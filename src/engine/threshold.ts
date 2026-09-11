@@ -574,6 +574,7 @@ export interface ThresholdSweepResult {
   coreEvents: CoreSystemEvent[]
 }
 
+/** How a threshold point is rolled (4.11, 10.3, 13.13). */
 export interface ThresholdSweepOptions {
   /** The game turn, for the Core Systems' countdowns (10.3). */
   turn: number
@@ -670,6 +671,49 @@ export function rollThresholdChecks(
 }
 
 /**
+ * Roll one ship's threshold point against a live game and write it to the
+ * battle log (4.11).
+ *
+ * This is what phases 10 and 15 call, where 2.6 asks for the check on the
+ * spot: "Damage resulting from these attacks is applied immediately, including
+ * threshold point checks if applicable", and, of a reactor explosion's
+ * neighbours, "roll additional threshold checks for them". Phase 13 runs the
+ * same function over the whole fleet.
+ */
+export function thresholdCheckForShip(
+  state: GameState,
+  ship: ShipState,
+  opts: Omit<ThresholdSweepOptions, 'turn'> = {},
+): ThresholdSweepResult | null {
+  const result = rollThresholdChecks(ship, state.rng, { ...opts, turn: state.turn })
+  if (!result) return null
+
+  const lost = result.checks.filter((check) => check.destroyed)
+  pushLog(state, {
+    kind: 'threshold',
+    shipId: ship.id,
+    side: ship.side,
+    dice: result.checks.map((check) => check.roll),
+    text:
+      `${ship.name}: threshold point ${result.rowsLost}` +
+      (result.extraRows > 0 ? ` (+${result.extraRows} for extra rows)` : '') +
+      `, systems lost on ${result.target}+ — ` +
+      (lost.length === 0 ? 'nothing lost' : lost.map((check) => check.label).join(', ')),
+  })
+  for (const event of result.coreEvents) {
+    pushLog(state, {
+      kind: 'threshold',
+      shipId: ship.id,
+      side: ship.side,
+      dice: event.roll === undefined ? undefined : [event.roll],
+      text: `${ship.name}: ${event.text}`,
+    })
+  }
+
+  return result
+}
+
+/**
  * Phase 13 (2.6): "All ships roll threshold checks from damage incurred in
  * phase 11 and 12 if required."
  *
@@ -693,31 +737,8 @@ export function thresholdPhase(
       })
     }
 
-    const result = rollThresholdChecks(ship, state.rng, { ...opts, turn: state.turn })
-    if (!result) continue
-    results.push(result)
-
-    const lost = result.checks.filter((check) => check.destroyed)
-    pushLog(state, {
-      kind: 'threshold',
-      shipId: ship.id,
-      side: ship.side,
-      dice: result.checks.map((check) => check.roll),
-      text:
-        `${ship.name}: threshold point ${result.rowsLost}` +
-        (result.extraRows > 0 ? ` (+${result.extraRows} for extra rows)` : '') +
-        `, systems lost on ${result.target}+ — ` +
-        (lost.length === 0 ? 'nothing lost' : lost.map((check) => check.label).join(', ')),
-    })
-    for (const event of result.coreEvents) {
-      pushLog(state, {
-        kind: 'threshold',
-        shipId: ship.id,
-        side: ship.side,
-        dice: event.roll === undefined ? undefined : [event.roll],
-        text: `${ship.name}: ${event.text}`,
-      })
-    }
+    const result = thresholdCheckForShip(state, ship, opts)
+    if (result) results.push(result)
   }
 
   return results
@@ -748,6 +769,7 @@ export interface RepairAttempt {
   text: string
 }
 
+/** How a damage control attempt is resolved (10.4). */
 export interface RepairOptions {
   /** The game turn, for the log and for the Core Systems' clocks (10.3). */
   turn: number

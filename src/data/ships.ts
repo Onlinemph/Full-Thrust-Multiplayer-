@@ -16,6 +16,7 @@
  */
 
 import type { ShipDesign, WeaponDef } from '../engine/types'
+import { GENERATED_DESIGNS } from './generatedShips'
 
 /**
  * A beam mount, priced off the construction table.
@@ -135,8 +136,12 @@ export const FRIGATE: ShipDesign = {
   notes: 'Reconstructed from the introductory scenario description in 4.12.',
 }
 
-/** Every design the app ships with. */
-export const SHIP_DESIGNS: ShipDesign[] = [HEAVY_CRUISER, FRIGATE]
+/**
+ * Every design the app ships with: the two introductory reconstructions above,
+ * and the two fleets generated from the construction tables by
+ * `tools/build_roster.py`.
+ */
+export const SHIP_DESIGNS: ShipDesign[] = [HEAVY_CRUISER, FRIGATE, ...GENERATED_DESIGNS]
 
 /**
  * Designs embedded in the battle being replayed, if any. A save carries every

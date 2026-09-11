@@ -97,9 +97,10 @@ row of hull boxes **instead of rolling at the end of the turn**".
 | 15 Reactor explosions | "If the reactor explodes apply damage to adjacent ships if necessary and **roll additional threshold checks for them**." | roll the sweep at once |
 
 `game.ts`'s `thresholdResolution(phase)` already encodes that split; `rollThresholdChecks()` is the
-same function in all three cases, which is why it takes a ship and not a phase. Rows crossed in
-phase 10 are therefore checked before, and separately from, rows crossed in phase 11 — exactly what
-"in a single phase" in 4.11 asks for.
+same function in all three cases, which is why it takes a ship and not a phase
+(`thresholdCheckForShip()` is the same roll against a live game, with the battle log written).
+Rows crossed in phase 10 are therefore checked before, and separately from, rows crossed in phase
+11 — exactly what "in a single phase" in 4.11 asks for.
 
 ### 1.4 Which symbols are rolled for
 
@@ -354,13 +355,37 @@ so none is implemented.
 
 ---
 
-## 7. Cross-references this module deliberately does not implement
+## 7. What `threshold.ts` exports
+
+| Export | Rule |
+| --- | --- |
+| `thresholdPhase(state, opts?)` | phase 13 over the whole fleet (2.6, 4.11) |
+| `thresholdCheckForShip(state, ship, opts?)` | one ship's check against a live game, for the immediate checks of phases 10 and 15 |
+| `rollThresholdChecks(ship, rng, opts)` | the pure sweep: no game state, no log |
+| `checkableSystems(ship)` | the symbols that owe a die, in SSD order (4.11) |
+| `damageControlPhase(state, opts?)` | phase 14 over the whole fleet (10.4) |
+| `repairSystem(ship, id, parties, rng, opts)` | one repair attempt (10.4) |
+| `reactorExplosionPhase(state)` | phase 15 (10.3) |
+| `knockOutCoreSystem(ship, which, turn, rng)` | a Core System's consequence roll, for anything that kills one outside a threshold check — a needle beam cannot, but boarders and scenario events can (10.3) |
+| `advanceCoreSystems(ship, turn)` | the Core Systems clocks (10.3) |
+| `isOutOfControl`, `isPermanentlyOutOfControl`, `outOfControlTurnsRemaining`, `lifeSupportFailsOnTurn`, `isDerelict` | what the movement, fire and UI modules ask (10.3) |
+| `systemBoxesLost(ship, id, boxes)` | how far through a multi-box symbol the damage has got (7.21) |
+| `CORE_SYSTEM_IDS`, `DRIVE_SYSTEM_ID`, `FTL_SYSTEM_ID`, `THRESHOLD_EFFECT_SOURCES`, `SYSTEM_DAMAGE_BOXES`, `CORE_SYSTEM_DRM`, `FLAWED_DESIGN_DRM` | the constants the rest of the engine needs to name the same things |
+
+State lives on `ShipState` in `game.ts` and nowhere else: `hullMarked`, `pendingThresholdRows`,
+`hullRowsChecked`, `destroyedSystems`, `driveHits`, `core` and `ongoing`. A half-damaged multi-box
+symbol is held in the same `destroyedSystems` set as `id#1`, `id#2` … so nothing new has to be
+saved, loaded or replayed.
+
+---
+
+## 8. Cross-references this module deliberately does not implement
 
 | Rule | Owner |
 | --- | --- |
 | 5.4 EMP threshold tests (their own target numbers, "+1 for each row of hull boxes checked off") | the EMP weapon module — it is a different check with a different trigger, not a threshold point |
 | 5.13 Needle beams picking a single system | the needle beam module; it destroys a system outright and passes the id here as unrepairable |
 | 7.9 Antimatter Suicide Charge detonation | the system's own module; this module only gives it its −1 DRM |
-| 7.14 / 7.23 Wave gun discharge when knocked out while charged | the spinal mount module, from the sweep result |
-| 6.6 what a destroyed magazine does to the loads inside it | the ordnance module |
+| 7.23 Wave gun discharge when knocked out while charged ("the carrying ship suffers damage equal to the current charge") | the spinal mount module, off `ThresholdSweepResult.destroyedIds` |
+| 6.6 a destroyed magazine's loads, and "If an Antimatter Missile fails a threshold test it explodes on the rack, immediately doing 1d6 damage to the carrying ship, and 1d6 damage to any unit within 1 MU" | the ordnance module, off `ThresholdSweepResult.destroyedIds` |
 | 3.6 emergency thrust inflicting drive hits "as if it had failed a threshold roll" | `movement.ts`, which applies them through the same one-hit-halves, two-hits-disables ladder |

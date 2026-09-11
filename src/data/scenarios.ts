@@ -144,7 +144,96 @@ export const INTRODUCTORY_SCENARIO: Scenario = {
   ],
 }
 
-export const SCENARIOS: Scenario[] = [INTRODUCTORY_SCENARIO]
+/**
+ * A cruiser action on a disputed frontier — the fight the two fleets' own
+ * designs are built for, and the first scenario worth playing once the
+ * introductory battle has taught the sequence.
+ */
+export const BORDER_SKIRMISH: Scenario = {
+  id: 'border-skirmish',
+  name: 'Border Skirmish',
+  briefing:
+    'A survey convoy went quiet three days ago on a frontier neither government admits to ' +
+    'claiming. Both navies sent a cruiser division to find out why, and both arrived at once. ' +
+    'Nobody has declared anything. Somebody is about to.',
+  objective: 'Break the enemy division. Points are scored on what you cripple, not what you chase off.',
+  table: { width: 72, height: 48 },
+  turnLimit: 10,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-heavy-cruiser', position: { x: 30, y: 10 }, facing: 6, velocity: 6 },
+        { designId: 'esu-light-cruiser', position: { x: 42, y: 10 }, facing: 6, velocity: 6 },
+        { designId: 'esu-destroyer', position: { x: 22, y: 6 }, facing: 6, velocity: 8 },
+        { designId: 'esu-destroyer', position: { x: 50, y: 6 }, facing: 6, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-heavy-cruiser', position: { x: 42, y: 38 }, facing: 12, velocity: 6 },
+        { designId: 'nac-light-cruiser', position: { x: 30, y: 38 }, facing: 12, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 50, y: 42 }, facing: 12, velocity: 8 },
+        { designId: 'nac-destroyer', position: { x: 22, y: 42 }, facing: 12, velocity: 8 },
+      ],
+    },
+  ],
+}
+
+/**
+ * The line of battle: both fleets in full, carriers included. Long, and the
+ * scenario where the fifteen-phase sequence earns its length.
+ */
+export const LINE_OF_BATTLE: Scenario = {
+  id: 'line-of-battle',
+  name: 'Line of Battle',
+  briefing:
+    'No more deniability and no more frontier incidents. Two battle fleets in open space, each ' +
+    'built around a battleship and a carrier, with the escorts they have spent a decade arguing ' +
+    'about. Whatever is left of these ships decides the war.',
+  objective: 'Destroy the enemy fleet. Every hull that disengages is worth full points to them.',
+  table: { width: 96, height: 72 },
+  turnLimit: 14,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-battleship', position: { x: 40, y: 14 }, facing: 6, velocity: 4 },
+        { designId: 'esu-carrier', position: { x: 56, y: 12 }, facing: 6, velocity: 4 },
+        { designId: 'esu-battlecruiser', position: { x: 24, y: 14 }, facing: 6, velocity: 6 },
+        { designId: 'esu-heavy-cruiser', position: { x: 66, y: 16 }, facing: 6, velocity: 6 },
+        { designId: 'esu-light-cruiser', position: { x: 14, y: 16 }, facing: 6, velocity: 6 },
+        { designId: 'esu-destroyer', position: { x: 32, y: 8 }, facing: 6, velocity: 8 },
+        { designId: 'esu-destroyer', position: { x: 48, y: 8 }, facing: 6, velocity: 8 },
+        { designId: 'esu-frigate', position: { x: 20, y: 6 }, facing: 6, velocity: 8 },
+        { designId: 'esu-frigate', position: { x: 60, y: 6 }, facing: 6, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-battleship', position: { x: 56, y: 58 }, facing: 12, velocity: 4 },
+        { designId: 'nac-carrier', position: { x: 40, y: 60 }, facing: 12, velocity: 4 },
+        { designId: 'nac-battlecruiser', position: { x: 72, y: 58 }, facing: 12, velocity: 6 },
+        { designId: 'nac-heavy-cruiser', position: { x: 30, y: 56 }, facing: 12, velocity: 6 },
+        { designId: 'nac-light-cruiser', position: { x: 82, y: 56 }, facing: 12, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 64, y: 64 }, facing: 12, velocity: 8 },
+        { designId: 'nac-destroyer', position: { x: 48, y: 64 }, facing: 12, velocity: 8 },
+        { designId: 'nac-frigate', position: { x: 76, y: 66 }, facing: 12, velocity: 8 },
+        { designId: 'nac-frigate', position: { x: 36, y: 66 }, facing: 12, velocity: 8 },
+      ],
+    },
+  ],
+}
+
+export const SCENARIOS: Scenario[] = [INTRODUCTORY_SCENARIO, BORDER_SKIRMISH, LINE_OF_BATTLE]
 
 /**
  * A scenario designed in the app, embedded whole in a battle file so the save
