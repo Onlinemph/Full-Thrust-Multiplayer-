@@ -1,0 +1,252 @@
+/* The plotting surface — the map and everything drawn on it.
+   ────────────────────────────────────────────────────────────────────────────
+   Full Thrust is played on a table with a tape measure, and the screen should
+   read the same way: a dark surface, a faint grid for scale, ships as counters
+   with a nose, and the things a player would actually draw on the table —
+   course tracks, range rings, fire arcs — drawn in thin luminous lines over it.
+
+   Everything here is sized in MU through a CSS custom property --mu, set by
+   MapView from the current zoom. That keeps line weights and counter sizes
+   honest at every zoom level: a 12 MU range band is always 12 MU wide. */
+
+.plot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  /* The grid is scale, not decoration, so it is drawn at a round number of MU
+     and it fades rather than competing with the counters. */
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size: calc(var(--mu, 4px) * 12) calc(var(--mu, 4px) * 12);
+  touch-action: none;
+  cursor: grab;
+}
+
+.plot:active {
+  cursor: grabbing;
+}
+
+.plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* ── Counters ─────────────────────────────────────────────────────────────── */
+
+/* A ship counter is an arrowhead, because the one thing a player must read off
+   it at a glance is which way the bow points. Size tracks hull mass so a
+   superdreadnought is visibly not a corvette, but the range is compressed:
+   a 300-mass hull is four times a 20-mass hull on the table, not fifteen. */
+.counter {
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.counter .hull {
+  stroke-width: 1.5;
+  stroke: var(--on-bright);
+}
+
+.counter.side-a .hull {
+  fill: var(--side-a);
+}
+.counter.side-b .hull {
+  fill: var(--side-b);
+}
+.counter.side-c .hull {
+  fill: var(--side-c);
+}
+
+.counter.is-selected {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.counter.is-destroyed {
+  opacity: 0.25;
+}
+
+.counter.is-destroyed .hull {
+  fill: var(--ink-faint);
+}
+
+/* A ship the enemy cannot see: drawn as an outline on your own console so you
+   know where it is, and not drawn at all on theirs. */
+.counter.is-cloaked .hull {
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 3 3;
+}
+
+.counter-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink-dim);
+  paint-order: stroke;
+  stroke: var(--void);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Plotted movement ─────────────────────────────────────────────────────── */
+
+/* The course track: where the ship will be at the end of this turn, drawn as
+   the two legs the cinematic rules actually move it through (3.4), because a
+   straight line from A to B would hide the turn the player just plotted. */
+.track {
+  fill: none;
+  stroke: var(--thrust);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+
+.track-end {
+  fill: none;
+  stroke: var(--thrust);
+  stroke-width: 1.5;
+}
+
+/* Last turn's movement, kept on screen one turn so the eye can read the flow
+   of the battle. Dimmer, and solid, so it never reads as a plotted order. */
+.track-past {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+/* ── Ranges and arcs ──────────────────────────────────────────────────────── */
+
+/* Range rings at the band boundaries of the selected ship's guns. The band a
+   weapon is currently in is the one drawn brightest — that is the number the
+   player is about to act on. */
+.range-ring {
+  fill: none;
+  stroke: var(--side-a);
+  stroke-width: 1;
+  opacity: 0.22;
+}
+
+.range-ring.is-live {
+  opacity: 0.65;
+  stroke-dasharray: none;
+}
+
+.range-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--side-a);
+  opacity: 0.7;
+}
+
+/* A fire arc is a 60-degree wedge (4.2), drawn only for the selected weapon so
+   the map never becomes six overlapping fans. */
+.arc-wedge {
+  fill: var(--side-a);
+  opacity: 0.07;
+  stroke: var(--side-a);
+  stroke-opacity: 0.3;
+  stroke-width: 1;
+}
+
+/* ── Ordnance and small craft ─────────────────────────────────────────────── */
+
+.missile-marker {
+  fill: var(--ordnance);
+  stroke: var(--void);
+  stroke-width: 1;
+}
+
+.missile-seek {
+  fill: none;
+  stroke: var(--ordnance);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0.5;
+}
+
+.flight-marker {
+  fill: var(--fighters);
+  stroke: var(--void);
+  stroke-width: 1;
+}
+
+/* A flight's remaining combat endurance, read at a glance (8.13). */
+.flight-cef {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--void);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* ── Terrain ──────────────────────────────────────────────────────────────── */
+
+.terrain-body {
+  fill: var(--panel-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.terrain-cloud {
+  fill: var(--side-c);
+  opacity: 0.1;
+}
+
+/* ── Fire effects ─────────────────────────────────────────────────────────── */
+
+/* Weapon fire is a line that draws itself and fades. It is decoration: the log
+   is the record, and a reduced-motion preference switches the animation off
+   entirely (see tokens.css). */
+.shot {
+  stroke-width: 1.5;
+  opacity: 0;
+  animation: shot-flash 620ms ease-out forwards;
+}
+
+.shot.is-beam {
+  stroke: var(--side-a);
+}
+.shot.is-kinetic {
+  stroke: var(--thrust);
+}
+.shot.is-ordnance {
+  stroke: var(--ordnance);
+}
+
+@keyframes shot-flash {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.hit-burst {
+  fill: var(--damage);
+  animation: hit-burst 700ms ease-out forwards;
+}
+
+@keyframes hit-burst {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}

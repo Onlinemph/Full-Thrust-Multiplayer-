@@ -1,0 +1,309 @@
+/* Panels, and the Ship System Status Display.
+   ────────────────────────────────────────────────────────────────────────────
+   The SSD is the most distinctive thing on screen and the thing a player looks
+   at most, so it gets the most care here. On the table it is a printed sheet
+   with rows of little boxes you cross off with a chinagraph pencil; on screen
+   it should still read as that sheet, not as a set of progress bars. Boxes stay
+   boxes, a marked box gets a line through it, and the rows stay rows — because
+   the row boundary IS the threshold point (4.11) and a player has to be able to
+   see how close the next one is. */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gap-2);
+  min-width: 0;
+}
+
+.panel > h2,
+.panel > h3 {
+  margin-top: 0;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  margin-bottom: 2px;
+}
+
+.panel-row:hover,
+.panel-row.is-selected {
+  background: var(--panel-3);
+}
+
+.panel-row .spacer {
+  flex: 1;
+}
+
+/* ── The SSD ──────────────────────────────────────────────────────────────── */
+
+.ssd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  display: grid;
+  gap: var(--gap);
+}
+
+.ssd-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.3rem;
+}
+
+.ssd-name {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.ssd-class {
+  color: var(--ink-dim);
+}
+
+/* Mass, thrust, points — the three numbers on every hull. */
+.ssd-stats {
+  display: flex;
+  gap: var(--gap-2);
+  color: var(--ink-dim);
+}
+
+.ssd-stats b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ── Hull track ───────────────────────────────────────────────────────────── */
+
+/* One row per hull row. The gap BETWEEN rows is wider than the gap between
+   boxes, because that gap is the threshold point — the whole reason the track
+   is drawn in rows at all. */
+.hull-track {
+  display: grid;
+  gap: 5px;
+}
+
+.hull-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+}
+
+.hull-row .row-label {
+  width: 1.4em;
+  color: var(--ink-faint);
+  text-align: right;
+  margin-right: 0.3em;
+}
+
+/* The threshold number this row will be checked at, if it is the next to go
+   (4.11): 6, then 5+, then 4+. Shown so the player can see what the next hit
+   costs without counting rows. */
+.hull-row .row-threshold {
+  margin-left: 0.4em;
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.box {
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--armour);
+  border-radius: 1px;
+  background: transparent;
+  flex: none;
+  position: relative;
+}
+
+.box.is-hull {
+  border-color: var(--hull);
+}
+
+/* A marked box gets a line through it, exactly as it would on paper. */
+.box.is-marked {
+  border-color: var(--damage);
+}
+
+.box.is-marked::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px),
+    var(--damage) calc(50% - 1px),
+    var(--damage) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+
+/* Armour is drawn as circles, because the rulebook draws it as circles and
+   calls them boxes anyway (4.8). */
+.box.is-armour {
+  border-radius: 50%;
+  border-color: var(--armour);
+}
+
+.box.is-regen {
+  border-style: dashed;
+}
+
+/* ── Systems ──────────────────────────────────────────────────────────────── */
+
+.ssd-systems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.system-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.system-chip.is-fired {
+  color: var(--ink-faint);
+  border-style: dashed;
+}
+
+/* Knocked out by a threshold check: struck through and left in place, because
+   on paper it is crossed off, not erased. */
+.system-chip.is-destroyed {
+  color: var(--damage);
+  border-color: var(--damage);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Half thrust after the drive's first threshold failure (4.11). */
+.system-chip.is-degraded {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.system-chip .arcs {
+  color: var(--ink-faint);
+  font-size: 0.9em;
+}
+
+/* ── Screens ──────────────────────────────────────────────────────────────── */
+
+.screen-level {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.screen-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--screens);
+}
+
+.screen-pip.is-up {
+  background: var(--screens);
+}
+
+.screen-pip.is-backup {
+  border-style: dashed;
+}
+
+/* ── Order plotting ───────────────────────────────────────────────────────── */
+
+/* Orders are written before anything moves (3.5), so the plotting panel shows
+   the written order in the rulebook's own notation — 8P2+4: 12 — as well as in
+   controls. A player who knows the notation should recognise what they typed. */
+.order-notation {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  color: var(--thrust);
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.5rem;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.thrust-budget {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+/* One pip per thrust point, filled as it is spent. Turning may use at most half
+   the rating (3.2), so the half-way mark is drawn on the track. */
+.thrust-pip {
+  width: 8px;
+  height: 14px;
+  border: 1px solid var(--thrust);
+  border-radius: 1px;
+}
+
+.thrust-pip.is-spent {
+  background: var(--thrust);
+}
+
+.thrust-pip.is-turn-limit {
+  border-right-width: 2px;
+  margin-right: 3px;
+}
+
+.thrust-pip.is-emergency {
+  border-style: dashed;
+  border-color: var(--damage);
+}
+
+/* ── Log ──────────────────────────────────────────────────────────────────── */
+
+.log {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.log-entry {
+  padding: 0.15rem 0.3rem;
+  border-left: 2px solid transparent;
+  color: var(--ink-dim);
+}
+
+.log-entry.is-phase {
+  color: var(--side-a);
+  border-left-color: var(--side-a);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 0.35rem;
+}
+
+.log-entry.is-damage {
+  color: var(--damage);
+}
+.log-entry.is-threshold {
+  color: var(--warn);
+}
+
+/* The dice a roll actually produced, so a player can audit a volley (4.5). */
+.log-dice {
+  color: var(--ink);
+  font-weight: 700;
+}
