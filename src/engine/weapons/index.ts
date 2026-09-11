@@ -74,4 +74,63 @@ export function isOrdnance(weapon: WeaponDef): boolean {
   return specFor(weapon)?.ordnance ?? false
 }
 
+// ---------------------------------------------------------------------------
+// Weapon taxonomy, for the rules that ask what kind of gun this is
+// ---------------------------------------------------------------------------
+
+/**
+ * Weapons that roll beam dice off the 4.5 table.
+ *
+ * 7.17 needs the distinction and states it as a class rather than a list: a
+ * Holofield takes a die roll modifier off anything rolling beam dice, and adds
+ * 12 MU to the range of anything using a to-hit table instead. So this is
+ * sections 5.3 – 5.13 plus the three later weapons that say they behave as
+ * beams — the Gravitic Gun (5.20, *"As a beam-type weapon"*), the Pulser
+ * (5.21) and the beam and plasma spinal mounts (5.23) — and none of the
+ * projectile weapons of 5.14 – 5.19.
+ *
+ * It is not the same set as `isEnergyWeapon` in `ew.ts`, and the difference is
+ * the EMP projector: it rolls beam dice but ignores standard screens, so 7.25
+ * excludes it where 7.17 includes it. Two questions, two lists.
+ */
+const BEAM_DICE_CLASSES: ReadonlySet<WeaponClass> = new Set<WeaponClass>([
+  'beam',
+  'emp',
+  'plasma-cannon',
+  'graser',
+  'heavy-graser',
+  'phaser',
+  'transporter',
+  'gatling',
+  'twin-particle-array',
+  'meson-projector',
+  'needle-beam',
+  'gravitic-gun',
+  'pulser',
+  'spinal-beam',
+  'spinal-plasma',
+])
+
+export function rollsBeamDice(weapon: WeaponDef): boolean {
+  return BEAM_DICE_CLASSES.has(weapon.weaponClass)
+}
+
+/**
+ * Weapons that put an effect on an area rather than a shot on a hull, which
+ * 7.17 says a Holofield cannot hide from: spinal mounts (5.23), plasma bolts
+ * (6.8) and the two superweapons of 7.23 and 7.24.
+ */
+const AREA_EFFECT_CLASSES: ReadonlySet<WeaponClass> = new Set<WeaponClass>([
+  'spinal-beam',
+  'spinal-plasma',
+  'spinal-psp',
+  'plasma-bolt-launcher',
+  'nova-cannon',
+  'wave-gun',
+])
+
+export function isAreaEffect(weapon: WeaponDef): boolean {
+  return AREA_EFFECT_CLASSES.has(weapon.weaponClass)
+}
+
 export type { FiringContext, WeaponResult, WeaponSpec } from './contract'

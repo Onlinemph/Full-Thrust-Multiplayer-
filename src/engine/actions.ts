@@ -76,7 +76,14 @@ import {
   type PdThreat,
 } from './defences'
 import type { ScreenLevel } from './dice'
-import { fireWeapon, maxRangeOf, needsFireCon, type WeaponResult } from './weapons'
+import {
+  fireWeapon,
+  isAreaEffect,
+  maxRangeOf,
+  needsFireCon,
+  rollsBeamDice,
+  type WeaponResult,
+} from './weapons'
 import {
   acquireMissileTargets,
   launchMissile,
@@ -99,6 +106,17 @@ import {
   type GunboatCarrierState,
   type GunboatSquadron,
 } from './gunboats'
+import {
+  cancelCloakOrder,
+  cloakCapability,
+  cloakEndOfMovement,
+  cloakMode,
+  cloakStartOfMovement,
+  ewFireEffect,
+  orderCloak,
+  AREA_ECM_RADIUS,
+  type EwDefences,
+} from './ew'
 import type { Arc, Course, MovementOrder, Point, SystemKind, TurnDirection } from './types'
 
 // ---------------------------------------------------------------------------
@@ -190,7 +208,13 @@ export type GameAction =
   | { type: 'resolve-reactor-explosions' }
 
   // Electronic warfare and cloaks (7.17 – 7.22)
-  | { type: 'set-cloak'; shipId: string; on: boolean }
+  /**
+   * 7.20: "the player must note this in orders for that turn, and the number
+   * of turns the ship is to remain cloaked" — declared in advance, which is
+   * what stops a ship decloaking "just because a juicy target has wandered
+   * into range" (7.21). `turns` defaults to one.
+   */
+  | { type: 'set-cloak'; shipId: string; on: boolean; turns?: number }
 
   /**
    * Answers to questions the rules put to a player mid-resolution — which
@@ -376,6 +400,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (et.mustReplot) effective = { ...order, emergencyThrust: false }
       }
 
+      // 7.21, 7.22: a total cloak goes up before the ship moves — "At the
+      // start of its movement for that turn, the ship model is removed from
+      // the table" — and 7.20's Device goes up after. Both are handled by the
+      // module; here they simply bracket the move.
+      if (ship.cloak) {
+        ship.cloak = cloakStartOfMovement(ship.cloak, ship.placement.position)
+        ship.cloaked = cloakMode(ship.cloak) !== 'none'
+      }
+
       const result = applyOrder(movementStateOf(ship), effective)
       ship.lastKnown = {
         course: ship.placement.facing,
@@ -393,6 +426,23 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (group.carrierId === ship.id && group.status === 'aboard') {
           group.position = ship.placement.position
           group.facing = ship.placement.facing
+        }
+      }
+      if (ship.cloak) {
+        const wasCloaked = ship.cloaked
+        const after = cloakEndOfMovement(ship.cloak, { velocity: ship.velocity })
+        ship.cloak = after
+        ship.cloaked = cloakMode(after) !== 'none'
+        if (ship.cloaked !== wasCloaked) {
+          pushLog(state, {
+            kind: 'note',
+            shipId: ship.id,
+            side: ship.side,
+            text: ship.cloaked
+              ? `${ship.name} cloaks (7.20)`
+              : `${ship.name} decloaks` +
+                (after.voidedBy === 'over-speed' ? ' — over 24 MU voids the cloak (7.20)' : ''),
+          })
         }
       }
       pushLog(state, {
@@ -459,8 +509,40 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!weapon.arcs.includes(arc)) return refuse('Target is not in that arc')
 
+      // 7.17 – 7.22: what the target's electronic warfare fit does to this
+      // particular shot. It can change the range as well as the die roll — a
+      // Holofield adds 12 MU against a to-hit table and a Cloaking Device
+      // doubles it — so the effect is computed before the shot, not applied
+      // to its result.
+      const ew = ewFireEffect(
+        {
+          range,
+          usesBeamDice: rollsBeamDice(weapon),
+          areaEffect: isAreaEffect(weapon),
+          gravitonBeam: weapon.weaponClass === 'gravitic-gun',
+          needleBeam: weapon.weaponClass === 'needle-beam',
+          maxRange: maxRangeOf(weapon),
+        },
+        ewDefencesOf(state, target),
+      )
+      if (ew.untargetable) {
+        return refuse(`${target.name} is not on the table (7.21)`)
+      }
+      if (ew.autoMiss) {
+        markWeaponFired(ship, weapon.id, state.phase)
+        markShipFired(ship)
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} misses — ${ew.modifiers.map((m) => m.label).join('; ')}`,
+        })
+        return OK
+      }
+
       const result = fireWeapon(weapon, {
-        range,
+        range: ew.effectiveRange,
         arc,
         targetScreens: effectiveScreenLevel(target),
         rearArc: isRearArcAttack(
@@ -468,7 +550,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           target.placement.facing,
           ship.placement.position,
         ),
-        drm: 0,
+        drm: ew.drm,
         rng: state.rng,
       })
       markWeaponFired(ship, weapon.id, state.phase)
@@ -1032,6 +1114,36 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    // ── Cloaks (7.20 – 7.22) ──────────────────────────────────────────────
+    case 'set-cloak': {
+      // Written with the movement order, and nowhere else: the count is
+      // declared in advance and cannot be revised once the turn is under way.
+      if (state.phase !== 'orders') return refuse('A cloak is written in orders, phase 1 (7.20)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (!ship.cloak) return refuse(`${ship.name} has no cloak fitted`)
+
+      if (!action.on) {
+        ship.cloak = cancelCloakOrder(ship.cloak)
+        return OK
+      }
+      if (cloakCapability(ship.cloak) === 'none') {
+        return refuse(`${ship.name}'s cloak is knocked out (7.20)`)
+      }
+      const turns = Math.max(1, Math.floor(action.turns ?? 1))
+      ship.cloak = orderCloak(ship.cloak, turns)
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        // Written orders are the one secret in an open-book game (2.6).
+        visibleTo: [ship.side],
+        text: `${ship.name} will cloak for ${turns} turn${turns === 1 ? '' : 's'} (7.20)`,
+      })
+      return OK
+    }
+
     // ── Gunboats (9, phases 4, 6 and 10) ──────────────────────────────────
     case 'launch-gunboats': {
       if (state.phase !== 'move-fighters') {
@@ -1470,6 +1582,36 @@ function squadronFacingAfterMove(
   if (chosen !== undefined) return chosen
   if (distance(squadron.position, to) <= 1e-9) return squadron.facing
   return nearestCourse(squadron.position, to)
+}
+
+/**
+ * The target's electronic warfare fit, as one shot sees it (7.17 – 7.22).
+ *
+ * Levels are what is *operational*, not what is fitted: ECM is one SSD box per
+ * level and is lost progressively to damage (7.18), so a knocked-out box stops
+ * counting the moment it is crossed off. Area ECM is read off the neighbours,
+ * since 7.19 covers a *friend* within 6 MU rather than the ship carrying it —
+ * and 7.20 switches a cloaked ship's area cover off, which is why the emitter
+ * has to be checked as well as the range.
+ */
+function ewDefencesOf(state: GameState, target: ShipState): EwDefences {
+  const areaEcm = state.ships
+    .filter(
+      (ship) =>
+        ship.side === target.side &&
+        !ship.destroyed &&
+        !ship.offTable &&
+        !ship.cloaked &&
+        distance(ship.placement.position, target.placement.position) <= AREA_ECM_RADIUS,
+    )
+    .reduce((best, ship) => Math.max(best, operationalCount(ship, 'area-ecm')), 0)
+
+  return {
+    holofield: operationalCount(target, 'holofield') > 0,
+    ecmLevel: operationalCount(target, 'ecm'),
+    areaEcmLevel: areaEcm,
+    cloak: target.cloak ? cloakMode(target.cloak) : 'none',
+  }
 }
 
 /**

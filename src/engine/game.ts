@@ -24,6 +24,7 @@ import {
   type FighterMission,
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
+import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -160,8 +161,19 @@ export interface ShipState {
   /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
   fixedPath: boolean
   /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
-   *  and velocity question asked before orders are written. */
+   *  and velocity question asked before orders are written. Derived from
+   *  `cloak` and kept in step with it, because the map, the last-known table
+   *  and the AI all want the one-bit answer. */
   cloaked: boolean
+  /**
+   * The cloak's own state machine (7.20 – 7.22), or null on a ship with no
+   * cloak fitted. It is `ew.ts`'s value type rather than a few booleans here
+   * because the transitions are the rule: a Field goes up at the *start* of
+   * the movement phase and a Device at the end, a Device over 24 MU voids
+   * itself, and a cloak killed by a threshold check keeps the ship hidden
+   * until the end of the turn it died in.
+   */
+  cloak: CloakState | null
   /** Course and velocity as at the end of a previous phase 5 (2.6). */
   lastKnown: { course: Course; velocity: number; turn: number; cloaked: boolean } | null
 
@@ -212,6 +224,22 @@ export interface ShipStateOptions {
   hullRowSizes?: number[]
 }
 
+/**
+ * The cloak an SSD carries, if any (7.20 – 7.22).
+ *
+ * A ship may only have one — 7.20 forbids a cloak *"combined with any fields
+ * or screens"* — so the first one found is the one it flies with, and
+ * `validateEwFit` is where a design carrying two is reported.
+ */
+const CLOAK_KINDS: readonly CloakKind[] = ['cloaking-device', 'cloaking-field', 'tuffley-cloak']
+
+function cloakFitOf(design: ShipDesign): CloakState | null {
+  const fitted = design.systems.find((system) =>
+    (CLOAK_KINDS as readonly string[]).includes(system.kind),
+  )
+  return fitted ? createCloakState(fitted.kind as CloakKind) : null
+}
+
 /** Put a design on the table as an undamaged ship (2.4). */
 export function createShipState(opts: ShipStateOptions): ShipState {
   return {
@@ -228,6 +256,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ftlTransit: 'none',
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
+    cloak: cloakFitOf(opts.design),
     lastKnown: null,
     hullMarked: 0,
     armourMarked: opts.design.armour.layers.map(() => 0),
@@ -961,6 +990,15 @@ function onBeginTurn(state: GameState): void {
   for (const squadron of state.gunboatSquadrons) {
     Object.assign(squadron, beginGunboatTurn(squadron))
     squadron.targetId = null
+  }
+
+  // 7.20: a cloak knocked out by a threshold check keeps the ship hidden until
+  // the end of the turn it died in, so the decloak lands here rather than at
+  // the moment the box was checked.
+  for (const ship of state.ships) {
+    if (!ship.cloak) continue
+    ship.cloak = cloakEndOfTurn(ship.cloak)
+    ship.cloaked = cloakMode(ship.cloak) !== 'none'
   }
 }
 

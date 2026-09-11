@@ -49,6 +49,11 @@ SYSTEMS = {
     'cargo': (1, 0), 'troop-berthing': (1, 0), 'minesweeper': (5, 15),
     'ortillery': (3, 9), 'shipyard': (1, 2), 'antimatter-charge': (1, 5),
     'stealth-hull': (0, 2),
+    # The optional systems of 7.17 - 7.25 are shares of the hull, not flat
+    # fits, so the catalogue carries a placeholder and `proportionalCost` in
+    # designPricing.ts prices one the moment it is fitted to a design.
+    'holofield': (0, 0), 'cloaking-device': (1, 0), 'cloaking-field': (1, 0),
+    'tuffley-cloak': (0, 0), 'reflex-field': (0, 0),
 }
 
 # 9.2, per gunboat. A rack always carries six, so a rack costs six of these.
@@ -62,6 +67,9 @@ LABELS = {
     'area-ecm': 'Area ECM', 'enhanced-sensors': 'Enh Sensors',
     'superior-sensors': 'Sup Sensors', 'hangar-bay': 'Hangar', 'launch-tube': 'Launch Tube',
     'gunboat-rack': 'Gunboat Rack', 'gunboat-bay': 'Gunboat Bay',
+    'holofield': 'Holofield', 'cloaking-device': 'Cloaking Device',
+    'cloaking-field': 'Cloaking Field', 'tuffley-cloak': 'Tuffley Cloak',
+    'reflex-field': 'Reflex Field',
     'boat-bay': 'Boat Bay', 'cargo': 'Cargo', 'troop-berthing': 'Troops',
     'minesweeper': 'Minesweeper', 'ortillery': 'Ortillery', 'shipyard': 'Shipyard',
     'antimatter-charge': 'AM Charge', 'stealth-hull': 'Stealth Hull',

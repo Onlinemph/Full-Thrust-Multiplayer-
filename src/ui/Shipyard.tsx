@@ -4,6 +4,8 @@ import {
   describeFault,
   hullBoxesFor,
   priceDesign,
+  proportionalCost,
+  repriceProportional,
   validateDesign,
   HULL_CLASS_OPTIONS,
   HULL_ROW_OPTIONS,
@@ -37,7 +39,10 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
   /** Any edit that changes mass has to re-derive the hull box count with it. */
   const edit = (patch: Partial<ShipDesign>) =>
     setDesign((d) => {
-      const next = { ...d, ...patch }
+      // Order matters: hull boxes and the proportional systems both scale with
+      // mass, and the points are the sum of what they become — not of what
+      // they were before the slider moved.
+      const next = repriceProportional({ ...d, ...patch })
       next.hullBoxes = hullBoxesFor(next.mass, next.hullClass)
       next.points = priceDesign(next).points
       return next
@@ -213,7 +218,10 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                   key={entry.kind + entry.label}
                   className="design-chip"
                   title={`${entry.mass} mass, ${entry.points} points`}
-                  onClick={() =>
+                  onClick={() => {
+                    // A share-of-hull system is priced against this hull, not
+                    // off the catalogue's flat figures (7.17 – 7.25).
+                    const scaled = proportionalCost(entry.kind, design.mass)
                     edit({
                       systems: [
                         ...design.systems,
@@ -221,12 +229,12 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                           id: `${entry.kind}-${design.systems.length + 1}`,
                           kind: entry.kind,
                           label: entry.label,
-                          mass: entry.mass,
-                          points: entry.points,
+                          mass: scaled ? scaled.mass : entry.mass,
+                          points: scaled ? scaled.points : entry.points,
                         },
                       ],
                     })
-                  }
+                  }}
                 >
                   {entry.label}
                   <span className="num">{entry.mass}m</span>

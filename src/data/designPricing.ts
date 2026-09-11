@@ -91,6 +91,59 @@ export function armourPoints(armour: ArmourDef): number {
   )
 }
 
+/**
+ * Systems priced as a share of the hull rather than as a flat fit (7.17 –
+ * 7.25).
+ *
+ * Every one of these is stated in the rulebook as a percentage: a Holofield is
+ * *"10% of ships mass"*, a Cloaking Device costs *"50% of the ships mass"* in
+ * points while weighing one. They are stored on the design with their computed
+ * mass and points like any other system, so there is still one pricing path —
+ * `repriceProportional` is what keeps them honest when the hull changes size
+ * under them, and `validateDesign` reports it when they have not been.
+ */
+export const PROPORTIONAL_SYSTEMS: Partial<
+  Record<SystemKind, { mass: number | 'fraction'; massFraction?: number; pointsPerMass?: number; pointsFraction?: number }>
+> = {
+  holofield: { mass: 'fraction', massFraction: 0.1, pointsPerMass: 5 },
+  'tuffley-cloak': { mass: 'fraction', massFraction: 0.1, pointsPerMass: 10 },
+  'reflex-field': { mass: 'fraction', massFraction: 0.1, pointsPerMass: 6 },
+  'cloaking-device': { mass: 1, pointsFraction: 0.5 },
+  'cloaking-field': { mass: 1, pointsFraction: 1 },
+}
+
+/** What one proportional system weighs and costs on a hull of this mass. */
+export function proportionalCost(
+  kind: SystemKind,
+  shipMass: number,
+): { mass: number; points: number } | null {
+  const spec = PROPORTIONAL_SYSTEMS[kind]
+  if (!spec) return null
+  const mass = spec.mass === 'fraction' ? (spec.massFraction ?? 0) * shipMass : spec.mass
+  const points =
+    spec.pointsFraction !== undefined
+      ? spec.pointsFraction * shipMass
+      : mass * (spec.pointsPerMass ?? 0)
+  return { mass: round2(mass), points: Math.floor(points + 0.5) }
+}
+
+/**
+ * Re-price every proportional system against the design's current mass.
+ *
+ * The shipyard calls this on every edit, because raising the hull raises the
+ * cloak with it and a player dragging the mass slider should watch that
+ * happen rather than discover it when the design fails validation.
+ */
+export function repriceProportional(design: ShipDesign): ShipDesign {
+  return {
+    ...design,
+    systems: design.systems.map((system) => {
+      const cost = proportionalCost(system.kind, design.mass)
+      return cost ? { ...system, ...cost } : system
+    }),
+  }
+}
+
 /** A damage control party and a marine party: 5 points, no mass (13.13). */
 export const CREW_PARTY_POINTS = 5
 
@@ -188,6 +241,8 @@ export type DesignFault =
   | { kind: 'bad-arcs'; weaponId: string; arcs: number }
   | { kind: 'screens-without-generators'; level: number; generators: number }
   | { kind: 'banned'; system: string }
+  | { kind: 'mispriced-proportional'; system: string; mass: number; points: number }
+  | { kind: 'two-cloaks' }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -207,6 +262,10 @@ export function describeFault(fault: DesignFault): string {
       return `level-${fault.level} screens with ${fault.generators} generators (7.2)`
     case 'banned':
       return `${fault.system} is barred in this game`
+    case 'mispriced-proportional':
+      return `${fault.system} is a share of hull mass: it should be ${fault.mass} mass and ${fault.points} points on this hull (7.17 – 7.25)`
+    case 'two-cloaks':
+      return 'two cloaks on one hull: a cloak may not be combined with any other field (7.20)'
   }
 }
 
@@ -261,6 +320,26 @@ export function validateDesign(
       generators,
     })
   }
+
+  for (const system of design.systems) {
+    const cost = proportionalCost(system.kind, design.mass)
+    if (!cost) continue
+    if (Math.abs(system.mass - cost.mass) > 1e-6 || system.points !== cost.points) {
+      faults.push({
+        kind: 'mispriced-proportional',
+        system: system.label,
+        mass: cost.mass,
+        points: cost.points,
+      })
+    }
+  }
+
+  // 7.20: a cloak may not be "combined with any fields or screens", and 7.17
+  // says the same of a Holofield, so one hull carries at most one of them.
+  const fields = design.systems.filter((system) =>
+    ['cloaking-device', 'cloaking-field', 'tuffley-cloak', 'holofield'].includes(system.kind),
+  ).length
+  if (fields > 1) faults.push({ kind: 'two-cloaks' })
 
   for (const banned of opts.bannedSystems ?? []) {
     if (design.systems.some((s) => s.kind === banned) ||
