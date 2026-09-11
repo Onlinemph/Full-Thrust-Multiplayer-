@@ -16,6 +16,7 @@
  */
 
 import type { ShipDesign, WeaponDef } from '../engine/types'
+import { savedDesigns } from './shipyard'
 import { GENERATED_DESIGNS } from './generatedShips'
 
 /**
@@ -158,13 +159,30 @@ export function setEmbeddedDesigns(designs: ShipDesign[]): void {
   embedded = designs
 }
 
+/**
+ * The player's own designs, minus any that collide with the shipped roster.
+ *
+ * The roster is shared vocabulary: `esu-frigate` has to mean the same hull in
+ * every player's copy, or two people reading the same battle file are reading
+ * different battles. A local design that reuses a canon id is ignored rather
+ * than allowed to shadow it. An *embedded* design still wins, because an
+ * imported battle's hull may exist nowhere else on this machine.
+ */
+function yardDesigns(): ShipDesign[] {
+  return savedDesigns().filter((d) => !SHIP_DESIGNS.some((canon) => canon.id === d.id))
+}
+
 export function designById(id: string): ShipDesign | undefined {
-  // The embedded copy wins: an imported battle's design may exist nowhere else
-  // on this machine, and must not be shadowed by a same-id local design.
-  return embedded.find((d) => d.id === id) ?? SHIP_DESIGNS.find((d) => d.id === id)
+  return (
+    embedded.find((d) => d.id === id) ??
+    yardDesigns().find((d) => d.id === id) ??
+    SHIP_DESIGNS.find((d) => d.id === id)
+  )
 }
 
 export function allDesigns(): ShipDesign[] {
   const seen = new Set(embedded.map((d) => d.id))
-  return [...embedded, ...SHIP_DESIGNS.filter((d) => !seen.has(d.id))]
+  const yard = yardDesigns().filter((d) => !seen.has(d.id))
+  for (const design of yard) seen.add(design.id)
+  return [...embedded, ...yard, ...SHIP_DESIGNS.filter((d) => !seen.has(d.id))]
 }

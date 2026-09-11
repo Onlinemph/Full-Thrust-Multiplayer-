@@ -135,6 +135,10 @@ that one fact.
   without discarding the present. It costs nothing to provide: an earlier moment is just the
   journal replayed to a shorter length.
 - **Ship library.** *Ships* in the top bar shows every design's real SSD, grouped by fleet.
+- **Your own designs.** *Shipyard* builds a hull against the section 14 tables, with the mass bar
+  fighting you the whole way, and saves it into the fleet picker beside the shipped roster. A
+  battle that uses one carries its own copy, so the save file opens on a browser that has never
+  seen the design.
 
 ## Ship construction
 

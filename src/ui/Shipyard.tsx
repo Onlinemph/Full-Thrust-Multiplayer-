@@ -12,6 +12,7 @@ import {
 } from '../data/designPricing'
 import { ALL_ARCS, CATALOGUE_SYSTEMS, CATALOGUE_WEAPONS } from '../data/buildCatalog'
 import { allDesigns } from '../data/ships'
+import { deleteDesign, saveDesign, savedDesigns } from '../data/shipyard'
 import type { HullClass, HullRows, ShipDesign } from '../engine/types'
 import { Ssd } from './Ssd'
 
@@ -33,6 +34,8 @@ import { Ssd } from './Ssd'
  */
 export function Shipyard({ onClose }: { onClose: () => void }) {
   const [design, setDesign] = useState<ShipDesign>(() => startingPoint())
+  const [yard, setYard] = useState<ShipDesign[]>(() => [...savedDesigns()])
+  const [saved, setSaved] = useState<string | null>(null)
   const cost = priceDesign(design)
   const faults = validateDesign(design)
 
@@ -282,6 +285,26 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
             <Ssd design={design} />
             <div className="panel-row" style={{ marginTop: 'var(--gap)' }}>
               <button onClick={() => setDesign(startingPoint())}>Start over</button>
+              <button
+                className="primary"
+                disabled={faults.length > 0}
+                title={
+                  faults.length > 0
+                    ? 'Fix the faults above first — an illegal hull is not a design'
+                    : 'Saved designs appear in the fleet picker beside the shipped roster'
+                }
+                onClick={() => {
+                  // An id derived from the name, so building the same class
+                  // twice replaces it rather than filling the yard with
+                  // "new-design", "new-design-2", "new-design-3".
+                  const id = slug(design.name) || 'new-design'
+                  saveDesign({ ...design, id })
+                  setYard([...savedDesigns()])
+                  setSaved(id)
+                }}
+              >
+                Save to the yard
+              </button>
               <span className="spacer" />
               <button
                 onClick={() => {
@@ -299,10 +322,45 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                 Download design
               </button>
             </div>
-            <p className="rule-detail">
-              A downloaded design drops into <code>src/data/</code> and ships with the site, or
-              rides inside a battle file so it opens on a browser that has never seen it.
-            </p>
+            {saved ? (
+              <p className="rule-detail" style={{ color: 'var(--screens)' }}>
+                Saved as <code>{saved}</code>. It is in the fleet picker now, and any battle that
+                uses it carries its own copy — so the save file opens on a browser that has never
+                seen the design.
+              </p>
+            ) : (
+              <p className="rule-detail">
+                A saved design joins the fleet picker beside the shipped roster. A downloaded one
+                is a file you can keep or send.
+              </p>
+            )}
+
+            {yard.length > 0 ? (
+              <>
+                <h4>The yard</h4>
+                <div className="design-list">
+                  {yard.map((entry) => (
+                    <button
+                      key={entry.id}
+                      className="design-chip"
+                      title={`${entry.points} points — click to open, shift-click to delete`}
+                      onClick={(event) => {
+                        if (event.shiftKey) {
+                          deleteDesign(entry.id)
+                          setYard([...savedDesigns()])
+                          return
+                        }
+                        setDesign(structuredClone(entry))
+                        setSaved(null)
+                      }}
+                    >
+                      {entry.name}
+                      <span className="num">{entry.points}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -310,6 +368,14 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   )
+}
+
+/** A class name as an id: lower case, hyphens, nothing else (13). */
+function slug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** A bare hull to build on: the smallest thing that is not yet illegal. */
