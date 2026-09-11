@@ -48,6 +48,13 @@ two browsers.
   gatling batteries, twin particle arrays, meson projectors, needle beams, pulse torpedoes in all
   their variants, submunition packs, K-guns with flak, MKP, boarding torpedoes, fusion arrays,
   gravitic guns, pulsers, turrets and spinal mounts.
+- **Ordnance** (6) — salvo missiles and their racks and launchers, extended and antimatter grades,
+  heavy missiles, multi-stage missiles, rockets, plasma bolts and minefields: launched in phase 3,
+  flying as markers on the table with their own facing, and attacking in phase 10 after point
+  defence has had its say.
+- **Defences** (7) — screens, advanced screens and area screens, ablative and regenerative armour,
+  antimatter charges, PDS, ADS, scatterguns and grapeshot, area defence fire control, and the
+  stealth hull with its range-band shrinking.
 - **Threshold and repair** (4.11, 10) — the 6 / 5+ / 4+ ladder, one check per attack with +1 per
   extra row crossed, the drive's two-stage failure, Core Systems, and damage control parties.
 - **Victory** (4.12) — the damage ladder, including the part that is easy to miss: *crippled* is
@@ -142,8 +149,6 @@ The strategic layer above the tactical one — economy, FTL movement, exploratio
 research, admirals, detection and espionage — is written up in `docs/rules/campaign.md` from the
 *Stellar Imperium* campaign rules. One Full Thrust point costs one Resource Point, so the tactical
 points model is also the strategic price list.
-
-## Campaign
 
 `src/campaign/` implements the *Stellar Imperium* strategic layer: the star map and its d100
 generation tables, the economy and production phase, the eight-phase campaign turn with its
