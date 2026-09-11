@@ -116,11 +116,25 @@ export function currentMatchSide(): string | null {
   return matchSide
 }
 
-/** A hook the network layer installs to mirror local actions to the peer. */
-let peer: ((action: GameAction, sequence: number) => void) | null = null
+/**
+ * Hooks the network layer installs to mirror what happens here to the peer.
+ * Null in hot-seat, which is why every call site uses optional chaining.
+ */
+export interface NetHooks {
+  onAction: (action: GameAction, sequenceAfter: number) => void
+  onUndo: (lengthAfter: number) => void
+  onReplace: (saved: SavedGame) => void
+}
 
-export function setPeerSink(sink: ((action: GameAction, sequence: number) => void) | null): void {
-  peer = sink
+let net: NetHooks | null = null
+
+export function setNetHooks(hooks: NetHooks | null): void {
+  net = hooks
+}
+
+/** The battle as a record, for shipping to a peer that has fallen behind. */
+export function currentSave(): SavedGame {
+  return saved()
 }
 
 // ---------------------------------------------------------------------------
@@ -152,17 +166,53 @@ export function dispatch(action: GameAction): ActionOutcome {
 
   const outcome = applyJournaled(action)
   autosave()
-  peer?.(action, journal.length)
+  net?.onAction(action, journal.length)
   emit()
   return outcome
 }
 
-/** An action arriving from the remote peer. Already theirs to take. */
-export function dispatchRemote(action: GameAction): ActionOutcome {
-  const outcome = applyJournaled(action)
+/**
+ * An action arriving from the peer.
+ *
+ * `sequenceAfter` is the sender's journal length once they applied it. If ours
+ * disagrees, the two actions crossed on the wire. The host is the ordering
+ * authority: it appends in arrival order regardless and ships a corrective
+ * sync; a guest that notices the disagreement asks for one. Either way both
+ * ends converge on the host's record.
+ */
+export function applyRemoteAction(
+  action: GameAction,
+  sequenceAfter: number,
+  authoritative: boolean,
+): 'applied' | 'mismatch' {
+  const expected = journal.length + 1
+  if (!authoritative && sequenceAfter !== expected) return 'mismatch'
+  applyJournaled(action)
   autosave()
   emit()
-  return outcome
+  return sequenceAfter === expected ? 'applied' : 'mismatch'
+}
+
+/** An undo arriving from the peer. */
+export function applyRemoteUndo(lengthAfter: number, authoritative: boolean): 'applied' | 'mismatch' {
+  if (!authoritative && lengthAfter !== journal.length - 1) return 'mismatch'
+  if (journal.length === 0) return 'mismatch'
+  journal = journal.slice(0, -1)
+  game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
+  clearReady(game)
+  autosave()
+  emit()
+  return lengthAfter === journal.length ? 'applied' : 'mismatch'
+}
+
+/** The whole battle, replacing whatever is here. The host's record wins. */
+export function applyRemoteSave(next: SavedGame): void {
+  setup = next.setup
+  journal = next.actions
+  game = replayPartial(next, next.actions.length)
+  clearReady(game)
+  autosave()
+  emit()
 }
 
 /**
@@ -179,6 +229,7 @@ export function undo(): boolean {
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
   clearReady(game)
   autosave()
+  net?.onUndo(journal.length)
   emit()
   return true
 }
@@ -194,6 +245,7 @@ export function newGame(next: GameSetup): void {
   journal = []
   game = buildGame(setup)
   autosave()
+  net?.onReplace(saved())
   emit()
 }
 
@@ -205,6 +257,7 @@ export function loadGame(text: string): string | null {
   journal = parsed.actions
   game = replayPartial(parsed, parsed.actions.length)
   autosave()
+  net?.onReplace(saved())
   emit()
   return null
 }

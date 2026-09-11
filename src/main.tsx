@@ -5,6 +5,7 @@ import './ui/theme/tokens.css'
 import './ui/theme/plot.css'
 import './ui/theme/panels.css'
 import './ui/theme/chrome.css'
+import './ui/theme/modals.css'
 import { App } from './ui/App'
 
 /**
