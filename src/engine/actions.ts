@@ -45,6 +45,16 @@ import {
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import { arcTo, distance, isRearArcAttack } from './geometry'
+import {
+  effectiveScreenLevel as screenLevelOf,
+  pointDefenceOptions,
+  resolvePointDefence,
+  type PdAllocation,
+  type PdMount,
+  type PdMountKind,
+  type PdThreat,
+} from './defences'
+import type { ScreenLevel } from './dice'
 import { fireWeapon, needsFireCon } from './weapons'
 import {
   acquireMissileTargets,
@@ -563,6 +573,82 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    // ── Point defence (7.12 – 7.15, phase 9) ──────────────────────────────
+    case 'resolve-point-defence': {
+      if (state.phase !== 'point-defence') return refuse('Point defence is phase 9')
+      const markers = ordnanceOf(state)
+      if (markers.length === 0) return OK
+
+      for (const ship of state.ships) {
+        if (ship.destroyed || ship.offTable) continue
+        const mounts = pdMountsOf(ship)
+        if (mounts.length === 0) continue
+
+        // A marker is a threat to this ship if it is close enough to be worth
+        // shooting at; the options function applies the actual reach rules.
+        const threats: PdThreat[] = markers
+          .filter((marker) => marker.owner !== ship.side && marker.missiles > 0)
+          .map((marker) => ({
+            id: marker.id,
+            kind: marker.kind === 'heavy' ? 'heavy-missile' : 'salvo-missile',
+            position: marker.position,
+            attacking: ship.id,
+          }))
+        if (threats.length === 0) continue
+
+        const options = pointDefenceOptions(
+          { id: ship.id, placement: ship.placement, mounts, adfc: adfcCount(ship, 'adfc'),
+            advancedAdfc: adfcCount(ship, 'advanced-adfc') },
+          threats,
+        )
+        // Doctrine: every mount at the nearest thing it can reach. That is what
+        // a player does when missiles are inbound, and splitting fire between
+        // two salvos usually stops neither.
+        const used = new Set<string>()
+        const allocations: PdAllocation[] = []
+        for (const option of [...options].sort((a, b) => a.range - b.range)) {
+          if (used.has(option.mountId)) continue
+          used.add(option.mountId)
+          allocations.push({
+            mountId: option.mountId,
+            threatId: option.threatId,
+            reach: option.reach,
+            coveringShipId: option.coveringShipId,
+            dice: option.dice,
+          })
+        }
+        if (allocations.length === 0) continue
+
+        const outcome = resolvePointDefence(
+          { id: ship.id, placement: ship.placement, mounts, adfc: adfcCount(ship, 'adfc'),
+            advancedAdfc: adfcCount(ship, 'advanced-adfc') },
+          threats,
+          allocations,
+          state.rng,
+        )
+
+        for (const result of outcome.results) {
+          if (result.kills <= 0) continue
+          const marker = markers.find((m) => m.id === result.threatId)
+          if (!marker) continue
+          marker.missiles = Math.max(0, marker.missiles - result.kills)
+          pushLog(state, {
+            kind: 'point-defence',
+            shipId: ship.id,
+            side: ship.side,
+            dice: result.rolls,
+            text: `${ship.name} point defence: ${result.detail}`,
+          })
+        }
+        // A mount that fires as point defence has fired for the turn (2.6).
+        for (const allocation of allocations) markWeaponFired(ship, allocation.mountId, state.phase)
+      }
+
+      setOrdnance(state, markers.filter((marker) => marker.missiles > 0))
+      projectOrdnance(state)
+      return OK
+    }
+
     // ── Threshold checks (4.11, phase 13) ─────────────────────────────────
     case 'threshold-check': {
       const ship = shipById(state, action.shipId)
@@ -649,6 +735,53 @@ function projectOrdnance(state: GameState): void {
   }))
 }
 
+/**
+ * A ship's point-defence mounts (7.12 – 7.15).
+ *
+ * Two sources: the dedicated systems — PDS, ADS, scattergun, grapeshot — and
+ * any class-1 beam, which 8.8 lets a ship fire as point defence at a worse
+ * table. Both spend the mount for the turn, which is why the ids stay the ids
+ * the rest of the engine knows them by.
+ */
+function pdMountsOf(ship: ShipState): PdMount[] {
+  const kinds: Partial<Record<string, PdMountKind>> = {
+    pds: 'pds',
+    ads: 'ads',
+    scattergun: 'scattergun',
+    grapeshot: 'grapeshot',
+  }
+  const mounts: PdMount[] = []
+  for (const system of ship.design.systems) {
+    const kind = kinds[system.kind]
+    if (!kind) continue
+    if (ship.destroyedSystems.has(system.id)) continue
+    if (!canWeaponFire(ship, system.id)) continue
+    mounts.push({
+      id: system.id,
+      kind,
+      arcs: system.arcs ?? ALL_ARCS,
+      // The roll table this mount uses (8.8): a scattergun rolls four dice but
+      // reads each on the PDS table, and a beam-1 reads a worse one.
+      mode: 'pds',
+    })
+  }
+  for (const weapon of ship.design.weapons) {
+    if (weapon.weaponClass !== 'beam' || weapon.rating !== 1) continue
+    if (ship.destroyedSystems.has(weapon.id)) continue
+    if (!canWeaponFire(ship, weapon.id)) continue
+    mounts.push({ id: weapon.id, kind: 'beam-1', arcs: weapon.arcs, mode: 'beam-1' })
+  }
+  return mounts
+}
+
+const ALL_ARCS = ['F', 'FS', 'AS', 'A', 'AP', 'FP'] as const
+
+function adfcCount(ship: ShipState, kind: 'adfc' | 'advanced-adfc'): number {
+  return ship.design.systems.filter(
+    (system) => system.kind === kind && !ship.destroyedSystems.has(system.id),
+  ).length
+}
+
 /** Which launcher classes put a marker on the table (6.2, 6.6). */
 function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | null {
   switch (weaponClass) {
@@ -673,15 +806,15 @@ function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | 
  *
  * A screen generator is a symbol on the SSD and takes threshold checks like any
  * other, so losing one drops the level — which is why designs carry a
- * `screen-generator` entry per level plus any backups. Capped at 2 by the rule.
- *
- * TODO: move to defences.ts when that module lands; it owns 7.2.
+ * `screen-generator` entry per level plus any backups. The arithmetic and the
+ * cap belong to `defences.ts`, which owns 7.2; counting the surviving
+ * generators off a ShipState is the part that belongs here.
  */
-export function effectiveScreenLevel(ship: ShipState): 0 | 1 | 2 {
+export function effectiveScreenLevel(ship: ShipState): ScreenLevel {
   const working = ship.design.systems.filter(
     (system) => system.kind === 'screen-generator' && !ship.destroyedSystems.has(system.id),
   ).length
-  return Math.min(2, ship.design.screens.level, working) as 0 | 1 | 2
+  return screenLevelOf(ship.design.screens, working)
 }
 
 /** The damage pipeline's view of a ship. */

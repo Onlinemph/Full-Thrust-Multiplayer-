@@ -367,6 +367,12 @@ export function aiActions(
       if (side === game.sides[0]?.id) actions.push({ type: 'move-ordnance' })
       break
 
+    case 'point-defence':
+      // Resolved once for the table: every ship shoots at what is coming for
+      // it, and a marker killed is killed for everyone (2.6 phase 9).
+      if (side === game.sides[0]?.id) actions.push({ type: 'resolve-point-defence' })
+      break
+
     case 'ordnance-vs-ships':
       // Resolved once for the table rather than per side: a marker attacks
       // whatever it acquires, whoever launched it.

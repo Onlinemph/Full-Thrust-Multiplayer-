@@ -56,6 +56,7 @@ function playPhase(game: GameState): GameAction[] {
       take({ type: 'move-ordnance' })
       break
     case 'launch-missiles':
+    case 'point-defence':
     case 'ordnance-vs-ships':
       // Ordnance is the computer's to fly here: aiming a missile is a judgement
       // about where a ship will be, and the AI already makes it (6.3).

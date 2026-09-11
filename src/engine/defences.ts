@@ -30,7 +30,7 @@ import {
   type ScreenLevel,
 } from './dice'
 import { arcTo, bearsOn, distance } from './geometry'
-import type { Arc, ArmourDef, DamageMode, Placement, Point, ScreenDef } from './types'
+import { ARC_ORDER, type Arc, type ArmourDef, type DamageMode, type Placement, type Point, type ScreenDef } from './types'
 
 // ---------------------------------------------------------------------------
 // Screens (4.7, 7.2, 7.3, 7.16)
@@ -712,8 +712,13 @@ export interface PdMount {
   expended?: boolean
 }
 
-/** All six arcs — what a mount with no directionality covers (4.2). */
-export const ALL_ARCS: readonly Arc[] = ['F', 'FS', 'AS', 'A', 'AP', 'FP']
+/**
+ * All six arcs — what a mount with no directionality on the SSD covers (4.2:
+ * *"Systems that have no 'directionality' to their symbol, e.g. PDS, have
+ * all-round (6-arc) fire capabilities"*). Re-exported from `ARC_ORDER` so a
+ * PD mount and a fire arc are never two different lists.
+ */
+export const ALL_ARCS: readonly Arc[] = ARC_ORDER
 
 /** A ship doing the defending (7.10 – 7.15). */
 export interface PdDefender {

@@ -283,6 +283,19 @@ function PhaseControls({ phase }: { phase: Phase }) {
           </p>
         </div>
       )
+    case 'point-defence':
+      return (
+        <div className="panel">
+          <h3>Phase 9 · Point defence</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Every mount that can reach an incoming marker engages it. A gun fired here has fired
+            for the turn — a beam spent on missiles is a beam that does not fire at ships.
+          </p>
+          <button className="primary" onClick={() => dispatch({ type: 'resolve-point-defence' })}>
+            Resolve point defence
+          </button>
+        </div>
+      )
     case 'ordnance-vs-ships':
       return (
         <div className="panel">
