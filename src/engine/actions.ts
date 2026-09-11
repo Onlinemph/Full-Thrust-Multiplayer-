@@ -21,6 +21,11 @@ import {
   advancePhase,
   assignDamageControl,
   assignFireCon,
+  canWeaponFire,
+  engagedTargets,
+  markHullBoxes,
+  markShipFired,
+  markWeaponFired,
   pushLog,
   rollInitiative,
   setInitiativeOrder,
@@ -37,6 +42,9 @@ import {
   validateOrder,
   type MovementState,
 } from './movement'
+import { applyDamage, createTargetState, type DamageableTarget } from './combat'
+import { arcTo, distance, isRearArcAttack } from './geometry'
+import { fireWeapon, needsFireCon } from './weapons'
 import {
   damageControlPhase,
   rollThresholdChecks,
@@ -342,6 +350,97 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return assigned === action.parties ? OK : refuse('Not enough damage control parties')
     }
 
+    // ── Fire (4.4 – 4.9, phase 11) ────────────────────────────────────────
+    case 'fire-weapon': {
+      const ship = shipById(state, action.shipId)
+      const target = shipById(state, action.targetId)
+      if (!ship || !target) return refuse('No such ship')
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (ship.side === target.side) return refuse('That is a friendly ship')
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That weapon is knocked out')
+      // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
+
+      // 4.4: each FireCon engages one target. A weapon may join a target the
+      // ship is already engaging for free; a new target costs a FireCon.
+      if (needsFireCon(weapon) && !engagedTargets(ship, state.phase).includes(target.id)) {
+        if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
+      }
+
+      // Everything the resolver needs is re-derived here rather than carried in
+      // the payload, so a stale or edited action cannot make a replay disagree.
+      const rules = optional(state)
+      const range = distance(ship.placement.position, target.placement.position)
+      const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+      if (!weapon.arcs.includes(arc)) return refuse('Target is not in that arc')
+
+      const result = fireWeapon(weapon, {
+        range,
+        arc,
+        targetScreens: effectiveScreenLevel(target),
+        rearArc: isRearArcAttack(
+          target.placement.position,
+          target.placement.facing,
+          ship.placement.position,
+        ),
+        drm: 0,
+        rng: state.rng,
+      })
+      markWeaponFired(ship, weapon.id, state.phase)
+      markShipFired(ship)
+
+      if ('refused' in result) {
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} holds fire — ${result.refused}`,
+        })
+        return OK
+      }
+
+      const applied = applyDamage(targetStateOf(target), result, {
+        rearArcRule: rules.rearArcAttacks,
+        rearArc: isRearArcAttack(
+          target.placement.position,
+          target.placement.facing,
+          ship.placement.position,
+        ),
+        source: 'direct-fire',
+      })
+      writeBackDamage(target, applied.target)
+      // markHullBoxes owns the row accounting and the pending threshold, so
+      // the hull damage goes through it rather than being written directly.
+      markHullBoxes(target, applied.hullDamage)
+
+      pushLog(state, {
+        kind: applied.hullDamage > 0 ? 'damage' : 'fire',
+        shipId: ship.id,
+        targetId: target.id,
+        side: ship.side,
+        dice: result.dice,
+        text: `${ship.name} fires ${weapon.label} at ${target.name}: ${result.detail}`,
+      })
+      if (target.destroyed) {
+        pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+      }
+      return OK
+    }
+
+    case 'pass-fire': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      markShipFired(ship)
+      return OK
+    }
+
     // ── Threshold checks (4.11, phase 13) ─────────────────────────────────
     case 'threshold-check': {
       const ship = shipById(state, action.shipId)
@@ -381,6 +480,45 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // looks like it worked.
       return refuse(`Not yet implemented: ${action.type}`)
   }
+}
+
+// ---------------------------------------------------------------------------
+// Damage plumbing
+// ---------------------------------------------------------------------------
+
+/**
+ * The working screen level (7.2).
+ *
+ * A screen generator is a symbol on the SSD and takes threshold checks like any
+ * other, so losing one drops the level — which is why designs carry a
+ * `screen-generator` entry per level plus any backups. Capped at 2 by the rule.
+ *
+ * TODO: move to defences.ts when that module lands; it owns 7.2.
+ */
+export function effectiveScreenLevel(ship: ShipState): 0 | 1 | 2 {
+  const working = ship.design.systems.filter(
+    (system) => system.kind === 'screen-generator' && !ship.destroyedSystems.has(system.id),
+  ).length
+  return Math.min(2, ship.design.screens.level, working) as 0 | 1 | 2
+}
+
+/** The damage pipeline's view of a ship. */
+function targetStateOf(ship: ShipState): DamageableTarget {
+  const fresh = createTargetState(ship.design)
+  return {
+    ...fresh,
+    hullDamage: ship.hullMarked,
+    armourRemaining: ship.design.armour.layers.map(
+      (boxes, layer) => boxes - (ship.armourMarked[layer] ?? 0),
+    ),
+  }
+}
+
+/** Write armour back; hull goes through markHullBoxes, which owns the rows. */
+function writeBackDamage(ship: ShipState, after: DamageableTarget): void {
+  ship.armourMarked = ship.design.armour.layers.map(
+    (boxes, layer) => boxes - (after.armourRemaining[layer] ?? boxes),
+  )
 }
 
 // ---------------------------------------------------------------------------

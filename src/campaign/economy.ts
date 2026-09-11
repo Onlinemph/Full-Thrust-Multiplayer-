@@ -258,7 +258,15 @@ export function growPopulation(colony: Colony, body: PlanetaryBody): { loyal: nu
 // Industrial output (6.5, 6.4)
 // ---------------------------------------------------------------------------
 
-/** 50 RP per million population, each production phase (6.5). */
+/**
+ * 50 RP per million population, each production phase (6.5).
+ *
+ * The document's headline scale figure is "1 million population = 20 RP"
+ * (Economy), which is the rate it uses to describe how rich a civilisation is;
+ * the production rule states 50, and production is what this module runs. The
+ * two are kept apart rather than reconciled, because reconciling them would be
+ * picking a number the rules do not.
+ */
 export const RP_PER_MILLION_POPULATION = 50
 
 /** 50 RP per active factory, each production phase (6.5). */
@@ -606,7 +614,10 @@ export function runProductionPhase(
  * Three things can refuse a purchase: the technology the price schedule names,
  * the siege rule — a besieged colony "cannot build starships or act as a
  * command post, but still generates RP and can build defences" — and an unrest
- * roll that came up 1 last admin phase and blocks building this one.
+ * roll that came up 1 last admin phase, which "blocks building next phase".
+ * Counter-espionage is exempt from that last one: it buys watchers, not
+ * buildings, and a colony in the middle of a riot is exactly where an owner
+ * wants them.
  */
 export function purchaseRefusal(
   colony: Colony,

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { applyAction, type GameAction } from './actions'
 import { PHASE_ORDER, type Phase } from './types'
-import { shipMovementOrder, type GameState } from './game'
+import { canWeaponFire, enemiesOf, shipMovementOrder, type GameState } from './game'
+import { distance, arcTo } from './geometry'
+import { maxRangeOf } from './weapons'
 import { buildGame, replayGame, type GameSetup } from '../data/savedGame'
 import { SCENARIOS } from '../data/scenarios'
 
@@ -49,6 +51,31 @@ function playPhase(game: GameState): GameAction[] {
       for (const ship of shipMovementOrder(game)) {
         if (ship.destroyed || ship.offTable) continue
         take({ type: 'move-ship', shipId: ship.id })
+      }
+      break
+    case 'ship-fire':
+      // Every ship fires everything that can bear on the nearest enemy, which
+      // is both the commonest thing a player does and the heaviest path
+      // through the engine.
+      for (const ship of game.ships) {
+        if (ship.destroyed || ship.offTable) continue
+        const enemies = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
+        if (enemies.length === 0) continue
+        const target = enemies.reduce((best, e) =>
+          distance(ship.placement.position, e.placement.position) <
+          distance(ship.placement.position, best.placement.position)
+            ? e
+            : best,
+        )
+        const range = distance(ship.placement.position, target.placement.position)
+        const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+        for (const weapon of ship.design.weapons) {
+          if (ship.destroyedSystems.has(weapon.id)) continue
+          if (!canWeaponFire(ship, weapon.id)) continue
+          if (!weapon.arcs.includes(arc)) continue
+          if (range > maxRangeOf(weapon)) continue
+          take({ type: 'fire-weapon', shipId: ship.id, weaponId: weapon.id, targetId: target.id })
+        }
       }
       break
     case 'threshold':

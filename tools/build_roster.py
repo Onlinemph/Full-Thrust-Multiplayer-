@@ -123,6 +123,13 @@ def price(d):
             systems.append({'id': f'{key}-{i+1}', 'kind': KIND.get(key, key),
                             'label': LABELS[key], 'mass': sm, 'points': sp})
             mass += sm; pts += sp
+    # Screen generators are symbols on the SSD and take threshold checks like any
+    # other (2.4, 4.11), so each needs an entry in `systems` — but their mass and
+    # points are already paid as a fraction of hull mass above (7.2), so the
+    # entries themselves are free. Losing one drops the working screen level.
+    for i in range(d.get('screens', 0)):
+        systems.append({'id': f'screen-gen-{i+1}', 'kind': 'screen-generator',
+                        'label': 'Screen Gen', 'mass': 0, 'points': 0})
     pts += d.get('dcp', 0) * 5 + d.get('marines', 0) * 5
     # floor(x + 0.5), not Python's round(): round() is half-to-even, so a total
     # of 348.5 comes out 348 here and 349 in the TypeScript that checks it. A
