@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { SCENARIOS } from '../data/scenarios'
+import { scenarioById, SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
 import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
@@ -152,6 +152,37 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             forces={draft.forces ?? {}}
             onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
           />
+        </section>
+
+        <section>
+          <h3>Who plays which fleet</h3>
+          <p>
+            A fleet the computer commands is flown by the same rules you play by — it writes its
+            orders in phase 1 like everyone else, and you can take its turn back with Undo.
+          </p>
+          {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => {
+            const ai = (draft.aiSides ?? []).includes(side.id)
+            return (
+              <label key={side.id} className="rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={ai}
+                  onChange={() =>
+                    setDraft((d) => {
+                      const sides = new Set(d.aiSides ?? [])
+                      if (sides.has(side.id)) sides.delete(side.id)
+                      else sides.add(side.id)
+                      return { ...d, aiSides: [...sides] }
+                    })
+                  }
+                />
+                <span>
+                  <b>{side.name}</b>{' '}
+                  <span className="rule-detail">{ai ? 'computer' : 'you'}</span>
+                </span>
+              </label>
+            )
+          })}
         </section>
 
         <section>

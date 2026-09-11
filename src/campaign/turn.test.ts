@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { setEmbeddedScenario, startScenario, INTRODUCTORY_VICTORY } from '../data/scenarios'
 import { designById } from '../data/ships'
-import { campaignRng } from './intel'
+import { campaignRng, sampleAt } from './intel'
 import {
   BASE_FTL_RATE,
   MAX_FTL_RATE,
@@ -80,11 +80,9 @@ function seedYielding(faces: readonly number[]): number {
   for (let seed = 1; seed < 20_000_000; seed++) {
     let matches = true
     for (let i = 0; i < faces.length; i++) {
-      let t = (seed + Math.imul(i + 1, 0x6d2b79f5)) >>> 0
-      t = Math.imul(t ^ (t >>> 15), t | 1)
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-      const face = Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * 6) + 1
-      if (face !== faces[i]) {
+      // Read through the stream's own sampler, so a change to it re-derives the
+      // seed rather than silently rolling different faces.
+      if (Math.floor(sampleAt(seed, i) * 6) + 1 !== faces[i]) {
         matches = false
         break
       }

@@ -28,7 +28,16 @@ import {
   BEAM_RANGE_BAND,
 } from './geometry'
 import { applyOrder, driveFromDef, standardTurnAllowance, validateOrder, type MovementState } from './movement'
-import { currentThrust, enemiesOf, type GameState, type ShipState } from './game'
+import {
+  availableFireCons,
+  canWeaponFire,
+  currentThrust,
+  enemiesOf,
+  engagedTargets,
+  type GameState,
+  type ShipState,
+} from './game'
+import { maxRangeOf, needsFireCon } from './weapons'
 import type { GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
@@ -325,10 +334,85 @@ export function aiActions(
       for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
       break
 
+    case 'ship-fire':
+      for (const ship of mine) actions.push(...planFire(game, ship))
+      break
+
     default:
       break
   }
 
+  return actions
+}
+
+/**
+ * What a ship shoots at, and with what (4.4, 4.2, 4.5).
+ *
+ * FireCon is the scarce thing — one target apiece — so the plan is: rank the
+ * enemies you can actually hurt, spend your FireCon on the best of them in
+ * order, then send every gun to whichever engaged target it does the most
+ * damage against. Concentrating fire is usually right in Full Thrust, because a
+ * ship is only worth points once it is crippled (4.12), but a gun that cannot
+ * bear on the best target should still shoot at the second best rather than
+ * sulk.
+ */
+export function planFire(game: GameState, ship: ShipState): GameAction[] {
+  const actions: GameAction[] = []
+  const enemies = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
+  if (enemies.length === 0) return actions
+
+  // What each gun would do to each enemy, if anything.
+  const shots = new Map<string, Array<{ weapon: (typeof ship.design.weapons)[number]; dice: number }>>()
+  for (const enemy of enemies) {
+    const range = distance(ship.placement.position, enemy.placement.position)
+    const arc = arcTo(ship.placement.position, ship.placement.facing, enemy.placement.position)
+    const able = ship.design.weapons
+      .filter((weapon) => !ship.destroyedSystems.has(weapon.id))
+      .filter((weapon) => canWeaponFire(ship, weapon.id))
+      .filter((weapon) => weapon.arcs.includes(arc))
+      .filter((weapon) => range <= maxRangeOf(weapon))
+      .map((weapon) => ({ weapon, dice: Math.max(1, weapon.rating - (rangeBand(range) - 1)) }))
+    if (able.length > 0) shots.set(enemy.id, able)
+  }
+  if (shots.size === 0) return actions
+
+  // Rank by weight of fire this ship can put on them, breaking ties towards
+  // the one already hurt — the difference between two damaged cruisers and one
+  // dead one is the difference between 50 points and 100 (4.12).
+  const ranked = [...shots.entries()]
+    .map(([id, able]) => {
+      const enemy = enemies.find((e) => e.id === id)
+      const hurt = enemy && enemy.design.hullBoxes > 0 ? enemy.hullMarked / enemy.design.hullBoxes : 0
+      return { id, able, weight: able.reduce((sum, s) => sum + s.dice, 0) + hurt * 6 }
+    })
+    .sort((a, b) => b.weight - a.weight)
+
+  // Engage as many as there is FireCon for, best first (4.4).
+  const already = new Set(engagedTargets(ship, game.phase))
+  let spare = availableFireCons(ship, game.phase)
+  const engagedNow = new Set(already)
+  for (const { id } of ranked) {
+    if (engagedNow.has(id)) continue
+    if (spare <= 0) break
+    engagedNow.add(id)
+    spare -= 1
+  }
+
+  // Every gun to the best engaged target it can reach.
+  const spent = new Set<string>()
+  for (const { id, able } of ranked) {
+    if (!engagedNow.has(id)) continue
+    for (const { weapon } of able) {
+      if (spent.has(weapon.id)) continue
+      // A weapon needing no FireCon — point defence used offensively — is not
+      // bound by the engagement list.
+      if (needsFireCon(weapon) && !engagedNow.has(id)) continue
+      spent.add(weapon.id)
+      actions.push({ type: 'fire-weapon', shipId: ship.id, weaponId: weapon.id, targetId: id })
+    }
+  }
+
+  if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
   return actions
 }
 

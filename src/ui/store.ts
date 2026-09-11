@@ -20,6 +20,7 @@ import {
   type GameSetup,
   type SavedGame,
 } from '../data/savedGame'
+import { aiActions } from '../engine/ai'
 import { aliveShipIds, clearFx, fxAfter, fxBefore, queueFx } from './fx'
 
 /**
@@ -158,6 +159,46 @@ function applyJournaled(action: GameAction): ActionOutcome {
   return outcome
 }
 
+// ---------------------------------------------------------------------------
+// The computer's captains
+// ---------------------------------------------------------------------------
+
+/**
+ * Phases the computer has already acted in, keyed `turn:phase:side`.
+ *
+ * The computer acts once when a phase opens, and its actions go through the
+ * same `dispatch` a human's clicks do — so they are journalled, they replay,
+ * and a player can undo the computer's turn. Held off the game state because it
+ * is about this console's driver, not about the battle: a save that reached
+ * another machine must not arrive thinking the AI has already moved.
+ */
+let aiActed = new Set<string>()
+
+/**
+ * Let the computer take its turn in the current phase.
+ *
+ * Called after every dispatch rather than on a timer, because the thing that
+ * opens a phase is always an action. The `aiActed` guard is what stops it
+ * recursing: the computer's own actions call back in here and find the phase
+ * already done.
+ */
+function runAi(): void {
+  const sides = setup.aiSides ?? []
+  if (sides.length === 0) return
+  for (const side of sides) {
+    // In an online match the computer is driven from one console only — the
+    // creator's — or both ends would journal its orders twice.
+    if (matchSide !== null && matchSide !== game.sides[0]?.id) return
+    const key = `${game.turn}:${game.phase}:${side}`
+    if (aiActed.has(key)) continue
+    aiActed.add(key)
+    for (const action of aiActions(game, side)) {
+      applyJournaled(action)
+      net?.onAction(action, journal.length)
+    }
+  }
+}
+
 /** Apply an action, journal it, autosave, notify. The only way state changes. */
 export function dispatch(action: GameAction): ActionOutcome {
   if (matchSide !== null && action.type !== 'signal-ready') {
@@ -171,8 +212,9 @@ export function dispatch(action: GameAction): ActionOutcome {
   }
 
   const outcome = applyJournaled(action)
-  autosave()
   net?.onAction(action, journal.length)
+  runAi()
+  autosave()
   emit()
   return outcome
 }
@@ -218,6 +260,7 @@ export function applyRemoteSave(next: SavedGame): void {
   game = replayPartial(next, next.actions.length)
   clearReady(game)
   clearFx()
+  aiActed = new Set()
   autosave()
   emit()
 }
@@ -236,6 +279,7 @@ export function undo(): boolean {
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
   clearReady(game)
   clearFx()
+  aiActed = new Set()
   autosave()
   net?.onUndo(journal.length)
   emit()
@@ -253,6 +297,7 @@ export function newGame(next: GameSetup): void {
   journal = []
   game = buildGame(setup)
   clearFx()
+  aiActed = new Set()
   autosave()
   net?.onReplace(saved())
   emit()
@@ -265,6 +310,8 @@ export function loadGame(text: string): string | null {
   setup = parsed.setup
   journal = parsed.actions
   game = replayPartial(parsed, parsed.actions.length)
+  clearFx()
+  aiActed = new Set()
   autosave()
   net?.onReplace(saved())
   emit()

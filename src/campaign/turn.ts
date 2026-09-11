@@ -307,7 +307,11 @@ export function validateFtlPlot(
         Number.POSITIVE_INFINITY,
       )
       if (nearest > COMMAND_POST_RANGE) {
-        reasons.push(`${hexKey(hex)} is ${nearest === Number.POSITIVE_INFINITY ? 'beyond any' : nearest} hexes from a friendly command post`)
+        reasons.push(
+          Number.isFinite(nearest)
+            ? `${hexKey(hex)} is ${nearest} hexes from a friendly command post; the limit is ${COMMAND_POST_RANGE}`
+            : `${hexKey(hex)} is out of reach: there is no friendly command post at all`,
+        )
         break
       }
     }
@@ -415,6 +419,10 @@ export interface HazardCheck {
  * to state. The roll itself is made here anyway, because a GM ruling made over
  * dice from the campaign's own stream is a ruling that replays; one made over
  * dice from somewhere else is not.
+ *
+ * 2d6 because every other modified check the campaign prints — detection, the
+ * discovery check, the drop pod launch — is 2d6, and a ±1 means nothing on the
+ * d100 tables of 6.2.1.
  */
 export function explorationHazardCheck(
   rng: CampaignRng,
