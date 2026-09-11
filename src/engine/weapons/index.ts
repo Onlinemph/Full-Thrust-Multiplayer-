@@ -13,6 +13,10 @@
 
 import { BEAM_WEAPON_SPECS } from './beams'
 import { KINETIC_WEAPON_SPECS } from './kinetics'
+// The two superweapons of 7.23 and 7.24 live in ew.ts with the rest of the
+// optional systems, because what makes them hard is the template sweeping the
+// table and the ship powering everything else down to fire — not the dice.
+import { EW_WEAPON_SPECS } from '../ew'
 // Ordnance lives outside weapons/ because a missile is not resolved where it is
 // fired: it is launched in phase 3, flies, and attacks in phase 10 (2.6, 6.3).
 // Its spec table still belongs in the registry so nothing else has to know that.
@@ -25,6 +29,7 @@ export const WEAPON_SPECS: Partial<Record<WeaponClass, WeaponSpec>> = {
   ...BEAM_WEAPON_SPECS,
   ...KINETIC_WEAPON_SPECS,
   ...ORDNANCE_WEAPON_SPECS,
+  ...EW_WEAPON_SPECS,
 }
 
 export function specFor(weapon: WeaponDef): WeaponSpec | undefined {

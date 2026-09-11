@@ -265,3 +265,14 @@
     transform: scale(2.2);
   }
 }
+
+/* The group in hand. A fighter group is flown by clicking the table, so the
+   one that will move needs to be unmistakable (8.5). */
+.flight-marker.is-selected {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.flight-group {
+  cursor: pointer;
+}

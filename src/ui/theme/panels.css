@@ -478,3 +478,33 @@
 .flight-status.is-in-flight {
   color: var(--fighters);
 }
+
+/* Picking a group in the panel is the same act as picking it on the table, so
+   the row is a button and says so. */
+.flight-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.flight-pick[aria-pressed='true'] {
+  outline: 1px solid var(--fighters);
+  border-radius: var(--radius);
+}
+
+.flight-pick:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.flight-row.is-selected {
+  background: var(--panel-2);
+  border-radius: var(--radius);
+}

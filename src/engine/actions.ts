@@ -31,6 +31,7 @@ import {
   rollInitiative,
   setInitiativeOrder,
   shipById,
+  type FighterGroupState,
   type GameState,
   type ShipState,
   type SideId,
@@ -40,26 +41,46 @@ import {
   driveFromDef,
   formatOrder,
   rollEmergencyThrust,
+  thrustBudget,
   validateOrder,
   type MovementState,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
+import {
+  adfcLockedOut,
+  canDeclareAttack,
+  evadeShipFire,
+  interceptMissiles,
+  isEngaged,
+  launchFighterGroup,
+  moveFighterGroup,
+  recoverFighterGroup,
+  resolveAttackRun,
+  resolveDogfight,
+  secondaryMoveFighterGroup,
+  shipFireAtFighters,
+  type CarrierFlightState,
+  type FighterGroup,
+  type RearmResult,
+} from './fighters'
 import { arcTo, distance, isRearArcAttack } from './geometry'
 import {
   effectiveScreenLevel as screenLevelOf,
   pointDefenceOptions,
   resolvePointDefence,
   type PdAllocation,
+  type PdDefender,
   type PdMount,
   type PdMountKind,
   type PdThreat,
 } from './defences'
 import type { ScreenLevel } from './dice'
-import { fireWeapon, needsFireCon } from './weapons'
+import { fireWeapon, maxRangeOf, needsFireCon, type WeaponResult } from './weapons'
 import {
   acquireMissileTargets,
   launchMissile,
   moveOrdnanceMarkers,
+  nearestCourse,
   resolveOrdnanceAttack,
   type MissileMarker,
 } from './ordnance'
@@ -68,7 +89,7 @@ import {
   rollThresholdChecks,
   thresholdPhase,
 } from './threshold'
-import type { Arc, MovementOrder, TurnDirection } from './types'
+import type { Arc, Course, MovementOrder, Point, SystemKind, TurnDirection } from './types'
 
 // ---------------------------------------------------------------------------
 // The action union
@@ -117,8 +138,18 @@ export type GameAction =
 
   // Flight operations (8)
   | { type: 'launch-flight'; carrierId: string; flightId: string }
-  | { type: 'move-flight'; flightId: string; to: { x: number; y: number } }
-  | { type: 'secondary-move-flight'; flightId: string; to: { x: number; y: number } }
+  /**
+   * A group flies where it likes: no course, no velocity, no written order
+   * (8.5). `facing` is separate because a group's facing need not be its
+   * direction of travel, and it decides which 180° it can shoot into (8.7).
+   */
+  | { type: 'move-flight'; flightId: string; to: { x: number; y: number }; facing?: Course }
+  | {
+      type: 'secondary-move-flight'
+      flightId: string
+      to: { x: number; y: number }
+      facing?: Course
+    }
   | { type: 'flight-strike'; flightId: string; targetId: string }
   | { type: 'flight-dogfight'; flightId: string; targetFlightId: string }
   | { type: 'flight-intercept'; flightId: string; ordnanceId: string }
@@ -596,11 +627,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           }))
         if (threats.length === 0) continue
 
-        const options = pointDefenceOptions(
-          { id: ship.id, placement: ship.placement, mounts, adfc: adfcCount(ship, 'adfc'),
-            advancedAdfc: adfcCount(ship, 'advanced-adfc') },
-          threats,
-        )
+        const defender = pdDefenderOf(state, ship, mounts)
+        const options = pointDefenceOptions(defender, threats)
         // Doctrine: every mount at the nearest thing it can reach. That is what
         // a player does when missiles are inbound, and splitting fire between
         // two salvos usually stops neither.
@@ -619,13 +647,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         }
         if (allocations.length === 0) continue
 
-        const outcome = resolvePointDefence(
-          { id: ship.id, placement: ship.placement, mounts, adfc: adfcCount(ship, 'adfc'),
-            advancedAdfc: adfcCount(ship, 'advanced-adfc') },
-          threats,
-          allocations,
-          state.rng,
-        )
+        const outcome = resolvePointDefence(defender, threats, allocations, state.rng)
 
         for (const result of outcome.results) {
           if (result.kills <= 0) continue
@@ -677,6 +699,305 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     case 'resolve-damage-control': {
       if (state.phase !== 'damage-control') return refuse('Repairs are made in phase 14')
       damageControlPhase(state)
+      return OK
+    }
+
+    // ── Flight operations (8, phases 4, 6, 8 and 10) ──────────────────────
+    case 'launch-flight': {
+      if (state.phase !== 'move-fighters') return refuse('Fighters launch in phase 4')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const carrier = shipById(state, action.carrierId)
+      if (!carrier) return refuse('No such carrier')
+      if (flight.carrierId !== carrier.id) {
+        return refuse(`${flight.label} is not aboard ${carrier.name}`)
+      }
+      if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+
+      const result = launchFighterGroup(
+        flight,
+        carrierFlightState(state, carrier),
+        state.turn,
+        carrier.placement.position,
+        carrier.placement.facing,
+      )
+      if (!result.launched) return refuse(`${flight.label}: ${result.reason}`)
+
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'launch',
+        side: flight.side,
+        shipId: carrier.id,
+        text: `${carrier.name} launches ${flight.label}`,
+      })
+      return OK
+    }
+
+    case 'move-flight': {
+      if (state.phase !== 'move-fighters') return refuse('Fighter groups move in phase 4')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.movedThisTurn) return refuse(`${flight.label} has already moved this turn`)
+      // 8.6: a screen or a pursuit moves with what it is tied to, in phase 5.
+      if (flight.mission !== 'free') {
+        return refuse(`${flight.label} is ${flight.mission === 'screen' ? 'screening' : 'pursuing'} and moves with its charge (8.6)`)
+      }
+
+      const result = moveFighterGroup(
+        flight,
+        action.to,
+        state.turn,
+        facingAfterMove(flight, action.to, action.facing),
+      )
+      if (!result.moved) return refuse(`${flight.label}: ${result.reason}`)
+      writeFlight(flight, result.group)
+      return OK
+    }
+
+    case 'secondary-move-flight': {
+      if (state.phase !== 'secondary-fighter-moves') {
+        return refuse('Secondary fighter moves are phase 6')
+      }
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.secondaryMovedThisTurn) return refuse(`${flight.label} has already moved again`)
+
+      const result = secondaryMoveFighterGroup(
+        flight,
+        action.to,
+        facingAfterMove(flight, action.to, action.facing),
+      )
+      if (!result.moved) return refuse(`${flight.label}: ${result.reason}`)
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'move',
+        side: flight.side,
+        text: `${flight.label} moves again, ${flight.cef} CEF left`,
+      })
+      return OK
+    }
+
+    case 'recover-flight': {
+      // 8.1 lands a group on its fighter move; phase 6 works too and is where
+      // a group that spent phase 4 elsewhere gets home, at the cost of the
+      // secondary move's endurance.
+      const secondary = state.phase === 'secondary-fighter-moves'
+      if (state.phase !== 'move-fighters' && !secondary) {
+        return refuse('A group lands on a fighter move, phase 4 or 6 (8.1)')
+      }
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const carrier = shipById(state, action.carrierId)
+      if (!carrier) return refuse('No such carrier')
+      if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+      if (carrier.side !== flight.side) return refuse('A group lands on its own side’s ship')
+
+      // "The fighter group moves into contact with the carrier in the Fighter
+      // Movement Phase" (8.1) — so the flight home is part of the landing, and
+      // it is flown under whichever phase's allowance applies.
+      const home = carrier.placement.position
+      const flown = secondary
+        ? secondaryMoveFighterGroup(flight, home, carrier.placement.facing)
+        : moveFighterGroup(flight, home, state.turn, carrier.placement.facing)
+      if (!flown.moved) return refuse(`${flight.label}: ${flown.reason}`)
+
+      const result = recoverFighterGroup(
+        flown.group,
+        carrierFlightState(state, carrier),
+        state.turn,
+        state.rng,
+      )
+      if (!result.recovered) return refuse(`${flight.label}: ${result.reason}`)
+
+      writeFlight(flight, result.group)
+      flight.carrierId = carrier.id
+      flight.recoveredTurn = state.turn
+      flight.targetId = null
+      pushLog(state, {
+        kind: 'launch',
+        side: flight.side,
+        shipId: carrier.id,
+        text: `${carrier.name} recovers ${flight.label}${describeRearm(result.rearm)}`,
+        dice: result.rearm ? [result.rearm.roll] : undefined,
+      })
+      return OK
+    }
+
+    case 'flight-strike': {
+      if (state.phase !== 'ordnance-vs-ships' && state.phase !== 'ship-fire') {
+        return refuse('Fighter attacks are resolved after point defence (8.7)')
+      }
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.attackedThisTurn) return refuse(`${flight.label} has already attacked this turn`)
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (target.side === flight.side) return refuse('A group does not strafe its own fleet')
+
+      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
+
+      const result = resolveAttackRun(
+        flight,
+        {
+          screens: effectiveScreenLevel(target),
+          advancedScreens: target.design.screens.advanced,
+          rearArc: isRearArcAttack(
+            target.placement.position,
+            target.placement.facing,
+            flight.position,
+          ),
+        },
+        state.rng,
+      )
+      if (!result.fired) return refuse(`${flight.label}: ${result.reason}`)
+
+      writeFlight(flight, result.group)
+      flight.targetId = target.id
+      pushLog(state, {
+        kind: 'fire',
+        side: flight.side,
+        shipId: target.id,
+        text: `${flight.label} strafes ${target.name}: ${result.detail}`,
+        dice: result.dice,
+      })
+      applyFighterDamage(state, target, {
+        normalDamage: result.normalDamage,
+        penetratingDamage: result.penetratingDamage,
+        mode: result.mode,
+        dice: result.dice,
+        detail: result.detail,
+      })
+      return OK
+    }
+
+    case 'flight-dogfight': {
+      if (state.phase !== 'fighter-vs-fighter') return refuse('Dogfights are phase 8')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const enemy = flightById(state, action.targetFlightId)
+      if (!enemy) return refuse('No such enemy group')
+      if (enemy.side === flight.side) return refuse('A group does not dogfight its own side')
+      if (flight.attackedThisTurn) return refuse(`${flight.label} has already fought this turn`)
+
+      const allowed = canDeclareAttack(flight, enemy.position, { kind: 'fighter' })
+      if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
+
+      // 8.10: "All fire between fighter groups in a dogfight is considered
+      // simultaneous", so both groups are written back from one resolution.
+      const result = resolveDogfight(flight, enemy, state.rng)
+      for (const group of result.groups) {
+        const live = flightById(state, group.id)
+        if (live) writeFlight(live, group)
+      }
+      for (const side of result.sides) {
+        const shooter = flightById(state, side.groupId)
+        if (!shooter) continue
+        pushLog(state, {
+          kind: 'fire',
+          side: shooter.side,
+          text: `${shooter.label} dogfights: ${side.kills} killed${side.exhausted ? ' (out of endurance)' : ''}`,
+          dice: side.dice,
+        })
+      }
+      return OK
+    }
+
+    case 'flight-intercept': {
+      if (state.phase !== 'point-defence') return refuse('Fighters intercept missiles in phase 9')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const markers = ordnanceOf(state)
+      const marker = markers.find((m) => m.id === action.ordnanceId)
+      if (!marker) return refuse('No such missile marker')
+      if (marker.owner === flight.side) return refuse('A group does not shoot down its own missiles')
+      if (marker.missiles <= 0) return refuse('That salvo is already gone')
+
+      const allowed = canDeclareAttack(flight, marker.position, { kind: 'missile' })
+      if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
+
+      const result = interceptMissiles(
+        flight,
+        { kind: marker.kind === 'heavy' ? 'heavy' : 'salvo', count: marker.missiles },
+        state.rng,
+      )
+      if (!result.intercepted) return refuse(`${flight.label}: ${result.reason}`)
+
+      writeFlight(flight, result.group)
+      marker.missiles = Math.max(0, marker.missiles - result.kills)
+      setOrdnance(state, markers.filter((m) => m.missiles > 0))
+      projectOrdnance(state)
+      pushLog(state, {
+        kind: 'point-defence',
+        side: flight.side,
+        text: `${flight.label} intercepts: ${result.kills} killed, ${result.losses} lost`,
+        dice: [...result.rolls, ...result.casualtyRolls],
+      })
+      return OK
+    }
+
+    case 'flight-evade': {
+      // 8.6: declared "After a player has announced fire against a fighter
+      // group but before actually rolling the dice", which is the ship fire
+      // phase — and there is no evading point defence.
+      if (state.phase !== 'ship-fire') return refuse('Evasion answers ship fire, phase 11 (8.6)')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+
+      const result = evadeShipFire(flight)
+      if (!result.evaded) return refuse(`${flight.label}: ${result.reason}`)
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'note',
+        side: flight.side,
+        text: `${flight.label} evades: ship weapons miss it for the rest of the turn (8.6)`,
+      })
+      return OK
+    }
+
+    case 'fire-at-flight': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.side === ship.side) return refuse('A ship does not shoot its own fighters')
+      if (flight.status !== 'in-flight') return refuse(`${flight.label} is not on the table`)
+      // 8.6: "Only groups that are not engaged … may be fired at."
+      if (isEngaged(flight)) return refuse(`${flight.label} is engaged; ships may not fire into it (8.6, 8.10)`)
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
+      const arc = arcTo(ship.placement.position, ship.placement.facing, flight.position)
+      if (!weapon.arcs.includes(arc)) return refuse(`${weapon.label} does not bear on ${flight.label}`)
+      if (distance(ship.placement.position, flight.position) > maxRangeOf(weapon)) {
+        return refuse(`${flight.label} is out of ${weapon.label}'s reach`)
+      }
+      // 8.6: "each fighter group targeted requires a separate FireCon." A
+      // group already engaged this phase is free, exactly as a ship is (4.4).
+      if (needsFireCon(weapon) && !assignFireCon(ship, flight.id, state.phase)) {
+        return refuse(`No FireCon left to hold ${flight.label} (4.4, 8.6)`)
+      }
+
+      // "Ship to ship weapons roll 1D6 only against fighter groups, regardless
+      // of range band or normal damage inflicted" (8.6) — so the mount's own
+      // dice table does not come into it, and one mount is one die.
+      const result = shipFireAtFighters(flight, 1, state.rng)
+      markWeaponFired(ship, weapon.id, state.phase)
+      markShipFired(ship)
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'fire',
+        side: ship.side,
+        shipId: ship.id,
+        text: result.evaded
+          ? `${ship.name}'s ${weapon.label} finds ${flight.label} evading: automatic miss (8.6)`
+          : `${ship.name}'s ${weapon.label} at ${flight.label}: ${result.kills} killed`,
+        dice: result.rolls,
+      })
       return OK
     }
 
@@ -795,6 +1116,156 @@ function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | 
     default:
       return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// Flight operations (8)
+// ---------------------------------------------------------------------------
+
+/**
+ * The boundary between the game's fighter groups and `fighters.ts`.
+ *
+ * The module works in values: every one of its functions takes a group and
+ * returns a new one, which is what makes a dogfight between two groups one
+ * call instead of two half-applied mutations. `GameState` works in place,
+ * because the engine marks a ship's SSD the way a player marks a dry-erase
+ * sheet. `writeFlight` is where the two meet, and the only reason it is not a
+ * plain `Object.assign` is that the table's own columns — the group's name,
+ * whether it is gunboats, the landing stamp, what it declared an attack on —
+ * are not the module's to overwrite.
+ */
+function writeFlight(live: FighterGroupState, next: FighterGroup): void {
+  const { label, gunboats, recoveredTurn, targetId, side } = live
+  Object.assign(live, next, { label, gunboats, recoveredTurn, targetId, side })
+}
+
+function flightById(state: GameState, id: string): FighterGroupState | undefined {
+  return state.fighterGroups.find((group) => group.id === id)
+}
+
+/**
+ * What the carrier's flight deck can do this turn (8.1, 8.2).
+ *
+ * `usedThrust` is read off the written order rather than off the ship's
+ * position, because flight operations are phase 4 and ships do not move until
+ * phase 5: at the moment a group launches, the only evidence of what the
+ * carrier is about to do is what its captain wrote down.
+ */
+function carrierFlightState(state: GameState, carrier: ShipState): CarrierFlightState {
+  return {
+    launchFacilities: operationalCount(carrier, 'launch-tube'),
+    facilitiesUsed: facilitiesUsed(state, carrier),
+    usedThrust: carrierUnderThrust(carrier),
+    catapults: operationalCount(carrier, 'catapult') > 0,
+  }
+}
+
+/**
+ * Where the group is pointing after it moves.
+ *
+ * The default is the way it flew, because that is what a player who does not
+ * say otherwise means; 8.5 lets them say otherwise, and 8.7's front 180° makes
+ * it worth saying. A group that did not actually go anywhere keeps its facing.
+ */
+function facingAfterMove(
+  flight: FighterGroupState,
+  to: Point,
+  chosen: Course | undefined,
+): Course {
+  if (chosen !== undefined) return chosen
+  if (distance(flight.position, to) <= 1e-9) return flight.facing
+  return nearestCourse(flight.position, to)
+}
+
+/** The re-arm die a landing group rolls, in words for the log (8.16). */
+function describeRearm(rearm: RearmResult | null): string {
+  if (!rearm) return ''
+  if (rearm.outcome === 'lost') return ' — the group is written off (8.16)'
+  if (rearm.outcome === 'crash-turnaround') return ` — turned around for turn ${rearm.readyTurn}`
+  return ` — re-arming until turn ${rearm.readyTurn}`
+}
+
+function operationalCount(ship: ShipState, kind: SystemKind): number {
+  return ship.design.systems.filter(
+    (system) => system.kind === kind && !ship.destroyedSystems.has(system.id),
+  ).length
+}
+
+/**
+ * Launch tubes spent this turn.
+ *
+ * 8.1: "All carriers are allowed to launch (or recover) as many groups per
+ * turn as they have operational launch tube/flight decks" — one pool, drawn on
+ * by both operations, which is why both stamps are counted here.
+ */
+function facilitiesUsed(state: GameState, carrier: ShipState): number {
+  return state.fighterGroups.filter(
+    (group) =>
+      group.carrierId === carrier.id &&
+      (group.launchedTurn === state.turn || group.recoveredTurn === state.turn),
+  ).length
+}
+
+function carrierUnderThrust(carrier: ShipState): boolean {
+  if (!carrier.order) return false
+  return thrustBudget(carrier.order, movementStateOf(carrier).drive).totalUsed > 0
+}
+
+/**
+ * A fighter group's hits going onto a hull.
+ *
+ * The rear arc is denied on purpose: 8.9 says fighters "can attack ships from
+ * the rear arc, but like missiles gain no advantage from doing so as it is
+ * assumed that they must avoid being melted by the drive", so the optional rule
+ * of 4.10 does not apply however the game is configured.
+ */
+function applyFighterDamage(state: GameState, target: ShipState, result: WeaponResult): void {
+  const applied = applyDamage(targetStateOf(target), result, {
+    rearArcRule: false,
+    rearArc: false,
+    source: 'direct-fire',
+  })
+  writeBackDamage(target, applied.target)
+  markHullBoxes(target, applied.hullDamage)
+  if (target.destroyed) {
+    pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+  }
+}
+
+/**
+ * A ship as its point defence sees it.
+ *
+ * The one rule that lives here rather than in `defences.ts` is 8.4's: "A ship
+ * that launches or recovers fighters cannot use an ADFC in that turn." It is a
+ * flight-operations rule that happens to be paid for in point defence, so the
+ * ADFC count is zeroed at the boundary and `defences.ts` never has to know
+ * that carriers exist. The ship's own mounts still fire — only the umbrella it
+ * holds over its neighbours goes down.
+ */
+function pdDefenderOf(state: GameState, ship: ShipState, mounts: PdMount[]): PdDefender {
+  const busy = adfcLockedOut({
+    launchedThisTurn: launchedThisTurn(state, ship),
+    recoveredThisTurn: recoveredThisTurn(state, ship),
+  })
+  return {
+    id: ship.id,
+    placement: ship.placement,
+    mounts,
+    adfc: busy ? 0 : adfcCount(ship, 'adfc'),
+    advancedAdfc: busy ? 0 : adfcCount(ship, 'advanced-adfc'),
+  }
+}
+
+function launchedThisTurn(state: GameState, ship: ShipState): boolean {
+  return state.fighterGroups.some(
+    (group) => group.carrierId === ship.id && group.launchedTurn === state.turn,
+  )
+}
+
+function recoveredThisTurn(state: GameState, ship: ShipState): boolean {
+  return state.fighterGroups.some(
+    (group) => group.carrierId === ship.id && group.recoveredTurn === state.turn,
+  )
 }
 
 // ---------------------------------------------------------------------------

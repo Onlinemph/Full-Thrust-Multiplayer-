@@ -41,6 +41,10 @@ export function App() {
   const setup = currentSetup()
   const scenario = scenarioById(game.scenario)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /* A fighter group is picked separately from a ship: they are flown on the
+     table, not from a ship's panel, and a carrier's own counter stays selected
+     while its wing is out (8.5). */
+  const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null)
   const [viewingSide, setViewingSide] = useState<string | null>(null)
   const [showOnline, setShowOnline] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
@@ -130,6 +134,8 @@ export function App() {
           onSelect={setSelectedId}
           viewingSide={viewingSide}
           litArcs={litArcs}
+          selectedFlightId={selectedFlightId}
+          onSelectFlight={setSelectedFlightId}
         />
 
         <aside className="app-side">
@@ -151,8 +157,13 @@ export function App() {
 
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
 
-          {selected && selected.design.fighterBays.length > 0 ? (
-            <FlightPanel game={game} ship={selected} />
+          {game.fighterGroups.length > 0 ? (
+            <FlightPanel
+              game={game}
+              ship={selected}
+              selectedFlightId={selectedFlightId}
+              onSelectFlight={setSelectedFlightId}
+            />
           ) : null}
 
           {selected ? (

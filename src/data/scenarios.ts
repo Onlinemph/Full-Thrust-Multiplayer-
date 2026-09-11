@@ -16,6 +16,11 @@ import {
   type ShipState,
   type SideId,
 } from '../engine/game'
+import {
+  createFighterGroup,
+  FIGHTER_TYPES,
+  type FighterTypeId,
+} from '../engine/fighters'
 import type { Course, Point, ShipGroup } from '../engine/types'
 import { designById } from './ships'
 
@@ -267,26 +272,34 @@ export function scenarioById(id: string): Scenario | undefined {
  */
 function embarkedFlights(ship: ShipState): FighterGroupState[] {
   return ship.design.fighterBays.map((bay, index) => ({
-    id: `${ship.id}-flight-${index + 1}`,
+    // The catalogue's fighter types and their strengths, moves and endurance
+    // are `fighters.ts`'s (8.15), so the group is built by its constructor
+    // rather than by a literal here that would have to know a Light group is
+    // eight craft with four CEF.
+    ...createFighterGroup({
+      id: `${ship.id}-flight-${index + 1}`,
+      side: ship.side,
+      typeId: fighterTypeOf(bay.typeId),
+      carrierId: ship.id,
+      position: ship.placement.position,
+      facing: ship.placement.facing,
+    }),
     side: ship.side,
-    carrierId: ship.id,
-    typeId: bay.typeId,
     label: `${ship.name} ${bay.label}`,
     gunboats: false,
-    position: ship.placement.position,
-    facing: ship.placement.facing,
-    strength: 6,
-    cef: 6,
-    status: 'aboard',
-    launchedTurn: null,
-    role: 'free',
-    escorting: null,
-    movedThisTurn: false,
-    secondaryMovedThisTurn: false,
-    attackedThisTurn: false,
-    dogfightWith: null,
+    recoveredTurn: null,
     targetId: null,
   }))
+}
+
+/**
+ * An SSD names its bay's fighter type as a string, because `types.ts` is the
+ * schema every module reads and may not depend on any of them. An unknown name
+ * flies as a standard group rather than crashing the deployment: a carrier
+ * with an empty bay is a worse bug than a carrier with the wrong fighters.
+ */
+function fighterTypeOf(id: string): FighterTypeId {
+  return id in FIGHTER_TYPES ? (id as FighterTypeId) : 'standard'
 }
 
 export interface StartOptions {

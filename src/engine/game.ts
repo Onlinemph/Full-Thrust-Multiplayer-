@@ -18,6 +18,12 @@
 
 import { d6, Rng } from './dice'
 import {
+  beginFighterTurn,
+  type FighterGroup,
+  type FighterGroupStatus,
+  type FighterMission,
+} from './fighters'
+import {
   PHASE_LABELS,
   PHASE_ORDER,
   type Course,
@@ -251,42 +257,37 @@ export function createShipState(opts: ShipStateOptions): ShipState {
 // ---------------------------------------------------------------------------
 
 /** Where a fighter or gunboat group is in its life cycle (8.2, 8.13). */
-export type FighterStatus = 'aboard' | 'in-flight' | 'destroyed'
+export type FighterStatus = FighterGroupStatus
 
 /** A group's standing orders for the turn (8.6). */
-export type FighterRole = 'free' | 'screen' | 'pursuit'
+export type FighterRole = FighterMission
 
 /**
- * A fighter or gunboat group in play (8, 9). The group is the unit of
- * alternation in phases 4 and 6 (2.6), which is the only reason it is modelled
- * here; how it fights belongs to the fighter module.
+ * A fighter or gunboat group in play (8, 9).
+ *
+ * The group is the unit of alternation in phases 4 and 6 (2.6), which is why
+ * `GameState` knows about it at all; how it fights is `fighters.ts`'s business.
+ * The state carried here is `fighters.ts`'s own `FighterGroup` rather than a
+ * copy of it, because a copy would have to be converted at every call and
+ * every conversion is a chance for a group's fuel or its dogfight to be
+ * quietly dropped on the way through.
+ *
+ * What is added is what only a table needs: a name, whether the squadron is
+ * gunboats (9.1), the landing stamp that completes the tube-capacity sum, and
+ * what the group has declared an attack on.
  */
-export interface FighterGroupState {
-  id: string
+export interface FighterGroupState extends FighterGroup {
   side: SideId
-  /** Carrier that launched it, or null once the carrier is gone (8.2). */
-  carrierId: string | null
-  typeId: string
   label: string
   /** Gunboats operate in squadrons of six, like fighters (9.1). */
   gunboats: boolean
-  position: Point
-  /** A group has a facing, which need not be its direction of travel (8.5). */
-  facing: Course
-  /** Fighters left; a full group is six (8.15). */
-  strength: number
-  /** Combat endurance factors left (8.13). */
-  cef: number
-  status: FighterStatus
-  launchedTurn: number | null
-  role: FighterRole
-  /** Ship or group being screened or pursued (8.6). */
-  escorting: string | null
-  movedThisTurn: boolean
-  secondaryMovedThisTurn: boolean
-  attackedThisTurn: boolean
-  /** Group id this one is locked in a dogfight with (8.7, phase 8). */
-  dogfightWith: string | null
+  /**
+   * Turn the group last landed. Launching and recovering draw on the same pool
+   * of tubes (8.1), so both stamps have to be readable to know how much of a
+   * carrier's capacity this turn has gone.
+   */
+  recoveredTurn: number | null
+  /** What it has declared an attack on this turn (8.7), for the map. */
   targetId: string | null
 }
 
@@ -934,11 +935,11 @@ function onBeginTurn(state: GameState): void {
     )
   }
 
+  // The per-turn flags a group carries are `fighters.ts`'s to name, so they
+  // are cleared by its own function rather than by a list here that would
+  // silently fall behind it.
   for (const group of state.fighterGroups) {
-    group.movedThisTurn = false
-    group.secondaryMovedThisTurn = false
-    group.attackedThisTurn = false
-    group.dogfightWith = null
+    Object.assign(group, beginFighterTurn(group))
     group.targetId = null
   }
 }

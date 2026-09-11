@@ -7,6 +7,7 @@ import type { Point } from '../engine/types'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter } from './Counter'
+import { dispatch } from './store'
 
 /**
  * The plotting surface.
@@ -15,6 +16,13 @@ import { Counter } from './Counter'
  * draw on a real table: the counters, the course each ship has plotted for this
  * turn, range rings around the selected ship, and the fire arcs of whatever
  * weapon is in hand.
+ *
+ * Fighter groups are flown here rather than from a panel, because a group has
+ * no course and no written order — "a fighter group can move any distance up
+ * to the maximum allowed and in any direction" (8.5) — so the only thing a
+ * player can say about a move is *where*, and the only place to say it is the
+ * table. Pick a group, click where it should go; with one picked, clicking an
+ * enemy is the attack declaration of 8.7.
  */
 export interface MapViewProps {
   game: GameState
@@ -25,6 +33,9 @@ export interface MapViewProps {
   viewingSide: string | null
   /** Arcs to light up on the selected ship — the weapon currently in hand. */
   litArcs?: readonly ('F' | 'FS' | 'AS' | 'A' | 'AP' | 'FP')[]
+  /** The fighter group in hand, if any (8.5). */
+  selectedFlightId?: string | null
+  onSelectFlight?: (flightId: string | null) => void
 }
 
 const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
@@ -36,6 +47,8 @@ export function MapView({
   onSelect,
   viewingSide,
   litArcs,
+  selectedFlightId = null,
+  onSelectFlight,
 }: MapViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 960, height: 640 })
@@ -86,8 +99,51 @@ export function MapView({
     })
   }
 
-  const onPointerUp = () => {
+  /**
+   * A click on bare table, as opposed to the end of a pan.
+   *
+   * Four pixels of slop, because a pointer always moves a little between down
+   * and up and a player who meant to click should not have their fighters
+   * refuse to move for it.
+   */
+  const onPointerUp = (event: React.PointerEvent) => {
+    const start = drag.current
     drag.current = null
+    if (!start || !flight) return
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
+    const box = host.current?.getBoundingClientRect()
+    if (!box) return
+    flyTo({
+      x: (event.clientX - box.left - originX) / scale,
+      y: (event.clientY - box.top - originY) / scale,
+    })
+  }
+
+  const flight = selectedFlightId
+    ? game.fighterGroups.find((group) => group.id === selectedFlightId)
+    : undefined
+
+  /** Where a click on bare table sends the group in hand (8.5). */
+  const flyTo = (to: Point) => {
+    if (!flight) return
+    if (game.phase === 'move-fighters') dispatch({ type: 'move-flight', flightId: flight.id, to })
+    else if (game.phase === 'secondary-fighter-moves') {
+      dispatch({ type: 'secondary-move-flight', flightId: flight.id, to })
+    }
+  }
+
+  /**
+   * Clicking an enemy with a group in hand declares the attack the phase
+   * allows (8.7): a dogfight in phase 8, an attack run once point defence has
+   * had its say. Anything else falls through to ordinary ship selection.
+   */
+  const declareAgainstShip = (shipId: string): boolean => {
+    if (!flight) return false
+    const target = game.ships.find((s) => s.id === shipId)
+    if (!target || target.side === flight.side) return false
+    if (game.phase !== 'ordnance-vs-ships' && game.phase !== 'ship-fire') return false
+    dispatch({ type: 'flight-strike', flightId: flight.id, targetId: shipId })
+    return true
   }
 
   const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
@@ -240,12 +296,29 @@ export function MapView({
             .map((group) => (
               <g
                 key={group.id}
+                className="flight-group"
                 transform={`translate(${group.position.x * scale} ${group.position.y * scale})`}
+                role="button"
+                aria-label={`${group.label}, ${group.strength} fighters, ${group.cef} CEF`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  if (flight && group.side !== flight.side && game.phase === 'fighter-vs-fighter') {
+                    dispatch({
+                      type: 'flight-dogfight',
+                      flightId: flight.id,
+                      targetFlightId: group.id,
+                    })
+                    return
+                  }
+                  onSelectFlight?.(group.id === selectedFlightId ? null : group.id)
+                }}
               >
                 {/* Strength inside, endurance beneath: a group is read as "how
                     many are left" and "how much they can still do" (8.9, 8.13). */}
                 <circle
-                  className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}`}
+                  className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}${
+                    group.id === selectedFlightId ? ' is-selected' : ''
+                  }`}
                   r={6}
                 />
                 <text className="flight-cef" y={3}>
@@ -295,7 +368,10 @@ export function MapView({
                 cloaked={ship.cloaked}
                 scale={scale}
                 art={ship.design.art}
-                onClick={() => onSelect(ship.id === selectedId ? null : ship.id)}
+                onClick={() => {
+                  if (declareAgainstShip(ship.id)) return
+                  onSelect(ship.id === selectedId ? null : ship.id)
+                }}
               />
             ))}
         </g>
