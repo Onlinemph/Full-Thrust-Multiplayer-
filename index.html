@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Full Thrust: Project Continuum — Digital Tabletop</title>
+    <meta
+      name="description"
+      content="A browser implementation of Full Thrust: Project Continuum, the fleet-scale starship combat rules by Jon Tuffley and the Emerald Coast Skunkworks. Hot-seat or remote play, no server."
+    />
+
+    <!-- The app is dark throughout; say so before the CSS lands so there is no
+         white flash and the browser chrome matches. -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#04070d" />
+
+    <!-- An inline SVG favicon: a ship counter under thrust. Data URIs are
+         relative to nothing, so this survives being hosted under a subpath
+         such as a GitHub Pages project site, and costs no extra request. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2304070d'/%3E%3Cpath d='M16 4 L25 24 L16 20 L7 24 Z' fill='%2364d2ff'/%3E%3Cpath d='M16 20 L19 29 L16 27 L13 29 Z' fill='%23ff7a3d'/%3E%3C/svg%3E"
+    />
+
+    <meta property="og:title" content="Full Thrust: Project Continuum — Digital Tabletop" />
+    <meta
+      property="og:description"
+      content="Fleet-scale starship combat in the browser. Cinematic movement, threshold checks, the full weapon list, fighters and gunboats, and a ship designer on the official construction tables."
+    />
+    <meta property="og:type" content="website" />
+
+    <!-- Relative, so a project-site subpath resolves it. -->
+    <link rel="manifest" href="manifest.webmanifest" />
+  </head>
+  <body>
+    <!--
+      React replaces everything inside #root on mount. Anything still visible
+      here means the script never ran — almost always because the host is
+      serving this repository's *source* rather than a build, which otherwise
+      leaves a blank page with no clue as to why. Say so instead.
+    -->
+    <div id="root">
+      <div class="boot-message">
+        <h1>Full Thrust: Project Continuum</h1>
+        <p>
+          The page loaded but the game did not start. This host is serving the repository
+          <em>source</em> rather than a built site.
+        </p>
+        <p>
+          <strong>On GitHub Pages</strong>, that means the source is set to
+          <em>Deploy from a branch</em>, which publishes the files through Jekyll — Jekyll cannot
+          build this app, and it overwrites the real build on every push. Go to
+          <em>Settings → Pages → Source</em> and choose <strong>GitHub Actions</strong>.
+        </p>
+        <p>
+          <strong>Anywhere else</strong>, run <code>npm install &amp;&amp; npm run build</code> and
+          serve the <code>dist/</code> folder.
+        </p>
+        <noscript>
+          <p><strong>JavaScript is switched off.</strong> The rules engine runs in your browser, so the game needs it.</p>
+        </noscript>
+      </div>
+    </div>
+    <style>
+      /* The real stylesheet arrives with the bundle, so this fallback carries
+         just enough of it to be readable on its own. */
+      body { margin: 0; background: #04070d; }
+      .boot-message {
+        max-width: 34rem;
+        margin: 12vh auto;
+        padding: 0.9rem 1.5rem;
+        border-left: 8px solid #64d2ff;
+        border-radius: 0 8px 8px 0;
+        background: #0d1220;
+        font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+        color: #e6ecf7;
+        line-height: 1.55;
+      }
+      .boot-message h1 {
+        font-family: 'Antonio', 'Oswald', 'Arial Narrow', 'Inter', system-ui, sans-serif;
+        font-size: 1.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: #8fe3ff;
+        margin-bottom: 0.8rem;
+      }
+      .boot-message code { background: #161c2d; border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.9em; }
+      .boot-message p { color: #93a0bd; }
+    </style>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

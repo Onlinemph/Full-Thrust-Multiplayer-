@@ -1,0 +1,14 @@
+{
+  "name": "Full Thrust: Project Continuum — Digital Tabletop",
+  "short_name": "Full Thrust",
+  "description": "Fleet-scale starship combat in the browser. Cinematic movement, threshold checks, fighters and gunboats, and a ship designer on the official construction tables.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#04070d",
+  "theme_color": "#04070d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

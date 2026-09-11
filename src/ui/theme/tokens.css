@@ -1,0 +1,179 @@
+/* Full Thrust: Project Continuum — design system foundation.
+   ────────────────────────────────────────────────────────────────────────────
+   Tokens and element-level rhythm only. No component class is styled here.
+
+   The system in one paragraph: this is a naval plotting table, not a starship
+   bridge. The ground is a deep blue-black; information is drawn on it in thin
+   luminous lines the way a plot is drawn in chinagraph on glass. Ranges, arcs
+   and course tracks are cyan. Thrust and anything the player is spending is
+   orange. Damage is red, and red is reserved for damage — side identity never
+   borrows it. Panels are recessed wells rather than raised cards: there is no
+   elevation ramp, no bevel, no light source. Type is condensed and uppercase
+   for labels, plain for prose, and tabular-figure monospace for any number a
+   player would read off an SSD.
+
+   Rules-information colour is frozen. Chrome may be retuned freely; the tokens
+   in section 1 may not, because they carry game state. */
+
+:root {
+  /* ══ 1. RULES INFORMATION — FROZEN ════════════════════════════════════════
+     These carry meaning. Never retune them and never borrow them for chrome. */
+
+  /* Side identity. Deliberately not red/blue: red is damage, and a red fleet
+     on a table full of damage markers is unreadable. */
+  --side-a: #64d2ff; /* cyan   — 10.4:1 on --bg */
+  --side-b: #ffc24a; /* amber  — 12.7:1 on --bg */
+  --side-c: #b79cff; /* violet —  7.6:1 on --bg */
+  --side-neutral: #8b97b0;
+
+  --thrust: #ff7a3d; /* thrust spent, acceleration, emergency thrust */
+  --screens: #6fe3c4; /* screens up, and the screen level readout     */
+  --armour: #9fb3d9; /* armour boxes, intact                         */
+  --hull: #d7e2f5; /* hull boxes, intact                           */
+  --damage: #ff5555; /* marked boxes, destroyed systems, threshold   */
+  --warn: #ffb020; /* degraded: half drive, one screen left        */
+  --ordnance: #ff8fc4; /* missiles and their markers                   */
+  --fighters: #7dff9e; /* fighter groups and their CEF                 */
+
+  /* ══ 2. GROUND AND SURFACES ═══════════════════════════════════════════════
+     Four steps and no more. A panel is a well cut into the ground, not a card
+     floating above it, so the ramp runs darker-than-ground, not lighter. */
+  --bg: #04070d; /* the ground */
+  --void: #01030a; /* deep space behind the plotting surface */
+  --panel: #0b101c; /* panel ground */
+  --panel-2: #131a2b; /* row, chip, control at rest */
+  --panel-3: #1d263d; /* hover and selection — the only lit state */
+
+  /* ══ 3. LINES AND TYPE ════════════════════════════════════════════════════ */
+  --line: #253150; /* panel edges and table rules */
+  --line-soft: #18213a; /* grid lines on the plotting surface */
+  --ink: #e6ecf7; /* body text */
+  --ink-dim: #93a0bd; /* secondary text, captions, disabled */
+  --ink-faint: #5d6a86; /* axis labels, watermarks */
+  --on-bright: #04070d; /* ink used on any bright fill */
+
+  /* ══ 4. TYPE SCALE ════════════════════════════════════════════════════════
+     Two weights, 400 and 700. Nothing between. */
+  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Antonio', 'Oswald', 'Arial Narrow', 'Inter', system-ui, sans-serif;
+  /* Every number a player reads off an SSD is tabular, so columns of hull
+     boxes and dice results line up without a table. */
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Mono', monospace;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+
+  /* ══ 5. SPACE AND SHAPE ═══════════════════════════════════════════════════ */
+  --gap: 0.5rem;
+  --gap-2: 0.75rem;
+  --gap-3: 1.125rem;
+  --radius: 3px; /* plotting instruments have square corners */
+  --radius-lg: 6px;
+
+  color-scheme: dark;
+}
+
+/* ── Element rhythm ───────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--gap);
+  color: var(--side-a);
+}
+
+h1 {
+  font-size: var(--text-xl);
+}
+h2 {
+  font-size: var(--text-lg);
+}
+h3 {
+  font-size: var(--text-md);
+}
+h4 {
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+/* Any figure a player would read off a ship form: tabular, so a column of
+   hull boxes or die results lines up without being put in a table. */
+.num,
+td.num,
+.ssd var,
+output {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-style: normal;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.35em 0.8em;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--panel-3);
+}
+
+button:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+/* The one primary action on a screen. Orange, because a primary action is
+   almost always the player spending something. */
+button.primary {
+  background: var(--thrust);
+  border-color: var(--thrust);
+  color: var(--on-bright);
+  font-weight: 700;
+}
+
+/* Focus is visible on every control: this game is played through a lot of
+   small buttons and a keyboard user must be able to see where they are. */
+:focus-visible {
+  outline: 2px solid var(--side-a);
+  outline-offset: 2px;
+}
+
+/* Honour a reduced-motion preference: the map's fire and explosion effects are
+   decorative and nothing in the rules depends on seeing them animate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
