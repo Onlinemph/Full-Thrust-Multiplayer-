@@ -241,10 +241,11 @@ on the hull.
 | Rocket pod | 1 | 3 points | 6.7 |
 | Plasma Bolt Launcher, class *n* | 3*n*, +*n* per extra arc (max 3 arcs) | 3 per mass | 6.8 |
 
-**Not in the extract:** the mass of an *extended-range* single-shot rack. The caption reads
-*"Single shot SMLs are 4 mass / SML launchers are 3 mass / Extended range single shot SMLs"* and the
-number is lost in the figure. `ORDNANCE_MOUNTS` therefore records the ER rack's mass as `null`
-rather than guessing one.
+**Not in the extract:** the mass of an *extended-range* single-shot rack, and the mass of a **Heavy
+Missile** rack. The caption reads *"Single shot SMLs are 4 mass / SML launchers are 3 mass /
+Extended range single shot SMLs"* and then breaks off into the magazine-load line; the Heavy Missile
+rack is never priced in section 6 at all (section 14.6's table is past the extract's last page).
+`ORDNANCE_MOUNTS` records both masses as `null` rather than guessing one.
 
 ### Magazine capacity
 
@@ -536,3 +537,26 @@ on request and rolls nothing, so the rule can be finished when the table arrives
 - **Whether a marker's line of aim is blocked.** 6.3 bars aim points *"obstructed by any asteroids,
   planets, or similar obstacles"*; terrain (17) is not implemented anywhere in the engine, so the
   launch functions take an `obstructed` flag the caller may set.
+
+---
+
+## Integration notes
+
+- **`ORDNANCE_WEAPON_SPECS`** is a `WeaponSpecTable` covering `heavy-missile`, `salvo-missile-rack`,
+  `salvo-missile-launcher`, `antimatter-missile`, `rocket-pod`, `plasma-bolt-launcher` and
+  `mine-rack`. Each spec answers `maxRange`, `requiresFireCon`, `damageMode` and `ordnance: true`,
+  and its `fire()` always returns `null` because no ordnance is fired in phase 11. `weapons/index.ts`
+  can merge it in beside `BEAM_WEAPON_SPECS` and `KINETIC_WEAPON_SPECS` with one import.
+- **What `game.ts` calls, in sequence order:** `launchMissile` / `fireRocketPod` /
+  `launchPlasmaBolt` / `relocateMultiStageMarker` (phase 3) → `moveOrdnanceMarkers`, `layMines`,
+  `minesTriggeredBy` + `resolveMineAttack` (phase 5) → `acquireMissileTargets` (phase 7) →
+  `resolveMissilePointDefence` / `resolvePlasmaBoltDefence` (phase 9) → `resolveOrdnanceAttack`,
+  `resolveAntimatterDetonation`, `resolvePlasmaBoltDetonation` (phase 10).
+- **Defined here because the spine does not carry them:** `d3` (no D3 in `dice.ts`),
+  `nearestCourse` (no degrees-to-clock in `geometry.ts`), `distanceToSegment` / `distanceToPath`
+  (point-to-point measurement only), and a point-defence roll that honours a DRM
+  (`dice.pointDefenceKills` takes none, which the K-1 of 5.16 needs). The un-modified case still goes
+  through `dice.pointDefenceKills` so the 6.4 table lives in one place.
+- **Reading taken on a modified point-defence die:** the re-roll is earned by the **natural** 6, in
+  line with 4.6 — *"a +1 DRM makes a 5 hit as though it were a 6 but does not earn the extra die"* —
+  so a K-1's natural 6 scores as a 5 and still re-rolls.

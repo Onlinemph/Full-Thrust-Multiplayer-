@@ -517,10 +517,18 @@ Phase"* (8.8).
 | Grapeshot | 4 | PDS | 6 MU, one-shot |
 | Scattergun | 1d6 kills outright | — | 6 MU, one-shot |
 
+Arcs always apply: a plain PDS has all six (4.2), a Gatling, TPA, Meson Projector or Pulser in PD
+mode only its own.
+
 *Reading (PDS envelope against ordnance and fighters):* 7.12 gives a PDS a 6 MU reach only for its
 anti-ship mode; against attackers it says nothing, because an attack run is by definition adjacent.
-6 MU is used throughout, which is also the ADFC radius, so nothing a PDS can legally be pointed at
-lies outside it.
+6 MU is used for that case too.
+
+*Reading (the envelope does not apply through ADFC):* the envelope is measured **defender → threat**
+and is checked only for the `self` and `adfc-direct` reaches. For `adfc-ally` the only range test is
+**defender → the covered ally ≤ 6 MU**, because 8.8's worked example has ship B's PDS engage group X
+*"although the fighters are more than 6MU away"*. Reading it the other way would make the example
+illegal.
 
 ### Worked example (8.8)
 
@@ -567,3 +575,19 @@ prevent any meaningful explosion."* The allocator therefore caps recorded hits a
 | What a plasma bolt, gunboat or heavy fighter *is* | sections 6.8, 9, 8.15 — other modules; this module takes the target category as an input |
 | Per-weapon PD quirks (K-1's −1 DRM and aft-arc bar, EMP-1's −1, Interceptor's +1) | the weapon modules own the numbers; `PdMount.drm` carries whatever they say |
 | Holofield (7.17) onward | outside 7.2–7.16 |
+
+---
+
+## What the spine did not provide
+
+These are defined in `defences.ts` rather than in `types.ts`, `dice.ts` or `geometry.ts`, which this
+module must not edit:
+
+| Missing | Stood in for by |
+| --- | --- |
+| `ShipDesign` has no stealth-hull level (7.4); `SystemKind` has `stealth-field` but no level either | `StealthLevel` is a parameter to every stealth function |
+| `ScreenDef.area` is `{ advanced: boolean }` with no level (7.16) | `AreaScreenCover.level`, defaulting to 1 when read off a plain SSD |
+| `SystemDef` has no ammunition or one-shot flag, so a scattergun or grapeshot cannot record that it has fired (7.14, 7.15) | `PdMount.expended` |
+| `dice.pointDefenceKills` takes no DRM, and several mounts have one — K-1 −1 (5.16), EMP-1 −1 (5.4), Interceptor +1 (8.15), any PD vs a plasma bolt −2 (6.8) | `rollPointDefenceDice`, which delegates to `pointDefenceKills` whenever the DRM is zero and only rolls itself when it is not |
+| `dice.ScreenLevel` is `0 \| 1 \| 2`, but an area screen reaches 3 (7.16) | `UmbrellaLevel`, with `screenProtection` narrowing back to a `ScreenLevel` for the 4.7 table |
+| Nothing tracks armour boxes burnt out by a natural 1 on a regeneration roll (7.8) | `regenerateArmour` takes and returns a `burntOut` array alongside `remaining` |

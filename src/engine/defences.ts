@@ -1032,16 +1032,9 @@ export function validatePointDefence(
       continue
     }
 
-    const already = diceUsed.get(mount.id) ?? 0
-    if (already + allocation.dice > option.dice) {
-      refusals.push({
-        code: 'mount-overcommitted',
-        mountId: mount.id,
-        threatId: allocation.threatId,
-        detail: `${mount.id} has ${option.dice} die/dice here; ${already + allocation.dice} committed (2.6)`,
-      })
-      continue
-    }
+    // The split test comes first: pointing one mount at two targets is a
+    // different mistake from spending more dice than it has, and 2.6's
+    // once-per-turn rule is the one a player will have broken.
     const pairings = pairingsPerMount.get(mount.id) ?? 0
     if (pairings >= 1 && !option.splittable) {
       refusals.push({
@@ -1049,6 +1042,16 @@ export function validatePointDefence(
         mountId: mount.id,
         threatId: allocation.threatId,
         detail: `${mount.id} may only be directed at a single target this turn (2.6)`,
+      })
+      continue
+    }
+    const already = diceUsed.get(mount.id) ?? 0
+    if (already + allocation.dice > option.dice) {
+      refusals.push({
+        code: 'mount-overcommitted',
+        mountId: mount.id,
+        threatId: allocation.threatId,
+        detail: `${mount.id} has ${option.dice} die/dice here; ${already + allocation.dice} committed (2.6)`,
       })
       continue
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { HULL_FRACTION, HULL_POINTS_PER_BOX, type ShipDesign } from '../engine/types'
+import { hullBoxesFor, priceDesign, validateDesign } from './designPricing'
 import { GENERATED_DESIGNS } from './generatedShips'
 import { SHIP_DESIGNS } from './ships'
 
@@ -12,44 +12,6 @@ import { SHIP_DESIGNS } from './ships'
  * a design is edited by hand. A mispriced hull does not crash anything; it just
  * makes every battle it appears in unfair, and nobody notices for months.
  */
-
-/** Mass of every system fitted, which must fit inside the hull (13.14). */
-function fittedMass(design: ShipDesign): number {
-  const hull = design.hullBoxes
-  const drive = 0.05 * design.drive.thrust * design.mass
-  const ftl = design.ftl === 'none' ? 0 : 0.1 * design.mass
-  const stream =
-    design.streamlining === 'none' ? 0 : (design.streamlining === 'partial' ? 0.05 : 0.1) * design.mass
-  const armour = design.armour.layers.reduce((a, b) => a + b, 0)
-  const screens =
-    (design.screens.advanced ? 0.075 : 0.05) * design.mass * design.screens.level
-  const weapons = design.weapons.reduce((sum, w) => sum + w.mass, 0)
-  const turrets = design.turrets.reduce((sum, t) => sum + t.mass, 0)
-  const systems = design.systems.reduce((sum, s) => sum + s.mass, 0)
-  return hull + drive + ftl + stream + armour + screens + weapons + turrets + systems
-}
-
-/** Combat Points Value from the parts (14, 18.3). */
-function pricedPoints(design: ShipDesign): number {
-  const hull = design.hullBoxes * HULL_POINTS_PER_BOX[design.hullRows]
-  const drive = 0.05 * design.drive.thrust * design.mass * (design.drive.advanced ? 3 : 2)
-  const ftl = design.ftl === 'none' ? 0 : 0.1 * design.mass * (design.ftl === 'advanced' ? 3 : 2)
-  // Armour: 2 points a box on the inner layer, then 4, 6, 8, 10 per shell (7.7).
-  const shellPoints = [2, 4, 6, 8, 10]
-  const armour = design.armour.layers.reduce((sum, boxes, i) => sum + boxes * shellPoints[i], 0)
-  const screens =
-    (design.screens.advanced ? 0.075 : 0.05) *
-    design.mass *
-    design.screens.level *
-    (design.screens.advanced ? 4 : 3)
-  const weapons = design.weapons.reduce((sum, w) => sum + w.points, 0)
-  const turrets = design.turrets.reduce((sum, t) => sum + t.points, 0)
-  const systems = design.systems.reduce((sum, s) => sum + s.points, 0)
-  // A damage control party and a marine boarding party cost 5 points and no
-  // mass apiece (13.13).
-  const crew = (design.damageControlParties + design.marineParties) * 5
-  return hull + drive + ftl + armour + screens + weapons + turrets + systems + crew
-}
 
 describe('the roster', () => {
   it('has unique ids', () => {
@@ -69,27 +31,36 @@ describe('the roster', () => {
     '%s fits inside its own hull',
     (id, design) => {
       // 13.14: a design may not carry more mass of systems than the hull rates.
-      expect(fittedMass(design), `${id} carries ${fittedMass(design)} on ${design.mass}`).toBeLessThanOrEqual(
-        design.mass + 1e-6,
-      )
+      const cost = priceDesign(design)
+      expect(cost.massUsed, `${id} carries ${cost.massUsed} on ${cost.massAvailable}`)
+        .toBeLessThanOrEqual(cost.massAvailable + 1e-6)
     },
   )
 
   it.each(GENERATED_DESIGNS.map((d) => [d.id, d] as const))(
     '%s has the hull boxes its integrity class gives it',
     (id, design) => {
-      expect(design.hullBoxes, id).toBe(Math.floor(design.mass * HULL_FRACTION[design.hullClass]))
+      expect(design.hullBoxes, id).toBe(hullBoxesFor(design.mass, design.hullClass))
     },
   )
 
   it.each(GENERATED_DESIGNS.map((d) => [d.id, d] as const))(
     '%s is priced at the sum of its parts',
     (id, design) => {
-      // Rounded, because several components are priced per fractional mass —
-      // a thrust-3 drive on a 170-mass hull is 25.5 mass of drive.
-      expect(Math.round(pricedPoints(design)), id).toBe(design.points)
+      // The declared CPV must be what the tables say the parts cost. This is
+      // the assertion that catches a hand-edited design, and it is why the
+      // roster is generated rather than written.
+      expect(priceDesign(design).points, id).toBe(design.points)
     },
   )
+
+  it('passes the designer\'s own validation', () => {
+    // The same check a player gets while building, run over the shipped fleet:
+    // if the roster cannot pass it, the check is wrong or the roster is.
+    for (const design of SHIP_DESIGNS) {
+      expect(validateDesign(design), design.id).toEqual([])
+    }
+  })
 
   it('does not carry more armour than hull', () => {
     // Legal, but a hull plated with more ablative armour than it has structure

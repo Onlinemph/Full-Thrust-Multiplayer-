@@ -89,12 +89,16 @@ export const HEAVY_CRUISER: ShipDesign = {
     { id: 'pds-2', kind: 'pds', label: 'PDS', mass: 1, points: 3 },
     { id: 'pds-3', kind: 'pds', label: 'PDS', mass: 1, points: 3 },
     { id: 'pds-4', kind: 'pds', label: 'PDS', mass: 1, points: 3 },
+    // A screen generator is a symbol on the SSD and takes threshold checks
+    // like any other (2.4, 4.11); its mass and points are already paid as a
+    // fraction of hull mass (7.2), so the entry itself is free.
+    { id: 'screen-gen-1', kind: 'screen-generator', label: 'Screen Gen', mass: 0, points: 0 },
   ],
   fighterBays: [],
   gunboats: [],
   damageControlParties: 3,
   marineParties: 2,
-  points: 220,
+  points: 230,
   provisional: true,
   notes:
     'Built from the prose statement of the introductory cruiser in 4.11. The printed SSD is an ' +
