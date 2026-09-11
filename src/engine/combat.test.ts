@@ -19,6 +19,7 @@ import {
   hullRowBounds,
   planFireControl,
   rollBeamAttack,
+  rowBoundsFor,
   rowsCrossedBetween,
   scoreBeamDice,
   thresholdTrigger,
@@ -435,6 +436,22 @@ describe('4.11 hull rows', () => {
   it('gives the earlier rows the odd box', () => {
     expect(hullRowBounds(14, 4)).toEqual([4, 8, 11, 14])
     expect(hullRowBounds(26, 4)).toEqual([7, 14, 20, 26])
+  })
+
+  it('honours a row layout printed on the SSD', () => {
+    // game.ts carries `hullRowSizes` for SSDs that do not divide evenly; a row
+    // boundary is a threshold point, so the printed one has to win.
+    const target: DamageableTarget = {
+      hullBoxes: 10,
+      hullRows: 3,
+      hullDamage: 0,
+      armourRemaining: [],
+      hullRowSizes: [5, 3, 2],
+    }
+    expect(rowBoundsFor(target)).toEqual([5, 8, 10])
+    const applied = applyDamage(target, hit(8))
+    expect(applied.rowsCrossed).toEqual([1, 2])
+    expect(applied.target.hullRowSizes).toEqual([5, 3, 2])
   })
 
   it('counts only the rows whose last box went', () => {

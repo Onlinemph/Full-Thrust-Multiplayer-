@@ -37,6 +37,11 @@ import {
   validateOrder,
   type MovementState,
 } from './movement'
+import {
+  damageControlPhase,
+  rollThresholdChecks,
+  thresholdPhase,
+} from './threshold'
 import type { Arc, MovementOrder, TurnDirection } from './types'
 
 // ---------------------------------------------------------------------------
@@ -98,9 +103,12 @@ export type GameAction =
   | { type: 'resolve-boarding' }
 
   // Threshold and repair (phases 13, 14)
+  /** One ship's threshold point. Every ship that owes one, in one action. */
   | { type: 'threshold-check'; shipId: string }
+  | { type: 'threshold-sweep' }
   | { type: 'assign-damage-control'; shipId: string; systemId: string; parties: number }
-  | { type: 'resolve-damage-control'; shipId: string }
+  /** Phase 14 sweep: every party that was assigned makes its roll. */
+  | { type: 'resolve-damage-control' }
   | { type: 'resolve-reactor-explosions' }
 
   // Electronic warfare and cloaks (7.17 – 7.22)
@@ -334,6 +342,37 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return assigned === action.parties ? OK : refuse('Not enough damage control parties')
     }
 
+    // ── Threshold checks (4.11, phase 13) ─────────────────────────────────
+    case 'threshold-check': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      const result = rollThresholdChecks(ship, state.rng, {
+        turn: state.turn,
+        driveDamage: optional(state).driveDamage,
+      })
+      if (!result) return refuse('No threshold check owing')
+      pushLog(state, {
+        kind: 'threshold',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} crosses hull row ${result.rowsLost}: systems lost on ${result.target}+`,
+        dice: result.checks.map((check) => check.roll),
+      })
+      return OK
+    }
+
+    case 'threshold-sweep': {
+      if (state.phase !== 'threshold') return refuse('Threshold checks are phase 13')
+      thresholdPhase(state, { driveDamage: optional(state).driveDamage })
+      return OK
+    }
+
+    case 'resolve-damage-control': {
+      if (state.phase !== 'damage-control') return refuse('Repairs are made in phase 14')
+      damageControlPhase(state)
+      return OK
+    }
+
     default:
       // Handlers for combat, ordnance, flight operations, boarding, threshold
       // and cloaks arrive with their engine modules. Refusing by name rather
@@ -358,6 +397,33 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
  * Stored off the GameState so it never rides in a save: readiness is about the
  * two people at the table, not about the battle.
  */
+/**
+ * Optional rules in force for this battle.
+ *
+ * They live in the setup rather than in GameState, which the engine cannot
+ * reach — so the store stamps them here when it builds the game. Held off the
+ * state so they never ride in a save twice and can never drift from the setup
+ * that is the authority.
+ */
+export interface OptionalRules {
+  driveDamage?: boolean
+  rearArcAttacks?: boolean
+  coreSystems?: boolean
+  reactorBreaches?: boolean
+  emergencyThrust?: boolean
+  sensorRules?: boolean
+}
+
+const OPTIONS = new WeakMap<GameState, OptionalRules>()
+
+export function setOptionalRules(state: GameState, rules: OptionalRules): void {
+  OPTIONS.set(state, rules)
+}
+
+export function optional(state: GameState): OptionalRules {
+  return OPTIONS.get(state) ?? {}
+}
+
 const READY = new WeakMap<GameState, Record<SideId, boolean>>()
 
 function readySides(state: GameState): Record<SideId, boolean> {

@@ -214,7 +214,10 @@ Notes on the readings taken:
 Hull boxes are crossed off **left to right** (4.9) and the track is divided into `hullRows` rows
 (13.7). The SSD in the rulebook's example is *"12 hull boxes in four rows of three"*. Where the
 boxes do not divide evenly the engine gives the **earlier** rows the extra box (14 boxes in 4 rows →
-4/4/3/3), matching how an SSD is drawn top-down with a short last row.
+4/4/3/3), matching how an SSD is drawn top-down with a short last row. A printed SSD that splits its
+track some other way overrides that: put the row lengths in `DamageableTarget.hullRowSizes` and
+`rowBoundsFor` uses them, because a row boundary *is* a threshold point and has to fall where the
+sheet says it does.
 
 `applyDamage` returns `rowsCrossed`, the 1-based indices of every row **completed** by that attack,
 and from it:

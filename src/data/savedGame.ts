@@ -7,7 +7,7 @@
  * actions without a server. See docs/architecture.md.
  */
 
-import { applyAction, type GameAction } from '../engine/actions'
+import { applyAction, setOptionalRules, type GameAction } from '../engine/actions'
 import type { GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
@@ -92,7 +92,19 @@ export interface SavedGame {
 export function buildGame(setup: GameSetup): GameState {
   setEmbeddedDesigns(setup.customDesigns ?? [])
   setEmbeddedScenario(setup.customScenario ?? null)
-  return startScenario(setup.scenarioId, { seed: setup.seed })
+  const game = startScenario(setup.scenarioId, { seed: setup.seed })
+  // The optional rules are part of the setup, and the setup is what a battle
+  // file carries — so stamping them onto the game here is what makes a replay
+  // fight under the rules the battle was actually fought under.
+  setOptionalRules(game, {
+    driveDamage: setup.driveDamage,
+    rearArcAttacks: setup.rearArcAttacks,
+    coreSystems: setup.coreSystems,
+    reactorBreaches: setup.reactorBreaches,
+    emergencyThrust: setup.emergencyThrust,
+    sensorRules: setup.sensorRules,
+  })
+  return game
 }
 
 /**

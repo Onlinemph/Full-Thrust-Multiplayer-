@@ -215,6 +215,35 @@ function PhaseControls({ phase }: { phase: Phase }) {
           </button>
         </div>
       )
+    case 'threshold':
+      return (
+        <div className="panel">
+          <h3>Phase 13 · Threshold checks</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Every ship that crossed a hull row this turn rolls one die per surviving system: a 6
+            at the first threshold, 5 or better at the second, 4 or better at the third.
+          </p>
+          <button className="primary" onClick={() => dispatch({ type: 'threshold-sweep' })}>
+            Roll threshold checks
+          </button>
+        </div>
+      )
+    case 'damage-control':
+      return (
+        <div className="panel">
+          <h3>Phase 14 · Damage control</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Up to three parties may work one system, and it is repaired on a die at or below the
+            number assigned.
+          </p>
+          <button
+            className="primary"
+            onClick={() => dispatch({ type: 'resolve-damage-control' })}
+          >
+            Make repair rolls
+          </button>
+        </div>
+      )
     default:
       return (
         <div className="panel">
