@@ -7,6 +7,7 @@ import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
+import { ReplayBar } from './ReplayBar'
 import { Scoreboard } from './Scoreboard'
 import { SetupPanel } from './SetupPanel'
 import { KEY_HELP, useKeyboard } from './useKeyboard'
@@ -44,6 +45,7 @@ export function App() {
   // Dismissed once, the result stays dismissed: a player who closes it to look
   // at the wreckage should not have it thrown back at them every phase.
   const [resultSeen, setResultSeen] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
@@ -124,7 +126,17 @@ export function App() {
         />
 
         <aside className="app-side">
-          {game.phase === 'ship-fire' && selected ? (
+          <ReplayBar onPreview={setPreviewing} />
+
+          {previewing ? (
+            <div className="panel">
+              <h3>Replaying</h3>
+              <p style={{ color: 'var(--ink-dim)' }}>
+                An earlier moment of this battle, rebuilt from the journal — the same seed, so the
+                same dice. Slide back to now to keep playing.
+              </p>
+            </div>
+          ) : game.phase === 'ship-fire' && selected ? (
             <CombatPanel game={game} ship={selected} onHoverWeapon={setLitArcs} />
           ) : (
             <PhaseControls phase={game.phase} />

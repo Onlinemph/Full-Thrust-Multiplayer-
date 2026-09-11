@@ -131,3 +131,35 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* ── Replay scrubber ──────────────────────────────────────────────────────── */
+
+.replay-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.3rem var(--gap);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: var(--text-xs);
+}
+
+/* Previewing is a mode, and a mode a player can forget they are in is a bug
+   waiting to happen — so the bar itself changes colour while it is up. */
+.replay-bar.is-previewing {
+  border-color: var(--thrust);
+  color: var(--thrust);
+}
+
+.replay-bar input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--thrust);
+}
+
+.replay-bar .replay-state {
+  color: var(--screens);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

@@ -261,6 +261,7 @@ export function applyRemoteSave(next: SavedGame): void {
   clearReady(game)
   clearFx()
   aiActed = new Set()
+  preview = null
   autosave()
   emit()
 }
@@ -280,6 +281,7 @@ export function undo(): boolean {
   clearReady(game)
   clearFx()
   aiActed = new Set()
+  preview = null
   autosave()
   net?.onUndo(journal.length)
   emit()
@@ -298,6 +300,7 @@ export function newGame(next: GameSetup): void {
   game = buildGame(setup)
   clearFx()
   aiActed = new Set()
+  preview = null
   autosave()
   net?.onReplace(saved())
   emit()
@@ -312,6 +315,7 @@ export function loadGame(text: string): string | null {
   game = replayPartial(parsed, parsed.actions.length)
   clearFx()
   aiActed = new Set()
+  preview = null
   autosave()
   net?.onReplace(saved())
   emit()
@@ -327,7 +331,17 @@ export function exportGame(): string {
 // Reading
 // ---------------------------------------------------------------------------
 
+/**
+ * The battle as it should be drawn: the preview while one is up, otherwise the
+ * live game. Everything that WRITES uses `game` directly, so scrubbing can
+ * never be mistaken for playing.
+ */
 export function currentGame(): GameState {
+  return preview ?? game
+}
+
+/** The live battle, whatever the scrubber is showing. */
+export function liveGame(): GameState {
   return game
 }
 
@@ -337,6 +351,46 @@ export function currentSetup(): GameSetup {
 
 export function journalLength(): number {
   return journal.length
+}
+
+/** The journal itself, for the replay scrubber. Read-only by convention. */
+export function currentJournal(): readonly GameAction[] {
+  return journal
+}
+
+// ---------------------------------------------------------------------------
+// Replay preview
+// ---------------------------------------------------------------------------
+
+/**
+ * An earlier moment of the battle, shown without discarding the present.
+ *
+ * Free, and only because a battle is (setup + journal): any earlier state is
+ * the journal replayed to a shorter length, with the same seed drawing the same
+ * dice. Nothing is snapshotted and nothing is unwound.
+ *
+ * Kept beside the live game rather than replacing it, so the preview can be
+ * dropped instantly and no action taken while scrubbing can reach the record —
+ * `dispatch` always applies to `game`, never to this.
+ */
+let preview: GameState | null = null
+
+export function previewAt(count: number): void {
+  preview =
+    count >= journal.length
+      ? null
+      : replayPartial({ version: 1, setup, actions: journal }, count)
+  emit()
+}
+
+export function stopPreview(): void {
+  if (preview === null) return
+  preview = null
+  emit()
+}
+
+export function isPreviewing(): boolean {
+  return preview !== null
 }
 
 export function awaitingSides(): string[] {
@@ -365,5 +419,5 @@ export function useGameVersion(): number {
 /** The game, re-read on every change. */
 export function useGame(): GameState {
   useGameVersion()
-  return game
+  return preview ?? game
 }
