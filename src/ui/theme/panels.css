@@ -424,8 +424,41 @@
 
 /* ── Flight operations ────────────────────────────────────────────────────── */
 
+/* Two lines: the group on the first, what can be done with it on the second.
+   A group's name carries its carrier's, and a carrier's name is long — one
+   line ellipsised every wing in the fleet down to "Gagarin-class …". */
 .flight-row {
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  grid-template-areas:
+    'name name name'
+    'cef controls status';
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line-faint, var(--line));
+}
+
+.flight-row .flight-pick {
+  grid-area: name;
+}
+
+.flight-row .flight-cef-readout {
+  grid-area: cef;
+}
+
+.flight-row button:not(.flight-pick) {
+  grid-area: controls;
+  justify-self: end;
+}
+
+.flight-row .flight-status {
+  grid-area: status;
+  justify-self: end;
+}
+
+.flight-row .spacer {
+  display: none;
 }
 
 /* Strength is how many fighters are left of six, and it is the first thing to

@@ -291,45 +291,6 @@ export function MapView({
             />
           ))}
 
-          {game.fighterGroups
-            .filter((group) => group.status === 'in-flight')
-            .map((group) => (
-              <g
-                key={group.id}
-                className="flight-group"
-                transform={`translate(${group.position.x * scale} ${group.position.y * scale})`}
-                role="button"
-                aria-label={`${group.label}, ${group.strength} fighters, ${group.cef} CEF`}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={() => {
-                  if (flight && group.side !== flight.side && game.phase === 'fighter-vs-fighter') {
-                    dispatch({
-                      type: 'flight-dogfight',
-                      flightId: flight.id,
-                      targetFlightId: group.id,
-                    })
-                    return
-                  }
-                  onSelectFlight?.(group.id === selectedFlightId ? null : group.id)
-                }}
-              >
-                {/* Strength inside, endurance beneath: a group is read as "how
-                    many are left" and "how much they can still do" (8.9, 8.13). */}
-                <circle
-                  className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}${
-                    group.id === selectedFlightId ? ' is-selected' : ''
-                  }`}
-                  r={6}
-                />
-                <text className="flight-cef" y={3}>
-                  {group.strength}
-                </text>
-                <text className="counter-label" y={17} textAnchor="middle">
-                  {group.cef > 0 ? `CEF ${group.cef}` : 'spent'}
-                </text>
-              </g>
-            ))}
-
           {effects.map((fx) =>
             fx.from ? (
               <line
@@ -374,10 +335,81 @@ export function MapView({
                 }}
               />
             ))}
+
+          {stackFlights(game.fighterGroups.filter((group) => group.status === 'in-flight')).map(
+            ({ group, nudge }) => (
+              <g
+                key={group.id}
+                className={`flight-group is-${SIDE_CLASS[group.side] ?? 'c'}`}
+                transform={`translate(${group.position.x * scale + nudge.x} ${
+                  group.position.y * scale + nudge.y
+                })`}
+                role="button"
+                aria-label={`${group.label}, ${group.strength} fighters, ${group.cef} CEF`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  if (flight && group.side !== flight.side && game.phase === 'fighter-vs-fighter') {
+                    dispatch({
+                      type: 'flight-dogfight',
+                      flightId: flight.id,
+                      targetFlightId: group.id,
+                    })
+                    return
+                  }
+                  onSelectFlight?.(group.id === selectedFlightId ? null : group.id)
+                }}
+              >
+                {/* Strength inside, endurance beneath: a group is read as "how
+                    many are left" and "how much they can still do" (8.9, 8.13).
+                    Drawn after the ships, because a wing that has just left the
+                    tube is on top of its carrier and would be painted over. */}
+                <circle
+                  className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}${
+                    group.id === selectedFlightId ? ' is-selected' : ''
+                  }`}
+                  r={7}
+                />
+                <text className="flight-cef" y={3}>
+                  {group.strength}
+                </text>
+                {/* The endurance caption only on the group in hand: several
+                    groups launch from the same tube and sit on the same point,
+                    and three captions on one spot read as none. The panel
+                    lists every group's CEF regardless. */}
+                {group.id === selectedFlightId ? (
+                  <text className="counter-label" y={17} textAnchor="middle">
+                    {group.cef > 0 ? `CEF ${group.cef}` : 'spent'}
+                  </text>
+                ) : null}
+              </g>
+            ),
+          )}
         </g>
       </svg>
     </div>
   )
+}
+
+/**
+ * Groups sharing a point, fanned out so you can see there is more than one.
+ *
+ * Several groups launch from the same tube in the same phase and genuinely are
+ * in the same place until someone flies them, so the offset is a drawing
+ * nicety and nothing else: the group's position is untouched, and a click on a
+ * fanned marker still moves the group from where it really is.
+ */
+function stackFlights<T extends { id: string; position: Point }>(
+  groups: readonly T[],
+): Array<{ group: T; nudge: Point }> {
+  const seen = new Map<string, number>()
+  return groups.map((group) => {
+    const key = `${Math.round(group.position.x * 10)}:${Math.round(group.position.y * 10)}`
+    const index = seen.get(key) ?? 0
+    seen.set(key, index + 1)
+    if (index === 0) return { group, nudge: { x: 0, y: 0 } }
+    const angle = (index * 2 * Math.PI) / 6
+    return { group, nudge: { x: Math.cos(angle) * 9, y: Math.sin(angle) * 9 } }
+  })
 }
 
 /**

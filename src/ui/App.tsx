@@ -322,6 +322,8 @@ function PhaseControls({ phase }: { phase: Phase }) {
           <h3>Phase 10 · Ordnance against ships</h3>
           <p style={{ color: 'var(--ink-dim)' }}>
             Every marker attacks whatever it has acquired. A marker that finds nothing flies on.
+            Fighter attack runs are resolved here too, after point defence has had its say: pick a
+            group and click an enemy ship within 6 MU.
           </p>
           <button
             className="primary"
@@ -358,6 +360,38 @@ function PhaseControls({ phase }: { phase: Phase }) {
           >
             Make repair rolls
           </button>
+        </div>
+      )
+    case 'move-fighters':
+      return (
+        <div className="panel">
+          <h3>Phase 4 · Move fighters</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            A group has no course and no written order: pick one and click where it should go, up
+            to 24 MU, in any direction. It costs no endurance. A carrier launching this turn holds
+            its course and velocity, and a group launching gets half a move.
+          </p>
+        </div>
+      )
+    case 'secondary-fighter-moves':
+      return (
+        <div className="panel">
+          <h3>Phase 6 · Secondary fighter moves</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            The look a group gets after the ships have moved: up to 12 MU more, for one Combat
+            Endurance Factor. A group already dogfighting has to stay where it is.
+          </p>
+        </div>
+      )
+    case 'fighter-vs-fighter':
+      return (
+        <div className="panel">
+          <h3>Phase 8 · Fighters against fighters</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Pick a group, then click an enemy group within 6 MU of it and inside its front 180°.
+            Dogfights are simultaneous — every fighter on both sides shoots, including the ones
+            about to be hit.
+          </p>
         </div>
       )
     case 'ship-fire':

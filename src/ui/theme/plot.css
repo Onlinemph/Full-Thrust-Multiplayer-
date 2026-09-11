@@ -187,11 +187,38 @@
   stroke-width: 1;
 }
 
+/* Whose fighters they are, read off the same palette as the ship counters. */
+.flight-group.is-a .flight-marker {
+  fill: var(--side-a);
+}
+
+.flight-group.is-b .flight-marker {
+  fill: var(--side-b);
+}
+
+.flight-group.is-c .flight-marker {
+  fill: var(--side-c);
+}
+
 /* A group with no endurance left can still fly, and can do nothing (8.13). */
-.flight-marker.is-spent {
+.flight-marker.is-spent,
+.flight-group.is-a .flight-marker.is-spent,
+.flight-group.is-b .flight-marker.is-spent,
+.flight-group.is-c .flight-marker.is-spent {
   fill: none;
-  stroke: var(--fighters);
   stroke-dasharray: 2 2;
+}
+
+.flight-group.is-a .flight-marker.is-spent {
+  stroke: var(--side-a);
+}
+
+.flight-group.is-b .flight-marker.is-spent {
+  stroke: var(--side-b);
+}
+
+.flight-group.is-c .flight-marker.is-spent {
+  stroke: var(--side-c);
 }
 
 /* A flight's remaining combat endurance, read at a glance (8.13). */
