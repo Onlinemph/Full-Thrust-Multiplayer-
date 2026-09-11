@@ -343,3 +343,35 @@
   color: var(--ink-faint);
   border-style: dashed;
 }
+
+/* ── Keyboard help ────────────────────────────────────────────────────────── */
+
+.keys summary {
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+}
+
+.keys dl {
+  margin: var(--gap) 0 0;
+  display: grid;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
+}
+
+.keys dl > div {
+  display: flex;
+  gap: var(--gap);
+}
+
+.keys dt {
+  font-family: var(--font-mono);
+  color: var(--side-a);
+  min-width: 7em;
+  flex: none;
+}
+
+.keys dd {
+  margin: 0;
+  color: var(--ink-dim);
+}

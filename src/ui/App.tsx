@@ -7,6 +7,7 @@ import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { Scoreboard } from './Scoreboard'
 import { SetupPanel } from './SetupPanel'
+import { KEY_HELP, useKeyboard } from './useKeyboard'
 import { OrderPanel } from './OrderPanel'
 import { Ssd } from './Ssd'
 import {
@@ -41,6 +42,8 @@ export function App() {
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
   const log = viewingSide ? logFor(game, viewingSide) : game.log
+
+  useKeyboard({ game, selectedId, onSelect: setSelectedId, suspended: showOnline || showSetup })
 
   return (
     <div className="app">
@@ -154,6 +157,18 @@ export function App() {
               <p style={{ color: 'var(--ink-faint)' }}>Select a ship on the plot to give it orders.</p>
             </div>
           )}
+
+          <details className="panel keys">
+            <summary>Keyboard</summary>
+            <dl>
+              {KEY_HELP.map(([keys, does]) => (
+                <div key={keys}>
+                  <dt>{keys}</dt>
+                  <dd>{does}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
 
           <div className="panel log" style={{ flex: 1, minHeight: '8rem' }}>
             {log
