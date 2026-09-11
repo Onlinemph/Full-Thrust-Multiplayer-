@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { PHASE_LABELS, type Arc, type Phase } from '../engine/types'
 import { logFor, phaseNumber, shipById, shipMovementOrder } from '../engine/game'
 import { scenarioById } from '../data/scenarios'
+import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
@@ -40,10 +41,14 @@ export function App() {
   const [showOnline, setShowOnline] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [litArcs, setLitArcs] = useState<readonly Arc[] | undefined>(undefined)
+  // Dismissed once, the result stays dismissed: a player who closes it to look
+  // at the wreckage should not have it thrown back at them every phase.
+  const [resultSeen, setResultSeen] = useState(false)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
   const log = viewingSide ? logFor(game, viewingSide) : game.log
+  const end = battleEnd(game, scenario)
 
   useKeyboard({ game, selectedId, onSelect: setSelectedId, suspended: showOnline || showSetup })
 
@@ -76,7 +81,14 @@ export function App() {
           </select>
         </label>
 
-        <button onClick={() => setShowSetup(true)}>New battle</button>
+        <button
+          onClick={() => {
+            setResultSeen(false)
+            setShowSetup(true)
+          }}
+        >
+          New battle
+        </button>
         <button onClick={() => setShowOnline(true)}>Remote play</button>
         <button disabled={!canUndo()} onClick={() => undo()}>
           Undo
@@ -195,6 +207,14 @@ export function App() {
 
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showSetup ? <SetupPanel onClose={() => setShowSetup(false)} /> : null}
+      {end.over && scenario && !resultSeen ? (
+        <BattleResult
+          game={game}
+          scenario={scenario}
+          end={end}
+          onClose={() => setResultSeen(true)}
+        />
+      ) : null}
     </div>
   )
 }
