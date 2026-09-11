@@ -262,7 +262,8 @@ export interface OrdnanceScreens {
  * subtract 1 from each damage roll, Advanced level-2 Screens subtract 2."*
  */
 export function missileScreenDrm(screens: OrdnanceScreens): number {
-  return screens.advanced ? -screens.level : 0
+  if (!screens.advanced || screens.level === 0) return 0
+  return -screens.level
 }
 
 /**
@@ -273,6 +274,7 @@ export function missileScreenDrm(screens: OrdnanceScreens): number {
  * they would not against a missile.
  */
 export function plasmaScreenDrm(screens: OrdnanceScreens): number {
+  if (screens.level === 0) return 0
   return -screens.level
 }
 

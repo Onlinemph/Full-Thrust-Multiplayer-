@@ -15,27 +15,39 @@ import { describe, expect, it } from 'vitest'
 import { Rng } from './dice'
 import type { WeaponClass } from './types'
 import {
+  ANTIMATTER_BLAST_RADIUS,
+  ANTIMATTER_FREE_FLIGHT_RANGE,
   ANTIMATTER_HITS_TO_KILL,
   ANTIMATTER_RANGE,
+  MINES_MINIMUM_PER_RACK,
   MINE_ATTACK_DICE,
   MINE_DETECTION_RADIUS,
+  MINE_MASS,
+  MINE_POINTS,
   MISSILE_ATTACK_RADIUS,
   MISSILE_RANGE_EXTENDED,
   MISSILE_RANGE_STANDARD,
   MULTI_STAGE_MAX_LEG,
   MULTI_STAGE_MIN_LEG,
+  MULTI_STAGE_RANGE_BONUS,
   ORDNANCE_MOUNTS,
   ORDNANCE_WEAPON_SPECS,
+  PLASMA_BOLT_BLAST_RADIUS,
+  PLASMA_BOLT_FIGHTER_RANGE,
+  PLASMA_BOLT_PDS_DRM,
   PLASMA_BOLT_RANGE,
   ROCKETS_PER_POD,
   SALVO_SIZE,
+  VECTOR_MISSILE_ATTACK_RADIUS,
   acquireMissileTargets,
   antimatterBlastDice,
+  attackRadiusFor,
   canEngagePlasmaBolt,
   checkMagazine,
   clearMine,
   d3,
   distanceToPath,
+  distanceToSegment,
   drawMagazineLoad,
   fireRocketPod,
   launchMissile,
@@ -55,6 +67,7 @@ import {
   plasmaBoltLauncherLimit,
   plasmaBoltMass,
   plasmaBoltMayFire,
+  plasmaScreenDrm,
   relocateMultiStageMarker,
   resolveAntimatterDetonation,
   resolveAntimatterRackExplosion,
@@ -1053,6 +1066,26 @@ describe('6.8 plasma bolt launchers', () => {
     expect(rng.remaining).toBe(0)
   })
 
+  it('turns each die of plasma damage into 1D6 fighter casualties', () => {
+    const bolt = {
+      id: 'pbl-1',
+      owner: 'red',
+      sourceShipId: 'red-1',
+      position: { x: 0, y: 0 },
+      boltClass: 2,
+      strength: 2,
+      launchedTurn: 3,
+    }
+    const rng = new ScriptedRng([3, 4])
+    const blast = resolvePlasmaBoltDetonation(
+      bolt,
+      [{ id: 'vf-1', position: { x: 0, y: 2 }, kind: 'fighter-group', screens: NO_SCREENS }],
+      rng,
+    )
+    expect(blast.effects[0]).toMatchObject({ targetId: 'vf-1', damage: 7 })
+    expect(rng.remaining).toBe(0)
+  })
+
   it('does nothing once its strength is gone', () => {
     const bolt = {
       id: 'pbl-1',
@@ -1256,5 +1289,56 @@ describe('ordnance in the weapon registry', () => {
     expect(specOf('heavy-missile').damageMode).toBe('SAP')
     expect(specOf('rocket-pod').damageMode).toBe('SAP')
     expect(specOf('mine-rack').damageMode).toBe('P')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The numbers, straight off the page
+// ---------------------------------------------------------------------------
+
+describe('section 6 constants', () => {
+  it('keeps the ranges and radii the rulebook prints', () => {
+    expect(MISSILE_RANGE_STANDARD).toBe(24)
+    expect(MISSILE_RANGE_EXTENDED).toBe(36)
+    expect(MISSILE_ATTACK_RADIUS).toBe(6)
+    expect(VECTOR_MISSILE_ATTACK_RADIUS).toBe(3)
+    expect(MULTI_STAGE_MIN_LEG).toBe(16)
+    expect(MULTI_STAGE_MAX_LEG).toBe(24)
+    expect(MULTI_STAGE_RANGE_BONUS).toBe(24)
+    expect(ANTIMATTER_RANGE).toBe(18)
+    expect(ANTIMATTER_BLAST_RADIUS).toBe(3)
+    expect(ANTIMATTER_FREE_FLIGHT_RANGE).toBe(3)
+    expect(ANTIMATTER_HITS_TO_KILL).toBe(3)
+    expect(PLASMA_BOLT_BLAST_RADIUS).toBe(6)
+    expect(PLASMA_BOLT_FIGHTER_RANGE).toBe(6)
+    expect(PLASMA_BOLT_PDS_DRM).toBe(-2)
+    expect(MINE_DETECTION_RADIUS).toBe(3)
+    expect(SALVO_SIZE).toBe(6)
+    expect(ROCKETS_PER_POD).toBe(2)
+  })
+
+  it('prices a mine at 1 mass and 2 points, two to a rack', () => {
+    expect(MINE_MASS).toBe(1)
+    expect(MINE_POINTS).toBe(2)
+    expect(MINES_MINIMUM_PER_RACK).toBe(2)
+  })
+
+  it('gives every level of screen a −1 against a plasma bolt, advanced or not', () => {
+    expect(plasmaScreenDrm(STANDARD_2)).toBe(-2)
+    expect(plasmaScreenDrm(ADVANCED_1)).toBe(-1)
+    expect(plasmaScreenDrm(NO_SCREENS)).toBe(0)
+  })
+
+  it('hands each target its own attack radius', () => {
+    expect(attackRadiusFor({ id: 'a', owner: 'blue', position: { x: 0, y: 0 } })).toBe(6)
+    expect(
+      attackRadiusFor({ id: 'a', owner: 'blue', position: { x: 0, y: 0 }, vectorMovement: true }),
+    ).toBe(3)
+  })
+
+  it('measures to a leg of a move, not just to its ends', () => {
+    expect(distanceToSegment({ x: 0, y: 0 }, { x: -5, y: 2 }, { x: 5, y: 2 })).toBe(2)
+    expect(distanceToSegment({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 3, y: 4 })).toBe(5)
+    expect(distanceToPath({ x: 0, y: 0 }, [{ x: 3, y: 4 }])).toBe(5)
   })
 })
