@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+tsconfig.tsbuildinfo
+
+# Anchored to the repository root, and the leading slash is load-bearing: a bare
+# `data/` matches a directory of that name at ANY depth, which would silently
+# swallow `src/data/` — the game's own ship, fighter and scenario data.
+/data/
+/models/
+
+# Screenshots: regenerable, and megabytes of PNG bloats the history for no gain.
+/shots/
