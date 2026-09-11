@@ -5,6 +5,7 @@ import { PHASE_ORDER, type Phase } from './types'
 import { canWeaponFire, enemiesOf, shipMovementOrder, type GameState } from './game'
 import { distance, arcTo } from './geometry'
 import { maxRangeOf } from './weapons'
+import { aiActions } from './ai'
 import { buildGame, replayGame, type GameSetup } from '../data/savedGame'
 import { SCENARIOS } from '../data/scenarios'
 
@@ -52,6 +53,13 @@ function playPhase(game: GameState): GameAction[] {
         if (ship.destroyed || ship.offTable) continue
         take({ type: 'move-ship', shipId: ship.id })
       }
+      take({ type: 'move-ordnance' })
+      break
+    case 'launch-missiles':
+    case 'ordnance-vs-ships':
+      // Ordnance is the computer's to fly here: aiming a missile is a judgement
+      // about where a ship will be, and the AI already makes it (6.3).
+      for (const side of game.sides) for (const a of aiActions(game, side.id)) take(a)
       break
     case 'ship-fire':
       // Every ship fires everything that can bear on the nearest enemy, which

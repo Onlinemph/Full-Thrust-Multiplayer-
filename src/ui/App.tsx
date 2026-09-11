@@ -273,6 +273,31 @@ function PhaseControls({ phase }: { phase: Phase }) {
           </button>
         </div>
       )
+    case 'launch-missiles':
+      return (
+        <div className="panel">
+          <h3>Phase 3 · Launch missiles</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            A missile is aimed at a point, not at a ship: it attacks whatever it finds within 6 MU
+            of that point once everything has moved. The side with initiative launches last.
+          </p>
+        </div>
+      )
+    case 'ordnance-vs-ships':
+      return (
+        <div className="panel">
+          <h3>Phase 10 · Ordnance against ships</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Every marker attacks whatever it has acquired. A marker that finds nothing flies on.
+          </p>
+          <button
+            className="primary"
+            onClick={() => dispatch({ type: 'resolve-ordnance-attacks' })}
+          >
+            Resolve ordnance attacks
+          </button>
+        </div>
+      )
     case 'threshold':
       return (
         <div className="panel">
@@ -339,6 +364,8 @@ function moveEveryone(): void {
     if (ship.destroyed || ship.offTable) continue
     dispatch({ type: 'move-ship', shipId: ship.id })
   }
+  // Markers fly in the same phase the ships do (2.6 phase 5).
+  dispatch({ type: 'move-ordnance' })
 }
 
 function download(text: string): void {

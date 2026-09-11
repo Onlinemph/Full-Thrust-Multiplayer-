@@ -21,6 +21,7 @@ import {
   advancePhase,
   assignDamageControl,
   assignFireCon,
+  availableFireCons,
   canWeaponFire,
   engagedTargets,
   markHullBoxes,
@@ -45,6 +46,13 @@ import {
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import { arcTo, distance, isRearArcAttack } from './geometry'
 import { fireWeapon, needsFireCon } from './weapons'
+import {
+  acquireMissileTargets,
+  launchMissile,
+  moveOrdnanceMarkers,
+  resolveOrdnanceAttack,
+  type MissileMarker,
+} from './ordnance'
 import {
   damageControlPhase,
   rollThresholdChecks,
@@ -441,6 +449,120 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    // ── Ordnance (6, phases 3, 5, 9 and 10) ───────────────────────────────
+    case 'launch-ordnance': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'launch-missiles') return refuse('Missiles launch in phase 3')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That launcher is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That launcher has already fired')
+
+      const kind = missileKindOf(weapon.weaponClass)
+      if (!kind) return refuse(`${weapon.label} is not a missile launcher`)
+
+      const markers = ordnanceOf(state)
+      const result = launchMissile({
+        id: `ord-${state.turn}-${markers.length + 1}-${ship.id}-${weapon.id}`,
+        owner: ship.side,
+        sourceShipId: ship.id,
+        sourceWeaponId: weapon.id,
+        kind,
+        grade: weapon.variant === 'extended' ? 'extended' : 'standard',
+        stages: weapon.variant === 'two-stage' ? 2 : 1,
+        origin: { position: ship.placement.position, facing: ship.placement.facing },
+        arcs: weapon.arcs,
+        aim: action.aimPoint,
+        turn: state.turn,
+        fireConsAvailable: availableFireCons(ship, state.phase),
+      })
+
+      markWeaponFired(ship, weapon.id, state.phase)
+      if (!result.marker) {
+        pushLog(state, {
+          kind: 'launch',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} does not launch — ${result.detail}`,
+        })
+        return OK
+      }
+      markers.push(result.marker)
+      projectOrdnance(state)
+      pushLog(state, {
+        kind: 'launch',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} launches ${weapon.label}: ${result.detail}`,
+      })
+      return OK
+    }
+
+    case 'move-ordnance': {
+      if (state.phase !== 'move-ships') return refuse('Ordnance flies in phase 5')
+      const markers = ordnanceOf(state)
+      setOrdnance(state, moveOrdnanceMarkers(markers))
+      projectOrdnance(state)
+      return OK
+    }
+
+    case 'resolve-ordnance-attacks': {
+      if (state.phase !== 'ordnance-vs-ships') {
+        return refuse('Ordnance attacks in phase 10')
+      }
+      const alive = state.ships.filter((ship) => !ship.destroyed && !ship.offTable)
+      const acquired = acquireMissileTargets(
+        ordnanceOf(state),
+        alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
+      )
+      setOrdnance(state, acquired.markers)
+
+      for (const hit of acquired.acquisitions) {
+        const marker = acquired.markers.find((m) => m.id === hit.markerId)
+        const target = shipById(state, hit.targetShipId)
+        if (!marker || !target) continue
+
+        const result = resolveOrdnanceAttack(marker, marker.missiles, {
+          level: effectiveScreenLevel(target),
+          advanced: target.design.screens.advanced,
+        }, state.rng)
+        if (!result) continue
+
+        const applied = applyDamage(targetStateOf(target), result, {
+          // 4.10: "Missiles or fighters do not benefit from rear arc attacks."
+          source: 'ordnance',
+        })
+        writeBackDamage(target, applied.target)
+        markHullBoxes(target, applied.hullDamage)
+        pushLog(state, {
+          kind: applied.hullDamage > 0 ? 'damage' : 'fire',
+          targetId: target.id,
+          side: marker.owner,
+          dice: result.dice,
+          text: `Ordnance strikes ${target.name}: ${result.detail}`,
+        })
+        if (target.destroyed) {
+          pushLog(state, {
+            kind: 'destroyed',
+            shipId: target.id,
+            text: `${target.name} is destroyed`,
+          })
+        }
+      }
+
+      // A marker that attacked is spent (6.3); one that found nothing flies on.
+      const spent = new Set(acquired.acquisitions.map((a) => a.markerId))
+      setOrdnance(
+        state,
+        acquired.markers.filter((marker) => !spent.has(marker.id)),
+      )
+      projectOrdnance(state)
+      return OK
+    }
+
     // ── Threshold checks (4.11, phase 13) ─────────────────────────────────
     case 'threshold-check': {
       const ship = shipById(state, action.shipId)
@@ -479,6 +601,66 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // module lands shows up as a refusal in the log instead of a no-op that
       // looks like it worked.
       return refuse(`Not yet implemented: ${action.type}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ordnance in flight
+// ---------------------------------------------------------------------------
+
+/**
+ * Missile markers on the table.
+ *
+ * `ordnance.ts` has a richer marker than `GameState` does — it carries a facing
+ * and the distance flown, which a seeker needs and a counter on a map does not
+ * — so the authoritative list lives here and `GameState.ordnance` carries a
+ * projection of it for drawing. The projection is derived and never read back,
+ * and both are rebuilt identically by a replay, so nothing about this is a
+ * second source of truth.
+ */
+const ORDNANCE = new WeakMap<GameState, MissileMarker[]>()
+
+function ordnanceOf(state: GameState): MissileMarker[] {
+  let markers = ORDNANCE.get(state)
+  if (!markers) {
+    markers = []
+    ORDNANCE.set(state, markers)
+  }
+  return markers
+}
+
+function setOrdnance(state: GameState, markers: MissileMarker[]): void {
+  ORDNANCE.set(state, markers)
+}
+
+/** Copy what the map needs into GameState, for drawing only. */
+function projectOrdnance(state: GameState): void {
+  state.ordnance = ordnanceOf(state).map((marker) => ({
+    id: marker.id,
+    side: marker.owner,
+    sourceShipId: marker.sourceShipId,
+    kind: marker.kind === 'rocket' ? 'rocket' : marker.kind,
+    grade: marker.grade === 'extended' ? 'extended' : 'standard',
+    missiles: marker.missiles,
+    position: marker.position,
+    launchedTurn: marker.launchedTurn,
+    stagesRemaining: 0,
+    targetShipId: null,
+  }))
+}
+
+/** Which launcher classes put a marker on the table (6.2, 6.6). */
+function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | null {
+  switch (weaponClass) {
+    case 'heavy-missile':
+      return 'heavy'
+    case 'salvo-missile-rack':
+    case 'salvo-missile-launcher':
+      return 'salvo'
+    case 'antimatter-missile':
+      return 'antimatter'
+    default:
+      return null
   }
 }
 

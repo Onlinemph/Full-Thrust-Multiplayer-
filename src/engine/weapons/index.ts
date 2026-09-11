@@ -13,6 +13,10 @@
 
 import { BEAM_WEAPON_SPECS } from './beams'
 import { KINETIC_WEAPON_SPECS } from './kinetics'
+// Ordnance lives outside weapons/ because a missile is not resolved where it is
+// fired: it is launched in phase 3, flies, and attacks in phase 10 (2.6, 6.3).
+// Its spec table still belongs in the registry so nothing else has to know that.
+import { ORDNANCE_WEAPON_SPECS } from '../ordnance'
 import type { FiringContext, WeaponResult, WeaponSpec } from './contract'
 import type { WeaponClass, WeaponDef } from '../types'
 
@@ -20,6 +24,7 @@ import type { WeaponClass, WeaponDef } from '../types'
 export const WEAPON_SPECS: Partial<Record<WeaponClass, WeaponSpec>> = {
   ...BEAM_WEAPON_SPECS,
   ...KINETIC_WEAPON_SPECS,
+  ...ORDNANCE_WEAPON_SPECS,
 }
 
 export function specFor(weapon: WeaponDef): WeaponSpec | undefined {

@@ -289,6 +289,14 @@ export function planMovement(
     .sort((a, b) => b.score - a.score)
 }
 
+/** Launcher classes that put a marker on the table rather than firing (6.2). */
+const LAUNCHER_CLASSES = new Set([
+  'heavy-missile',
+  'salvo-missile-rack',
+  'salvo-missile-launcher',
+  'antimatter-missile',
+])
+
 // ---------------------------------------------------------------------------
 // Driving
 // ---------------------------------------------------------------------------
@@ -330,8 +338,39 @@ export function aiActions(
       }
       break
 
+    case 'launch-missiles':
+      // 6.3: a missile is aimed at a point, not at a ship, and attacks whatever
+      // it finds within 6 MU of that point after movement — so the aim point is
+      // where the target will BE, not where it is.
+      for (const ship of mine) {
+        for (const weapon of ship.design.weapons) {
+          if (ship.destroyedSystems.has(weapon.id)) continue
+          if (!LAUNCHER_CLASSES.has(weapon.weaponClass)) continue
+          if (!canWeaponFire(ship, weapon.id)) continue
+          const target = pickTarget(game, ship)
+          if (!target) continue
+          const aim = predict(target, 1)
+          if (distance(ship.placement.position, aim) > maxRangeOf(weapon)) continue
+          actions.push({
+            type: 'launch-ordnance',
+            shipId: ship.id,
+            weaponId: weapon.id,
+            aimPoint: aim,
+          })
+        }
+      }
+      break
+
     case 'move-ships':
       for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
+      // Ordnance flies with the ships (2.6 phase 5), once for the whole table.
+      if (side === game.sides[0]?.id) actions.push({ type: 'move-ordnance' })
+      break
+
+    case 'ordnance-vs-ships':
+      // Resolved once for the table rather than per side: a marker attacks
+      // whatever it acquires, whoever launched it.
+      if (side === game.sides[0]?.id) actions.push({ type: 'resolve-ordnance-attacks' })
       break
 
     case 'ship-fire':
