@@ -63,13 +63,42 @@ The rulebook's sections 1–9 in full, which is the whole tactical game:
 
 ### What is not
 
-The rulebook PDF's text layer ends at page 80 of 151, so sections 10–22 are not available as quoted
-prose. What that costs is written up in `docs/rules/SOURCES.md`; the short version is that
-threshold checks and the construction tables are covered from other sources, but **FTL entry and
-exit (11), vector movement (12.12), the Imperial Tech Base (15), special moves (16) and terrain
-(17) are not implemented.** Dropping the missing pages into
-`docs/rules/continuum-rulebook-extract.txt` is all it takes to close those: the engine is written
-against spec documents, not against the PDF.
+**The rulebook PDF's text layer ends at page 80 of 151**, so sections 10–22 are not available as
+quoted prose. Everything the engine implements from beyond that point comes from another source and
+is marked as such. `docs/rules/SOURCES.md` has the full account; the short version:
+
+| Section | Status |
+| --- | --- |
+| 10 Threshold points | Covered — 4.11 states the rules in full; Core Systems come from the XD quick reference, marked `[XD]` |
+| 11 Faster Than Light | **Not implemented.** FTL is priced and sits on the SSD; entry and exit are out |
+| 12 Optional rules | Partly — sensors and ECM from 7.18/7.19, boarding from 5.9/5.18. Vector movement (12.12) is **out** |
+| 13, 14 Ship construction | Covered — the construction tables encode every cost these sections state |
+| 15 Imperial Tech Base | **Not implemented.** No faction availability restrictions |
+| 16 Special moves | **Not implemented** — thrust-0 drives, rolling, towing, docking, ramming |
+| 17 Terrain | **Not implemented** |
+| 18 Battles and CPV | Points are computed; fleet-composition guidance is advisory in the fleet picker |
+
+Dropping the missing pages into `docs/rules/continuum-rulebook-extract.txt` is what it takes to
+close these: the engine is written against the spec documents in `docs/rules/`, not against the PDF.
+
+Rules whose source is silent are marked `[reading]` in the spec docs with the reading taken and
+why — what life-support failure costs a ship, for instance, or which way round Flawed Design's
+−1 DRM runs. A `[reading]` is a decision, not a guess, and each one names the alternative.
+
+## Playing against the computer
+
+Hand either fleet to the computer in **New battle**. It writes its orders in
+phase 1 like everyone else, and its actions go through the same journal yours do —
+so you can take its turn back with Undo, and a battle against it saves and replays
+like any other.
+
+It plays the geometry rather than the odds, which is what a Full Thrust captain
+actually does: one-ply search over every order it may legally write, scored on
+where the enemy is predicted to be — the range its doctrine wants, how many guns
+will bear, whether it is showing its engines, and whether it is about to fly off
+the table. Its prediction of the enemy is deliberately naive (straight ahead),
+because orders are written simultaneously and in secret and anything cleverer
+would be the computer reading your orders rather than guessing them.
 
 ## Playing
 
@@ -112,6 +141,21 @@ The strategic layer above the tactical one — economy, FTL movement, exploratio
 research, admirals, detection and espionage — is written up in `docs/rules/campaign.md` from the
 *Stellar Imperium* campaign rules. One Full Thrust point costs one Resource Point, so the tactical
 points model is also the strategic price list.
+
+## Campaign
+
+`src/campaign/` implements the *Stellar Imperium* strategic layer: the star map and its d100
+generation tables, the economy and production phase, the eight-phase campaign turn with its
+Engage/Stand Off/FTL Move encounter matrix, research, admirals, detection and espionage. A campaign
+is `(setup + move journal)` exactly as a battle is `(setup + action journal)`, and it hands battles
+to the tactical engine as ordinary scenarios.
+
+**It has no user interface yet** — it is a tested library, not a playable campaign.
+
+One thing to flag about the source: the campaign document's economy section says *1 million
+population = 20 RP*, and its production phase says *50 RP for every 1 million population*.
+Production uses the 50, since that is the rule in the phase that spends it, and
+`src/campaign/economy.ts` notes the discrepancy at the constant rather than quietly picking one.
 
 ## Architecture
 
