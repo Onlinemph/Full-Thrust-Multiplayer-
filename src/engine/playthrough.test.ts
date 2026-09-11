@@ -12,7 +12,7 @@ import {
   secondaryMoveAllowance,
   FIGHTER_ATTACK_RANGE,
 } from './fighters'
-import type { FighterGroupState } from './game'
+import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import type { Point } from './types'
 import { buildGame, replayGame, type GameSetup } from '../data/savedGame'
 import { SCENARIOS } from '../data/scenarios'
@@ -93,6 +93,26 @@ function playPhase(game: GameState): GameAction[] {
           to: closeTo(group.position, prey, mainMoveAllowance(group, game.turn)),
         })
       }
+      // Gunboats launch and move with the fighters (9.1).
+      for (const squadron of game.gunboatSquadrons) {
+        if (squadron.status === 'aboard' && squadron.carrierId) {
+          take({
+            type: 'launch-gunboats',
+            carrierId: squadron.carrierId,
+            squadronId: squadron.id,
+          })
+        }
+      }
+      for (const squadron of game.gunboatSquadrons) {
+        if (squadron.status !== 'in-flight') continue
+        const prey = nearestEnemyShip(game, squadron)
+        if (!prey) continue
+        take({
+          type: 'move-gunboats',
+          squadronId: squadron.id,
+          to: closeTo(squadron.position, prey, GUNBOAT_MOVE),
+        })
+      }
       break
     case 'secondary-fighter-moves':
       for (const group of game.fighterGroups) {
@@ -103,6 +123,16 @@ function playPhase(game: GameState): GameAction[] {
           type: 'secondary-move-flight',
           flightId: group.id,
           to: closeTo(group.position, prey, secondaryMoveAllowance(group)),
+        })
+      }
+      for (const squadron of game.gunboatSquadrons) {
+        if (squadron.status !== 'in-flight' || squadron.cef <= 0) continue
+        const prey = nearestEnemyShip(game, squadron)
+        if (!prey) continue
+        take({
+          type: 'move-gunboats',
+          squadronId: squadron.id,
+          to: closeTo(squadron.position, prey, GUNBOAT_SECONDARY_MOVE),
         })
       }
       break
@@ -132,6 +162,14 @@ function playPhase(game: GameState): GameAction[] {
           if (!prey) continue
           if (distance(group.position, prey.placement.position) > FIGHTER_ATTACK_RANGE) continue
           take({ type: 'flight-strike', flightId: group.id, targetId: prey.id })
+        }
+        // 9.1: "Gunboats then make their attacks in the Fighter Attack Phase".
+        for (const squadron of game.gunboatSquadrons) {
+          if (squadron.status !== 'in-flight' || squadron.cef <= 0) continue
+          const prey = nearestEnemyShip(game, squadron)
+          if (!prey) continue
+          if (distance(squadron.position, prey.placement.position) > GUNBOAT_FIRE_CONTROL) continue
+          take({ type: 'gunboat-attack', squadronId: squadron.id, targetId: prey.id })
         }
       }
       break
@@ -174,8 +212,8 @@ function playPhase(game: GameState): GameAction[] {
   return taken
 }
 
-/** The nearest live enemy hull to a fighter group. */
-function nearestEnemyShip(game: GameState, group: FighterGroupState) {
+/** The nearest live enemy hull to a fighter group or gunboat squadron. */
+function nearestEnemyShip(game: GameState, group: { side: string; position: Point }) {
   const enemies = game.ships.filter(
     (ship) => ship.side !== group.side && !ship.destroyed && !ship.offTable,
   )
@@ -279,6 +317,12 @@ describe('a long battle', () => {
 
     // Something has to have come of it: a group that has spent endurance has
     // attacked, moved twice or evaded, and a group off its carrier has flown.
+    expect(attempted('launch-gunboats'), 'gunboat launches attempted').toBeGreaterThan(0)
+    expect(
+      game.gunboatSquadrons.some((squadron) => squadron.launchedTurn !== null),
+      'at least one squadron left its rack',
+    ).toBe(true)
+
     const flew = game.fighterGroups.some((group) => group.launchedTurn !== null)
     const spent = game.fighterGroups.some((group) => group.cef < 6 || group.strength < 6)
     expect(flew, 'at least one group left its carrier').toBe(true)

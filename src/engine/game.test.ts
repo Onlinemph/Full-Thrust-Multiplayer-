@@ -171,7 +171,6 @@ function fighterGroup(
     carrierId: null,
     typeId: 'standard',
     label: id,
-    gunboats: false,
     position: { x: 0, y: 0 },
     facing: 12,
     strength: 6,

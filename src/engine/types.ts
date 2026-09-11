@@ -248,6 +248,8 @@ export type SystemKind =
   | 'catapult'
   | 'fighter-rack'
   | 'gunboat-rack'
+  /** 9.1: "Bays are 24 mass" — big enough to take a whole squadron back. */
+  | 'gunboat-bay'
   | 'boat-bay'
   | 'tender'
   // Secondary systems (13.13)

@@ -318,6 +318,47 @@ export const ESU_CARRIER: ShipDesign = {
   points: 411,
 }
 
+export const ESU_TENDER: ShipDesign = {
+  id: "esu-tender",
+  name: "Sevastopol-class Gunboat Tender",
+  faction: "Eurasian Solar Union",
+  group: "capital",
+  mass: 270,
+  hullClass: "average",
+  hullRows: 4,
+  hullBoxes: 81,
+  drive: { thrust: 4, advanced: false },
+  ftl: "standard",
+  streamlining: "none",
+  armour: { layers: [3], regenerative: false },
+  screens: { level: 1, generators: 1, advanced: false },
+  weapons: [
+    {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
+    {"id": "w2", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
+    {"id": "w3", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
+  ],
+  turrets: [], 
+  systems: [
+    {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-3", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-bay-1", "kind": "gunboat-bay", "label": "Gunboat Bay", "mass": 24, "points": 0},
+    {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+  ],
+  fighterBays: [],
+  gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
+  damageControlParties: 4,
+  marineParties: 2,
+  points: 606,
+}
+
 export const NAC_CORVETTE: ShipDesign = {
   id: "nac-corvette",
   name: "Kestrel-class Corvette",
@@ -621,6 +662,47 @@ export const NAC_CARRIER: ShipDesign = {
   points: 391,
 }
 
+export const NAC_TENDER: ShipDesign = {
+  id: "nac-tender",
+  name: "Cook-class Gunboat Tender",
+  faction: "New Anglian Confederation",
+  group: "capital",
+  mass: 254,
+  hullClass: "average",
+  hullRows: 4,
+  hullBoxes: 76,
+  drive: { thrust: 4, advanced: false },
+  ftl: "standard",
+  streamlining: "none",
+  armour: { layers: [3], regenerative: false },
+  screens: { level: 2, generators: 2, advanced: false },
+  weapons: [
+    {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
+    {"id": "w2", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
+    {"id": "w3", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
+  ],
+  turrets: [], 
+  systems: [
+    {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-bay-1", "kind": "gunboat-bay", "label": "Gunboat Bay", "mass": 24, "points": 0},
+    {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+    {"id": "screen-gen-2", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+  ],
+  fighterBays: [],
+  gunboats: [{"typeId": "graser", "label": "Squadron 1"}, {"typeId": "graser", "label": "Squadron 2"}],
+  damageControlParties: 4,
+  marineParties: 2,
+  points: 568,
+}
+
 /** Every design the app ships with. */
 export const GENERATED_DESIGNS: ShipDesign[] = [
   ESU_CORVETTE,
@@ -631,6 +713,7 @@ export const GENERATED_DESIGNS: ShipDesign[] = [
   ESU_BATTLECRUISER,
   ESU_BATTLESHIP,
   ESU_CARRIER,
+  ESU_TENDER,
   NAC_CORVETTE,
   NAC_FRIGATE,
   NAC_DESTROYER,
@@ -639,4 +722,5 @@ export const GENERATED_DESIGNS: ShipDesign[] = [
   NAC_BATTLECRUISER,
   NAC_BATTLESHIP,
   NAC_CARRIER,
+  NAC_TENDER,
 ]

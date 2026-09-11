@@ -74,6 +74,8 @@ export const CATALOGUE_SYSTEMS: readonly CatalogueSystem[] = [
   { kind: 'enhanced-sensors', label: "Enh Sensors", mass: 2, points: 8 },
   { kind: 'firecon', label: "FireCon", mass: 1, points: 4 },
   { kind: 'grapeshot', label: "Grapeshot", mass: 1, points: 4 },
+  { kind: 'gunboat-bay', label: "Gunboat Bay", mass: 24, points: 0 },
+  { kind: 'gunboat-rack', label: "Gunboat Rack", mass: 18, points: 0 },
   { kind: 'hangar-bay', label: "Hangar", mass: 6, points: 18 },
   { kind: 'launch-tube', label: "Launch Tube", mass: 3, points: 9 },
   { kind: 'minesweeper', label: "Minesweeper", mass: 5, points: 15 },

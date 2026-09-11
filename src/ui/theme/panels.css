@@ -486,10 +486,17 @@
   color: var(--ink-faint);
 }
 
+/* Truncate from the *left*. Every group's name starts with its carrier's, so
+   the end is the half that tells "Flight 1" from "Flight 3"; ellipsising the
+   usual way turns a fleet's whole air group into one repeated string. */
 .flight-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* `direction: rtl` moves the ellipsis to the start; `unicode-bidi: plaintext`
+     would undo it by re-deriving the direction from the first Latin letter. */
+  direction: rtl;
+  text-align: left;
 }
 
 /* Endurance is what a wing is planned around: every attack, secondary move and

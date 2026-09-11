@@ -1,5 +1,15 @@
-import type { FighterGroupState, GameState, ShipState } from '../engine/game'
+import type {
+  FighterGroupState,
+  GameState,
+  GunboatSquadronState,
+  ShipState,
+} from '../engine/game'
 import { isExhausted, mainMoveAllowance, secondaryMoveAllowance } from '../engine/fighters'
+import {
+  GUNBOAT_MOVE,
+  GUNBOAT_SECONDARY_MOVE,
+  isSquadronExhausted,
+} from '../engine/gunboats'
 import { distance } from '../engine/geometry'
 import { dispatch } from './store'
 
@@ -36,7 +46,10 @@ export function FlightPanel({
   const flights = ship
     ? game.fighterGroups.filter((g) => g.carrierId === ship.id || nearby(g, ship))
     : game.fighterGroups
-  if (flights.length === 0) return null
+  const squadrons = ship
+    ? game.gunboatSquadrons.filter((g) => g.carrierId === ship.id || nearby(g, ship))
+    : game.gunboatSquadrons
+  if (flights.length === 0 && squadrons.length === 0) return null
 
   const phase = game.phase
   const tubes = ship
@@ -68,6 +81,7 @@ export function FlightPanel({
           <button
             className="flight-pick"
             aria-pressed={flight.id === selectedFlightId}
+            title={flight.label}
             disabled={flight.status !== 'in-flight'}
             onClick={() => onSelectFlight?.(flight.id === selectedFlightId ? null : flight.id)}
           >
@@ -134,8 +148,124 @@ export function FlightPanel({
           <span className={`flight-status is-${flight.status}`}>{describe(flight)}</span>
         </div>
       ))}
+
+      {squadrons.length > 0 ? (
+        <>
+          <h4>Gunboats</h4>
+          <p className="rule-detail">
+            Six to a squadron, 18 MU a move and 12 MU of fire control — but anti-ship guns kill one
+            gunboat per hit, and a rack cannot take a squadron back (9.1).
+          </p>
+          {squadrons.map((squadron) => (
+            <div
+              key={squadron.id}
+              className={`panel-row flight-row${
+                squadron.id === selectedFlightId ? ' is-selected' : ''
+              }`}
+            >
+              <button
+                className="flight-pick"
+                aria-pressed={squadron.id === selectedFlightId}
+                title={squadron.label}
+                disabled={squadron.status !== 'in-flight'}
+                onClick={() =>
+                  onSelectFlight?.(squadron.id === selectedFlightId ? null : squadron.id)
+                }
+              >
+                <span className={`flight-strength num is-${squadron.status}`}>
+                  {squadron.boats.length}
+                </span>
+                <span className="flight-name">{squadron.label}</span>
+              </button>
+              <span className="spacer" />
+              <span
+                className={`num flight-cef-readout${squadron.cef === 0 ? ' is-spent' : ''}`}
+                title="Combat endurance remaining (9.1)"
+              >
+                CEF {squadron.cef}
+              </span>
+
+              {squadron.status === 'aboard' && phase === 'move-fighters' ? (
+                <button
+                  disabled={!squadron.carrierId}
+                  onClick={() =>
+                    dispatch({
+                      type: 'launch-gunboats',
+                      carrierId: squadron.carrierId ?? '',
+                      squadronId: squadron.id,
+                    })
+                  }
+                >
+                  Launch
+                </button>
+              ) : null}
+
+              {squadron.status === 'in-flight' &&
+              (phase === 'move-fighters' || phase === 'secondary-fighter-moves') &&
+              squadron.carrierId ? (
+                <button
+                  disabled={!squadronCanLand(squadron, game, phase === 'secondary-fighter-moves')}
+                  title={squadronLandNote(squadron, game, phase === 'secondary-fighter-moves')}
+                  onClick={() =>
+                    dispatch({
+                      type: 'recover-gunboats',
+                      squadronId: squadron.id,
+                      carrierId: squadron.carrierId ?? '',
+                    })
+                  }
+                >
+                  Land
+                </button>
+              ) : null}
+
+              <span className={`flight-status is-${squadron.status}`}>
+                {squadron.status === 'aboard'
+                  ? 'on the rack'
+                  : squadron.status === 'destroyed'
+                    ? 'lost'
+                    : 'in flight'}
+              </span>
+            </div>
+          ))}
+        </>
+      ) : null}
     </div>
   )
+}
+
+/**
+ * Whether the squadron can get home this phase, and whether home will take it.
+ *
+ * Both halves matter: 9.1 says only a bay recovers gunboats — *"Gunboats
+ * cannot be refueled or rearmed in combat using their carrying rack"* — so a
+ * tender with racks alone launches its squadrons once and that is that.
+ */
+function squadronCanLand(
+  squadron: GunboatSquadronState,
+  game: GameState,
+  secondary: boolean,
+): boolean {
+  const carrier = game.ships.find((s) => s.id === squadron.carrierId)
+  if (!carrier) return false
+  if (!carrier.design.systems.some((system) => system.kind === 'gunboat-bay')) return false
+  if (secondary && isSquadronExhausted(squadron)) return false
+  const allowance = secondary ? GUNBOAT_SECONDARY_MOVE : GUNBOAT_MOVE
+  return distance(squadron.position, carrier.placement.position) <= allowance
+}
+
+function squadronLandNote(
+  squadron: GunboatSquadronState,
+  game: GameState,
+  secondary: boolean,
+): string {
+  const carrier = game.ships.find((s) => s.id === squadron.carrierId)
+  if (carrier && !carrier.design.systems.some((system) => system.kind === 'gunboat-bay')) {
+    return 'A rack cannot take a squadron back; only a gunboat bay can (9.1)'
+  }
+  if (squadronCanLand(squadron, game, secondary)) {
+    return secondary ? 'Lands on its secondary move — 1 CEF (9.1)' : 'Lands this turn (9.1)'
+  }
+  return 'Too far from the carrier to land this turn (9.1)'
 }
 
 function describe(flight: FighterGroupState): string {
@@ -146,12 +276,15 @@ function describe(flight: FighterGroupState): string {
   return 'in flight'
 }
 
-/** A flight close enough to this carrier to be worth listing beside it. */
-function nearby(flight: FighterGroupState, ship: ShipState): boolean {
+/** Small craft close enough to this ship to be worth listing beside it. */
+function nearby(
+  craft: { status: string; side: string; position: { x: number; y: number } },
+  ship: ShipState,
+): boolean {
   return (
-    flight.status === 'in-flight' &&
-    flight.side === ship.side &&
-    distance(flight.position, ship.placement.position) <= 24
+    craft.status === 'in-flight' &&
+    craft.side === ship.side &&
+    distance(craft.position, ship.placement.position) <= 24
   )
 }
 

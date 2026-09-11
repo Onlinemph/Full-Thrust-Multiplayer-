@@ -42,9 +42,18 @@ SYSTEMS = {
     'scattergun': (1, 5), 'grapeshot': (1, 4), 'ecm': (1, 3), 'area-ecm': (2, 6),
     'enhanced-sensors': (2, 8), 'superior-sensors': (4, 16),
     'hangar-bay': (6, 18), 'launch-tube': (3, 9), 'boat-bay': (1.5, 0),
+    # 9.1: "Gunboat Racks are 18 mass for a squadron of 6 gunboats. The cost of
+    # the rack is included in the gunboat cost", and "Bays are 24 mass and cost
+    # 0 points". A rack launches a squadron and cannot take it back.
+    'gunboat-rack': (18, 0), 'gunboat-bay': (24, 0),
     'cargo': (1, 0), 'troop-berthing': (1, 0), 'minesweeper': (5, 15),
     'ortillery': (3, 9), 'shipyard': (1, 2), 'antimatter-charge': (1, 5),
     'stealth-hull': (0, 2),
+}
+
+# 9.2, per gunboat. A rack always carries six, so a rack costs six of these.
+GUNBOAT_POINTS = {
+    'beam': 9, 'plasma': 9, 'graser': 9, 'gatling': 15, 'needle': 9,
 }
 LABELS = {
     'firecon': 'FireCon', 'advanced-firecon': 'Adv FireCon', 'pds': 'PDS',
@@ -52,6 +61,7 @@ LABELS = {
     'scattergun': 'Scattergun', 'grapeshot': 'Grapeshot', 'ecm': 'ECM',
     'area-ecm': 'Area ECM', 'enhanced-sensors': 'Enh Sensors',
     'superior-sensors': 'Sup Sensors', 'hangar-bay': 'Hangar', 'launch-tube': 'Launch Tube',
+    'gunboat-rack': 'Gunboat Rack', 'gunboat-bay': 'Gunboat Bay',
     'boat-bay': 'Boat Bay', 'cargo': 'Cargo', 'troop-berthing': 'Troops',
     'minesweeper': 'Minesweeper', 'ortillery': 'Ortillery', 'shipyard': 'Shipyard',
     'antimatter-charge': 'AM Charge', 'stealth-hull': 'Stealth Hull',
@@ -119,6 +129,13 @@ def price(d):
     systems = []
     for n, (key, count) in enumerate(d.get('systems', [])):
         sm, sp = SYSTEMS[key]
+        # 9.1: "The cost of the rack is included in the gunboat cost." Read the
+        # other way round, which is the way that makes a tender cost what it is
+        # worth: you buy six gunboats and the rack comes with them. So a rack
+        # carries the squadron's points, or a tender fields 162 points of
+        # gunboats for nothing.
+        if key == 'gunboat-rack':
+            sp = GUNBOAT_POINTS[d.get('gunboatType', 'beam')] * 6
         for i in range(count):
             systems.append({'id': f'{key}-{i+1}', 'kind': KIND.get(key, key),
                             'label': LABELS[key], 'mass': sm, 'points': sp})
@@ -174,6 +191,14 @@ DESIGNS = [
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',5),('advanced-adfc',1),('hangar-bay',4),('launch-tube',3)],
        dcp=4, marines=2, bays=4),
+  # A gunboat tender: racks on the hull, a bay to take the squadrons back, and
+  # only enough of its own armament to defend itself. Gunboats reach 12 MU and
+  # move 18, so a tender fights at a range its own guns cannot (9.1).
+  dict(id='esu-tender', name='Sevastopol-class Gunboat Tender', faction='Eurasian Solar Union',
+       group='capital', mass=140, hull='average', rows=4, thrust=4, armour=[3], screens=1,
+       weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',4),('adfc',1),('gunboat-rack',3),('gunboat-bay',1)],
+       dcp=4, marines=2, racks=3, gunboatType='beam'),
   # ── New Anglian Confederation ────────────────────────────────────────────
   # Screens and beams, pulse torpedoes for the closing pass. Faster hulls that
   # expect to choose the range and hold it.
@@ -212,6 +237,11 @@ DESIGNS = [
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('advanced-adfc',1),('hangar-bay',3),('launch-tube',3)],
        dcp=4, marines=2, bays=3),
+  dict(id='nac-tender', name='Cook-class Gunboat Tender', faction='New Anglian Confederation',
+       group='capital', mass=132, hull='average', rows=4, thrust=4, armour=[3], screens=2,
+       weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',4),('adfc',1),('gunboat-rack',2),('gunboat-bay',1)],
+       dcp=4, marines=2, racks=2, gunboatType='graser'),
 ]
 
 import sys
@@ -290,7 +320,7 @@ def design_ts(r):
              *[f"    {ts(s)}," for s in r['systems']],
              "  ],",
              f"  fighterBays: {ts([{'typeId': 'standard', 'label': f'Flight {i+1}'} for i in range(d.get('bays', 0))])},",
-             "  gunboats: [],",
+             f"  gunboats: {ts([{'typeId': d.get('gunboatType', 'beam'), 'label': f'Squadron {i+1}'} for i in range(d.get('racks', 0))])},",
              f"  damageControlParties: {d.get('dcp', 0)},",
              f"  marineParties: {d.get('marines', 0)},",
              f"  points: {r['points']},"]

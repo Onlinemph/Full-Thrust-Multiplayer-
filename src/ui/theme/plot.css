@@ -303,3 +303,49 @@
 .flight-group {
   cursor: pointer;
 }
+
+/* A gunboat squadron. Square rather than round, and bigger than a wing: 9.1
+   puts them "between a very small ship, and a very large fighter", and on the
+   table that is exactly how they need to read. */
+.gunboat-marker {
+  fill: var(--fighters);
+  stroke: var(--void);
+  stroke-width: 1;
+}
+
+.flight-group.is-a .gunboat-marker {
+  fill: var(--side-a);
+}
+
+.flight-group.is-b .gunboat-marker {
+  fill: var(--side-b);
+}
+
+.flight-group.is-c .gunboat-marker {
+  fill: var(--side-c);
+}
+
+.gunboat-marker.is-spent,
+.flight-group.is-a .gunboat-marker.is-spent,
+.flight-group.is-b .gunboat-marker.is-spent,
+.flight-group.is-c .gunboat-marker.is-spent {
+  fill: none;
+  stroke-dasharray: 2 2;
+}
+
+.flight-group.is-a .gunboat-marker.is-spent {
+  stroke: var(--side-a);
+}
+
+.flight-group.is-b .gunboat-marker.is-spent {
+  stroke: var(--side-b);
+}
+
+.flight-group.is-c .gunboat-marker.is-spent {
+  stroke: var(--side-c);
+}
+
+.gunboat-marker.is-selected {
+  stroke: var(--ink);
+  stroke-width: 2;
+}

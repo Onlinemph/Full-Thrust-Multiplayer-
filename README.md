@@ -55,11 +55,19 @@ two browsers.
 - **Defences** (7) — screens, advanced screens and area screens, ablative and regenerative armour,
   antimatter charges, PDS, ADS, scatterguns and grapeshot, area defence fire control, and the
   stealth hull with its range-band shrinking.
+- **Fighters** (8) — the ten fighter types and their modifications, launch and recovery, the
+  scramble table, combat endurance, the two movement phases, attack runs, dogfights and furballs,
+  missile interception, morale and aces. Groups are flown on the table, not from a form.
+- **Gunboats** (9) — squadrons of six that fly like fighters and are shot at like ships: 18 MU,
+  12 MU of fire control, one gunboat dead per anti-ship hit, and a PDS that only scores on a 6.
+- **Electronic warfare and the weird weapons** (7.17 – 7.25) — holofields, ECM and area ECM, the
+  three cloaks and their state machines, the Nova Cannon's three-turn template, the Wave Gun's
+  charge, and the Reflex Field. Each is separately bannable, and the campaign bans three by default.
 - **Threshold and repair** (4.11, 10) — the 6 / 5+ / 4+ ladder, one check per attack with +1 per
   extra row crossed, the drive's two-stage failure, Core Systems, and damage control parties.
 - **Victory** (4.12) — the damage ladder, including the part that is easy to miss: *crippled* is
   four conditions joined by OR, and three of them are about systems rather than hull.
-- **Ship data** — sixteen designs across two fleets, generated from the section 14 construction
+- **Ship data** — eighteen designs across two fleets, generated from the section 14 construction
   tables so no cost is ever typed by hand, plus the two introductory hulls.
 
 Run `npx vitest run src/engine/coverage.test.ts` to see exactly which weapon classes the engine can
@@ -82,6 +90,10 @@ is marked as such. `docs/rules/SOURCES.md` has the full account; the short versi
 | 16 Special moves | **Not implemented** — thrust-0 drives, rolling, towing, docking, ramming |
 | 17 Terrain | **Not implemented** |
 | 18 Battles and CPV | Points are computed; fleet-composition guidance is advisory in the fleet picker |
+
+Section 9's own gap: the text layer stops on page 80, mid-way through the list of gunboat types, so
+whatever 9.2 catalogues after the Needle Gunboat is missing. The five types that are quoted are
+implemented.
 
 Dropping the missing pages into `docs/rules/continuum-rulebook-extract.txt` is what it takes to
 close these: the engine is written against the spec documents in `docs/rules/`, not against the PDF.

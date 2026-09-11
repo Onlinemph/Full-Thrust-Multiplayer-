@@ -33,6 +33,7 @@ import {
   shipById,
   type FighterGroupState,
   type GameState,
+  type GunboatSquadronState,
   type ShipState,
   type SideId,
 } from './game'
@@ -89,6 +90,15 @@ import {
   rollThresholdChecks,
   thresholdPhase,
 } from './threshold'
+import {
+  launchGunboatSquadron,
+  moveGunboatSquadron,
+  recoverGunboatSquadron,
+  resolveGunboatAttack,
+  secondaryMoveGunboatSquadron,
+  type GunboatCarrierState,
+  type GunboatSquadron,
+} from './gunboats'
 import type { Arc, Course, MovementOrder, Point, SystemKind, TurnDirection } from './types'
 
 // ---------------------------------------------------------------------------
@@ -155,6 +165,17 @@ export type GameAction =
   | { type: 'flight-intercept'; flightId: string; ordnanceId: string }
   | { type: 'flight-evade'; flightId: string }
   | { type: 'recover-flight'; flightId: string; carrierId: string }
+
+  // Gunboats (9) — a squadron of six, flown like fighters, shot at like ships
+  | { type: 'launch-gunboats'; carrierId: string; squadronId: string }
+  | {
+      type: 'move-gunboats'
+      squadronId: string
+      to: { x: number; y: number }
+      facing?: Course
+    }
+  | { type: 'gunboat-attack'; squadronId: string; targetId: string }
+  | { type: 'recover-gunboats'; squadronId: string; carrierId: string }
 
   // Boarding (phase 12)
   | { type: 'resolve-boarding' }
@@ -1011,6 +1032,163 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    // ── Gunboats (9, phases 4, 6 and 10) ──────────────────────────────────
+    case 'launch-gunboats': {
+      if (state.phase !== 'move-fighters') {
+        return refuse('Gunboats launch with the fighters, in phase 4 (9.1)')
+      }
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      const carrier = shipById(state, action.carrierId)
+      if (!carrier) return refuse('No such carrier')
+      if (squadron.carrierId !== carrier.id) {
+        return refuse(`${squadron.label} is not aboard ${carrier.name}`)
+      }
+      if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+
+      const result = launchGunboatSquadron(
+        squadron,
+        gunboatCarrierState(state, carrier),
+        state.turn,
+        carrier.placement.position,
+        carrier.placement.facing,
+      )
+      if (!result.launched) return refuse(`${squadron.label}: ${result.reason}`)
+      writeSquadron(squadron, result.squadron)
+      pushLog(state, {
+        kind: 'launch',
+        side: squadron.side,
+        shipId: carrier.id,
+        text: `${carrier.name} launches ${squadron.label}`,
+      })
+      return OK
+    }
+
+    case 'move-gunboats': {
+      const secondary = state.phase === 'secondary-fighter-moves'
+      if (state.phase !== 'move-fighters' && !secondary) {
+        return refuse('Gunboats move with the fighters, phases 4 and 6 (9.1)')
+      }
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      if (secondary ? squadron.secondaryMovedThisTurn : squadron.movedThisTurn) {
+        return refuse(`${squadron.label} has already moved this phase`)
+      }
+
+      const facing = squadronFacingAfterMove(squadron, action.to, action.facing)
+      const result = secondary
+        ? secondaryMoveGunboatSquadron(squadron, action.to, facing)
+        : moveGunboatSquadron(squadron, action.to, facing)
+      if (!result.moved) return refuse(`${squadron.label}: ${result.reason}`)
+      writeSquadron(squadron, result.squadron)
+      if (secondary) {
+        pushLog(state, {
+          kind: 'move',
+          side: squadron.side,
+          text: `${squadron.label} moves again, ${squadron.cef} CEF left`,
+        })
+      }
+      return OK
+    }
+
+    case 'gunboat-attack': {
+      // 9.1: "Gunboats then make their attacks in the Fighter Attack Phase
+      // (phase 10)" — the same phase a fighter's attack run is resolved in.
+      if (state.phase !== 'ordnance-vs-ships' && state.phase !== 'ship-fire') {
+        return refuse('Gunboats attack in phase 10 (9.1)')
+      }
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (target.side === squadron.side) return refuse('A squadron does not shoot its own fleet')
+
+      const range = distance(squadron.position, target.placement.position)
+      const result = resolveGunboatAttack(
+        squadron,
+        {
+          screens: effectiveScreenLevel(target),
+          range,
+          arc: arcTo(target.placement.position, target.placement.facing, squadron.position),
+        },
+        state.rng,
+      )
+      if (!result.fired) return refuse(`${squadron.label}: ${result.reason}`)
+
+      writeSquadron(squadron, result.squadron)
+      squadron.targetId = target.id
+      pushLog(state, {
+        kind: 'fire',
+        side: squadron.side,
+        shipId: target.id,
+        text:
+          `${squadron.label} attacks ${target.name}: ` +
+          `${result.normalDamage} damage, ${result.penetratingDamage} penetrating`,
+        dice: result.dice,
+      })
+      // Unlike a fighter, a gunboat's guns are ship guns (9.1), so the
+      // optional rear-arc rule of 4.10 applies to them as it does to a
+      // cruiser's — 8.9's "no advantage" is written about fighters only.
+      applyFighterDamage(
+        state,
+        target,
+        {
+          normalDamage: result.normalDamage,
+          penetratingDamage: result.penetratingDamage,
+          mode: result.mode,
+          dice: result.dice,
+          detail: result.shots.map((shot) => shot.detail).join('; '),
+        },
+        {
+          rearArcRule: optional(state).rearArcAttacks,
+          rearArc: isRearArcAttack(
+            target.placement.position,
+            target.placement.facing,
+            squadron.position,
+          ),
+        },
+      )
+      return OK
+    }
+
+    case 'recover-gunboats': {
+      const secondary = state.phase === 'secondary-fighter-moves'
+      if (state.phase !== 'move-fighters' && !secondary) {
+        return refuse('A squadron lands on a fighter move, phase 4 or 6 (9.1)')
+      }
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      const carrier = shipById(state, action.carrierId)
+      if (!carrier) return refuse('No such carrier')
+      if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+      if (carrier.side !== squadron.side) return refuse('A squadron lands on its own side’s ship')
+
+      // Fly it home first, under this phase's allowance, exactly as a wing.
+      const home = carrier.placement.position
+      const facing = carrier.placement.facing
+      const flown = secondary
+        ? secondaryMoveGunboatSquadron(squadron, home, facing)
+        : moveGunboatSquadron(squadron, home, facing)
+      if (!flown.moved) return refuse(`${squadron.label}: ${flown.reason}`)
+
+      const result = recoverGunboatSquadron(
+        flown.squadron,
+        gunboatCarrierState(state, carrier),
+        state.turn,
+      )
+      if (!result.recovered) return refuse(`${squadron.label}: ${result.reason}`)
+      writeSquadron(squadron, result.squadron)
+      squadron.carrierId = carrier.id
+      pushLog(state, {
+        kind: 'launch',
+        side: squadron.side,
+        shipId: carrier.id,
+        text: `${carrier.name} recovers ${squadron.label}, refuelled and rearmed (9.1)`,
+      })
+      return OK
+    }
+
     default:
       // Handlers for combat, ordnance, flight operations, boarding, threshold
       // and cloaks arrive with their engine modules. Refusing by name rather
@@ -1145,8 +1323,8 @@ function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | 
  * are not the module's to overwrite.
  */
 function writeFlight(live: FighterGroupState, next: FighterGroup): void {
-  const { label, gunboats, recoveredTurn, targetId, side } = live
-  Object.assign(live, next, { label, gunboats, recoveredTurn, targetId, side })
+  const { label, recoveredTurn, targetId, side } = live
+  Object.assign(live, next, { label, recoveredTurn, targetId, side })
 }
 
 function flightById(state: GameState, id: string): FighterGroupState | undefined {
@@ -1229,10 +1407,15 @@ function carrierUnderThrust(carrier: ShipState): boolean {
  * assumed that they must avoid being melted by the drive", so the optional rule
  * of 4.10 does not apply however the game is configured.
  */
-function applyFighterDamage(state: GameState, target: ShipState, result: WeaponResult): void {
+function applyFighterDamage(
+  state: GameState,
+  target: ShipState,
+  result: WeaponResult,
+  opts: { rearArcRule?: boolean; rearArc?: boolean } = {},
+): void {
   const applied = applyDamage(targetStateOf(target), result, {
-    rearArcRule: false,
-    rearArc: false,
+    rearArcRule: opts.rearArcRule ?? false,
+    rearArc: opts.rearArc ?? false,
     source: 'direct-fire',
   })
   writeBackDamage(target, applied.target)
@@ -1240,6 +1423,53 @@ function applyFighterDamage(state: GameState, target: ShipState, result: WeaponR
   if (target.destroyed) {
     pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
   }
+}
+
+/**
+ * The gunboat half of the same boundary.
+ *
+ * A squadron carries the same per-turn flags a wing does and is written back
+ * the same way; the columns the table owns are fewer, because a squadron has
+ * no mission and no dogfight — 9.1 gives it a rack, a target and endurance.
+ */
+function writeSquadron(live: GunboatSquadronState, next: GunboatSquadron): void {
+  const { label, targetId, side } = live
+  Object.assign(live, next, { label, targetId, side })
+}
+
+function squadronById(state: GameState, id: string): GunboatSquadronState | undefined {
+  return state.gunboatSquadrons.find((squadron) => squadron.id === id)
+}
+
+/**
+ * What the carrying ship's racks and bays can do this turn (9.1).
+ *
+ * `gunboat-bay` is its own fit rather than a large `boat-bay` because 9.1
+ * gives it its own mass and its own job: a bay recovers gunboats only when it
+ * is *"of sufficient size to recover the whole squadron"*, and a ship's
+ * general-purpose boat cradle is not that.
+ */
+function gunboatCarrierState(state: GameState, carrier: ShipState): GunboatCarrierState {
+  return {
+    racks: operationalCount(carrier, 'gunboat-rack'),
+    bays: operationalCount(carrier, 'gunboat-bay'),
+    used: state.gunboatSquadrons.filter(
+      (squadron) =>
+        squadron.carrierId === carrier.id &&
+        (squadron.launchedTurn === state.turn || squadron.recoveredTurn === state.turn),
+    ).length,
+  }
+}
+
+/** The same default as a wing's: the way it flew, unless the player says (9.1). */
+function squadronFacingAfterMove(
+  squadron: GunboatSquadronState,
+  to: Point,
+  chosen: Course | undefined,
+): Course {
+  if (chosen !== undefined) return chosen
+  if (distance(squadron.position, to) <= 1e-9) return squadron.facing
+  return nearestCourse(squadron.position, to)
 }
 
 /**
@@ -1393,6 +1623,9 @@ export function actionSide(state: GameState, action: GameAction): SideId | null 
   if (shipId) return shipById(state, shipId)?.side ?? null
   if ('flightId' in action) {
     return state.fighterGroups.find((g) => g.id === action.flightId)?.side ?? null
+  }
+  if ('squadronId' in action) {
+    return state.gunboatSquadrons.find((s) => s.id === action.squadronId)?.side ?? null
   }
   return null
 }

@@ -23,6 +23,7 @@ import {
   type FighterGroupStatus,
   type FighterMission,
 } from './fighters'
+import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -279,8 +280,6 @@ export type FighterRole = FighterMission
 export interface FighterGroupState extends FighterGroup {
   side: SideId
   label: string
-  /** Gunboats operate in squadrons of six, like fighters (9.1). */
-  gunboats: boolean
   /**
    * Turn the group last landed. Launching and recovering draw on the same pool
    * of tubes (8.1), so both stamps have to be readable to know how much of a
@@ -289,6 +288,19 @@ export interface FighterGroupState extends FighterGroup {
   recoveredTurn: number | null
   /** What it has declared an attack on this turn (8.7), for the map. */
   targetId: string | null
+}
+
+/**
+ * A gunboat squadron in play (9).
+ *
+ * Its own list rather than a fighter group with a flag, because every number
+ * in section 9 differs from section 8's — 18 MU instead of 24, 12 MU of fire
+ * control instead of 6 — and the two defensive rules invert: anti-ship fire is
+ * better against a gunboat and point defence is worse. A shared type would be
+ * a type with two of everything.
+ */
+export interface GunboatSquadronState extends GunboatSquadron {
+  side: SideId
 }
 
 /** Ordnance marker families that sit on the table between phases (6). */
@@ -428,6 +440,7 @@ export interface GameState {
   sides: SideState[]
   ships: ShipState[]
   fighterGroups: FighterGroupState[]
+  gunboatSquadrons: GunboatSquadronState[]
   ordnance: OrdnanceMarkerState[]
   terrain: TerrainFeature[]
   initiative: InitiativeState | null
@@ -439,6 +452,7 @@ export interface GameOptions {
   sides: Array<{ id: SideId; name?: string; team?: string }>
   ships?: ShipState[]
   fighterGroups?: FighterGroupState[]
+  gunboatSquadrons?: GunboatSquadronState[]
   ordnance?: OrdnanceMarkerState[]
   terrain?: TerrainFeature[]
   phases?: readonly Phase[]
@@ -475,6 +489,7 @@ export function createGame(opts: GameOptions): GameState {
     })),
     ships: opts.ships ?? [],
     fighterGroups: opts.fighterGroups ?? [],
+    gunboatSquadrons: opts.gunboatSquadrons ?? [],
     ordnance: opts.ordnance ?? [],
     terrain: opts.terrain ?? [],
     initiative: null,
@@ -941,6 +956,11 @@ function onBeginTurn(state: GameState): void {
   for (const group of state.fighterGroups) {
     Object.assign(group, beginFighterTurn(group))
     group.targetId = null
+  }
+
+  for (const squadron of state.gunboatSquadrons) {
+    Object.assign(squadron, beginGunboatTurn(squadron))
+    squadron.targetId = null
   }
 }
 

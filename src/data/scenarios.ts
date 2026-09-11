@@ -13,6 +13,7 @@ import {
   INTRODUCTORY_PHASES,
   type FighterGroupState,
   type GameState,
+  type GunboatSquadronState,
   type ShipState,
   type SideId,
 } from '../engine/game'
@@ -21,6 +22,12 @@ import {
   FIGHTER_TYPES,
   type FighterTypeId,
 } from '../engine/fighters'
+import {
+  createGunboatSquadron,
+  GUNBOAT_SQUADRON_SIZE,
+  GUNBOAT_TYPES,
+  type GunboatTypeId,
+} from '../engine/gunboats'
 import type { Course, Point, ShipGroup } from '../engine/types'
 import { designById } from './ships'
 
@@ -213,6 +220,7 @@ export const LINE_OF_BATTLE: Scenario = {
       force: [
         { designId: 'esu-battleship', position: { x: 40, y: 14 }, facing: 6, velocity: 4 },
         { designId: 'esu-carrier', position: { x: 56, y: 12 }, facing: 6, velocity: 4 },
+        { designId: 'esu-tender', position: { x: 46, y: 4 }, facing: 6, velocity: 4 },
         { designId: 'esu-battlecruiser', position: { x: 24, y: 14 }, facing: 6, velocity: 6 },
         { designId: 'esu-heavy-cruiser', position: { x: 66, y: 16 }, facing: 6, velocity: 6 },
         { designId: 'esu-light-cruiser', position: { x: 14, y: 16 }, facing: 6, velocity: 6 },
@@ -228,6 +236,7 @@ export const LINE_OF_BATTLE: Scenario = {
       force: [
         { designId: 'nac-battleship', position: { x: 56, y: 58 }, facing: 12, velocity: 4 },
         { designId: 'nac-carrier', position: { x: 40, y: 60 }, facing: 12, velocity: 4 },
+        { designId: 'nac-tender', position: { x: 50, y: 68 }, facing: 12, velocity: 4 },
         { designId: 'nac-battlecruiser', position: { x: 72, y: 58 }, facing: 12, velocity: 6 },
         { designId: 'nac-heavy-cruiser', position: { x: 30, y: 56 }, facing: 12, velocity: 6 },
         { designId: 'nac-light-cruiser', position: { x: 82, y: 56 }, facing: 12, velocity: 6 },
@@ -286,10 +295,36 @@ function embarkedFlights(ship: ShipState): FighterGroupState[] {
     }),
     side: ship.side,
     label: `${ship.name} ${bay.label}`,
-    gunboats: false,
     recoveredTurn: null,
     targetId: null,
   }))
+}
+
+/**
+ * The gunboat squadrons a ship starts with, in their racks (9.1).
+ *
+ * A rack holds one squadron of six and the rack's cost is inside the
+ * squadron's, so a hull that carries racks carries full squadrons: there is no
+ * partial fit to model.
+ */
+function embarkedSquadrons(ship: ShipState): GunboatSquadronState[] {
+  return ship.design.gunboats.map((rack, index) => ({
+    ...createGunboatSquadron({
+      id: `${ship.id}-squadron-${index + 1}`,
+      side: ship.side,
+      label: `${ship.name} ${rack.label}`,
+      boats: Array(GUNBOAT_SQUADRON_SIZE).fill(gunboatTypeOf(rack.typeId)),
+      carrierId: ship.id,
+      position: ship.placement.position,
+      facing: ship.placement.facing,
+    }),
+    side: ship.side,
+  }))
+}
+
+/** As with fighter bays: the SSD names a type, and an unknown one flies beams. */
+function gunboatTypeOf(id: string): GunboatTypeId {
+  return id in GUNBOAT_TYPES ? (id as GunboatTypeId) : 'beam'
 }
 
 /**
@@ -370,6 +405,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
   return createGame({
     seed: opts.seed,
     fighterGroups: ships.flatMap(embarkedFlights),
+    gunboatSquadrons: ships.flatMap(embarkedSquadrons),
     scenario: scenario.id,
     // The introductory scenario plays phases 1, 2, 5, 11 and 13 only (2.6).
     phases: scenario.introductoryPhases ? INTRODUCTORY_PHASES : undefined,

@@ -13,7 +13,13 @@ The engine is built from these, and every rule reference in the code points at o
 
 `continuum-rulebook-extract.txt` is the text layer of the rulebook PDF, and it ends part-way
 through section 9.2 — page 80 of 151. Everything from section 10 on is therefore **not** quoted
-prose. What that costs, and what stands in for it:
+prose.
+
+Section 9 is covered as far as the text goes: 9.1 in full and five gunboat types from 9.2 (Beam,
+Plasma, Graser, Gatling, Needle), plus the FTL and Heavy modifications. The list is cut off after
+the Needle Gunboat, so any further type is missing rather than omitted. `gunboats.md` records it.
+
+What the rest costs, and what stands in for it:
 
 | Section | Status |
 | --- | --- |

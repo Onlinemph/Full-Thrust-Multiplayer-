@@ -36,7 +36,7 @@ function randomAction(game: GameState, rng: Rng): GameAction {
   const ship = ships[rng.int(Math.max(1, ships.length))]
   if (!ship) return { type: 'advance-phase' }
 
-  const roll = rng.int(18)
+  const roll = rng.int(20)
   switch (roll) {
     case 0:
     case 1:
@@ -117,6 +117,41 @@ function randomAction(game: GameState, rng: Rng): GameAction {
       if (!target) return { type: 'flight-evade', flightId: group.id }
       return { type: 'flight-strike', flightId: group.id, targetId: target.id }
     }
+    // Gunboats, thrown around the same way. Their tables are the fighters'
+    // inverted — anti-ship fire is better against them and point defence is
+    // worse — so a rule taken from the wrong section shows up here (9.1).
+    case 17: {
+      const squadron = game.gunboatSquadrons[rng.int(Math.max(1, game.gunboatSquadrons.length))]
+      if (!squadron) return { type: 'advance-phase' }
+      return {
+        type: 'launch-gunboats',
+        carrierId: squadron.carrierId ?? ship.id,
+        squadronId: squadron.id,
+      }
+    }
+    case 18: {
+      const squadron = game.gunboatSquadrons[rng.int(Math.max(1, game.gunboatSquadrons.length))]
+      if (!squadron) return { type: 'advance-phase' }
+      return {
+        type: 'move-gunboats',
+        squadronId: squadron.id,
+        to: { x: rng.int(120), y: rng.int(90) },
+      }
+    }
+    case 19: {
+      const squadron = game.gunboatSquadrons[rng.int(Math.max(1, game.gunboatSquadrons.length))]
+      if (!squadron) return { type: 'advance-phase' }
+      const enemies = game.ships.filter((s) => s.side !== squadron.side && !s.destroyed)
+      const target = enemies[rng.int(Math.max(1, enemies.length))]
+      if (!target) {
+        return {
+          type: 'recover-gunboats',
+          squadronId: squadron.id,
+          carrierId: squadron.carrierId ?? ship.id,
+        }
+      }
+      return { type: 'gunboat-attack', squadronId: squadron.id, targetId: target.id }
+    }
     default: {
       const group = game.fighterGroups[rng.int(Math.max(1, game.fighterGroups.length))]
       if (!group) return { type: 'advance-phase' }
@@ -181,6 +216,19 @@ function checkInvariants(game: GameState, context: string): void {
           carrier.placement.position,
         )
       }
+    }
+  }
+  for (const squadron of game.gunboatSquadrons) {
+    const id = squadron.id
+    // A squadron is six gunboats and never more; the list is the strength, so
+    // a squadron that grew a boat means a casualty was applied backwards.
+    expect(squadron.boats.length, `${context}: ${id} strength`).toBeGreaterThanOrEqual(0)
+    expect(squadron.boats.length, `${context}: ${id} strength`).toBeLessThanOrEqual(6)
+    expect(squadron.cef, `${context}: ${id} CEF`).toBeGreaterThanOrEqual(0)
+    expect(Number.isFinite(squadron.position.x), `${context}: ${id} x`).toBe(true)
+    expect(Number.isFinite(squadron.position.y), `${context}: ${id} y`).toBe(true)
+    if (squadron.boats.length === 0) {
+      expect(squadron.status, `${context}: ${id} empty but flying`).toBe('destroyed')
     }
   }
   expect(game.turn, `${context}: turn`).toBeGreaterThan(0)

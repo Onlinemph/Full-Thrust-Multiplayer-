@@ -109,7 +109,7 @@ export function MapView({
   const onPointerUp = (event: React.PointerEvent) => {
     const start = drag.current
     drag.current = null
-    if (!start || !flight) return
+    if (!start || !(flight || squadron)) return
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
     const box = host.current?.getBoundingClientRect()
     if (!box) return
@@ -122,9 +122,20 @@ export function MapView({
   const flight = selectedFlightId
     ? game.fighterGroups.find((group) => group.id === selectedFlightId)
     : undefined
+  const squadron = selectedFlightId
+    ? game.gunboatSquadrons.find((group) => group.id === selectedFlightId)
+    : undefined
 
-  /** Where a click on bare table sends the group in hand (8.5). */
+  /** Where a click on bare table sends the group in hand (8.5, 9.1). */
   const flyTo = (to: Point) => {
+    if (squadron) {
+      // A squadron uses one action for both phases: 9.1 gives it 18 MU on the
+      // fighter move and 9 on the secondary, and the handler reads which.
+      if (game.phase === 'move-fighters' || game.phase === 'secondary-fighter-moves') {
+        dispatch({ type: 'move-gunboats', squadronId: squadron.id, to })
+      }
+      return
+    }
     if (!flight) return
     if (game.phase === 'move-fighters') dispatch({ type: 'move-flight', flightId: flight.id, to })
     else if (game.phase === 'secondary-fighter-moves') {
@@ -138,11 +149,16 @@ export function MapView({
    * had its say. Anything else falls through to ordinary ship selection.
    */
   const declareAgainstShip = (shipId: string): boolean => {
-    if (!flight) return false
+    const attacker = flight ?? squadron
+    if (!attacker) return false
     const target = game.ships.find((s) => s.id === shipId)
-    if (!target || target.side === flight.side) return false
+    if (!target || target.side === attacker.side) return false
     if (game.phase !== 'ordnance-vs-ships' && game.phase !== 'ship-fire') return false
-    dispatch({ type: 'flight-strike', flightId: flight.id, targetId: shipId })
+    dispatch(
+      squadron
+        ? { type: 'gunboat-attack', squadronId: squadron.id, targetId: shipId }
+        : { type: 'flight-strike', flightId: attacker.id, targetId: shipId },
+    )
     return true
   }
 
@@ -335,6 +351,43 @@ export function MapView({
                 }}
               />
             ))}
+
+          {/* Gunboats: bigger counters than a wing, because a gunboat is
+              closer to a small ship than to a fighter (9.1) — and the number
+              inside is boats left, not fighters. */}
+          {stackFlights(
+            game.gunboatSquadrons.filter((squad) => squad.status === 'in-flight'),
+          ).map(({ group, nudge }) => (
+            <g
+              key={group.id}
+              className={`flight-group is-${SIDE_CLASS[group.side] ?? 'c'}`}
+              transform={`translate(${group.position.x * scale + nudge.x} ${
+                group.position.y * scale + nudge.y
+              })`}
+              role="button"
+              aria-label={`${group.label}, ${group.boats.length} gunboats, ${group.cef} CEF`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => onSelectFlight?.(group.id === selectedFlightId ? null : group.id)}
+            >
+              <rect
+                className={`gunboat-marker${group.cef === 0 ? ' is-spent' : ''}${
+                  group.id === selectedFlightId ? ' is-selected' : ''
+                }`}
+                x={-8}
+                y={-8}
+                width={16}
+                height={16}
+              />
+              <text className="flight-cef" y={4}>
+                {group.boats.length}
+              </text>
+              {group.id === selectedFlightId ? (
+                <text className="counter-label" y={19} textAnchor="middle">
+                  {group.cef > 0 ? `CEF ${group.cef}` : 'spent'}
+                </text>
+              ) : null}
+            </g>
+          ))}
 
           {stackFlights(game.fighterGroups.filter((group) => group.status === 'in-flight')).map(
             ({ group, nudge }) => (

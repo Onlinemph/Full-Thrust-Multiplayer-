@@ -157,7 +157,7 @@ export function App() {
 
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
 
-          {game.fighterGroups.length > 0 ? (
+          {game.fighterGroups.length > 0 || game.gunboatSquadrons.length > 0 ? (
             <FlightPanel
               game={game}
               ship={selected}
