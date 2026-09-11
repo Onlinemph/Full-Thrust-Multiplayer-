@@ -33,7 +33,9 @@ address.
 
 ## What is implemented
 
-The rulebook's sections 1–9 in full, which is the whole tactical game:
+The tactical game is playable end to end: write orders, roll initiative, move, fire, take
+threshold checks, make repairs, and score the result — hot-seat, against the computer, or between
+two browsers.
 
 - **Cinematic movement** (3) — velocity and a twelve-point course clock, thrust ratings and advanced
   drives, the two-leg course change, written orders in the book's own notation (`8P2+4: 12`),
@@ -46,20 +48,16 @@ The rulebook's sections 1–9 in full, which is the whole tactical game:
   gatling batteries, twin particle arrays, meson projectors, needle beams, pulse torpedoes in all
   their variants, submunition packs, K-guns with flak, MKP, boarding torpedoes, fusion arrays,
   gravitic guns, pulsers, turrets and spinal mounts.
-- **Ordnance** (6) — heavy missiles and salvo racks, the salvo missile launcher and its magazine,
-  seeking markers, point defence against both missile types, rocket pods, plasma bolt launchers,
-  mines and minelaying.
-- **Defences and electronic warfare** (7) — screens and advanced screens, stealth hulls and fields,
-  armour and regenerative armour, the antimatter suicide charge, ADFC, PDS, ADS, scattergun,
-  grapeshot, area screens, holofields, ECM and area ECM, three kinds of cloak, the nova cannon,
-  the wave gun and the reflex field.
-- **Fighters** (8) — launch and recovery, scrambling, combat landings, primary and secondary
-  movement, screens and pursuits, target selection, point defence, attack runs, dogfights,
-  missile interception, combat endurance, the full type catalogue, re-arming, and the optional
-  morale and ace/turkey rules.
-- **Gunboats** (9) — squadron rules and the types the rulebook extract reaches.
-- **Ship construction** (13, 14) — the complete mass and points model, and a designer that
-  validates and prices a hull against it.
+- **Threshold and repair** (4.11, 10) — the 6 / 5+ / 4+ ladder, one check per attack with +1 per
+  extra row crossed, the drive's two-stage failure, Core Systems, and damage control parties.
+- **Victory** (4.12) — the damage ladder, including the part that is easy to miss: *crippled* is
+  four conditions joined by OR, and three of them are about systems rather than hull.
+- **Ship data** — sixteen designs across two fleets, generated from the section 14 construction
+  tables so no cost is ever typed by hand, plus the two introductory hulls.
+
+Run `npx vitest run src/engine/coverage.test.ts` to see exactly which weapon classes the engine can
+currently resolve. The registry refuses an unknown gun by name rather than treating it as a beam,
+and a test fails the build if any ship in the roster carries one.
 
 ### What is not
 
@@ -114,26 +112,29 @@ that one fact.
   seen them.
 - **Auditing a volley.** Both players can replay a turn and see the same dice — useful when a
   threshold check decides a battle.
+- **Scrubbing.** The slider above the phase controls replays the battle to any earlier moment
+  without discarding the present. It costs nothing to provide: an earlier moment is just the
+  journal replayed to a shorter length.
+- **Ship library.** *Ships* in the top bar shows every design's real SSD, grouped by fleet.
 
-## Ship designer
+## Ship construction
 
-Ships are designed against the official construction tables, transcribed from the *Full Thrust
-Continuum Ultimate Ship Builder* spreadsheet into `src/data/systemCatalog.ts`. Mass proportions
-that scale with the hull do scale: a thrust-6 main drive is 30% of the ship's mass whatever the
-ship, hull boxes are 10–50% by integrity class, and screens, FTL and streamlining are all
-fractions. Flat-cost systems are flat.
+The section 14 tables — every hull row option, drive, system and weapon-at-each-arc-count — come
+from the *Full Thrust Continuum Ultimate Ship Builder* spreadsheet, which encodes every cost the
+rulebook's missing sections state.
 
-The designer validates as you build — does the fit fit the hull, are the arcs legal for that
-weapon, does each turret's contents fit its capacity, are there hangar bays for the fighter groups
-carried — and prices the result as a Combat Points Value.
+Fitting a hull is a fixed point rather than a sum, because hull boxes, the main drive, FTL,
+streamlining and screens are all fractions of *total mass*: a thrust-6 drive is 30% of the ship
+whatever the ship, and hull boxes are 10–50% by integrity class. `tools/build_roster.py` solves for
+the smallest hull that carries a declared loadout and emits `src/data/generatedShips.ts`, so no mass
+or points figure in the roster is hand-written and a design cannot drift from what it costs.
 
 ## Factions
 
-Fourteen factions with mechanical traits, from the user's own campaign supplements, are written up
-in `docs/rules/factions.md` and typed in `src/data/factions.ts`. A trait is a design rule, a
-tactical rule, a campaign rule or an outright prohibition, and the first and last are enforced by
-the designer. All of it is a toggle: several of these traits are strong enough to bend the points
-model, so a game can be played with faction traits off entirely.
+Fourteen factions with mechanical traits, from the campaign supplements, are written up in
+`docs/rules/factions.md` — each trait typed as a design rule, a tactical rule, a campaign rule or an
+outright prohibition. Several are strong enough to bend the points model, which is why they are
+written down before being wired in.
 
 ## Campaign
 
