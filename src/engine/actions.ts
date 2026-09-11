@@ -364,6 +364,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       ship.placement = result.placement
       ship.velocity = result.velocity
+      // A wing still in the bay goes where the ship goes. Nothing in section 8
+      // says so because on a real table the counters are the same counter —
+      // but here they are two, and a group left behind at last turn's station
+      // would launch into empty space.
+      for (const group of state.fighterGroups) {
+        if (group.carrierId === ship.id && group.status === 'aboard') {
+          group.position = ship.placement.position
+          group.facing = ship.placement.facing
+        }
+      }
       pushLog(state, {
         kind: 'move',
         text: `${ship.name} ${formatOrder(effective, before.velocity)}`,

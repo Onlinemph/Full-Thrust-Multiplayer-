@@ -36,7 +36,7 @@ function randomAction(game: GameState, rng: Rng): GameAction {
   const ship = ships[rng.int(Math.max(1, ships.length))]
   if (!ship) return { type: 'advance-phase' }
 
-  const roll = rng.int(14)
+  const roll = rng.int(18)
   switch (roll) {
     case 0:
     case 1:
@@ -85,8 +85,52 @@ function randomAction(game: GameState, rng: Rng): GameAction {
     }
     case 12:
       return { type: 'resolve-point-defence' }
-    default:
+    case 13:
       return { type: 'resolve-ordnance-attacks' }
+    // Flight operations, thrown at every phase on purpose: a group asked to
+    // launch in the damage control phase must be refused rather than shrug,
+    // and a refusal has to be the same refusal on a replay (8.1 – 8.13).
+    case 14: {
+      const group = game.fighterGroups[rng.int(Math.max(1, game.fighterGroups.length))]
+      if (!group) return { type: 'advance-phase' }
+      return {
+        type: 'launch-flight',
+        carrierId: group.carrierId ?? ship.id,
+        flightId: group.id,
+      }
+    }
+    case 15: {
+      const group = game.fighterGroups[rng.int(Math.max(1, game.fighterGroups.length))]
+      if (!group) return { type: 'advance-phase' }
+      // Somewhere on the table, often further than the group can fly: the
+      // allowance check is as much under test as the move itself (8.5).
+      const to = { x: rng.int(120), y: rng.int(90) }
+      return rng.int(2)
+        ? { type: 'move-flight', flightId: group.id, to }
+        : { type: 'secondary-move-flight', flightId: group.id, to }
+    }
+    case 16: {
+      const group = game.fighterGroups[rng.int(Math.max(1, game.fighterGroups.length))]
+      if (!group) return { type: 'advance-phase' }
+      const enemies = game.ships.filter((s) => s.side !== group.side && !s.destroyed)
+      const target = enemies[rng.int(Math.max(1, enemies.length))]
+      if (!target) return { type: 'flight-evade', flightId: group.id }
+      return { type: 'flight-strike', flightId: group.id, targetId: target.id }
+    }
+    default: {
+      const group = game.fighterGroups[rng.int(Math.max(1, game.fighterGroups.length))]
+      if (!group) return { type: 'advance-phase' }
+      const foes = game.fighterGroups.filter((other) => other.side !== group.side)
+      const foe = foes[rng.int(Math.max(1, foes.length))]
+      if (!foe) {
+        return {
+          type: 'recover-flight',
+          flightId: group.id,
+          carrierId: group.carrierId ?? ship.id,
+        }
+      }
+      return { type: 'flight-dogfight', flightId: group.id, targetFlightId: foe.id }
+    }
   }
 }
 
@@ -114,6 +158,29 @@ function checkInvariants(game: GameState, context: string): void {
     // A ship with hull left is not destroyed, and one with none is.
     if (ship.hullMarked >= ship.design.hullBoxes) {
       expect(ship.destroyed, `${context}: ${ship.id} should be destroyed`).toBe(true)
+    }
+  }
+  for (const group of game.fighterGroups) {
+    const id = group.id
+    // A group cannot have negative fighters, and cannot grow: nothing in
+    // section 8 adds a craft to a group in flight.
+    expect(group.strength, `${context}: ${id} strength`).toBeGreaterThanOrEqual(0)
+    expect(group.strength, `${context}: ${id} strength`).toBeLessThanOrEqual(8)
+    // 8.13: endurance runs down and stops at zero. A negative CEF is a group
+    // that flew on fuel it did not have.
+    expect(group.cef, `${context}: ${id} CEF`).toBeGreaterThanOrEqual(0)
+    expect(Number.isFinite(group.position.x), `${context}: ${id} x`).toBe(true)
+    expect(Number.isFinite(group.position.y), `${context}: ${id} y`).toBe(true)
+    expect(group.facing, `${context}: ${id} facing`).toBeGreaterThanOrEqual(1)
+    expect(group.facing, `${context}: ${id} facing`).toBeLessThanOrEqual(12)
+    // A group in its bay is at its carrier, not adrift somewhere it once was.
+    if (group.status === 'aboard' && group.carrierId) {
+      const carrier = game.ships.find((ship) => ship.id === group.carrierId)
+      if (carrier) {
+        expect(group.position, `${context}: ${id} aboard but adrift`).toEqual(
+          carrier.placement.position,
+        )
+      }
     }
   }
   expect(game.turn, `${context}: turn`).toBeGreaterThan(0)

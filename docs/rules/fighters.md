@@ -260,6 +260,22 @@ normally be applied to the re-roll as well."
 - **[reading]** "Fighters that use cannon ignore Standard Screens". Against *Advanced* screens (7.3)
   the screen level is applied, because 8.9 names Standard screens specifically and 8.15's looser
   "ignore the effects of screens" is the summary of the same sentence.
+- **[reading]** The cannon's loss of the re-roll follows the fighter's dice wherever they are BD*,
+  **dogfights included**, because 8.15 states it as a property of the armament ("Cannon lose the
+  reroll of beams, but ignore screens") and not of the target. 8.10 states the dogfight table in its
+  default beam form. The trade is coherent: cannon buy screen-blindness against ships and pay for it
+  against fighters.
+- **[reading]** The beam/cannon choice is the *purchase option* 8.15 offers the types listed with
+  both armaments — Standard, Interceptor, Attack, Torpedo, MKP, Missile, Multi-Role. It is not every
+  weapon the book calls a cannon: 8.15 says a Graser Fighter's "secondary cannon … inflict only BD*
+  hits with a -2 DRM", re-roll included, so Graser, Plasma and Assault Shuttle secondaries keep the
+  star.
+- **[reading]** A group that already attacked this turn pays no further endurance for a second
+  attack in the same turn — 8.13 charges "1 CEF each turn it engages in combat", not one per shot.
+  This is what makes 8.9's "survivors carry out the attack against the ship" after being intercepted
+  cost one factor rather than two.
+- **[reading]** Graser and Plasma fighters, which "drain 2 points of combat endurance", must have
+  the full two available; a group on one factor cannot fire.
 
 ## 8.10 Dogfights
 
@@ -293,6 +309,11 @@ A is left with 3, B with 1.
 Note the split is of **kills**, not of dice: roll the whole group's dice once, then divide the
 resulting casualties. "As equally as possible" leaves the remainder's destination to the player; the
 engine gives remainders to the earlier-listed targets so the result is deterministic.
+
+**[reading]** A single roll can carry only one defensive modifier, and a split may aim at groups
+with different ones (a Heavy group at −1 beside a plain one at 0). The rule offers no tie-break, so
+the engine takes the *most protective* of the declared targets — the lowest DRM — since the dice are
+one burst fired into a mixed formation.
 
 ## 8.12 Interception of missiles
 
@@ -364,7 +385,7 @@ re-roll. Points are per fighter / per wing of six unless noted.
 | **Attack** | BD\* at **+1 DRM** | BD\* at **−2 DRM** | 1 | 4 / 24 | beams or cannon; cannot intercept missiles (8.12) |
 | **Torpedo** | secondary beams BD\* at **−2 DRM** | BD\* at **−2 DRM** | 1 | 6 / 36 | 1-shot Pulse Torpedo below; cannot intercept missiles (8.12) |
 | **Graser** | 6 BD\* hits, each hit **1d3 damage, SAP** | secondary cannon BD\* at **−2 DRM** | **2** (Graser) | 7 / 42 | |
-| **Plasma** | **1d6−2 − screens/DRM hits**, re-roll on a 6 | BD\* at **−2 DRM** | **2** (Plasma) | 7 / 42 | |
+| **Plasma** | **1d6−2 − screens/DRM hits**, re-roll on a 6 | BD\* at **−2 DRM** | **2** (Plasma) | 7 / 42 | see the plasma reading below |
 | **MKP** | secondary BD\* at **−2 DRM** | BD\* at **−2 DRM** | 1 | 6 / 36 | 1-shot MKPs below |
 | **Missile** | secondary BD\* at **−2 DRM**, 6 MU | BD\* at **−2 DRM** | 1 | 4 / 24 | 1-shot salvo at 12 MU below |
 | **Multi-Role** | as Standard, Interceptor or Attack, chosen at re-arm | ditto | 1 | 5 / 30 | beams or cannon at re-arm |
@@ -379,6 +400,22 @@ Attack Fighter, quoted worked case: "If firing on an unscreened target ship they
 damage point with rolls of 3 or 4, and two damage points with 5 or 6." — which is the beam table
 under +1, confirming that the DRM shifts the face read on the table, and that the re-roll still
 keys on the natural 6.
+
+**Plasma Fighter dice**, and the one place 8.15 and 5.5 do not quite say the same thing. 5.5 reads
+"on a roll of 3 it inflicts 1 hit, on a 4 it inflicts 2 hits, on a 5 it inflicts 3 hits, and on a 6
+it inflicts 4 hits, penetrates, and gets a reroll!", while 8.15 describes the fighter weapon as
+"1d6-2 - screens/DRM hits with rerolls on a 6" and never mentions penetration. **[reading]** The
+fighter version follows 8.15 — its own section wins — so hits are `max(0, die − 2 − screens)`, the
+die's own hits are ordinary damage, and only the re-roll penetrates, exactly as a beam's does (4.6).
+The re-roll is scored unscreened and unmodified (1.7).
+
+| Die | Hits, unscreened |
+| --- | --- |
+| 1–2 | 0 |
+| 3 | 1 |
+| 4 | 2 |
+| 5 | 3 |
+| 6 | 4, plus a penetrating re-roll |
 
 ### One-shot payloads
 
@@ -401,6 +438,10 @@ its missiles. It also must not be engaged by other fighters at time of launch." 
 "Launching the missiles consumes one Combat Endurance Factor (CEF)." The group carries one Salvo
 Missile salvo of one missile per fighter. **Lock-on: "To determine how many missiles lock on to the
 target ship roll a D6 and subtract 1 for each fighter that was destroyed prior to launch."**
+**[reading]** "destroyed prior to launch" is read as the fighters missing from the group (full
+strength minus current strength), because that is the number a player can read straight off the
+counter; the result is also capped at the salvo size, since a salvo cannot land more missiles than
+it fired.
 Light Missile Fighters "must mount a light missile instead. The light missile is more easily
 destroyed, and so all PDS or fighter attacks against light missiles are at +1 to the die roll."
 
@@ -504,6 +545,25 @@ anyway), but when they are engaged in a dogfight with other fighters or try to i
 PPTs etc., they modify their attack rolls with a −1 DRM from every die roll they make."
 
 ---
+
+## What `game.ts` calls, and in which phase
+
+| Phase (2.6) | Function in `fighters.ts` |
+| --- | --- |
+| 3 Launch | `canLaunch`, `launchFighterGroup`, `deployFtlFighters` (8.15 FTL), `launchFighterMissiles` (8.15 Missile) |
+| 3 Launch, out of sequence | `scrambleFighters` (8.3) |
+| 4 Move fighters | `mainMoveAllowance`, `moveFighterGroup`, `assignScreen`, `declarePursuit`; `takesSecondaryMoveInPhaseFour` for Robot groups (8.15) |
+| 5 Move ships | `moveWithEscortedShip`, `screenHasBrokenOff` (8.6) |
+| 6 Secondary moves | `secondaryMoveAllowance`, `secondaryMoveFighterGroup` (8.5) |
+| 7 Allocate attacks | `canDeclareAttack`, `assignScreenEngagements` (8.6, 8.7) |
+| 8 Fighters vs fighters and missiles | `resolveDogfight`, `resolveMultiGroupDogfight`, `refuseDogfight`, `interceptMissiles`, `aceDuel` |
+| 9 Point defence | `pointDefenceAgainstFighters` (8.8) |
+| 10 Ordnance and fighters vs ships | `resolveAttackRun`, `resolveInterceptedAttackRun`, `launchPulseTorpedoes`, `launchFighterMkps`, `resolveBoardingRun`, `aceNeedleAttack` |
+| 11 Ships fire | `shipFireAtFighters`, `evadeShipFire` (8.6) |
+| any | `recoverFighterGroup`, `combatLanding`, `rollRearm`, `worstRearm`, `reconfigureMultiRole`, `adfcLockedOut` |
+| turn boundary | `beginFighterTurn` |
+| setup | `createFighterGroup`, `fighterProfile`, `validateFighterBuild`, `rollPilotQuality` |
+| optional | `fighterMoraleCheck` (8.17), the Ace/Turkey functions (8.18) |
 
 ## Rules referenced but owned elsewhere
 
