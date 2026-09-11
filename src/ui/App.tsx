@@ -10,6 +10,7 @@ import { OnlinePanel } from './OnlinePanel'
 import { ReplayBar } from './ReplayBar'
 import { Scoreboard } from './Scoreboard'
 import { SetupPanel } from './SetupPanel'
+import { ShipLibrary } from './ShipLibrary'
 import { KEY_HELP, useKeyboard } from './useKeyboard'
 import { OrderPanel } from './OrderPanel'
 import { Ssd } from './Ssd'
@@ -46,13 +47,14 @@ export function App() {
   // at the wreckage should not have it thrown back at them every phase.
   const [resultSeen, setResultSeen] = useState(false)
   const [previewing, setPreviewing] = useState(false)
+  const [showLibrary, setShowLibrary] = useState(false)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
   const log = viewingSide ? logFor(game, viewingSide) : game.log
   const end = battleEnd(game, scenario)
 
-  useKeyboard({ game, selectedId, onSelect: setSelectedId, suspended: showOnline || showSetup })
+  useKeyboard({ game, selectedId, onSelect: setSelectedId, suspended: showOnline || showSetup || showLibrary })
 
   return (
     <div className="app">
@@ -91,6 +93,7 @@ export function App() {
         >
           New battle
         </button>
+        <button onClick={() => setShowLibrary(true)}>Ships</button>
         <button onClick={() => setShowOnline(true)}>Remote play</button>
         <button disabled={!canUndo()} onClick={() => undo()}>
           Undo
@@ -219,6 +222,7 @@ export function App() {
 
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showSetup ? <SetupPanel onClose={() => setShowSetup(false)} /> : null}
+      {showLibrary ? <ShipLibrary onClose={() => setShowLibrary(false)} /> : null}
       {end.over && scenario && !resultSeen ? (
         <BattleResult
           game={game}

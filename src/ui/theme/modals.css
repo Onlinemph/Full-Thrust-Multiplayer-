@@ -224,3 +224,55 @@
   color: var(--damage);
   background: none;
 }
+
+/* ── Ship library ─────────────────────────────────────────────────────────── */
+
+.modal.is-wide {
+  width: min(62rem, 100%);
+}
+
+.library {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) 1fr;
+  gap: var(--gap-2);
+  min-height: 0;
+}
+
+.library-list {
+  overflow-y: auto;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.library-list h4 {
+  margin: 0 0 0.2rem;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding: 0.2rem 0;
+}
+
+.library-list .panel-row {
+  width: 100%;
+  border: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.library-form {
+  overflow-y: auto;
+  max-height: 60vh;
+  padding-right: var(--gap);
+}
+
+@media (max-width: 760px) {
+  .library {
+    grid-template-columns: 1fr;
+  }
+  .library-list {
+    max-height: 30vh;
+  }
+}
