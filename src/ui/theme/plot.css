@@ -187,6 +187,13 @@
   stroke-width: 1;
 }
 
+/* A group with no endurance left can still fly, and can do nothing (8.13). */
+.flight-marker.is-spent {
+  fill: none;
+  stroke: var(--fighters);
+  stroke-dasharray: 2 2;
+}
+
 /* A flight's remaining combat endurance, read at a glance (8.13). */
 .flight-cef {
   font-family: var(--font-mono);

@@ -242,9 +242,17 @@ export function MapView({
                 key={group.id}
                 transform={`translate(${group.position.x * scale} ${group.position.y * scale})`}
               >
-                <circle className="flight-marker" r={6} />
+                {/* Strength inside, endurance beneath: a group is read as "how
+                    many are left" and "how much they can still do" (8.9, 8.13). */}
+                <circle
+                  className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}`}
+                  r={6}
+                />
                 <text className="flight-cef" y={3}>
                   {group.strength}
+                </text>
+                <text className="counter-label" y={17} textAnchor="middle">
+                  {group.cef > 0 ? `CEF ${group.cef}` : 'spent'}
                 </text>
               </g>
             ))}
