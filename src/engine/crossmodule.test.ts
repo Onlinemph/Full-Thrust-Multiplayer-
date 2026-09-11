@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { applyAction } from './actions'
 import { hullRowBounds } from './combat'
-import { createShipState, hullRowBoundaries } from './game'
+import { advancePhase, createGame, createShipState, hullRowBoundaries } from './game'
 import { hullRows as ssdHullRows } from '../ui/Ssd'
 import { SHIP_DESIGNS } from '../data/ships'
-import type { HullRows } from './types'
+import type { HullRows, ShipDesign } from './types'
 
 /**
  * Cross-module agreement.
@@ -54,5 +55,95 @@ describe('hull rows', () => {
         expect(hullRowBounds(boxes, rows)[rows - 1], `${boxes}/${rows}`).toBe(boxes)
       }
     }
+  })
+})
+
+/**
+ * Boarding parties, from the gun to the SSD.
+ *
+ * Four modules have to agree for a marine to end up aboard an enemy ship: the
+ * weapon resolver says how many got across (5.9, 5.18), `combat.ts` carries
+ * the count out of the damage pipeline, `actions.ts` writes it onto the
+ * target, and `game.ts` holds it. Each is right on its own and the marines
+ * still vanish if any link drops the field, which is exactly the kind of gap
+ * a per-module test cannot see.
+ */
+describe('boarding parties', () => {
+  const boarder = (id: string): ShipDesign => ({
+    id,
+    name: id,
+    faction: 'Test',
+    group: 'cruiser',
+    mass: 80,
+    hullClass: 'average',
+    hullRows: 4,
+    hullBoxes: 24,
+    drive: { thrust: 4, advanced: false },
+    ftl: 'none',
+    streamlining: 'none',
+    armour: { layers: [], regenerative: false },
+    screens: { level: 0, generators: 0, advanced: false },
+    weapons: [
+      {
+        id: 'bt1',
+        label: 'Boarding Torpedo',
+        weaponClass: 'boarding-torpedo',
+        rating: 1,
+        variant: 'standard',
+        arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+        mass: 3,
+        points: 9,
+      },
+    ],
+    turrets: [],
+    systems: [{ id: 'fc1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 }],
+    fighterBays: [],
+    gunboats: [],
+    damageControlParties: 1,
+    marineParties: 4,
+    points: 100,
+  })
+
+  it('land on the ship they were fired at, stamped with the turn', () => {
+    // Fire enough torpedoes across enough seeds that at least one connects:
+    // 5.18 uses the projectile to-hit table, so a single shot can miss.
+    let landed = 0
+    let stamped = 0
+    for (let seed = 0; seed < 30; seed++) {
+      const game = createGame({
+        seed,
+        sides: [{ id: 'a' }, { id: 'b' }],
+        ships: [
+          createShipState({
+            id: 'boarder',
+            side: 'a',
+            design: boarder('Boarder'),
+            placement: { position: { x: 0, y: 0 }, facing: 6 },
+          }),
+          createShipState({
+            id: 'prize',
+            side: 'b',
+            design: boarder('Prize'),
+            placement: { position: { x: 0, y: 6 }, facing: 12 },
+          }),
+        ],
+      })
+      let guard = 40
+      while (game.phase !== 'ship-fire' && guard-- > 0) advancePhase(game)
+      applyAction(game, {
+        type: 'fire-weapon',
+        shipId: 'boarder',
+        weaponId: 'bt1',
+        targetId: 'prize',
+      })
+      const prize = game.ships[1]
+      const aboard = prize.boarders.reduce((sum, party) => sum + party.parties, 0)
+      if (aboard > 0) {
+        landed += aboard
+        if (prize.boarders.every((p) => p.side === 'a' && p.landedTurn === game.turn)) stamped += 1
+      }
+    }
+    expect(landed, 'no boarding torpedo in thirty ever put anyone aboard').toBeGreaterThan(0)
+    expect(stamped).toBeGreaterThan(0)
   })
 })

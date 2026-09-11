@@ -94,6 +94,7 @@ import {
 } from './ordnance'
 import {
   damageControlPhase,
+  reactorExplosionPhase,
   rollThresholdChecks,
   thresholdPhase,
 } from './threshold'
@@ -604,6 +605,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // markHullBoxes owns the row accounting and the pending threshold, so
       // the hull damage goes through it rather than being written directly.
       markHullBoxes(target, applied.hullDamage)
+      // 5.9: "Every hit generated allows the player to send one unit of
+      // Marines or a Damage Control Party over to the enemy ship"; 5.18: "two
+      // 'Marine' markers are placed on the enemy ship". Landing them is where
+      // the source stops — see the boarding phase.
+      landBoarders(state, ship, target, applied.boarders ?? 0)
 
       pushLog(state, {
         kind: applied.hullDamage > 0 ? 'damage' : 'fire',
@@ -854,6 +860,39 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     case 'resolve-damage-control': {
       if (state.phase !== 'damage-control') return refuse('Repairs are made in phase 14')
       damageControlPhase(state)
+      return OK
+    }
+
+    case 'resolve-reactor-explosions': {
+      if (state.phase !== 'reactor-explosions') {
+        return refuse('A breached core is rolled for in phase 15')
+      }
+      reactorExplosionPhase(state)
+      return OK
+    }
+
+    // ── Boarding (phase 12) ───────────────────────────────────────────────
+    case 'resolve-boarding': {
+      if (state.phase !== 'boarding') return refuse('Boarding is resolved in phase 12')
+      // Getting marines aboard is 5.9, 5.18 and 8.15, all of which are in the
+      // source and all of which are implemented — the parties are on the
+      // target's SSD. What they then *do* is 12.7, which is on page 96 of a
+      // rulebook whose text layer stops at page 80 (docs/rules/SOURCES.md).
+      // Inventing a boarding fight would be inventing a rule, so the phase
+      // reports the parties aboard and leaves the fight to the players.
+      for (const ship of state.ships) {
+        if (ship.destroyed || ship.offTable) continue
+        const aboard = ship.boarders.reduce((sum, party) => sum + party.parties, 0)
+        if (aboard === 0) continue
+        pushLog(state, {
+          kind: 'boarding',
+          shipId: ship.id,
+          side: ship.side,
+          text:
+            `${ship.name} has ${aboard} enemy boarding part${aboard === 1 ? 'y' : 'ies'} aboard ` +
+            '— the boarding action is 12.7, which is not in the source',
+        })
+      }
       return OK
     }
 
@@ -1649,6 +1688,33 @@ function squadronFacingAfterMove(
   if (chosen !== undefined) return chosen
   if (distance(squadron.position, to) <= 1e-9) return squadron.facing
   return nearestCourse(squadron.position, to)
+}
+
+/**
+ * Put boarding parties on the target's SSD (5.9, 5.18).
+ *
+ * They are stamped with the turn they landed because phase 13 says not to roll
+ * for boarders that arrived this turn, and the boarding rules of 12.7 — when
+ * they can be read — will want the same stamp.
+ */
+function landBoarders(
+  state: GameState,
+  from: ShipState,
+  target: ShipState,
+  parties: number,
+): void {
+  if (parties <= 0) return
+  const existing = target.boarders.find(
+    (party) => party.side === from.side && party.landedTurn === state.turn,
+  )
+  if (existing) existing.parties += parties
+  else target.boarders.push({ side: from.side, parties, landedTurn: state.turn })
+  pushLog(state, {
+    kind: 'boarding',
+    shipId: target.id,
+    side: from.side,
+    text: `${parties} boarding part${parties === 1 ? 'y' : 'ies'} from ${from.name} board ${target.name}`,
+  })
 }
 
 /**

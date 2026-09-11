@@ -204,6 +204,12 @@ function playPhase(game: GameState): GameAction[] {
     case 'damage-control':
       take({ type: 'resolve-damage-control' })
       break
+    case 'boarding':
+      take({ type: 'resolve-boarding' })
+      break
+    case 'reactor-explosions':
+      take({ type: 'resolve-reactor-explosions' })
+      break
     default:
       break
   }

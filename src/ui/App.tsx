@@ -394,6 +394,37 @@ function PhaseControls({ phase }: { phase: Phase }) {
           </p>
         </div>
       )
+    case 'boarding':
+      return (
+        <div className="panel">
+          <h3>Phase 12 · Boarding</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Transporters, boarding torpedoes and assault shuttles have put their parties aboard.
+            What those parties then do is section 12.7, which is past the end of the rulebook text
+            this engine is built from — so the phase lists who is aboard whom and leaves the fight
+            to the players.
+          </p>
+          <button className="primary" onClick={() => dispatch({ type: 'resolve-boarding' })}>
+            List boarders
+          </button>
+        </div>
+      )
+    case 'reactor-explosions':
+      return (
+        <div className="panel">
+          <h3>Phase 15 · Reactor explosions</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Every ship with a breached power core rolls a die. On a 5 or 6 the core lets go and
+            the ship is gone; anything else and it holds for one more turn.
+          </p>
+          <button
+            className="primary"
+            onClick={() => dispatch({ type: 'resolve-reactor-explosions' })}
+          >
+            Roll for breached cores
+          </button>
+        </div>
+      )
     case 'ship-fire':
       return (
         <div className="panel">
