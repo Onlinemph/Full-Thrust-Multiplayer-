@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { applyOrder, driveFromDef, type MovementState } from '../engine/movement'
 import type { GameState, ShipState } from '../engine/game'
@@ -53,10 +53,17 @@ export function MapView({
     return () => observer.disconnect()
   }, [])
 
-  /* Pixels per MU: fit the whole table by default, so a battle opens with both
-     fleets on screen rather than at an arbitrary magnification. */
-  const fit = Math.min(size.width / table.width, size.height / table.height)
-  const scale = fit * zoom
+  /* Pixels per MU: fit the whole table with a margin, so a battle opens with
+     both fleets on screen and nothing touching the edge. */
+  const MARGIN = 24
+  const fit = Math.min(
+    (size.width - MARGIN * 2) / table.width,
+    (size.height - MARGIN * 2) / table.height,
+  )
+  const scale = Math.max(0.5, fit) * zoom
+  // Centre the table, then apply the player's pan on top.
+  const originX = (size.width - table.width * scale) / 2 + pan.x
+  const originY = (size.height - table.height * scale) / 2 + pan.y
 
   const onWheel = useCallback((event: React.WheelEvent) => {
     event.preventDefault()
@@ -88,21 +95,25 @@ export function MapView({
    * The track each ship has plotted for this turn (3.4), drawn as the two legs
    * the cinematic rules actually move it through — a straight line from start
    * to finish would hide the very turn the player just plotted.
+   *
+   * Computed on every render rather than memoised, and deliberately: the engine
+   * mutates ship state in place, so `game` is the same object from one render
+   * to the next and any dependency array built from it would never invalidate.
+   * The work is a few applyOrder calls over the ships on the table, which is
+   * far cheaper than the bug that memoising it caused.
    */
-  const tracks = useMemo(() => {
-    return game.ships
-      .filter((ship) => !ship.destroyed && !ship.offTable && ship.order)
-      .filter((ship) => visible(ship, viewingSide))
-      .map((ship) => {
-        const movement: MovementState = {
-          placement: ship.placement,
-          velocity: ship.velocity,
-          drive: { ...driveFromDef(ship.design.drive), hits: ship.driveHits },
-        }
-        const result = applyOrder(movement, ship.order!)
-        return { ship, legs: result.legs }
-      })
-  }, [game, game.turn, viewingSide])
+  const tracks = game.ships
+    .filter((ship) => !ship.destroyed && !ship.offTable && ship.order)
+    .filter((ship) => visible(ship, viewingSide))
+    .map((ship) => {
+      const movement: MovementState = {
+        placement: ship.placement,
+        velocity: ship.velocity,
+        drive: { ...driveFromDef(ship.design.drive), hits: ship.driveHits },
+      }
+      const result = applyOrder(movement, ship.order as NonNullable<typeof ship.order>)
+      return { ship, legs: result.legs }
+    })
 
   return (
     <div
@@ -118,8 +129,30 @@ export function MapView({
       aria-label="Plotting surface"
     >
       <svg>
-        <g transform={`translate(${pan.x} ${pan.y})`}>
-          {/* The table edge. A ship that crosses it has left the battle (3.9). */}
+        <defs>
+          <pattern
+            id="mu-grid"
+            width={BEAM_RANGE_BAND * scale}
+            height={BEAM_RANGE_BAND * scale}
+            patternUnits="userSpaceOnUse"
+          >
+            <path
+              className="plot-grid-line"
+              d={`M ${BEAM_RANGE_BAND * scale} 0 L 0 0 0 ${BEAM_RANGE_BAND * scale}`}
+              fill="none"
+            />
+          </pattern>
+        </defs>
+        <g transform={`translate(${originX} ${originY})`}>
+          {/* The table, gridded at the beam range band, and its edge — which a
+              ship can cross to leave the battle (3.9). */}
+          <rect
+            className="plot-grid"
+            x={0}
+            y={0}
+            width={table.width * scale}
+            height={table.height * scale}
+          />
           <rect
             x={0}
             y={0}

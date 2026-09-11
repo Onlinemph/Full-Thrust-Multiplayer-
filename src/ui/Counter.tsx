@@ -32,13 +32,16 @@ export interface CounterProps {
 /**
  * Counter size in MU from hull mass.
  *
- * Deliberately compressed: mass runs from about 10 to 300 in practice, and a
- * counter thirty times another's size would be unusable. The cube root keeps a
- * superdreadnought visibly four times a corvette and no more — which is about
- * what the miniatures look like on a real table anyway.
+ * Two constraints fix this. It must be compressed — mass runs from about 10 to
+ * 300 in play and a counter thirty times another's size would be unusable — and
+ * it must stay small against the ranges, because a counter that reads as
+ * several MU across makes a 12 MU range band look like nothing. The cube root
+ * handles the first; the coefficient handles the second, putting a mass-20
+ * frigate at about 1.2 MU and a mass-300 dreadnought at about 3, which is
+ * roughly what the miniatures look like on a real table.
  */
 export function counterRadius(mass: number): number {
-  return 1.6 * Math.cbrt(Math.max(1, mass))
+  return 0.45 * Math.cbrt(Math.max(1, mass))
 }
 
 export function Counter({

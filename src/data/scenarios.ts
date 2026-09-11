@@ -129,16 +129,16 @@ export const INTRODUCTORY_SCENARIO: Scenario = {
       id: 'a',
       name: 'Eurasian Solar Union',
       force: [
-        ...line('intro-heavy-cruiser', 2, 6, 6, { from: 26, to: 46 }, 6),
-        ...line('intro-frigate', 3, 2, 6, { from: 20, to: 52 }, 8),
+        ...line('intro-heavy-cruiser', 2, 10, 6, { from: 26, to: 46 }, 6),
+        ...line('intro-frigate', 3, 5, 6, { from: 20, to: 52 }, 8),
       ],
     },
     {
       id: 'b',
       name: 'New Anglian Confederation',
       force: [
-        ...line('intro-heavy-cruiser', 2, 42, 12, { from: 26, to: 46 }, 6),
-        ...line('intro-frigate', 3, 46, 12, { from: 20, to: 52 }, 8),
+        ...line('intro-heavy-cruiser', 2, 38, 12, { from: 26, to: 46 }, 6),
+        ...line('intro-frigate', 3, 43, 12, { from: 20, to: 52 }, 8),
       ],
     },
   ],

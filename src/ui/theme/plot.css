@@ -15,18 +15,26 @@
   height: 100%;
   overflow: hidden;
   background: var(--void);
-  /* The grid is scale, not decoration, so it is drawn at a round number of MU
-     and it fades rather than competing with the counters. */
-  background-image:
-    linear-gradient(var(--line-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
-  background-size: calc(var(--mu, 4px) * 12) calc(var(--mu, 4px) * 12);
   touch-action: none;
   cursor: grab;
 }
 
 .plot:active {
   cursor: grabbing;
+}
+
+/* The grid is scale, not decoration: one line every 12 MU, which is the beam
+   range band (4.3), so a player can read distance off the table by eye. It is
+   drawn inside the table rect rather than across the viewport, because a grid
+   that runs past the table edge makes the edge — which ships can leave across
+   (3.9) — impossible to see. */
+.plot-grid {
+  fill: url(#mu-grid);
+}
+
+.plot-grid-line {
+  stroke: var(--line-soft);
+  stroke-width: 1;
 }
 
 .plot svg {
