@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
+import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
 
 /**
@@ -114,8 +115,11 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
           <label className="code-field">
             Scenario
             <select
+              aria-label="Scenario"
               value={draft.scenarioId}
-              onChange={(event) => setDraft((d) => ({ ...d, scenarioId: event.target.value }))}
+              onChange={(event) =>
+                setDraft((d) => ({ ...d, scenarioId: event.target.value, forces: undefined }))
+              }
             >
               {SCENARIOS.map((scenario) => (
                 <option key={scenario.id} value={scenario.id}>
@@ -140,6 +144,14 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             The same seed and the same orders give the same battle, every time. Change it for a
             fresh roll of the dice; keep it to replay one.
           </p>
+        </section>
+
+        <section>
+          <FleetPicker
+            scenarioId={draft.scenarioId}
+            forces={draft.forces ?? {}}
+            onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
+          />
         </section>
 
         <section>

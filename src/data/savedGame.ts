@@ -57,6 +57,14 @@ export interface GameSetup {
   /** Faction traits in play, by faction id. Empty means plain Continuum. */
   factions?: Partial<Record<string, string>>
 
+  /**
+   * A force chosen for a side, replacing the scenario's own (18.2). Stored as
+   * design ids in deployment order; `startScenario` places them on the
+   * scenario's own stations, so a picked fleet deploys where the scenario says
+   * the fleet deploys.
+   */
+  forces?: Partial<Record<string, string[]>>
+
   /** Sides the computer commands. */
   aiSides?: string[]
 
@@ -92,7 +100,7 @@ export interface SavedGame {
 export function buildGame(setup: GameSetup): GameState {
   setEmbeddedDesigns(setup.customDesigns ?? [])
   setEmbeddedScenario(setup.customScenario ?? null)
-  const game = startScenario(setup.scenarioId, { seed: setup.seed })
+  const game = startScenario(setup.scenarioId, { seed: setup.seed, forceIds: setup.forces })
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay
   // fight under the rules the battle was actually fought under.
@@ -139,6 +147,7 @@ export function withEmbedded(setup: GameSetup): GameSetup {
 
   const ids = new Set<string>()
   for (const side of scenario?.sides ?? []) for (const entry of side.force) ids.add(entry.designId)
+  for (const list of Object.values(setup.forces ?? {})) for (const id of list ?? []) ids.add(id)
 
   const custom: ShipDesign[] = []
   for (const id of ids) {

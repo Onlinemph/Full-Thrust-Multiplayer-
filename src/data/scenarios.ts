@@ -258,8 +258,39 @@ export function scenarioById(id: string): Scenario | undefined {
 
 export interface StartOptions {
   seed: number
-  /** Override the scenario's forces — "choose forces" and campaign battles. */
+  /** Override the scenario's forces outright — campaign battles. */
   forces?: Partial<Record<SideId, ForceEntry[]>>
+  /**
+   * A force picked by design id (18.2). Ships deploy on the scenario's own
+   * stations in order, so a picked fleet arrives where the scenario says a
+   * fleet arrives. A force longer than the scenario's stations continues the
+   * line outward from the last one.
+   */
+  forceIds?: Partial<Record<SideId, string[]>>
+}
+
+/**
+ * Lay a list of design ids out on a side's deployment stations.
+ *
+ * Beyond the last printed station the line continues on the same row, spaced
+ * as the last gap was — so bringing a bigger fleet than the scenario assumed
+ * widens the formation rather than stacking hulls on one point.
+ */
+function deploy(stations: readonly ForceEntry[], designIds: readonly string[]): ForceEntry[] {
+  if (stations.length === 0) return []
+  const gap =
+    stations.length > 1
+      ? stations[stations.length - 1].position.x - stations[stations.length - 2].position.x
+      : 8
+  return designIds.map((designId, index) => {
+    const station = stations[Math.min(index, stations.length - 1)]
+    const overflow = Math.max(0, index - (stations.length - 1))
+    return {
+      ...station,
+      designId,
+      position: { x: station.position.x + gap * overflow, y: station.position.y },
+    }
+  })
 }
 
 /** Build the round-one game a scenario describes. */
@@ -268,7 +299,9 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
   if (!scenario) throw new Error(`Unknown scenario: ${scenarioId}`)
 
   const ships = scenario.sides.flatMap((side) => {
-    const force = opts.forces?.[side.id] ?? side.force
+    const picked = opts.forceIds?.[side.id]
+    const force =
+      opts.forces?.[side.id] ?? (picked ? deploy(side.force, picked) : side.force)
     // Hulls of the same class are numbered within their side, so a log line
     // says "Heavy Cruiser 2" rather than two ships with identical names.
     const counts = new Map<string, number>()

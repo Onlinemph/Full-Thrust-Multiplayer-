@@ -128,3 +128,99 @@
   padding: 0.3em 0.5em;
   width: 100%;
 }
+
+/* ── Fleet picker ─────────────────────────────────────────────────────────── */
+
+.fleet-picker h4 {
+  margin: var(--gap) 0 0.25rem;
+}
+
+/* The budget is the only number that matters while building a fleet (18.3), so
+   it is large, tabular, and turns red the moment it is overspent. */
+.budget {
+  font-size: var(--text-lg);
+  color: var(--screens);
+}
+
+.budget.is-over {
+  color: var(--damage);
+}
+
+/* Composition as a bar, not three numbers: what a player is checking is a
+   proportion — "am I all battleships?" — and a proportion reads off a bar
+   faster than off arithmetic (18.2). */
+.composition {
+  display: flex;
+  height: 1.3rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: 100%;
+  font-size: var(--text-xs);
+}
+
+.composition-slice {
+  display: grid;
+  place-items: center;
+  color: var(--on-bright);
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.composition-slice.is-escort {
+  background: var(--screens);
+}
+.composition-slice.is-cruiser {
+  background: var(--side-a);
+}
+.composition-slice.is-capital {
+  background: var(--side-b);
+}
+
+.picked-list,
+.design-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+}
+
+.picked,
+.design-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--text-xs);
+  padding: 0.2em 0.45em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.design-chip {
+  cursor: pointer;
+}
+
+.design-chip:hover {
+  background: var(--panel-3);
+}
+
+.design-chip .num,
+.picked .num {
+  color: var(--ink-dim);
+}
+
+.picked button {
+  padding: 0 0.3em;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.picked button:hover {
+  color: var(--damage);
+  background: none;
+}
