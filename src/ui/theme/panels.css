@@ -307,3 +307,39 @@
   color: var(--ink);
   font-weight: 700;
 }
+
+/* ── Scoreboard ───────────────────────────────────────────────────────────── */
+
+.loss-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: var(--gap);
+}
+
+.loss {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink-dim);
+}
+
+.loss.is-damaged {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.loss.is-crippled,
+.loss.is-destroyed {
+  color: var(--damage);
+  border-color: var(--damage);
+}
+.loss.is-destroyed {
+  text-decoration: line-through;
+}
+.loss.is-disengaged {
+  color: var(--ink-faint);
+  border-style: dashed;
+}

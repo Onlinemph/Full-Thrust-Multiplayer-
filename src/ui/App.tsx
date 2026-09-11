@@ -5,6 +5,7 @@ import { logFor, phaseNumber, shipById, shipMovementOrder } from '../engine/game
 import { scenarioById } from '../data/scenarios'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
+import { Scoreboard } from './Scoreboard'
 import { OrderPanel } from './OrderPanel'
 import { Ssd } from './Ssd'
 import {
@@ -103,6 +104,8 @@ export function App() {
 
         <aside className="app-side">
           <PhaseControls phase={game.phase} />
+
+          {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
 
           {selected ? (
             <>
