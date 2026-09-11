@@ -11,7 +11,9 @@ import {
   createGame,
   createShipState,
   INTRODUCTORY_PHASES,
+  type FighterGroupState,
   type GameState,
+  type ShipState,
   type SideId,
 } from '../engine/game'
 import type { Course, Point, ShipGroup } from '../engine/types'
@@ -256,6 +258,37 @@ export function scenarioById(id: string): Scenario | undefined {
 // Starting a battle
 // ---------------------------------------------------------------------------
 
+/**
+ * The flights a carrier starts with, sitting in its bays (8.1).
+ *
+ * A group is six fighters at full strength, and it begins aboard: launching is
+ * a decision made in play, not at deployment, because a wing on the table on
+ * turn one is a wing that has already spent the carrier's launch capacity.
+ */
+function embarkedFlights(ship: ShipState): FighterGroupState[] {
+  return ship.design.fighterBays.map((bay, index) => ({
+    id: `${ship.id}-flight-${index + 1}`,
+    side: ship.side,
+    carrierId: ship.id,
+    typeId: bay.typeId,
+    label: `${ship.name} ${bay.label}`,
+    gunboats: false,
+    position: ship.placement.position,
+    facing: ship.placement.facing,
+    strength: 6,
+    cef: 6,
+    status: 'aboard',
+    launchedTurn: null,
+    role: 'free',
+    escorting: null,
+    movedThisTurn: false,
+    secondaryMovedThisTurn: false,
+    attackedThisTurn: false,
+    dogfightWith: null,
+    targetId: null,
+  }))
+}
+
 export interface StartOptions {
   seed: number
   /** Override the scenario's forces outright — campaign battles. */
@@ -323,6 +356,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
 
   return createGame({
     seed: opts.seed,
+    fighterGroups: ships.flatMap(embarkedFlights),
     scenario: scenario.id,
     // The introductory scenario plays phases 1, 2, 5, 11 and 13 only (2.6).
     phases: scenario.introductoryPhases ? INTRODUCTORY_PHASES : undefined,

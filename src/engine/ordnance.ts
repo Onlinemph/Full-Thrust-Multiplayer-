@@ -1516,21 +1516,23 @@ export function resolvePlasmaBoltDetonation(
       effects.push({ targetId: target.id, range, dice: [], damage: 0, destroyed: true })
       continue
     }
-    const faces = rollD6(bolt.strength, rng)
     if (target.kind === 'fighter-group') {
-      // 1d6 casualties per die of plasma damage, and screens do not protect a
-      // fighter: 6.8 gives the screen DRM to "each die of plasma damage", which
-      // for a fighter group is the casualty roll.
+      // 6.8: "Fighters and Heavy Fighters take 1d6 casualties per dice of
+      // plasma damage." The bolt throws one die per surviving class, so the
+      // group rolls that many casualty dice — the plasma damage itself is never
+      // worked out for a fighter, only converted. `damage` is the casualty
+      // count; capping it at the group's strength is the fighter module's job.
       const casualties = rollD6(bolt.strength, rng)
       effects.push({
         targetId: target.id,
         range,
-        dice: [...faces, ...casualties],
+        dice: casualties,
         damage: casualties.reduce((total, face) => total + face, 0),
         destroyed: false,
       })
       continue
     }
+    const faces = rollD6(bolt.strength, rng)
     effects.push({
       targetId: target.id,
       range,
