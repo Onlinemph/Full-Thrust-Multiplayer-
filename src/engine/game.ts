@@ -1,0 +1,1270 @@
+/**
+ * Full Thrust: Project Continuum — game state and the sequence of play (2.5, 2.6).
+ *
+ * This module owns the board: every ship, fighter group, missile marker and
+ * piece of terrain in play, where the turn has got to, who has initiative, and
+ * the battle log. Every other engine module mutates the state defined here.
+ *
+ * Two rules from elsewhere in the book decide what a phase is allowed to
+ * spend, so they live here with the clock rather than with the guns:
+ *
+ *  - a weapon fires once a turn, so a beam spent on point defence in phase 9
+ *    is not available in phase 11 (2.6);
+ *  - a FireCon is spent *per phase*, so one used to launch missiles in phase 3
+ *    is free again in phase 11 (5.2).
+ *
+ * The full written-out rules are in `docs/rules/sequence-of-play.md`.
+ */
+
+import { d6, Rng } from './dice'
+import {
+  PHASE_LABELS,
+  PHASE_ORDER,
+  type Course,
+  type MovementOrder,
+  type Phase,
+  type Placement,
+  type Point,
+  type SequencePosition,
+  type ShipDesign,
+} from './types'
+
+// ---------------------------------------------------------------------------
+// Sides
+// ---------------------------------------------------------------------------
+
+export type SideId = string
+
+/**
+ * One player's side (2.6). The rulebook is written for two opposed sides but
+ * phase 2 explicitly allows more — "(If there are more than two players, the
+ * winner decides the order for the others.)" — so sides carry a `team` to say
+ * who is allied with whom. A side on its own team fights everybody.
+ */
+export interface SideState {
+  id: SideId
+  name: string
+  team: string
+}
+
+// ---------------------------------------------------------------------------
+// Ongoing effects (10.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * An effect that outlives the hit that caused it — a wrecked bridge, an EMP
+ * shutdown (5.4), a power core running at half output (10.3).
+ *
+ * Section 10 is not in the text extract (see SOURCES.md), so this is a
+ * container, not a rule: the module that inflicts the effect states its
+ * duration and what it takes away, and `advancePhase` retires it when its turn
+ * comes round. `expiresAfterTurn: null` means "for the rest of the battle".
+ */
+export interface OngoingEffect {
+  id: string
+  /** What caused it, for the log: 'bridge', 'life-support', 'emp', … */
+  source: string
+  appliedTurn: number
+  expiresAfterTurn: number | null
+  /** Thrust the ship may not use while this lasts (3.2). */
+  thrustPenalty?: number
+  /** FireCon knocked offline without being destroyed (4.4). */
+  fireConOffline?: number
+  /** Weapon ids that may not fire while this lasts. */
+  weaponsOffline?: string[]
+  note: string
+}
+
+// ---------------------------------------------------------------------------
+// Per-ship battle state (2.4)
+// ---------------------------------------------------------------------------
+
+/** How a ship is using its FTL drive this turn (2.6 phases 1 and 5). */
+export type FtlTransit = 'none' | 'entering' | 'exiting'
+
+/**
+ * A FireCon allocation (4.4, 5.2). No `fireConId`: 4.4 says "Individual
+ * FireCon systems are not specifically linked to individual weapon systems",
+ * so all that matters is how many targets the ship is engaging in this phase.
+ * The `phase` is recorded because the allocation limit is per phase (5.2).
+ */
+export interface FireConAssignment {
+  /** Ship id or fighter group id — 4.4 counts a fighter group as a target. */
+  targetId: string
+  phase: Phase
+}
+
+/** A damage control party working one system (10.4). */
+export interface DamageControlAssignment {
+  /** System or weapon id being repaired. */
+  systemId: string
+  /** Parties on the job; at most three may work one system (10.4). */
+  parties: number
+}
+
+/** Enemy marines aboard a ship (5.9, 5.18, 12.7). */
+export interface BoardingParty {
+  side: SideId
+  parties: number
+  /**
+   * The turn they landed. Phase 13 says "do not roll for enemy boarders that
+   * 'landed' on the current turn", so the boarding module needs to know.
+   */
+  landedTurn: number
+}
+
+/** The Core Systems block (10.3), tracked as flags; effects live in `ongoing`. */
+export interface CoreSystemsState {
+  bridgeDestroyed: boolean
+  lifeSupportDestroyed: boolean
+  powerCoreDestroyed: boolean
+  /** Set when a destroyed power core has still to be rolled for in phase 15. */
+  reactorExplosionPending: boolean
+}
+
+/**
+ * The mutable SSD (2.4): everything a player would mark on a dry-erase sheet.
+ * The immutable printed design stays in `design`.
+ */
+export interface ShipState {
+  id: string
+  /** The individual ship's name; the class name is `design.name`. */
+  name: string
+  side: SideId
+  design: ShipDesign
+  /** Squadron membership (3.7); may only change in phase 1 (2.6). */
+  squadronId: string | null
+
+  // --- movement (3.1, 3.5) ------------------------------------------------
+  /**
+   * Position and facing. Under cinematic movement a ship always travels along
+   * its facing, so this doubles as its course (3.1); vector movement (3.10),
+   * which separates the two, is not implemented.
+   */
+  placement: Placement
+  velocity: number
+  /** This turn's written order (3.5), set in phase 1. */
+  order: MovementOrder | null
+  /** Thrust actually spent this turn — the optional aft-arc rule (4.2) and
+   *  fighter scrambles (8.3) both ask whether the ship used any. */
+  thrustUsed: number
+  layingMines: boolean
+  ftlTransit: FtlTransit
+  /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
+  fixedPath: boolean
+  /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
+   *  and velocity question asked before orders are written. */
+  cloaked: boolean
+  /** Course and velocity as at the end of a previous phase 5 (2.6). */
+  lastKnown: { course: Course; velocity: number; turn: number; cloaked: boolean } | null
+
+  // --- damage (2.4, 4.8, 4.11) -------------------------------------------
+  /** Hull boxes crossed off, from the top left (2.4). */
+  hullMarked: number
+  /** Armour boxes crossed off, inner layer first, parallel to `design.armour.layers`. */
+  armourMarked: number[]
+  /** Row lengths of the hull track, if the SSD does not split them evenly. */
+  hullRowSizes: number[] | null
+  /** System and weapon ids crossed off by threshold checks (4.11). */
+  destroyedSystems: Set<string>
+  /** Threshold hits on the main drive: 1 halves thrust, 2 disables it (4.11). */
+  driveHits: number
+  /** Hull rows crossed but not yet checked — drained in phase 13 (2.6, 4.11). */
+  pendingThresholdRows: number
+  /** Hull rows already checked, so the next check knows which row it is for. */
+  hullRowsChecked: number
+  destroyed: boolean
+  /** Left the table (3.9) — off the board but not dead. */
+  offTable: boolean
+
+  // --- what this turn has spent (2.6, 5.2) --------------------------------
+  /** Weapon id → the phase it fired in. Cleared at the start of each turn. */
+  weaponsFired: Map<string, Phase>
+  /** Phase 11: a ship gets one firing activation per turn. */
+  hasFiredThisTurn: boolean
+  /** Cleared at every phase boundary, because FireCon limits are per phase (5.2). */
+  fireconAssignments: FireConAssignment[]
+  /** Phase 14 assignments (10.4). */
+  damageControl: DamageControlAssignment[]
+
+  core: CoreSystemsState
+  ongoing: OngoingEffect[]
+  boarders: BoardingParty[]
+}
+
+export interface ShipStateOptions {
+  id: string
+  side: SideId
+  design: ShipDesign
+  placement: Placement
+  name?: string
+  velocity?: number
+  squadronId?: string | null
+  fixedPath?: boolean
+  /** Override the derived hull row lengths for a hand-entered SSD (2.4). */
+  hullRowSizes?: number[]
+}
+
+/** Put a design on the table as an undamaged ship (2.4). */
+export function createShipState(opts: ShipStateOptions): ShipState {
+  return {
+    id: opts.id,
+    name: opts.name ?? opts.design.name,
+    side: opts.side,
+    design: opts.design,
+    squadronId: opts.squadronId ?? null,
+    placement: { position: { ...opts.placement.position }, facing: opts.placement.facing },
+    velocity: opts.velocity ?? 0,
+    order: null,
+    thrustUsed: 0,
+    layingMines: false,
+    ftlTransit: 'none',
+    fixedPath: opts.fixedPath ?? false,
+    cloaked: false,
+    lastKnown: null,
+    hullMarked: 0,
+    armourMarked: opts.design.armour.layers.map(() => 0),
+    hullRowSizes: opts.hullRowSizes ?? null,
+    destroyedSystems: new Set<string>(),
+    driveHits: 0,
+    pendingThresholdRows: 0,
+    hullRowsChecked: 0,
+    destroyed: false,
+    offTable: false,
+    weaponsFired: new Map<string, Phase>(),
+    hasFiredThisTurn: false,
+    fireconAssignments: [],
+    damageControl: [],
+    core: {
+      bridgeDestroyed: false,
+      lifeSupportDestroyed: false,
+      powerCoreDestroyed: false,
+      reactorExplosionPending: false,
+    },
+    ongoing: [],
+    boarders: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fighter groups, ordnance markers and terrain
+// ---------------------------------------------------------------------------
+
+/** Where a fighter or gunboat group is in its life cycle (8.2, 8.13). */
+export type FighterStatus = 'aboard' | 'in-flight' | 'destroyed'
+
+/** A group's standing orders for the turn (8.6). */
+export type FighterRole = 'free' | 'screen' | 'pursuit'
+
+/**
+ * A fighter or gunboat group in play (8, 9). The group is the unit of
+ * alternation in phases 4 and 6 (2.6), which is the only reason it is modelled
+ * here; how it fights belongs to the fighter module.
+ */
+export interface FighterGroupState {
+  id: string
+  side: SideId
+  /** Carrier that launched it, or null once the carrier is gone (8.2). */
+  carrierId: string | null
+  typeId: string
+  label: string
+  /** Gunboats operate in squadrons of six, like fighters (9.1). */
+  gunboats: boolean
+  position: Point
+  /** A group has a facing, which need not be its direction of travel (8.5). */
+  facing: Course
+  /** Fighters left; a full group is six (8.15). */
+  strength: number
+  /** Combat endurance factors left (8.13). */
+  cef: number
+  status: FighterStatus
+  launchedTurn: number | null
+  role: FighterRole
+  /** Ship or group being screened or pursued (8.6). */
+  escorting: string | null
+  movedThisTurn: boolean
+  secondaryMovedThisTurn: boolean
+  attackedThisTurn: boolean
+  /** Group id this one is locked in a dogfight with (8.7, phase 8). */
+  dogfightWith: string | null
+  targetId: string | null
+}
+
+/** Ordnance marker families that sit on the table between phases (6). */
+export type OrdnanceKind = 'salvo' | 'heavy' | 'antimatter' | 'plasma-bolt' | 'rocket' | 'mine'
+
+/**
+ * A missile or other ordnance marker (6.3). Placed at its point of aim in
+ * phase 3, left in place while ships move, then moved next to its target in
+ * phase 7 — so the marker outlives the phase that made it and belongs to the
+ * game state rather than to a weapon resolver.
+ */
+export interface OrdnanceMarkerState {
+  id: string
+  side: SideId
+  sourceShipId: string
+  kind: OrdnanceKind
+  /** Standard or extended range (6.2). */
+  grade: 'standard' | 'extended'
+  /** Missiles left in the salvo; a full salvo is six (6.2). */
+  missiles: number
+  position: Point
+  launchedTurn: number
+  /** Stages left, for the optional multi-stage missile (6.6). */
+  stagesRemaining: number
+  /** Set in phase 7 once the marker has found something to attack (6.3). */
+  targetShipId: string | null
+}
+
+export type TerrainKind =
+  | 'planet'
+  | 'planetoid'
+  | 'asteroid-field'
+  | 'dust-cloud'
+  | 'nebula'
+  | 'debris'
+  | 'minefield'
+  | 'solar-flare'
+
+/**
+ * A piece of terrain (17). Section 17 is not in the text extract, so this
+ * carries only what the sequence of play needs — something to place on the
+ * table and, when `fixedPath` ships move first in phase 5, something to move.
+ * No terrain effect is applied anywhere in the engine.
+ */
+export interface TerrainFeature {
+  id: string
+  kind: TerrainKind
+  position: Point
+  /** Radius in MU (2.1). */
+  radius: number
+  label?: string
+}
+
+// ---------------------------------------------------------------------------
+// Battle log (2.6 "Information")
+// ---------------------------------------------------------------------------
+
+/** Broad classification of a log line, for filtering and icons. */
+export type LogKind =
+  | 'phase'
+  | 'initiative'
+  | 'orders'
+  | 'launch'
+  | 'move'
+  | 'fire'
+  | 'point-defence'
+  | 'damage'
+  | 'threshold'
+  | 'damage-control'
+  | 'boarding'
+  | 'destroyed'
+  | 'note'
+
+/**
+ * One line of the battle log.
+ *
+ * 2.6 says most games are played "open book", so entries default to being
+ * visible to everyone; the exceptions are the genuinely secret ones — written
+ * orders, and anything hidden by the optional sensors rules (12) — which name
+ * the sides that may read them.
+ */
+export interface LogEntry {
+  seq: number
+  turn: number
+  phase: Phase
+  kind: LogKind
+  text: string
+  visibleTo: 'all' | SideId[]
+  side?: SideId
+  shipId?: string
+  targetId?: string
+  dice?: number[]
+}
+
+/** The caller-supplied half of a log entry; the clock fields are filled in. */
+export interface LogInput {
+  text: string
+  kind?: LogKind
+  visibleTo?: 'all' | SideId[]
+  side?: SideId
+  shipId?: string
+  targetId?: string
+  dice?: number[]
+}
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+
+export interface InitiativeRoll {
+  side: SideId
+  roll: number
+}
+
+/**
+ * This turn's initiative (2.6 phase 2). `rounds[0]` is the opening roll; any
+ * further rounds are tie-breaks among the tied leaders.
+ */
+export interface InitiativeState {
+  turn: number
+  rounds: InitiativeRoll[][]
+  winner: SideId
+  /** Activation order, winner first. Phases that go loser-first reverse it. */
+  order: SideId[]
+}
+
+export interface GameState {
+  /** Scenario or battle identifier, for the journal. */
+  scenario: string
+  seed: number
+  /** The only source of randomness in the engine (1.7). */
+  rng: Rng
+  turn: number
+  phase: Phase
+  /** Phases actually played; INTRODUCTORY_PHASES for the intro scenario (2.6). */
+  phases: readonly Phase[]
+  sides: SideState[]
+  ships: ShipState[]
+  fighterGroups: FighterGroupState[]
+  ordnance: OrdnanceMarkerState[]
+  terrain: TerrainFeature[]
+  initiative: InitiativeState | null
+  log: LogEntry[]
+}
+
+export interface GameOptions {
+  seed: number
+  sides: Array<{ id: SideId; name?: string; team?: string }>
+  ships?: ShipState[]
+  fighterGroups?: FighterGroupState[]
+  ordnance?: OrdnanceMarkerState[]
+  terrain?: TerrainFeature[]
+  phases?: readonly Phase[]
+  scenario?: string
+}
+
+/**
+ * The five phases the introductory scenario needs (2.6): "For the Introductory
+ * Scenario you will need only phases 1, 2, 5, 11, and 13."
+ */
+export const INTRODUCTORY_PHASES: readonly Phase[] = [
+  'orders',
+  'initiative',
+  'move-ships',
+  'ship-fire',
+  'threshold',
+]
+
+/** Start a battle at turn 1, phase 1 (2.6). */
+export function createGame(opts: GameOptions): GameState {
+  const state: GameState = {
+    scenario: opts.scenario ?? 'battle',
+    seed: opts.seed,
+    rng: new Rng(opts.seed),
+    turn: 1,
+    phase: (opts.phases ?? PHASE_ORDER)[0],
+    phases: opts.phases ?? PHASE_ORDER,
+    sides: opts.sides.map((side) => ({
+      id: side.id,
+      name: side.name ?? side.id,
+      // A side with no stated team fights on its own (2.6 phase 2 allows more
+      // than two players; the book never assumes more than two teams).
+      team: side.team ?? side.id,
+    })),
+    ships: opts.ships ?? [],
+    fighterGroups: opts.fighterGroups ?? [],
+    ordnance: opts.ordnance ?? [],
+    terrain: opts.terrain ?? [],
+    initiative: null,
+    log: [],
+  }
+  pushLog(state, { kind: 'phase', text: `Turn 1 — ${PHASE_LABELS[state.phase]}` })
+  return state
+}
+
+// ---------------------------------------------------------------------------
+// Log helpers
+// ---------------------------------------------------------------------------
+
+/** Append one line to the battle log, stamped with the current turn and phase. */
+export function pushLog(state: GameState, input: LogInput): LogEntry {
+  const entry: LogEntry = {
+    seq: state.log.length + 1,
+    turn: state.turn,
+    phase: state.phase,
+    kind: input.kind ?? 'note',
+    text: input.text,
+    visibleTo: input.visibleTo ?? 'all',
+    side: input.side,
+    shipId: input.shipId,
+    targetId: input.targetId,
+    dice: input.dice,
+  }
+  state.log.push(entry)
+  return entry
+}
+
+/** The log as one side may read it (2.6: open book, minus the secrets). */
+export function logFor(state: GameState, side: SideId): LogEntry[] {
+  return state.log.filter((e) => e.visibleTo === 'all' || e.visibleTo.includes(side))
+}
+
+// ---------------------------------------------------------------------------
+// Lookup helpers
+// ---------------------------------------------------------------------------
+
+export function shipById(state: GameState, id: string): ShipState | undefined {
+  return state.ships.find((ship) => ship.id === id)
+}
+
+export function fighterGroupById(state: GameState, id: string): FighterGroupState | undefined {
+  return state.fighterGroups.find((group) => group.id === id)
+}
+
+export function sideById(state: GameState, id: SideId): SideState | undefined {
+  return state.sides.find((side) => side.id === id)
+}
+
+/** Every side in the battle, in declaration order. */
+export function sides(state: GameState): SideState[] {
+  return state.sides
+}
+
+/**
+ * Ships still in play (2.4): a ship with every hull box crossed out is
+ * "removed from play", and one that has left the table (3.9) is out too.
+ */
+export function activeShips(state: GameState, side?: SideId): ShipState[] {
+  return state.ships.filter(
+    (ship) => !ship.destroyed && !ship.offTable && (side === undefined || ship.side === side),
+  )
+}
+
+/** Fighter and gunboat groups actually on the table (8.2). */
+export function activeFighterGroups(state: GameState, side?: SideId): FighterGroupState[] {
+  return state.fighterGroups.filter(
+    (group) =>
+      group.status === 'in-flight' &&
+      group.strength > 0 &&
+      (side === undefined || group.side === side),
+  )
+}
+
+/** Whether two sides are on opposite sides of the battle. */
+export function areEnemies(state: GameState, a: SideId, b: SideId): boolean {
+  const left = sideById(state, a)
+  const right = sideById(state, b)
+  if (!left || !right) return a !== b
+  return left.team !== right.team
+}
+
+/** Every enemy ship still in play, seen from a side or from one of its ships. */
+export function enemiesOf(state: GameState, who: SideId | ShipState): ShipState[] {
+  const side = typeof who === 'string' ? who : who.side
+  return activeShips(state).filter((ship) => areEnemies(state, ship.side, side))
+}
+
+// ---------------------------------------------------------------------------
+// Initiative (2.6 phase 2)
+// ---------------------------------------------------------------------------
+
+/** Safety valve: a run of identical rolls cannot spin the loop for ever. */
+const MAX_INITIATIVE_ROUNDS = 32
+
+/**
+ * Roll initiative for the turn (2.6 phase 2): "Players roll a D6 each; highest
+ * roll has initiative for this turn."
+ *
+ * The book does not say what a tie does. The reading taken here is the one used
+ * at the table: the tied leaders roll again *among themselves* until one is
+ * highest, which settles the winner without disturbing the ranking of the
+ * players who were never in contention.
+ *
+ * With more than two players "the winner decides the order for the others", so
+ * the order returned is only a default — highest opening roll first, ties
+ * broken by seating order — and `setInitiativeOrder` lets the winner rearrange
+ * everyone behind them.
+ */
+export function rollInitiative(state: GameState): InitiativeState {
+  const rounds: InitiativeRoll[][] = []
+  let contenders = state.sides.map((side) => side.id)
+
+  while (contenders.length > 1 && rounds.length < MAX_INITIATIVE_ROUNDS) {
+    const round: InitiativeRoll[] = contenders.map((side) => ({ side, roll: d6(state.rng) }))
+    rounds.push(round)
+    const best = Math.max(...round.map((r) => r.roll))
+    contenders = round.filter((r) => r.roll === best).map((r) => r.side)
+  }
+  if (rounds.length === 0) rounds.push(contenders.map((side) => ({ side, roll: d6(state.rng) })))
+
+  const winner = contenders[0]
+  const opening = rounds[0]
+  const others = opening
+    .filter((r) => r.side !== winner)
+    .map((r, index) => ({ ...r, index }))
+    .sort((a, b) => b.roll - a.roll || a.index - b.index)
+    .map((r) => r.side)
+
+  const initiative: InitiativeState = {
+    turn: state.turn,
+    rounds,
+    winner,
+    order: [winner, ...others],
+  }
+  state.initiative = initiative
+  pushLog(state, {
+    kind: 'initiative',
+    text: `${sideById(state, winner)?.name ?? winner} wins initiative (${opening
+      .map((r) => `${r.side} ${r.roll}`)
+      .join(', ')})`,
+    dice: opening.map((r) => r.roll),
+  })
+  return initiative
+}
+
+/**
+ * Let the initiative winner set the order of everyone else (2.6 phase 2). The
+ * winner stays first — they are the ones with initiative — and the order must
+ * name every side exactly once.
+ */
+export function setInitiativeOrder(state: GameState, order: readonly SideId[]): boolean {
+  const initiative = state.initiative
+  if (!initiative) return false
+  if (order.length !== state.sides.length) return false
+  if (order[0] !== initiative.winner) return false
+  if (new Set(order).size !== order.length) return false
+  if (!order.every((id) => state.sides.some((side) => side.id === id))) return false
+  initiative.order = [...order]
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Who acts first (2.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where initiative puts a side in a phase.
+ *
+ * `initiative-last` is the surprising one: the winner *launches and moves last*
+ * (phases 3, 4 and 6) so they can react to what the loser commits to, and only
+ * *fires first* (phase 11).
+ */
+export type PhaseSequencing = 'simultaneous' | 'initiative-first' | 'initiative-last'
+
+/** What one activation consists of when players alternate (2.5). */
+export type AlternationUnit = 'none' | 'ship' | 'fighter-group'
+
+export interface PhaseSequenceRule {
+  /** The rulebook's own phase number (2.6). */
+  number: number
+  sequencing: PhaseSequencing
+  unit: AlternationUnit
+  /** The words in the book that fix the order. */
+  note: string
+}
+
+/**
+ * Who goes first in each phase, and what one activation is (2.6, with 8.5 for
+ * the fighter phases).
+ */
+export const PHASE_SEQUENCE: Record<Phase, PhaseSequenceRule> = {
+  orders: {
+    number: 1,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'both players simultaneously (and secretly) writing the movement orders',
+  },
+  initiative: {
+    number: 2,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'Players roll a D6 each; highest roll has initiative for this turn',
+  },
+  'launch-missiles': {
+    number: 3,
+    sequencing: 'initiative-last',
+    unit: 'ship',
+    note: 'Players alternate by ships, not by missile salvo or squadron. The player who lost initiative launches first',
+  },
+  'move-fighters': {
+    number: 4,
+    sequencing: 'initiative-last',
+    unit: 'fighter-group',
+    note: 'The player who lost initiative moves first (8.5: the winner moves second)',
+  },
+  'move-ships': {
+    number: 5,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'Both players simultaneously move their ships strictly in accordance with orders',
+  },
+  'secondary-fighter-moves': {
+    number: 6,
+    sequencing: 'initiative-last',
+    unit: 'fighter-group',
+    note: '8.5: whoever moved first in the main Fighter Movement Phase must also move first here',
+  },
+  'allocate-attacks': {
+    number: 7,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'all missiles and fighter groups within attack range are moved into attack positions',
+  },
+  'fighter-vs-fighter': {
+    number: 8,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'resolved before actual point defense fire is allocated to surviving ships',
+  },
+  'point-defence': {
+    number: 9,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'announce all targets before rolling any dice',
+  },
+  'ordnance-vs-ships': {
+    number: 10,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'damage is applied immediately, including threshold point checks if applicable',
+  },
+  'ship-fire': {
+    number: 11,
+    sequencing: 'initiative-first',
+    unit: 'ship',
+    note: 'starting with the player who won initiative, each player alternates in firing one ship',
+  },
+  boarding: {
+    number: 12,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'all ships that have enemy boarders onboard roll for effects',
+  },
+  threshold: {
+    number: 13,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'all ships roll threshold checks from damage incurred in phase 11 and 12',
+  },
+  'damage-control': {
+    number: 14,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'make any Damage Control repair rolls',
+  },
+  'reactor-explosions': {
+    number: 15,
+    sequencing: 'simultaneous',
+    unit: 'none',
+    note: 'apply damage to adjacent ships and roll additional threshold checks for them',
+  },
+}
+
+/** The rulebook's number for a phase (2.6), so a log line reads against the book. */
+export function phaseNumber(phase: Phase): number {
+  return PHASE_SEQUENCE[phase].number
+}
+
+/**
+ * The order sides act in during a phase (2.6).
+ *
+ * For a `simultaneous` phase there is no alternation at all; the order returned
+ * is simply a stable one to resolve in, so a replay is deterministic. Callers
+ * that care should read `PHASE_SEQUENCE[phase].sequencing`.
+ */
+export function activationOrder(state: GameState, phase: Phase = state.phase): SideId[] {
+  const order = state.initiative?.order ?? state.sides.map((side) => side.id)
+  return PHASE_SEQUENCE[phase].sequencing === 'initiative-last' ? [...order].reverse() : [...order]
+}
+
+/**
+ * Interleave each side's units into one activation list (2.5): "When the order
+ * matters, players alternate one ship at a time, not by entire fleet." A side
+ * that runs out of units simply drops out of the rotation.
+ */
+export function alternateActivations<T>(
+  order: readonly SideId[],
+  unitsBySide: ReadonlyMap<SideId, readonly T[]>,
+): Array<{ side: SideId; unit: T }> {
+  const out: Array<{ side: SideId; unit: T }> = []
+  const longest = Math.max(0, ...order.map((side) => unitsBySide.get(side)?.length ?? 0))
+  for (let i = 0; i < longest; i++) {
+    for (const side of order) {
+      const units = unitsBySide.get(side)
+      if (units && i < units.length) out.push({ side, unit: units[i] })
+    }
+  }
+  return out
+}
+
+/**
+ * The ships of a ship-alternating phase (3 and 11) in the order they activate.
+ * Within a side ships keep their declaration order; the player is of course
+ * free to pick any of their unactivated ships at the table, so this is the
+ * engine's default sequence rather than a constraint.
+ */
+export function shipActivationOrder(
+  state: GameState,
+  phase: Phase = state.phase,
+): Array<{ side: SideId; unit: ShipState }> {
+  const order = activationOrder(state, phase)
+  const bySide = new Map<SideId, ShipState[]>()
+  for (const side of order) bySide.set(side, activeShips(state, side))
+  return alternateActivations(order, bySide)
+}
+
+/**
+ * Fighter and gunboat groups in the order they activate in phase 4 (2.6):
+ * "All fighter groups being launched this turn must be moved before those
+ * already in flight", so a group launched this turn sorts ahead of the rest.
+ */
+export function fighterActivationOrder(
+  state: GameState,
+  phase: Phase = state.phase,
+): Array<{ side: SideId; unit: FighterGroupState }> {
+  const order = activationOrder(state, phase)
+  const bySide = new Map<SideId, FighterGroupState[]>()
+  for (const side of order) {
+    const groups = activeFighterGroups(state, side)
+    const launchedNow = groups.filter((g) => g.launchedTurn === state.turn)
+    const alreadyFlying = groups.filter((g) => g.launchedTurn !== state.turn)
+    bySide.set(side, [...launchedNow, ...alreadyFlying])
+  }
+  return alternateActivations(order, bySide)
+}
+
+/**
+ * Sub-order within the simultaneous ship movement phase (2.6 phase 5): fixed
+ * paths first, then mine layers, then everyone else, with FTL transits placed
+ * last. Lower ranks move earlier.
+ */
+export function shipMovementRank(ship: ShipState): number {
+  if (ship.fixedPath) return 0
+  if (ship.layingMines) return 1
+  if (ship.ftlTransit !== 'none') return 3
+  return 2
+}
+
+/** Ships in the order phase 5 moves them (2.6). */
+export function shipMovementOrder(state: GameState): ShipState[] {
+  return activeShips(state)
+    .map((ship, index) => ({ ship, index }))
+    .sort((a, b) => shipMovementRank(a.ship) - shipMovementRank(b.ship) || a.index - b.index)
+    .map((entry) => entry.ship)
+}
+
+// ---------------------------------------------------------------------------
+// Turn and phase advance (2.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Step to the next phase, wrapping into the next turn after the last one.
+ *
+ * Entering the initiative phase rolls it if this turn has not been rolled yet:
+ * phase 2 holds no decision beyond the dice — the one choice in it, the order
+ * of the other players in a multi-player game, is made afterwards with
+ * `setInitiativeOrder` — so an engine that could not step through phase 2 on
+ * its own would be useless headless.
+ */
+export function advancePhase(state: GameState): SequencePosition {
+  onLeavePhase(state)
+
+  const index = state.phases.indexOf(state.phase)
+  if (index < 0 || index === state.phases.length - 1) {
+    state.turn += 1
+    state.phase = state.phases[0]
+    onBeginTurn(state)
+  } else {
+    state.phase = state.phases[index + 1]
+  }
+
+  onEnterPhase(state)
+  return { turn: state.turn, phase: state.phase }
+}
+
+/** Step phases until the sequence reaches `phase` (2.6). */
+export function advanceToPhase(state: GameState, phase: Phase): SequencePosition {
+  if (!state.phases.includes(phase)) {
+    throw new Error(`phase ${phase} is not played in this game`)
+  }
+  // One full lap of the sequence is the most it can take; standing in the
+  // phase asked for means going round the turn to reach it again.
+  for (let guard = 0; guard < state.phases.length; guard++) {
+    advancePhase(state)
+    if (state.phase === phase) break
+  }
+  return { turn: state.turn, phase: state.phase }
+}
+
+function onLeavePhase(state: GameState): void {
+  // FireCon allocation is per phase, not per turn (5.2), so leaving a phase
+  // hands every FireCon back.
+  for (const ship of state.ships) ship.fireconAssignments = []
+
+  if (state.phase === 'move-ships') recordLastKnownVectors(state)
+}
+
+function onEnterPhase(state: GameState): void {
+  pushLog(state, {
+    kind: 'phase',
+    text: `Turn ${state.turn}, phase ${phaseNumber(state.phase)} — ${PHASE_LABELS[state.phase]}`,
+  })
+  if (state.phase === 'initiative' && state.initiative?.turn !== state.turn) {
+    rollInitiative(state)
+  }
+}
+
+function onBeginTurn(state: GameState): void {
+  // Initiative is rolled fresh each turn (2.6 phase 2).
+  state.initiative = null
+
+  for (const ship of state.ships) {
+    ship.order = null
+    ship.thrustUsed = 0
+    ship.layingMines = false
+    ship.ftlTransit = 'none'
+    // "In Full Thrust weapons can only be used once per turn" (2.6) — the
+    // turn is the unit, so this is the one place the record is wiped.
+    ship.weaponsFired.clear()
+    ship.hasFiredThisTurn = false
+    ship.damageControl = []
+    ship.ongoing = ship.ongoing.filter(
+      (effect) => effect.expiresAfterTurn === null || effect.expiresAfterTurn >= state.turn,
+    )
+  }
+
+  for (const group of state.fighterGroups) {
+    group.movedThisTurn = false
+    group.secondaryMovedThisTurn = false
+    group.attackedThisTurn = false
+    group.dogfightWith = null
+    group.targetId = null
+  }
+}
+
+/**
+ * Stamp each ship's course and velocity at the end of phase 5 (2.6): "players
+ * can ask opponents for the last known velocity and course (i.e. at the end of
+ * the previous turn's Ship Movement Phase) of any ships."
+ */
+function recordLastKnownVectors(state: GameState): void {
+  for (const ship of state.ships) {
+    ship.lastKnown = {
+      course: ship.placement.facing,
+      velocity: ship.velocity,
+      turn: state.turn,
+      cloaked: ship.cloaked,
+    }
+  }
+}
+
+/**
+ * What an opponent may be told about a ship before writing orders (2.6):
+ * course and velocity as at the end of the last movement phase — unless the
+ * ship was under cloak then, which exempts it from the question.
+ */
+export function lastKnownVector(ship: ShipState): { course: Course; velocity: number } | null {
+  if (!ship.lastKnown || ship.lastKnown.cloaked) return null
+  return { course: ship.lastKnown.course, velocity: ship.lastKnown.velocity }
+}
+
+// ---------------------------------------------------------------------------
+// Weapons: once per turn (2.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a weapon still has its shot (2.6): "weapons can only be used once per
+ * turn, so any system used for point defense … cannot be used again in that
+ * turn against a ship." A destroyed mount (4.11) and an empty one-shot rack
+ * (6.6) are out too.
+ */
+export function canWeaponFire(ship: ShipState, weaponId: string): boolean {
+  if (ship.destroyed || ship.offTable) return false
+  if (ship.destroyedSystems.has(weaponId)) return false
+  if (ship.weaponsFired.has(weaponId)) return false
+  if (ship.ongoing.some((effect) => effect.weaponsOffline?.includes(weaponId))) return false
+  const weapon = ship.design.weapons.find((w) => w.id === weaponId)
+  if (!weapon) return false
+  if (weapon.ammo !== undefined && weapon.ammo <= 0) return false
+  return true
+}
+
+/**
+ * Spend a weapon's fire for the turn (2.6). The phase is kept so the log can
+ * say why a beam was unavailable later — "spent on point defence in phase 9"
+ * is the common and otherwise baffling case.
+ */
+export function markWeaponFired(ship: ShipState, weaponId: string, phase: Phase): void {
+  ship.weaponsFired.set(weaponId, phase)
+}
+
+/** The phase a weapon spent its fire in, if it has (2.6). */
+export function weaponFiredIn(ship: ShipState, weaponId: string): Phase | undefined {
+  return ship.weaponsFired.get(weaponId)
+}
+
+/** Weapon ids that can still fire this turn (2.6, 4.11). */
+export function availableWeapons(ship: ShipState): string[] {
+  return ship.design.weapons.filter((w) => canWeaponFire(ship, w.id)).map((w) => w.id)
+}
+
+/**
+ * Whether a ship may still take its firing activation in phase 11 (2.6):
+ * "After a ship has fired some or all of its weaponry and play has moved on to
+ * another ship that ship may not fire any other ship to ship weapons in that
+ * game turn."
+ */
+export function canShipFire(ship: ShipState): boolean {
+  return !ship.destroyed && !ship.offTable && !ship.hasFiredThisTurn
+}
+
+/** Close a ship's phase 11 activation, spending its shot for the turn (2.6). */
+export function markShipFired(ship: ShipState): void {
+  ship.hasFiredThisTurn = true
+}
+
+// ---------------------------------------------------------------------------
+// FireCon: per phase, not per turn (4.4, 5.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Targets the ship can direct fire at in one phase (4.4, 5.2). An Advanced
+ * FireCon counts double: "Advanced FireCon systems can track two separate
+ * targets each, acting just like two normal FireCons" (5.2). Effects that put
+ * a FireCon offline without destroying it subtract from the total.
+ */
+export function fireConCapacity(ship: ShipState): number {
+  let capacity = 0
+  for (const system of ship.design.systems) {
+    if (ship.destroyedSystems.has(system.id)) continue
+    if (system.kind === 'firecon') capacity += 1
+    else if (system.kind === 'advanced-firecon') capacity += 2
+  }
+  for (const effect of ship.ongoing) capacity -= effect.fireConOffline ?? 0
+  return Math.max(0, capacity)
+}
+
+/** Targets already being engaged in this phase (5.2). */
+export function engagedTargets(ship: ShipState, phase: Phase): string[] {
+  return ship.fireconAssignments.filter((a) => a.phase === phase).map((a) => a.targetId)
+}
+
+/** FireCon left for this phase — the limit is per phase, not per turn (5.2). */
+export function availableFireCons(ship: ShipState, phase: Phase): number {
+  return fireConCapacity(ship) - engagedTargets(ship, phase).length
+}
+
+/**
+ * Claim a FireCon for a target in this phase (4.4, 5.2). Engaging a target the
+ * ship is already engaging in this phase is free — one FireCon tracks one
+ * target however many weapons are pointed down it (4.4) — so this returns true
+ * without spending anything. Returns false when no FireCon is left.
+ *
+ * Point defence never calls this: "Point defense fire against fighters or
+ * missiles does not require the use of the ship's main FireCon systems" (4.4).
+ */
+export function assignFireCon(ship: ShipState, targetId: string, phase: Phase): boolean {
+  if (engagedTargets(ship, phase).includes(targetId)) return true
+  if (availableFireCons(ship, phase) <= 0) return false
+  ship.fireconAssignments.push({ targetId, phase })
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Damage control (10.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Damage control parties aboard (10.4). Where the SSD lists the parties as
+ * systems they can be crossed off by a threshold check, so those are counted
+ * when present and the design's plain count is used otherwise.
+ */
+export function damageControlParties(ship: ShipState): number {
+  const listed = ship.design.systems.filter((s) => s.kind === 'damage-control-party')
+  if (listed.length > 0) {
+    return listed.filter((s) => !ship.destroyedSystems.has(s.id)).length
+  }
+  return ship.design.damageControlParties
+}
+
+/** Parties not yet assigned to a repair this turn (10.4). */
+export function availableDamageControlParties(ship: ShipState): number {
+  const assigned = ship.damageControl.reduce((sum, a) => sum + a.parties, 0)
+  return Math.max(0, damageControlParties(ship) - assigned)
+}
+
+/**
+ * Put parties on a system in phase 14 (10.4). At most three parties may work
+ * one system, and a ship cannot assign parties it does not have. Returns the
+ * number actually assigned.
+ */
+export function assignDamageControl(ship: ShipState, systemId: string, parties: number): number {
+  const existing = ship.damageControl.find((a) => a.systemId === systemId)
+  const already = existing?.parties ?? 0
+  const room = Math.min(3 - already, availableDamageControlParties(ship))
+  const added = Math.max(0, Math.min(parties, room))
+  if (added === 0) return 0
+  if (existing) existing.parties += added
+  else ship.damageControl.push({ systemId, parties: added })
+  return added
+}
+
+// ---------------------------------------------------------------------------
+// The hull track and threshold accounting (2.4, 4.11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where each hull row ends, as a running total of boxes (2.4).
+ *
+ * The SSD prints rows of near-equal length; where the boxes do not divide
+ * evenly the spare ones go in the earlier rows, which is how the printed
+ * sheets read (26 boxes in four rows is 7, 7, 6, 6). A hand-entered SSD that
+ * splits them some other way can say so with `hullRowSizes`.
+ */
+export function hullRowBoundaries(ship: ShipState): number[] {
+  const sizes = ship.hullRowSizes ?? derivedRowSizes(ship.design)
+  const boundaries: number[] = []
+  let running = 0
+  for (const size of sizes) {
+    if (size <= 0) continue
+    running += size
+    boundaries.push(running)
+  }
+  return boundaries
+}
+
+function derivedRowSizes(design: ShipDesign): number[] {
+  const base = Math.floor(design.hullBoxes / design.hullRows)
+  const spare = design.hullBoxes % design.hullRows
+  const sizes: number[] = []
+  for (let row = 0; row < design.hullRows; row++) sizes.push(base + (row < spare ? 1 : 0))
+  return sizes
+}
+
+/** Hull boxes left before the ship is destroyed (2.4). */
+export function hullRemaining(ship: ShipState): number {
+  return Math.max(0, ship.design.hullBoxes - ship.hullMarked)
+}
+
+/** Hull rows entirely crossed off (2.4, 4.11). */
+export function hullRowsCompleted(ship: ShipState): number {
+  return hullRowBoundaries(ship).filter((boundary) => ship.hullMarked >= boundary).length
+}
+
+/**
+ * Cross hull boxes off the track (2.4), "starting at the top left and crossing
+ * out one box per damage point", and record any threshold points passed.
+ *
+ * This only marks the hull: what screens and armour absorbed before the hull
+ * saw anything is the combat module's business (4.8, 4.9). The ship is
+ * destroyed when the last box goes, and 4.11 makes no check then — "No
+ * threshold checks need to be made at the end of the last hull row, since the
+ * ship is considered to be destroyed!".
+ */
+export function markHullBoxes(
+  ship: ShipState,
+  points: number,
+): { marked: number; rowsCrossed: number; destroyed: boolean } {
+  if (points <= 0 || ship.destroyed) {
+    return { marked: 0, rowsCrossed: 0, destroyed: ship.destroyed }
+  }
+  const rowsBefore = hullRowsCompleted(ship)
+  const before = ship.hullMarked
+  ship.hullMarked = Math.min(ship.design.hullBoxes, before + points)
+  const rowsCrossed = hullRowsCompleted(ship) - rowsBefore
+
+  if (ship.hullMarked >= ship.design.hullBoxes) {
+    ship.destroyed = true
+    ship.pendingThresholdRows = 0
+    return { marked: ship.hullMarked - before, rowsCrossed, destroyed: true }
+  }
+  ship.pendingThresholdRows += rowsCrossed
+  return { marked: ship.hullMarked - before, rowsCrossed, destroyed: false }
+}
+
+/**
+ * The threshold check owed, if any (4.11): one check for the last row lost,
+ * "but add 1 to each die roll for each extra threshold point passed in that
+ * attack". Feed the result straight to `thresholdCheck` in `dice.ts`.
+ *
+ * A Flawed Design's standing −1 (13.13) is not added here — that is a modifier
+ * on the roll, and `thresholdCheck` takes it as `drm`.
+ */
+export function pendingThresholdCheck(
+  ship: ShipState,
+): { rowsLost: number; extraRows: number } | null {
+  if (ship.destroyed || ship.pendingThresholdRows <= 0) return null
+  return {
+    rowsLost: ship.hullRowsChecked + ship.pendingThresholdRows,
+    extraRows: ship.pendingThresholdRows - 1,
+  }
+}
+
+/** Mark the owed checks as made, so the next row is checked as the next row (4.11). */
+export function resolvePendingThreshold(ship: ShipState): void {
+  ship.hullRowsChecked += ship.pendingThresholdRows
+  ship.pendingThresholdRows = 0
+}
+
+/**
+ * When the checks for damage dealt in a phase are rolled (2.6).
+ *
+ * Phase 10 says so outright — "Damage resulting from these attacks is applied
+ * immediately, including threshold point checks if applicable" — and phase 15
+ * has to be immediate because phase 13 is already behind it. Everything else,
+ * phases 11 and 12 above all, waits for phase 13: "All ships roll threshold
+ * checks from damage incurred in phase 11 and 12 if required."
+ *
+ * Damage from a source the book does not place — a phase 5 collision (3.8) —
+ * falls through to the default and is checked in phase 13, which is the
+ * nearest reading of that sentence.
+ */
+export function thresholdResolution(phase: Phase): 'immediate' | 'deferred' {
+  return phase === 'ordnance-vs-ships' || phase === 'reactor-explosions' ? 'immediate' : 'deferred'
+}
+
+/** Ships owing a threshold check in phase 13 (2.6, 4.11). */
+export function shipsAwaitingThreshold(state: GameState): ShipState[] {
+  return activeShips(state).filter((ship) => pendingThresholdCheck(ship) !== null)
+}
+
+// ---------------------------------------------------------------------------
+// Systems
+// ---------------------------------------------------------------------------
+
+/** Whether a system or weapon has been crossed off the SSD (2.4, 4.11). */
+export function isSystemDestroyed(ship: ShipState, systemId: string): boolean {
+  return ship.destroyedSystems.has(systemId)
+}
+
+/**
+ * Cross a system off the SSD (4.11). The main drive is the exception the rule
+ * calls out: the first failure halves the thrust rating, the second disables
+ * it, and a drive rated 1 is disabled by the first — so a drive is tracked as
+ * `driveHits` instead of being crossed off. Pass the drive as `'drive'`.
+ */
+export function destroySystem(ship: ShipState, systemId: string): void {
+  if (systemId === 'drive') {
+    ship.driveHits = Math.min(2, ship.driveHits + 1)
+    if (ship.design.drive.thrust <= 1) ship.driveHits = 2
+    return
+  }
+  ship.destroyedSystems.add(systemId)
+}
+
+/** Thrust the drive can still deliver (3.2, 4.11 drive damage, plus effects). */
+export function currentThrust(ship: ShipState): number {
+  const base = ship.design.drive.thrust
+  let thrust = ship.driveHits >= 2 ? 0 : ship.driveHits === 1 ? Math.floor(base / 2) : base
+  for (const effect of ship.ongoing) thrust -= effect.thrustPenalty ?? 0
+  return Math.max(0, thrust)
+}
+
+/** Operational systems of a kind, e.g. every live PDS (4.11, 7.12). */
+export function operationalSystems(
+  ship: ShipState,
+  kind: ShipDesign['systems'][number]['kind'],
+): ShipDesign['systems'] {
+  return ship.design.systems.filter((s) => s.kind === kind && !ship.destroyedSystems.has(s.id))
+}

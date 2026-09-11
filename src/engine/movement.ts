@@ -361,7 +361,7 @@ export interface MovementResult {
   drive: DriveState
 }
 
-function leg(from: Point, course: Course, distance: number): MovementLeg {
+function straightLeg(from: Point, course: Course, distance: number): MovementLeg {
   return { from, to: advance(from, course, distance), course, distance }
 }
 
@@ -386,16 +386,20 @@ function flyPath(
 
   if (isDoubleCourseChange(order)) {
     const midCourse = turnCourse(course, signedTurn(order.turn))
-    const first = leg(from, midCourse, firstLegDistance)
+    const first = straightLeg(from, midCourse, firstLegDistance)
     const finalCourse = turnCourse(midCourse, signedTurn(order.secondTurn))
-    const second = leg(first.to, finalCourse, secondLegDistance)
+    const second = straightLeg(first.to, finalCourse, secondLegDistance)
     return { position: second.to, course: finalCourse, legs: [first, second] }
   }
 
   const points = signedTurn(order.turn)
   const moved = moveShip(from, course, velocity, points)
   if (points === 0) {
-    return { position: moved.position, course: moved.course, legs: [leg(from, course, velocity)] }
+    return {
+      position: moved.position,
+      course: moved.course,
+      legs: [straightLeg(from, course, velocity)],
+    }
   }
 
   // `moveShip` owns the rounding; the midpoint is reconstructed here only so
@@ -562,15 +566,13 @@ export function emergencyThrustDice(
   const overRating = totalUsed > rating
   const overTurnLimit = turnPoints > standardTurnAllowance(drive)
   const priorUses = Math.max(0, drive.emergencyThrustUses)
+  // A plot that stays inside the drive's normal allowances is not an attempt at
+  // emergency thrust however it is flagged, so it rolls nothing and costs the
+  // ship nothing on a later attempt (3.6).
   const isUse = overRating || overTurnLimit
+  const dice = isUse ? (overRating ? 1 : 0) + (overTurnLimit ? 1 : 0) + priorUses : 0
 
-  return {
-    overRating,
-    overTurnLimit,
-    priorUses,
-    dice: (overRating ? 1 : 0) + (overTurnLimit ? 1 : 0) + priorUses,
-    isUse,
-  }
+  return { overRating, overTurnLimit, priorUses, dice, isUse }
 }
 
 /**
@@ -794,6 +796,7 @@ function fromFrame(frame: { along: number; across: number }, course: Course, ori
  */
 export function squadronLead(squadron: Squadron, order: MovementOrder): SquadronMember {
   const members = squadron.members
+  if (members.length === 0) throw new Error('a squadron has to have ships in it (3.7)')
   const course = members[0].placement.facing
   const frames = members.map((member) => ({
     member,

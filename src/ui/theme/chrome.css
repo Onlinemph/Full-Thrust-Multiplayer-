@@ -1,0 +1,133 @@
+/* App chrome: the bar, the two-column body, and the side column.
+   ────────────────────────────────────────────────────────────────────────────
+   One screen, no routing. The plot takes whatever space is left after the bar
+   and the side column, because the plot is the game and everything else is
+   instrumentation. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.4rem var(--gap-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.app-bar h1 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.app-bar .spacer {
+  flex: 1;
+}
+
+.app-bar label {
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+}
+
+.app-bar select {
+  font: inherit;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.2em 0.4em;
+}
+
+/* Turn and phase are the two facts a player checks constantly, so they sit
+   next to the title and are set in the tabular face. */
+.turn-readout {
+  color: var(--ink-dim);
+  letter-spacing: 0.08em;
+}
+
+.phase-readout {
+  color: var(--side-a);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--text-sm);
+}
+
+.phase-readout b {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 0.35em;
+  margin-right: 0.35em;
+  background: var(--side-a);
+  color: var(--on-bright);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+/* A file input styled as a button: the control itself is unstyleable, so it is
+   hidden inside its own label. */
+.file-button {
+  display: inline-block;
+  padding: 0.35em 0.8em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-md);
+}
+
+.file-button:hover {
+  background: var(--panel-3);
+}
+
+.file-button input {
+  display: none;
+}
+
+.app-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr minmax(20rem, 24rem);
+  min-height: 0;
+}
+
+.app-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  min-height: 0;
+}
+
+.app-side p {
+  margin: 0 0 var(--gap);
+  font-size: var(--text-sm);
+}
+
+.order-panel .panel-row {
+  gap: 0.35rem;
+}
+
+/* Narrow screens: the side column goes under the plot rather than squeezing
+   it, and the plot keeps at least half the height so ships stay clickable. */
+@media (max-width: 900px) {
+  .app-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(50vh, 1fr) auto;
+  }
+
+  .app-side {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}

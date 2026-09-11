@@ -300,7 +300,8 @@ roll threshold checks from damage incurred in phase 11 and 12."*
 ## 6. State model
 
 `GameState` holds: `turn`, `phase`, the `phases` actually in play, the seeded `Rng`, `sides`,
-`ships`, `fighterGroups`, `missiles`, `terrain`, this turn's `initiative`, and the `log`.
+`ships`, `fighterGroups`, `ordnance` (missile and mine markers), `terrain`, this turn's
+`initiative`, and the `log`.
 
 `ShipState` is the mutable dry-erase SSD: `placement` + `velocity` + this turn's `order` and
 `thrustUsed`; `hullMarked`, `armourMarked` per layer, `destroyedSystems`, `driveHits`;
