@@ -5,6 +5,7 @@ import type { GameState, ShipState } from '../engine/game'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Point } from '../engine/types'
 import { ArcRose } from './ArcRose'
+import { useFx } from './useFx'
 import { Counter } from './Counter'
 
 /**
@@ -90,6 +91,7 @@ export function MapView({
   }
 
   const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
+  const effects = useFx()
 
   /**
    * The track each ship has plotted for this turn (3.4), drawn as the two legs
@@ -246,6 +248,29 @@ export function MapView({
                 </text>
               </g>
             ))}
+
+          {effects.map((fx) =>
+            fx.from ? (
+              <line
+                key={fx.id}
+                className={`shot is-${fx.kind}`}
+                x1={fx.from.x * scale}
+                y1={fx.from.y * scale}
+                x2={fx.to.x * scale}
+                y2={fx.to.y * scale}
+                style={{ animationDelay: `${fx.delay}ms` }}
+              />
+            ) : (
+              <circle
+                key={fx.id}
+                className="hit-burst"
+                cx={fx.to.x * scale}
+                cy={fx.to.y * scale}
+                r={(fx.kind === 'destroyed' ? 8 : 4) * Math.max(1, scale / 8)}
+                style={{ animationDelay: `${fx.delay}ms`, transformOrigin: `${fx.to.x * scale}px ${fx.to.y * scale}px` }}
+              />
+            ),
+          )}
 
           {game.ships
             .filter((ship) => visible(ship, viewingSide))

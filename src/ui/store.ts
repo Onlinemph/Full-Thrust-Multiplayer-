@@ -20,6 +20,7 @@ import {
   type GameSetup,
   type SavedGame,
 } from '../data/savedGame'
+import { aliveShipIds, clearFx, fxAfter, fxBefore, queueFx } from './fx'
 
 /**
  * The store journals every action it applies, so the battle on screen is always
@@ -147,8 +148,13 @@ export function currentSave(): SavedGame {
  * through here.
  */
 function applyJournaled(action: GameAction): ActionOutcome {
+  // Sampled before, because a ship that dies to return fire in the same phase
+  // would otherwise have nowhere left to have shot from.
+  const before = fxBefore(game, action)
+  const alive = aliveShipIds(game)
   const outcome = applyAction(game, action)
   journal.push(action)
+  queueFx(before, fxAfter(game, action, alive))
   return outcome
 }
 
@@ -211,6 +217,7 @@ export function applyRemoteSave(next: SavedGame): void {
   journal = next.actions
   game = replayPartial(next, next.actions.length)
   clearReady(game)
+  clearFx()
   autosave()
   emit()
 }
@@ -228,6 +235,7 @@ export function undo(): boolean {
   journal = journal.slice(0, -1)
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
   clearReady(game)
+  clearFx()
   autosave()
   net?.onUndo(journal.length)
   emit()
@@ -244,6 +252,7 @@ export function newGame(next: GameSetup): void {
   setup = { rulesVersion: CURRENT_RULES_VERSION, ...next }
   journal = []
   game = buildGame(setup)
+  clearFx()
   autosave()
   net?.onReplace(saved())
   emit()

@@ -82,8 +82,11 @@ range of 12 MU"* (so it must still fire *at* 12), and the worked example in 4.9 
 `geometry.rangeBand`'s convention already; `combinedBeamDice` inherits it.
 
 **Volley dice.** The 4.12 sidebar tells players to *"roll for all weapon systems of a particular type
-together and add up the results"* — eleven dice at once for two Beam-1s, four Beam-2s and one Beam-3
-at 9 MU. `combinedBeamDice(ratings, range)` is that sum.
+together and add up the results"*: for two Beam-1s, four Beam-2s and one Beam-3 at 9 MU, *"just roll
+2 + 8 + 3 = 11 dice at once"*. `combinedBeamDice(ratings, range)` is that sum — and it returns **13**,
+because the three addends the book gives are the right ones (2 Beam-1 dice, 4 x 2 Beam-2 dice, 3
+Beam-3 dice) and only the printed total is wrong. An arithmetic slip in the source is not a rule; the
+engine follows the weapons.
 
 ## 4.4 Fire control
 
@@ -278,6 +281,7 @@ Every example below is in the test file as a named case.
 greater than 36 MU the weapon is out of range. A class 1 beam rolls 1 D6 at ranges 0-12 MU, and is out
 of range beyond 12 MU."*
 → `combinedBeamDice([3], r)` = 3 / 2 / 1 / 0 at r = 6 / 18 / 30 / 42; `[1]` = 1 at 6, 0 at 18.
+The mixed battery from the 4.12 sidebar is checked addend by addend (2, 8, 3) as well as in total.
 
 ### E2 — 4.6, two mounts at 18 MU, unscreened
 

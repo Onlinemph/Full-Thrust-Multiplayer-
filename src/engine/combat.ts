@@ -380,6 +380,13 @@ export interface DamageableTarget {
    * which is the rulebook's *"first layer of armor"*.
    */
   armourRemaining: number[]
+  /**
+   * Boxes in each hull row, where a printed SSD does not divide them the way
+   * `hullRowBounds` would. Some published SSDs draw an uneven track, and a row
+   * boundary is a threshold point (4.11), so it has to be honoured exactly as
+   * printed rather than recomputed.
+   */
+  hullRowSizes?: number[]
 }
 
 /** Battle state for a fresh, undamaged ship (4.8). */
@@ -390,6 +397,21 @@ export function createTargetState(design: ShipDesign): DamageableTarget {
     hullDamage: 0,
     armourRemaining: [...design.armour.layers],
   }
+}
+
+/**
+ * Where this target's hull rows end (4.11). An SSD that prints its own row
+ * lengths wins; otherwise the rows are derived from the box and row counts.
+ */
+export function rowBoundsFor(target: DamageableTarget): number[] {
+  if (!target.hullRowSizes) return hullRowBounds(target.hullBoxes, target.hullRows)
+  const bounds: number[] = []
+  let cumulative = 0
+  for (const size of target.hullRowSizes) {
+    cumulative += size
+    bounds.push(cumulative)
+  }
+  return bounds
 }
 
 export interface DamageOptions {
@@ -488,7 +510,7 @@ export function applyDamage(
     toHull += soakInward(armour, absorbed, outerBeforeHit - 1, result.penetratingDamage, false)
   }
 
-  const bounds = hullRowBounds(target.hullBoxes, target.hullRows)
+  const bounds = rowBoundsFor(target)
   const before = target.hullDamage
   const capacity = Math.max(0, target.hullBoxes - before)
   const hullDamage = Math.min(capacity, toHull)
@@ -499,8 +521,7 @@ export function applyDamage(
 
   return {
     target: {
-      hullBoxes: target.hullBoxes,
-      hullRows: target.hullRows,
+      ...target,
       hullDamage: after,
       armourRemaining: armour,
     },

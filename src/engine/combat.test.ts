@@ -83,10 +83,16 @@ describe('4.5 beam dice at range', () => {
     expect(combinedBeamDice([3], 36)).toBe(1)
   })
 
-  // The 4.12 sidebar: two Beam-1s, four Beam-2s and one Beam-3 at 9 MU is
-  // "2 + 8 + 3 = 11 dice at once".
+  // The 4.12 sidebar: two Beam-1s, four Beam-2s and one Beam-3 at 9 MU —
+  // "just roll 2 + 8 + 3 = 11 dice at once". The three addends are right (2
+  // Beam-1 dice, 4x2 Beam-2 dice, 3 Beam-3 dice) and the printed total is an
+  // arithmetic slip in the book: 2 + 8 + 3 is 13. The engine follows the
+  // weapons, not the typo.
   it('sums a mixed battery into one volley', () => {
-    expect(combinedBeamDice([1, 1, 2, 2, 2, 2, 3], 9)).toBe(11)
+    expect(combinedBeamDice([1, 1], 9)).toBe(2)
+    expect(combinedBeamDice([2, 2, 2, 2], 9)).toBe(8)
+    expect(combinedBeamDice([3], 9)).toBe(3)
+    expect(combinedBeamDice([1, 1, 2, 2, 2, 2, 3], 9)).toBe(13)
   })
 })
 
@@ -371,9 +377,9 @@ describe('4.10 optional rear-arc rule', () => {
   const armoured = () => targetWith(20, 4, [4, 4])
 
   it('is off unless the game turns it on', () => {
-    const applied = applyDamage(armoured(), hit(6), { rearArc: true })
+    const applied = applyDamage(armoured(), hit(10), { rearArc: true })
     expect(applied.rearArcBypass).toBe(false)
-    expect(applied.armourAbsorbed).toEqual([0, 4])
+    expect(applied.armourAbsorbed).toEqual([4, 4])
     expect(applied.hullDamage).toBe(2)
   })
 
@@ -392,26 +398,28 @@ describe('4.10 optional rear-arc rule', () => {
   // "(Missiles or fighters do not benefit from rear arc attacks.)"
   it('does not help missiles or fighters', () => {
     for (const source of ['ordnance', 'fighter'] as const) {
-      const applied = applyDamage(armoured(), hit(6), {
+      const applied = applyDamage(armoured(), hit(10), {
         rearArcRule: true,
         rearArc: true,
         source,
       })
       expect(applied.rearArcBypass).toBe(false)
-      expect(applied.armourAbsorbed).toEqual([0, 4])
+      expect(applied.armourAbsorbed).toEqual([4, 4])
+      expect(applied.hullDamage).toBe(2)
     }
   })
 
   // "This rule does not apply when firing at starbases [...] or other Really Big
   // Things."
   it('does not apply to starbases and Really Big Things', () => {
-    const applied = applyDamage(armoured(), hit(6), {
+    const applied = applyDamage(armoured(), hit(10), {
       rearArcRule: true,
       rearArc: true,
       targetIsBigThing: true,
     })
     expect(applied.rearArcBypass).toBe(false)
-    expect(applied.armourAbsorbed).toEqual([0, 4])
+    expect(applied.armourAbsorbed).toEqual([4, 4])
+    expect(applied.hullDamage).toBe(2)
   })
 })
 
