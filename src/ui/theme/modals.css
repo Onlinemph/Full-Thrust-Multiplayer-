@@ -276,3 +276,62 @@
     max-height: 30vh;
   }
 }
+
+/* ── Shipyard ─────────────────────────────────────────────────────────────── */
+
+/* Mass is the whole game in a shipyard — everything competes for it — so the
+   bar is the loudest thing on the panel and turns red the instant a design
+   stops fitting (13.14). */
+.mass-bar {
+  position: relative;
+  height: 1.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.mass-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--screens);
+  opacity: 0.35;
+  transition: width 120ms ease;
+}
+
+.mass-bar.is-over .mass-fill {
+  background: var(--damage);
+  opacity: 0.5;
+}
+
+.mass-readout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+/* A fault is stated in the rulebook's terms and does not stop you building:
+   half a design is a legitimate thing to have on the bench. */
+.faults {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--warn);
+  font-size: var(--text-sm);
+}
+
+.shipyard-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow-y: auto;
+  max-height: 60vh;
+  padding-right: var(--gap);
+}
+
+.shipyard-controls input[type='range'] {
+  width: 100%;
+  accent-color: var(--thrust);
+}

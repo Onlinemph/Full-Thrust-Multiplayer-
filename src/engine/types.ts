@@ -228,6 +228,8 @@ export type SystemKind =
   // Electronic warfare and stealth (7.4, 7.5, 7.17 – 7.19)
   | 'ecm'
   | 'area-ecm'
+  /** 7.4 — a hull shaped and coated to be hard to see. No mass, 2 points. */
+  | 'stealth-hull'
   | 'stealth-field'
   | 'holofield'
   // Cloaks (7.20 – 7.22)
