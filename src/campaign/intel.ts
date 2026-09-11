@@ -40,12 +40,16 @@ export function campaignRng(seed: number, cursor = 0): CampaignRng {
  * position rather than iterated). Keying on the position is what lets a saved
  * cursor resume the stream without replaying every draw before it.
  */
-export function sampleAt(seed: number, cursor: number): number {
-  let t = (seed + Math.imul(cursor + 1, 0x6d2b79f5)) >>> 0
-  t = Math.imul(t ^ (t >>> 15), t | 1)
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-}
+/**
+ * The campaign's one random generator, re-exported so every module draws from
+ * the same arithmetic. It briefly was not: this module carried its own mixing
+ * function of the same name and signature, so the same cursor on the same
+ * stream gave two different numbers depending on which file asked. Nothing
+ * broke while each module kept to its own stream, and everything would have
+ * broken the first time they shared one.
+ */
+export { sampleAt } from './types'
+import { sampleAt } from './types'
 
 /** Draw one integer in `[0, maxExclusive)` and advance the stream. */
 export function drawInt(rng: CampaignRng, maxExclusive: number): number {

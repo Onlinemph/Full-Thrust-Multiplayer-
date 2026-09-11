@@ -552,7 +552,7 @@ describe('the planetary phase (6.4)', () => {
 
   it('gates colonisation on planet type, trait and technology', () => {
     expect(canColonise('gas-giant', 'none', []).allowed).toBe(false)
-    expect(canColonise('anomaly', 'none', []).allowed).toBe(false)
+    expect(canColonise('special-anomaly', 'none', []).allowed).toBe(false)
     expect(canColonise('barren', 'none', []).allowed).toBe(false)
     expect(canColonise('barren', 'none', ['controlled-environment']).allowed).toBe(true)
     expect(canColonise('terran', 'hazardous', []).stabilisation).toBe(HAZARDOUS_STABILISATION_RP)

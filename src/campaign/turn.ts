@@ -20,6 +20,15 @@
  * meant to be replaced by the map layer's own on a later pass.
  */
 
+import type {
+  BattleKind,
+  CampaignPhase,
+  Hex,
+  PlanetTrait,
+  PlanetType,
+  SystemFeature,
+  TaskForceOrder as FleetOrder,
+} from './types'
 import type { SideId } from '../engine/game'
 import type { Course } from '../engine/types'
 import type { GameSetup } from '../data/savedGame'
@@ -53,10 +62,7 @@ import { ftlRate, type ResearchRequest, type TechId } from './research'
 // ---------------------------------------------------------------------------
 
 /** One hex of the strategic map — 1 hex = 1 parsec ("Scale"). Axial coordinates. */
-export interface Hex {
-  q: number
-  r: number
-}
+export type { Hex } from './types'
 
 /** Distance in hexes, which is what every range in the campaign is measured in. */
 export function hexDistance(a: Hex, b: Hex): number {
@@ -75,7 +81,7 @@ export function hexKey(hex: Hex): string {
 }
 
 /** The system features of 6.2.1. The d100 table that rolls them lives in `map.ts`. */
-export type SystemFeature = 'standard' | 'nebula' | 'dense-asteroid-field' | 'binary'
+export type { SystemFeature } from './types'
 
 /** A system as the exploration phase leaves it. */
 export interface ExploredSystem {
@@ -84,16 +90,10 @@ export interface ExploredSystem {
 }
 
 /** The planet types of 6.2.1, as the colonisation rules need to tell them apart. */
-export type PlanetType = 'terran' | 'sub-terran' | 'minimal-terran' | 'barren' | 'gas-giant' | 'anomaly'
+export type { PlanetType } from './types'
 
 /** The planet traits of 6.2.1. */
-export type PlanetTrait =
-  | 'none'
-  | 'mineral-rich'
-  | 'biologically-rich'
-  | 'hazardous'
-  | 'ancient-ruins'
-  | 'unique'
+export type { PlanetTrait } from './types'
 
 // ---------------------------------------------------------------------------
 // The eight phases ("Turn sequence")
@@ -103,15 +103,7 @@ export type PlanetTrait =
  * The campaign turn, in the order campaign.md numbers it. One strategic turn is
  * about a year ("Scale").
  */
-export type CampaignPhase =
-  | 'ftl-movement' // 1. Ships and task forces move, pre-plotted
-  | 'exploration' // 2. Explore new systems
-  | 'exploration-risk' // 3. Resolve hazards
-  | 'discovery' // 4. Find planets, colonies, ships
-  | 'combat' // 5. Fight the tactical battles
-  | 'planetary' // 6. Assaults, sieges, landings
-  | 'admin' // 7. Record the turn
-  | 'production' // 8. Every 4th turn: growth, output, research
+export type { CampaignPhase } from './types'
 
 export const CAMPAIGN_PHASE_ORDER: readonly CampaignPhase[] = [
   'ftl-movement',
@@ -184,7 +176,8 @@ export function advanceCampaignPhase(clock: CampaignClock): CampaignClock {
 export const COMMAND_POST_RANGE = 8
 
 /** The three standing orders a task force carries (6.1). */
-export type FleetOrder = 'engage' | 'stand-off' | 'ftl-move'
+/** 6.1. The schema module calls this TaskForceOrder; both names are the same type. */
+export type { TaskForceOrder as FleetOrder } from './types'
 
 /** What the campaign needs to know about a task force to move it (6.1, 7). */
 export interface TaskForceProfile {
@@ -330,7 +323,7 @@ export function plotDestination(plot: FtlPlot): Hex {
 // ---------------------------------------------------------------------------
 
 /** What a meeting between two hostile task forces produces (6.1). */
-export type BattleKind = 'even' | 'pursuit' | 'none'
+export type { BattleKind } from './types'
 
 export interface Meeting {
   kind: BattleKind
@@ -608,7 +601,7 @@ const CAMPAIGN_SYSTEM_FEATURE_LABELS: Readonly<Record<SystemFeature, string>> = 
   standard: 'standard system',
   nebula: 'gas and dust cloud',
   'dense-asteroid-field': 'dense asteroid field',
-  binary: 'binary or trinary star',
+  'multiple-star': 'binary or trinary star',
 }
 
 export interface EngagementScenarioOptions {
@@ -870,7 +863,7 @@ export function canColonise(
   if (planetType === 'gas-giant') {
     return { allowed: false, stabilisation, reason: 'gas giants cannot be colonised' }
   }
-  if (planetType === 'anomaly') {
+  if (planetType === 'special-anomaly') {
     return { allowed: false, stabilisation, reason: 'special anomaly — the GM narrates' }
   }
   if (planetType === 'barren' && !known.includes('controlled-environment')) {
