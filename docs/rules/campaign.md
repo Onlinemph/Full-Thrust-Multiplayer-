@@ -21,7 +21,7 @@ by a GM who plays the non-player factions and arbitrates.
 
 1 million population = 20 RP. Resource Points buy ships, facilities and research. One Full Thrust
 point costs 1 RP, so the tactical points model *is* the strategic price list — which is why
-`shipBuilder.price()` is the single source of truth for both.
+`designPricing.priceDesign()` is the single source of truth for both.
 
 Each player starts with a home system holding at least one habitable planet, 2,000 RP of naval
 ships and 20 colony transports of a million colonists each.

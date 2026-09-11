@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import type { ShipState } from '../engine/game'
 import {
   driveFromDef,
@@ -37,6 +39,9 @@ function movementStateOf(ship: ShipState): MovementState {
 }
 
 export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPanelProps) {
+  /* 7.20 makes the player commit to a number of turns before switching the
+     cloak on, so the count has to be chosen first and is local to the form. */
+  const [cloakTurns, setCloakTurns] = useState(3)
   const order = ship.order ?? BLANK
   const movement = movementStateOf(ship)
   const budget = thrustBudget(order, movement.drive)
@@ -123,6 +128,61 @@ export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPane
           <span className="spacer" />
           {/* 3.6: the drive is run at up to 150% and may be damaged for it. */}
           <span style={{ color: 'var(--warn)' }}>up to 150%, drive at risk</span>
+        </div>
+      ) : null}
+
+      {/* The two things written beside the movement order rather than in it:
+          a cloak, with the number of turns declared in advance (7.20), and a
+          Reflex Field, which costs the ship its guns for the turn (7.25). */}
+      {ship.cloak ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={ship.cloak.ordered !== null || ship.cloaked}
+              onChange={(event) =>
+                dispatch({
+                  type: 'set-cloak',
+                  shipId: ship.id,
+                  on: event.target.checked,
+                  turns: cloakTurns,
+                })
+              }
+            />{' '}
+            Cloak
+          </label>
+          <span className="spacer" />
+          <label className="code-field" style={{ flexDirection: 'row', gap: '0.3rem' }}>
+            turns
+            <input
+              type="number"
+              min={1}
+              max={9}
+              value={cloakTurns}
+              disabled={!editable}
+              onChange={(event) => setCloakTurns(Math.max(1, Number(event.target.value)))}
+              style={{ width: '3.5rem' }}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {ship.design.systems.some((system) => system.kind === 'reflex-field') ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={ship.reflexFieldActive}
+              onChange={(event) =>
+                dispatch({ type: 'set-reflex-field', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Reflex Field
+          </label>
+          <span className="spacer" />
+          <span style={{ color: 'var(--warn)' }}>no weapons this turn</span>
         </div>
       ) : null}
 

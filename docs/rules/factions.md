@@ -12,7 +12,7 @@ A faction trait is one of four kinds, and `src/data/factions.ts` types them that
 - **campaign** — changes RU income, repair cost or research.
 - **prohibition** — forbids a system outright.
 
-Prohibitions and design traits are enforced by `shipBuilder.validate()`. Tactical traits are read
+Prohibitions and design traits are enforced by `designPricing.validateDesign()`. Tactical traits are read
 by the engine at the point of the roll they modify.
 
 ---

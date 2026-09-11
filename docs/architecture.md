@@ -48,13 +48,16 @@ src/
       kinetics.ts      Pulse torpedoes, K-guns, MKP, fusion, gravitic, pulsers, turrets, spinal
     ordnance.ts      Missiles, salvo racks, rocket pods, plasma bolts, mines — launched, then flown
     defences.ts      Screens, armour ladders, PDS, ADS, scattergun, grapeshot, ADFC
-    ew.ts            ECM, holofields, cloaks, nova cannon, wave gun, reflex field
-    fighters.ts      Fighter groups, CEF, dogfights, strikes, interception, re-arming
-    gunboats.ts      Gunboat squadrons
-    shipBuilder.ts   The construction model: mass, points, validation
+    ew.ts            ECM, holofields, the three cloaks, nova cannon, wave gun, reflex field
+    fighters.ts      Fighter groups, CEF, dogfights, attack runs, interception, re-arming
+    gunboats.ts      Gunboat squadrons: fly like fighters, are shot at like ships
+    ai.ts            One-ply search over the orders a ship may legally write
+    victory.ts       The damage ladder and the points a hull concedes
     actions.ts       Every mutation the game accepts, as a named serializable record
   data/            Game content, authored as data
-    systemCatalog.ts   Every hull, drive, system and weapon/arc combination with its mass and points
+    buildCatalog.ts    Every hull, drive, system and weapon/arc combination with its mass and points
+    designPricing.ts   The construction model: the mass fixed point, points, validation
+    generatedShips.ts  The roster, emitted by tools/build_roster.py — never hand-edited
     ships.ts           Ship designs
     scenarios.ts       Scenarios and force setup
     savedGame.ts       (setup + actions) — build, replay, parse, embed custom designs

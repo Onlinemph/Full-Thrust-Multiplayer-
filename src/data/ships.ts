@@ -9,7 +9,7 @@
  * that is what is built here.
  *
  * Mass and points on each component come from the construction tables
- * (`src/data/systemCatalog.ts`, sections 13 and 14). `shipBuilder.price()` is
+ * (`src/data/buildCatalog.ts`, sections 13 and 14). `designPricing.priceDesign()` is
  * the authority; `ships.test.ts` asserts the figures below agree with it, so a
  * hand-authored design that drifts from the tables fails the build rather than
  * quietly mispricing a fleet.

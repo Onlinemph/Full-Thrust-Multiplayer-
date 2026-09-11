@@ -174,6 +174,13 @@ export interface ShipState {
    * until the end of the turn it died in.
    */
   cloak: CloakState | null
+  /**
+   * A Reflex Field switched on for this turn (7.25). Written in orders and
+   * secret until the ship is fired on — "The opposing player is not told of
+   * the field's status until the ship is fired upon, by which time it may be
+   * too late" — and it costs the ship its own weapons for the turn.
+   */
+  reflexFieldActive: boolean
   /** Course and velocity as at the end of a previous phase 5 (2.6). */
   lastKnown: { course: Course; velocity: number; turn: number; cloaked: boolean } | null
 
@@ -257,6 +264,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
     cloak: cloakFitOf(opts.design),
+    reflexFieldActive: false,
     lastKnown: null,
     hullMarked: 0,
     armourMarked: opts.design.armour.layers.map(() => 0),
@@ -974,6 +982,9 @@ function onBeginTurn(state: GameState): void {
     ship.weaponsFired.clear()
     ship.hasFiredThisTurn = false
     ship.damageControl = []
+    // 7.25: the field is declared afresh every turn, along with the movement
+    // order it is written beside.
+    ship.reflexFieldActive = false
     ship.ongoing = ship.ongoing.filter(
       (effect) => effect.expiresAfterTurn === null || effect.expiresAfterTurn >= state.turn,
     )

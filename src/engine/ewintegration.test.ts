@@ -150,6 +150,86 @@ describe('a holofield, once the shot goes through the engine (7.17)', () => {
   })
 })
 
+describe('a Reflex Field, through the action layer (7.25)', () => {
+  /** Fire the same volley many times and total what the field let through. */
+  function volleys(count: number, raise: boolean): { landed: number; back: number } {
+    let landed = 0
+    let back = 0
+    for (let seed = 0; seed < count; seed++) {
+      const game = createGame({
+        seed,
+        sides: [{ id: 'a' }, { id: 'b' }],
+        ships: [
+          createShipState({
+            id: 'shooter',
+            side: 'a',
+            design: design('Shooter', []),
+            placement: { position: { x: 0, y: 0 }, facing: 6 },
+          }),
+          createShipState({
+            id: 'target',
+            side: 'b',
+            design: design('Target', ['reflex-field']),
+            placement: { position: { x: 0, y: 10 }, facing: 12 },
+          }),
+        ],
+      })
+      if (raise) applyAction(game, { type: 'set-reflex-field', shipId: 'target', on: true })
+      advanceTo(game, 'ship-fire')
+      applyAction(game, {
+        type: 'fire-weapon',
+        shipId: 'shooter',
+        weaponId: 'b1',
+        targetId: 'target',
+      })
+      landed += game.ships[1].hullMarked
+      back += game.ships[0].hullMarked
+    }
+    return { landed, back }
+  }
+
+  it('absorbs most of a beam volley and throws some of it back', () => {
+    const off = volleys(40, false)
+    const on = volleys(40, true)
+    // The table is 1 full, 2 half, 3-4 nothing, 5 half back, 6 all back — so
+    // over enough volleys far less lands, and the shooter starts taking hits
+    // it never took before.
+    expect(on.landed).toBeLessThan(off.landed)
+    expect(off.back, 'nobody shoots themselves with the field down').toBe(0)
+    expect(on.back).toBeGreaterThan(0)
+  })
+
+  it('costs the ship its own weapons for the turn', () => {
+    // The field is on the `target` hull in this fixture, so it is the target
+    // that tries to shoot back and finds it cannot (7.25).
+    const game = battle(['reflex-field'])
+    expect(
+      applyAction(game, { type: 'set-reflex-field', shipId: 'target', on: true }).refused,
+    ).toBeUndefined()
+    advanceTo(game, 'ship-fire')
+    const shot = applyAction(game, {
+      type: 'fire-weapon',
+      shipId: 'target',
+      weaponId: 'b1',
+      targetId: 'shooter',
+    })
+    expect(shot.refused).toContain('Reflex Field')
+  })
+
+  it('is written in orders, and only by a ship that has one', () => {
+    const bare = battle([])
+    expect(
+      applyAction(bare, { type: 'set-reflex-field', shipId: 'target', on: true }).refused,
+    ).toContain('no working Reflex Field')
+
+    const game = battle(['reflex-field'])
+    advanceTo(game, 'ship-fire')
+    expect(
+      applyAction(game, { type: 'set-reflex-field', shipId: 'target', on: true }).refused,
+    ).toContain('orders')
+  })
+})
+
 describe('a cloak, through the action layer (7.20, 7.21)', () => {
   it('is written in orders and goes up when the ship moves', () => {
     const game = battle(['cloaking-device'])

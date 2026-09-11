@@ -113,11 +113,21 @@ import {
   cloakMode,
   cloakStartOfMovement,
   ewFireEffect,
+  isEnergyWeapon,
   orderCloak,
+  rollReflexField,
   AREA_ECM_RADIUS,
   type EwDefences,
 } from './ew'
-import type { Arc, Course, MovementOrder, Point, SystemKind, TurnDirection } from './types'
+import type {
+  Arc,
+  Course,
+  MovementOrder,
+  Point,
+  SystemKind,
+  TurnDirection,
+  WeaponDef,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // The action union
@@ -215,6 +225,12 @@ export type GameAction =
    * into range" (7.21). `turns` defaults to one.
    */
   | { type: 'set-cloak'; shipId: string; on: boolean; turns?: number }
+  /**
+   * 7.25: a Reflex Field is switched on in orders and costs the ship every
+   * weapon it has for that turn. Its status is secret until someone shoots at
+   * the ship, "by which time it may be too late".
+   */
+  | { type: 'set-reflex-field'; shipId: string; on: boolean }
 
   /**
    * Answers to questions the rules put to a player mid-resolution — which
@@ -490,6 +506,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (ship.side === target.side) return refuse('That is a friendly ship')
 
+      // 7.25: a ship running its Reflex Field "may not use any weaponry of its
+      // own that turn", and 7.20 says the same of a cloaked one.
+      if (ship.reflexFieldActive) return refuse(`${ship.name} is running its Reflex Field (7.25)`)
+      if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot fire (7.20)`)
+
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
       if (ship.destroyedSystems.has(weapon.id)) return refuse('That weapon is knocked out')
@@ -567,7 +588,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return OK
       }
 
-      const applied = applyDamage(targetStateOf(target), result, {
+      // 7.25: the damage is rolled first, then the field's own die decides how
+      // much of it lands and how much comes back.
+      const reflected = reflexField(state, ship, target, weapon, result)
+      const applied = applyDamage(targetStateOf(target), reflected.result, {
         rearArcRule: rules.rearArcAttacks,
         rearArc: isRearArcAttack(
           target.placement.position,
@@ -589,6 +613,24 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         dice: result.dice,
         text: `${ship.name} fires ${weapon.label} at ${target.name}: ${result.detail}`,
       })
+      if (reflected.back > 0) {
+        // The energy that came back is applied like any other direct fire, to
+        // the ship that sent it (7.25).
+        const onShooter = applyDamage(
+          targetStateOf(ship),
+          { ...reflected.result, normalDamage: reflected.back, penetratingDamage: 0 },
+          { rearArcRule: false, rearArc: false, source: 'direct-fire' },
+        )
+        writeBackDamage(ship, onShooter.target)
+        markHullBoxes(ship, onShooter.hullDamage)
+        if (ship.destroyed) {
+          pushLog(state, {
+            kind: 'destroyed',
+            shipId: ship.id,
+            text: `${ship.name} is destroyed by its own fire`,
+          })
+        }
+      }
       if (target.destroyed) {
         pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
       }
@@ -1144,6 +1186,31 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    case 'set-reflex-field': {
+      if (state.phase !== 'orders') {
+        return refuse('A Reflex Field is written in orders, phase 1 (7.25)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (action.on && operationalCount(ship, 'reflex-field') === 0) {
+        return refuse(`${ship.name} has no working Reflex Field`)
+      }
+      ship.reflexFieldActive = action.on
+      if (action.on) {
+        pushLog(state, {
+          kind: 'orders',
+          shipId: ship.id,
+          side: ship.side,
+          // Secret: "The opposing player is not told of the field's status
+          // until the ship is fired upon" (7.25).
+          visibleTo: [ship.side],
+          text: `${ship.name} raises its Reflex Field — no weapons this turn (7.25)`,
+        })
+      }
+      return OK
+    }
+
     // ── Gunboats (9, phases 4, 6 and 10) ──────────────────────────────────
     case 'launch-gunboats': {
       if (state.phase !== 'move-fighters') {
@@ -1582,6 +1649,53 @@ function squadronFacingAfterMove(
   if (chosen !== undefined) return chosen
   if (distance(squadron.position, to) <= 1e-9) return squadron.facing
   return nearestCourse(squadron.position, to)
+}
+
+/**
+ * The Reflex Field's die, and what it does to a volley (7.25).
+ *
+ * "Energy weapon" is 7.25's own list, which `ew.ts` reads off each weapon's
+ * section — the same set 7.2 says screens protect against. Anything else goes
+ * straight through: a Reflex Field does nothing to a pulse torpedo.
+ *
+ * **[reading]** The table talks about "the damage" as one number, and a volley
+ * arrives here as two — the part screens and armour may answer, and the part
+ * that goes straight to the hull (4.6). So the die is rolled once against the
+ * total, as the rule says, and the surviving damage is split back in the same
+ * proportion, with the odd point going to the normal pile so armour still gets
+ * its chance at it. Halving the two piles separately would round up twice and
+ * quietly favour the attacker.
+ */
+function reflexField(
+  state: GameState,
+  shooter: ShipState,
+  target: ShipState,
+  weapon: WeaponDef,
+  result: WeaponResult,
+): { result: WeaponResult; back: number } {
+  if (!target.reflexFieldActive) return { result, back: 0 }
+  if (operationalCount(target, 'reflex-field') === 0) return { result, back: 0 }
+  if (!isEnergyWeapon(weapon.weaponClass)) return { result, back: 0 }
+
+  const total = result.normalDamage + result.penetratingDamage
+  if (total <= 0) return { result, back: 0 }
+
+  const roll = rollReflexField(total, state.rng)
+  const penetrating = Math.min(result.penetratingDamage, Math.floor(roll.toTarget / 2))
+  const normal = roll.toTarget - penetrating
+  pushLog(state, {
+    kind: 'note',
+    shipId: target.id,
+    side: target.side,
+    dice: [roll.roll],
+    text:
+      `${target.name}'s Reflex Field: ${roll.outcome} — ${roll.toTarget} of ${total} lands` +
+      (roll.toAttacker > 0 ? `, ${roll.toAttacker} reflected at ${shooter.name}` : ''),
+  })
+  return {
+    result: { ...result, normalDamage: normal, penetratingDamage: penetrating },
+    back: roll.toAttacker,
+  }
 }
 
 /**
