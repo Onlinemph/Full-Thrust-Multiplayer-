@@ -82,3 +82,49 @@
   border-radius: var(--radius);
   padding: 0.2em 0.4em;
 }
+
+/* An optional rule is a choice with consequences, so each one gets its name,
+   its rule reference and a line saying what it actually does — a bare checkbox
+   labelled "Drive damage" tells a player nothing. */
+.rule-toggle {
+  display: flex;
+  gap: var(--gap);
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  width: 100%;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+}
+
+.rule-toggle:hover {
+  background: var(--panel-2);
+}
+
+.rule-toggle input {
+  margin-top: 0.25em;
+  flex: none;
+}
+
+.rule-ref {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--side-a);
+}
+
+.rule-detail {
+  color: var(--ink-dim);
+}
+
+.modal input[type='number'],
+.modal input[type='text'] {
+  font: inherit;
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.3em 0.5em;
+  width: 100%;
+}

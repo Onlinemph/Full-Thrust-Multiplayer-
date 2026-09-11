@@ -6,6 +6,7 @@ import { scenarioById } from '../data/scenarios'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { Scoreboard } from './Scoreboard'
+import { SetupPanel } from './SetupPanel'
 import { OrderPanel } from './OrderPanel'
 import { Ssd } from './Ssd'
 import {
@@ -35,6 +36,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [viewingSide, setViewingSide] = useState<string | null>(null)
   const [showOnline, setShowOnline] = useState(false)
+  const [showSetup, setShowSetup] = useState(false)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
@@ -69,6 +71,7 @@ export function App() {
           </select>
         </label>
 
+        <button onClick={() => setShowSetup(true)}>New battle</button>
         <button onClick={() => setShowOnline(true)}>Remote play</button>
         <button disabled={!canUndo()} onClick={() => undo()}>
           Undo
@@ -169,6 +172,7 @@ export function App() {
       </main>
 
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
+      {showSetup ? <SetupPanel onClose={() => setShowSetup(false)} /> : null}
     </div>
   )
 }

@@ -1,0 +1,198 @@
+import { useState } from 'react'
+
+import { SCENARIOS } from '../data/scenarios'
+import type { GameSetup } from '../data/savedGame'
+import { currentSetup, newGame } from './store'
+
+/**
+ * Starting a battle: the scenario, the dice seed, and which optional rules the
+ * table has agreed to.
+ *
+ * Full Thrust is unusually full of optional rules — the book flags them as
+ * optional in the heading and expects players to settle them beforehand — so
+ * they belong here, before the first order is written, rather than as switches
+ * to be found mid-game. They ride in the setup, which means a battle file
+ * carries the rules it was fought under and replays correctly however the
+ * table's habits change later.
+ */
+
+interface Toggle {
+  key: keyof GameSetup
+  label: string
+  rule: string
+  detail: string
+}
+
+const OPTIONAL_RULES: Toggle[] = [
+  {
+    key: 'emergencyThrust',
+    label: 'Emergency thrust',
+    rule: '3.6',
+    detail: 'Up to 150% of the drive rating, at the risk of damaging it.',
+  },
+  {
+    key: 'rearArcAttacks',
+    label: 'Rear arc attacks',
+    rule: '4.10',
+    detail: 'Fire from inside a target’s rear arc ignores its armour entirely.',
+  },
+  {
+    key: 'driveDamage',
+    label: 'Drive damage',
+    rule: '4.11',
+    detail: 'A ship that lost two or more hull rows rolls twice for its drive.',
+  },
+  {
+    key: 'coreSystems',
+    label: 'Core systems',
+    rule: '10.3',
+    detail: 'A bridge, life support and a power core that damage can single out.',
+  },
+  {
+    key: 'reactorBreaches',
+    label: 'Reactor breaches',
+    rule: '10.3',
+    detail: 'A gutted reactor may take the ship, and its neighbours, with it.',
+  },
+  {
+    key: 'fighterMorale',
+    label: 'Fighter morale',
+    rule: '8.17',
+    detail: 'Fighter groups may break off rather than press a hopeless attack.',
+  },
+  {
+    key: 'fighterQuality',
+    label: 'Aces and turkeys',
+    rule: '8.18',
+    detail: 'Pilot quality varies: some groups are far better than average, some far worse.',
+  },
+  {
+    key: 'multiStageMissiles',
+    label: 'Multi-stage missiles',
+    rule: '6.6',
+    detail: 'Missiles that fly on after a first stage burns out.',
+  },
+  {
+    key: 'sensorRules',
+    label: 'Sensors and ECM',
+    rule: '12.1',
+    detail: 'Enemy SSDs are closed: you see what your sensors tell you and no more.',
+  },
+]
+
+/**
+ * The three systems the campaign rules ban outright. Listed by name rather than
+ * hidden behind a single switch, because a tournament may want a different set.
+ */
+const BANNABLE = ['reflex-field', 'cloaking-field', 'wave-gun'] as const
+const BANNABLE_LABELS: Record<(typeof BANNABLE)[number], string> = {
+  'reflex-field': 'Reflex field (7.25)',
+  'cloaking-field': 'Cloaking field (7.21)',
+  'wave-gun': 'Wave gun (7.24)',
+}
+
+export function SetupPanel({ onClose }: { onClose: () => void }) {
+  const [draft, setDraft] = useState<GameSetup>(() => ({ ...currentSetup() }))
+
+  const toggle = (key: keyof GameSetup) =>
+    setDraft((d) => ({ ...d, [key]: !d[key] } as GameSetup))
+
+  const banned = new Set(draft.bannedSystems ?? [])
+  const toggleBan = (system: string) => {
+    const next = new Set(banned)
+    if (next.has(system)) next.delete(system)
+    else next.add(system)
+    setDraft((d) => ({ ...d, bannedSystems: [...next] }))
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(event) => event.stopPropagation()}>
+        <h2>New battle</h2>
+
+        <section>
+          <label className="code-field">
+            Scenario
+            <select
+              value={draft.scenarioId}
+              onChange={(event) => setDraft((d) => ({ ...d, scenarioId: event.target.value }))}
+            >
+              {SCENARIOS.map((scenario) => (
+                <option key={scenario.id} value={scenario.id}>
+                  {scenario.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="code-field">
+            Dice seed
+            <input
+              className="num"
+              type="number"
+              value={draft.seed}
+              onChange={(event) =>
+                setDraft((d) => ({ ...d, seed: Number(event.target.value) || 0 }))
+              }
+            />
+          </label>
+          <p>
+            The same seed and the same orders give the same battle, every time. Change it for a
+            fresh roll of the dice; keep it to replay one.
+          </p>
+        </section>
+
+        <section>
+          <h3>Optional rules</h3>
+          <p>Settle these before the first order is written. They ride in the battle file.</p>
+          {OPTIONAL_RULES.map((option) => (
+            <label key={option.key} className="rule-toggle">
+              <input
+                type="checkbox"
+                checked={Boolean(draft[option.key])}
+                onChange={() => toggle(option.key)}
+              />
+              <span>
+                <b>{option.label}</b> <span className="rule-ref">{option.rule}</span>
+                <br />
+                <span className="rule-detail">{option.detail}</span>
+              </span>
+            </label>
+          ))}
+        </section>
+
+        <section>
+          <h3>Banned systems</h3>
+          <p>
+            The campaign rules bar all three of these. A tournament may bar a different set.
+          </p>
+          {BANNABLE.map((system) => (
+            <label key={system} className="rule-toggle">
+              <input
+                type="checkbox"
+                checked={banned.has(system)}
+                onChange={() => toggleBan(system)}
+              />
+              <span>{BANNABLE_LABELS[system]}</span>
+            </label>
+          ))}
+        </section>
+
+        <div className="panel-row">
+          <button onClick={onClose}>Cancel</button>
+          <span className="spacer" />
+          <button
+            className="primary"
+            onClick={() => {
+              newGame(draft)
+              onClose()
+            }}
+          >
+            Start battle
+          </button>
+        </div>
+        <p>Starting a battle discards the one in progress. Save it first if you want it.</p>
+      </div>
+    </div>
+  )
+}
