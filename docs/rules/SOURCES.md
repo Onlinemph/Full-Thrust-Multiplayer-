@@ -6,7 +6,7 @@ The engine is built from these, and every rule reference in the code points at o
 | --- | --- | --- |
 | *Full Thrust: Project Continuum* v1.1.4, April 2017 | Sections 1–9: overview, sequence of play, cinematic movement, beam combat, threshold checks, all direct-fire weapons, ordnance, defensive systems, fighters, gunboats | `continuum-rulebook-extract.txt` |
 | Full Thrust Continuum Ultimate Ship Builder v1.31 | Sections 13–14: the mass and points cost of every hull, drive, system and weapon/arc combination | `construction-tables.md` |
-| Full Thrust XD Quick Reference | Core Systems effects (bridge, life support, power core) and damage control, cross-checked against the rulebook | `core-systems.md` |
+| Full Thrust XD Quick Reference | Core Systems effects (bridge, life support, power core) and damage control, cross-checked against the rulebook | `threshold.md`, marked `[XD]` |
 | Stellar Imperium campaign rules | The strategic layer: economy, research, espionage, production | `campaign.md` |
 
 ## A known gap
@@ -17,7 +17,7 @@ prose. What that costs, and what stands in for it:
 
 | Section | Status |
 | --- | --- |
-| 10 Threshold Points | Covered: 4.11 states the threshold rules in full, and the Core Systems effects come from the XD quick reference. |
+| 10 Threshold Points | Covered: 4.11 states the threshold rules in full, and the Core Systems effects come from the XD quick reference. Two consequences the XD sheet gives timings but not effects for — what life support failure and being out of control actually cost — are judgement calls, marked `[reading]` in `threshold.md`. |
 | 11 Faster Than Light | **Not implemented.** FTL fit is priced and carried on the SSD; entry and exit are out. |
 | 12 Optional Rules | Partly covered — sensors and ECM from 7.18/7.19, boarding from 5.9/5.18. Vector movement (12.12) is **not implemented**. |
 | 13 Ship design and construction | Covered by the construction tables, which encode every cost the section states. |
