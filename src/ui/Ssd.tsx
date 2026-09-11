@@ -1,3 +1,4 @@
+import { hullRowBounds } from '../engine/combat'
 import { thresholdTarget } from '../engine/dice'
 import type { ShipDesign } from '../engine/types'
 
@@ -44,15 +45,19 @@ const PRISTINE: SsdDamage = {
   destroyed: new Set<string>(),
 }
 
-/** Split a hull track of `boxes` into `rows` rows, remainder on the last (2.4). */
+/**
+ * Row sizes for a hull track (2.4).
+ *
+ * Derived from `hullRowBounds` rather than computed here, and that matters more
+ * than it looks: the row boundary IS the threshold point (4.11), so a form that
+ * drew the rows one way while the engine checked them another would show the
+ * player the wrong number for the next check — the single number they plan
+ * around. One implementation, two consumers, and a cross-module test that says
+ * so.
+ */
 export function hullRows(boxes: number, rows: number): number[] {
-  const per = Math.floor(boxes / rows)
-  const out = new Array(rows).fill(per)
-  // The rulebook's own example is 12 boxes in four rows of three; where it does
-  // not divide, the extra boxes go on the last row rather than being spread,
-  // so the early thresholds arrive on schedule.
-  out[rows - 1] += boxes - per * rows
-  return out
+  const bounds = hullRowBounds(boxes, rows as 3 | 4 | 5 | 6)
+  return bounds.map((end, i) => end - (i === 0 ? 0 : bounds[i - 1]))
 }
 
 export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdProps) {
