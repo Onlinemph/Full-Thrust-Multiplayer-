@@ -38,6 +38,13 @@ import {
   type ShipState,
 } from './game'
 import { maxRangeOf, needsFireCon } from './weapons'
+import {
+  isExhausted,
+  mainMoveAllowance,
+  secondaryMoveAllowance,
+  FIGHTER_ATTACK_RANGE,
+} from './fighters'
+import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import type { GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
@@ -322,6 +329,11 @@ export function aiActions(
   switch (game.phase) {
     case 'orders':
       for (const ship of mine) {
+        // 8.1: a carrier with a wing still in the bay writes "Launch" and
+        // nothing else — 8.2 refuses the launch outright if it spent thrust.
+        // Holding station for a turn is what the launch costs, and a carrier
+        // that never pays it is a carrier that never launches.
+        if (hasCraftAboard(game, ship)) continue
         const best = planMovement(game, ship, settings)[0]
         if (!best) continue
         if (best.order.turn) {
@@ -377,10 +389,26 @@ export function aiActions(
       // Resolved once for the table rather than per side: a marker attacks
       // whatever it acquires, whoever launched it.
       if (side === game.sides[0]?.id) actions.push({ type: 'resolve-ordnance-attacks' })
+      // Attack runs and gunboat attacks are this side's own, and belong here:
+      // 8.7 resolves them after point defence, and 9.1 puts gunboats in the
+      // same phase.
+      actions.push(...planSmallCraftAttacks(game, side))
       break
 
     case 'ship-fire':
       for (const ship of mine) actions.push(...planFire(game, ship))
+      break
+
+    case 'move-fighters':
+      actions.push(...planSmallCraftMoves(game, side, false))
+      break
+
+    case 'secondary-fighter-moves':
+      actions.push(...planSmallCraftMoves(game, side, true))
+      break
+
+    case 'fighter-vs-fighter':
+      actions.push(...planDogfights(game, side))
       break
 
     default:
@@ -473,4 +501,191 @@ export function projectedPosition(ship: ShipState, order: MovementOrder): Point 
     ? order.turn.points * (order.turn.direction === 'starboard' ? 1 : -1)
     : 0
   return moveShip(ship.placement.position, ship.placement.facing, velocity, turn).position
+}
+
+// ---------------------------------------------------------------------------
+// Small craft (8, 9)
+// ---------------------------------------------------------------------------
+
+/**
+ * How the computer flies its wings and its gunboat squadrons.
+ *
+ * Deliberately simpler than the ship AI, and for a reason that is about the
+ * game rather than about effort: a fighter group has no course, no velocity
+ * and no orders to guess at, so there is no simultaneity to model and nothing
+ * clever to do with a search. What is left is a standoff decision — get to the
+ * range your guns work at and no closer, because 8.7's 6 MU and 9.1's 12 MU
+ * are the whole of a small craft's tactics.
+ *
+ * It flies at ships rather than at other fighters. Trading fighters for
+ * fighters is a losing exchange for whoever has fewer, and the computer cannot
+ * tell whether it is that player; going for the hulls is the play that is
+ * never actively wrong.
+ */
+function planSmallCraftMoves(game: GameState, side: string, secondary: boolean): GameAction[] {
+  const actions: GameAction[] = []
+
+  for (const group of game.fighterGroups) {
+    if (group.side !== side) continue
+    const carrier = group.carrierId ? game.ships.find((s) => s.id === group.carrierId) : undefined
+    if (group.status === 'aboard' && !secondary && carrier) {
+      // A launch the carrier cannot make is refused and costs nothing (8.2),
+      // and the move that follows it is refused with it. Both go in the list:
+      // the actions are applied in order, so a group that gets out of the
+      // tube still gets its half move in the same phase (8.1).
+      actions.push({ type: 'launch-flight', carrierId: carrier.id, flightId: group.id })
+      const prey = nearestEnemyHull(game, group.side, carrier.placement.position)
+      if (prey) {
+        const to = standoff(
+          carrier.placement.position,
+          prey.placement.position,
+          mainMoveAllowance(group, game.turn) / 2,
+          FIGHTER_ATTACK_RANGE,
+        )
+        if (to) actions.push({ type: 'move-flight', flightId: group.id, to })
+      }
+      continue
+    }
+    if (group.status !== 'in-flight') continue
+    if (secondary && isExhausted(group)) continue
+    const prey = nearestEnemyHull(game, group.side, group.position)
+    if (!prey) continue
+    const allowance = secondary
+      ? secondaryMoveAllowance(group)
+      : mainMoveAllowance(group, game.turn)
+    const to = standoff(group.position, prey.placement.position, allowance, FIGHTER_ATTACK_RANGE)
+    if (!to) continue
+    actions.push(
+      secondary
+        ? { type: 'secondary-move-flight', flightId: group.id, to }
+        : { type: 'move-flight', flightId: group.id, to },
+    )
+  }
+
+  for (const squadron of game.gunboatSquadrons) {
+    if (squadron.side !== side) continue
+    const tender = squadron.carrierId
+      ? game.ships.find((s) => s.id === squadron.carrierId)
+      : undefined
+    if (squadron.status === 'aboard' && !secondary && tender) {
+      actions.push({ type: 'launch-gunboats', carrierId: tender.id, squadronId: squadron.id })
+      const prey = nearestEnemyHull(game, squadron.side, tender.placement.position)
+      if (prey) {
+        const to = standoff(
+          tender.placement.position,
+          prey.placement.position,
+          GUNBOAT_MOVE,
+          GUNBOAT_FIRE_CONTROL,
+        )
+        if (to) actions.push({ type: 'move-gunboats', squadronId: squadron.id, to })
+      }
+      continue
+    }
+    if (squadron.status !== 'in-flight') continue
+    if (secondary && squadron.cef <= 0) continue
+    const prey = nearestEnemyHull(game, squadron.side, squadron.position)
+    if (!prey) continue
+    const allowance = secondary ? GUNBOAT_SECONDARY_MOVE : GUNBOAT_MOVE
+    const to = standoff(
+      squadron.position,
+      prey.placement.position,
+      allowance,
+      GUNBOAT_FIRE_CONTROL,
+    )
+    if (!to) continue
+    actions.push({ type: 'move-gunboats', squadronId: squadron.id, to })
+  }
+
+  return actions
+}
+
+/** Attack runs and gunboat attacks, once everything is where it is going. */
+function planSmallCraftAttacks(game: GameState, side: string): GameAction[] {
+  const actions: GameAction[] = []
+
+  for (const group of game.fighterGroups) {
+    if (group.side !== side || group.status !== 'in-flight') continue
+    if (isExhausted(group) || group.attackedThisTurn) continue
+    const prey = nearestEnemyHull(game, side, group.position)
+    if (!prey) continue
+    if (distance(group.position, prey.placement.position) > FIGHTER_ATTACK_RANGE) continue
+    actions.push({ type: 'flight-strike', flightId: group.id, targetId: prey.id })
+  }
+
+  for (const squadron of game.gunboatSquadrons) {
+    if (squadron.side !== side || squadron.status !== 'in-flight') continue
+    if (squadron.cef <= 0 || squadron.attackedThisTurn) continue
+    const prey = nearestEnemyHull(game, side, squadron.position)
+    if (!prey) continue
+    if (distance(squadron.position, prey.placement.position) > GUNBOAT_FIRE_CONTROL) continue
+    actions.push({ type: 'gunboat-attack', squadronId: squadron.id, targetId: prey.id })
+  }
+
+  return actions
+}
+
+/**
+ * Dogfights (8.10). A group that an enemy has closed with is going to be in
+ * one whether it likes it or not, so the computer engages rather than being
+ * engaged: the fire is simultaneous either way and the one that declares gets
+ * to pick which enemy it is simultaneous with.
+ */
+function planDogfights(game: GameState, side: string): GameAction[] {
+  const actions: GameAction[] = []
+  const taken = new Set<string>()
+
+  for (const group of game.fighterGroups) {
+    if (group.side !== side || group.status !== 'in-flight') continue
+    if (isExhausted(group) || group.attackedThisTurn) continue
+    const enemy = game.fighterGroups
+      .filter(
+        (other) =>
+          other.side !== side &&
+          other.status === 'in-flight' &&
+          !taken.has(other.id) &&
+          distance(group.position, other.position) <= FIGHTER_ATTACK_RANGE,
+      )
+      .sort((a, b) => distance(group.position, a.position) - distance(group.position, b.position))[0]
+    if (!enemy) continue
+    taken.add(enemy.id)
+    actions.push({ type: 'flight-dogfight', flightId: group.id, targetFlightId: enemy.id })
+  }
+
+  return actions
+}
+
+/** Whether this ship still has a wing or a squadron waiting to go up (8.1). */
+function hasCraftAboard(game: GameState, ship: ShipState): boolean {
+  return (
+    game.fighterGroups.some((g) => g.carrierId === ship.id && g.status === 'aboard') ||
+    game.gunboatSquadrons.some((s) => s.carrierId === ship.id && s.status === 'aboard')
+  )
+}
+
+/** The nearest live enemy hull to a point. */
+function nearestEnemyHull(game: GameState, side: string, from: Point): ShipState | undefined {
+  const enemies = game.ships.filter(
+    (ship) => ship.side !== side && !ship.destroyed && !ship.offTable,
+  )
+  if (enemies.length === 0) return undefined
+  return enemies.reduce((best, ship) =>
+    distance(from, ship.placement.position) < distance(from, best.placement.position) ? ship : best,
+  )
+}
+
+/**
+ * A point `standoff` MU short of the target, as far along as this move allows.
+ *
+ * Stopping short is the whole point: a group that flies onto its target has
+ * spent its move to arrive at the same range it could have reached from
+ * further out, and given the enemy's point defence a closer shot for it. Null
+ * when the group is already where it wants to be.
+ */
+function standoff(from: Point, to: Point, allowance: number, keep: number): Point | null {
+  const span = distance(from, to)
+  const want = Math.max(0, span - keep * 0.8)
+  if (want <= 1e-9) return null
+  const travel = Math.min(allowance, want)
+  const t = travel / span
+  return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
 }

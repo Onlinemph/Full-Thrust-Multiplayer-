@@ -117,6 +117,13 @@ the table. Its prediction of the enemy is deliberately naive (straight ahead),
 because orders are written simultaneously and in secret and anything cleverer
 would be the computer reading your orders rather than guessing them.
 
+Its small craft are simpler on purpose. A fighter group has no course, no
+velocity and no written order, so there is no simultaneity to model and nothing
+for a search to do; what is left is the standoff decision, and the computer
+takes it — its carriers hold station on the turn they launch, as 8.1 requires,
+and its wings and gunboat squadrons fly to the range their guns work at rather
+than onto the hull.
+
 ## Playing
 
 A battle is **(setup + action journal)**: the engine is deterministic and the dice are seeded, so
