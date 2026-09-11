@@ -962,6 +962,14 @@ function fireTransporter(
 ): TransporterFireResult | null {
   const dice = beamDiceAtRange(weapon.rating, ctx.range)
   if (dice <= 0 || !canBear(weapon, ctx)) return null
+  // 5.9: "Marines may not be sent to attack any Core or otherwise protected
+  // systems" — an illegal raid order, refused outright rather than rolled.
+  if (
+    ctx.transporterMode === 'commando-raid' &&
+    (ctx.needleTarget === undefined || COMMANDO_RAID_FORBIDDEN.includes(ctx.needleTarget))
+  ) {
+    return null
+  }
   const screens = screensAgainst(ctx)
   // 5.9: "generate a BD hits (no rerolls)" — plain BD, so no re-roll on a 6.
   const hits = rollHits(dice, screens, ctx, false)

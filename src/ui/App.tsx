@@ -1,8 +1,9 @@
 import { useState } from 'react'
 
-import { PHASE_LABELS, type Phase } from '../engine/types'
+import { PHASE_LABELS, type Arc, type Phase } from '../engine/types'
 import { logFor, phaseNumber, shipById, shipMovementOrder } from '../engine/game'
 import { scenarioById } from '../data/scenarios'
+import { CombatPanel } from './CombatPanel'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { Scoreboard } from './Scoreboard'
@@ -38,6 +39,7 @@ export function App() {
   const [viewingSide, setViewingSide] = useState<string | null>(null)
   const [showOnline, setShowOnline] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
+  const [litArcs, setLitArcs] = useState<readonly Arc[] | undefined>(undefined)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = scenario?.table ?? { width: 72, height: 48 }
@@ -106,10 +108,15 @@ export function App() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           viewingSide={viewingSide}
+          litArcs={litArcs}
         />
 
         <aside className="app-side">
-          <PhaseControls phase={game.phase} />
+          {game.phase === 'ship-fire' && selected ? (
+            <CombatPanel game={game} ship={selected} onHoverWeapon={setLitArcs} />
+          ) : (
+            <PhaseControls phase={game.phase} />
+          )}
 
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
 
@@ -257,6 +264,16 @@ function PhaseControls({ phase }: { phase: Phase }) {
           >
             Make repair rolls
           </button>
+        </div>
+      )
+    case 'ship-fire':
+      return (
+        <div className="panel">
+          <h3>Phase 11 · Ships fire</h3>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Ships fire in initiative order, the side with initiative firing first, with threshold
+            checks after each. Select a ship to give it targets.
+          </p>
         </div>
       )
     default:

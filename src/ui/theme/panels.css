@@ -375,3 +375,49 @@
   margin: 0;
   color: var(--ink-dim);
 }
+
+/* ── Combat ───────────────────────────────────────────────────────────────── */
+
+.target-block {
+  border-top: 1px solid var(--line);
+  padding-top: var(--gap);
+  margin-top: var(--gap);
+}
+
+.target-block:first-of-type {
+  border-top: none;
+}
+
+/* The single biggest thing a gunner wants to know before choosing a target
+   (4.10): from back there, the armour does not count. */
+.rear-flag {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--on-bright);
+  background: var(--damage);
+  border-radius: var(--radius);
+  padding: 0.1em 0.35em;
+}
+
+.weapon-fire {
+  cursor: pointer;
+}
+
+.weapon-fire:not(:disabled):hover {
+  border-color: var(--damage);
+  color: var(--damage);
+}
+
+.weapon-fire.is-blocked,
+.weapon-fire:disabled {
+  color: var(--ink-faint);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.nothing-bears {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  margin: 0.2rem 0;
+}

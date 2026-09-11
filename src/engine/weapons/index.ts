@@ -12,12 +12,14 @@
  */
 
 import { BEAM_WEAPON_SPECS } from './beams'
+import { KINETIC_WEAPON_SPECS } from './kinetics'
 import type { FiringContext, WeaponResult, WeaponSpec } from './contract'
 import type { WeaponClass, WeaponDef } from '../types'
 
 /** Every weapon the engine knows how to fire. */
 export const WEAPON_SPECS: Partial<Record<WeaponClass, WeaponSpec>> = {
   ...BEAM_WEAPON_SPECS,
+  ...KINETIC_WEAPON_SPECS,
 }
 
 export function specFor(weapon: WeaponDef): WeaponSpec | undefined {

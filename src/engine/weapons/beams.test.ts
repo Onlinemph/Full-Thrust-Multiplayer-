@@ -645,6 +645,27 @@ describe('5.9 transporter beams', () => {
     expect(Object.keys(COMMANDO_RAID_TABLE)).toHaveLength(6)
   })
 
+  it('refuses a raid on a core or otherwise protected system', () => {
+    for (const forbidden of ['core-systems', 'antimatter-charge']) {
+      expect(
+        fireTransporterBeam(
+          mount('transporter', 1),
+          context(new ScriptedRng([6]), {
+            transporterMode: 'commando-raid',
+            needleTarget: forbidden,
+          }),
+        ),
+      ).toBeNull()
+    }
+    // ...and a raid with no system nominated is not an order at all.
+    expect(
+      fireTransporterBeam(
+        mount('transporter', 1),
+        context(new ScriptedRng([6]), { transporterMode: 'commando-raid' }),
+      ),
+    ).toBeNull()
+  })
+
   it('needs somebody left to send', () => {
     expect(canUseTransporters(0, 0)).toBe(false)
     expect(canUseTransporters(0, 1)).toBe(true)
