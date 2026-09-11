@@ -421,3 +421,60 @@
   font-size: var(--text-xs);
   margin: 0.2rem 0;
 }
+
+/* ── Flight operations ────────────────────────────────────────────────────── */
+
+.flight-row {
+  gap: 0.5rem;
+}
+
+/* Strength is how many fighters are left of six, and it is the first thing to
+   read off a group (8.9). */
+.flight-strength {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: var(--fighters);
+  color: var(--on-bright);
+  font-weight: 700;
+  flex: none;
+}
+
+.flight-strength.is-aboard {
+  background: var(--panel-3);
+  color: var(--fighters);
+  border: 1px solid var(--fighters);
+}
+
+.flight-strength.is-destroyed {
+  background: var(--panel-2);
+  color: var(--ink-faint);
+}
+
+.flight-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Endurance is what a wing is planned around: every attack, secondary move and
+   evade spends one, and at zero the group can fly but do nothing (8.13). */
+.flight-cef-readout {
+  color: var(--fighters);
+}
+
+.flight-cef-readout.is-spent {
+  color: var(--damage);
+}
+
+.flight-status {
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.flight-status.is-in-flight {
+  color: var(--fighters);
+}

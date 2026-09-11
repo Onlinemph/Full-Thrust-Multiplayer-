@@ -5,6 +5,7 @@ import { logFor, phaseNumber, shipById, shipMovementOrder } from '../engine/game
 import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
+import { FlightPanel } from './FlightPanel'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { ReplayBar } from './ReplayBar'
@@ -149,6 +150,10 @@ export function App() {
           )}
 
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
+
+          {selected && selected.design.fighterBays.length > 0 ? (
+            <FlightPanel game={game} ship={selected} />
+          ) : null}
 
           {selected ? (
             <>
