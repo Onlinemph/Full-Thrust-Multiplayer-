@@ -186,6 +186,13 @@ export interface WeaponDef {
   /** Mounted in a turret, which widens the arcs it can bear on (5.22). */
   turretId?: string
   /**
+   * 5.16: this K-Gun is equipped with Flak ammunition, for +2 points.
+   *
+   * A ship-wide decision rather than a per-gun one — *"All the K-Guns on a
+   * ship (except K-1s) must be so equipped"* — which `validateDesign` checks.
+   */
+  flak?: boolean
+  /**
    * Shots the mount is built with, for one-shot and magazine-fed systems
    * (6.6, 7.14).
    *

@@ -404,7 +404,11 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
             <div className="design-list">
               {CATALOGUE_SYSTEMS.map((entry) => (
                 <button
-                  key={entry.kind + entry.label}
+                  // 7.13's ADS is "mass 2 with 3 arcs; +1 mass for all 6",
+                  // so the catalogue lists it twice under one name and the
+                  // kind and the label together do not identify a button. The
+                  // mass is what tells them apart, on screen and here.
+                  key={`${entry.kind}-${entry.label}-${entry.mass}`}
                   className="design-chip"
                   title={`${entry.mass} mass, ${entry.points} points`}
                   onClick={() => {

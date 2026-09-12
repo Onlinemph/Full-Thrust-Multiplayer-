@@ -1,6 +1,11 @@
 import { canWeaponFire, enemiesOf, type GameState, type ShipState } from '../engine/game'
 import { distance, arcTo, bearsOn } from '../engine/geometry'
 import { maxRangeOf } from '../engine/weapons'
+import {
+  canMountFlak,
+  projectileLine,
+  FLAK_MARKER_RANGE,
+} from '../engine/weapons/kinetics'
 import { dispatch } from './store'
 import type { WeaponDef } from '../engine/types'
 
@@ -18,7 +23,7 @@ export type AimingMount = {
   shipId: string
   weaponId: string
   /** 5.23's Spinal Mount is aimed like a bolt: at a point, not a ship. */
-  kind: 'missile' | 'plasma-bolt' | 'spinal'
+  kind: 'missile' | 'plasma-bolt' | 'spinal' | 'flak'
 }
 
 export interface OrdnancePanelProps {
@@ -43,7 +48,10 @@ function launchable(ship: ShipState): WeaponDef[] {
     return (
       MISSILES.has(weapon.weaponClass) ||
       weapon.weaponClass === 'rocket-pod' ||
-      weapon.weaponClass === 'plasma-bolt-launcher'
+      weapon.weaponClass === 'plasma-bolt-launcher' ||
+      // 5.16: "At the beginning of the Launch Missile Phase" — a barraging
+      // K-Gun belongs on this panel and nowhere else.
+      (canMountFlak(weapon) && weapon.flak === true)
     )
   })
 }
@@ -70,6 +78,31 @@ export function OrdnancePanel({ game, side, aiming, onAim }: OrdnancePanelProps)
         <div key={ship.id} className="ordnance-ship">
           <b>{ship.name}</b>
           {launchable(ship).map((weapon) => {
+            if (canMountFlak(weapon) && weapon.flak === true) {
+              // 5.16's Blast Marker is a point up-range, so it is aimed the
+              // way a missile is — and the marker is a tripwire, so where it
+              // goes matters more than what is standing there now.
+              const held = aiming?.weaponId === weapon.id
+              return (
+                <div key={weapon.id} className="ordnance-mount">
+                  <span>{weapon.label} · Flak</span>
+                  <span className="num">
+                    {FLAK_MARKER_RANGE[projectileLine(weapon.variant)]} MU
+                  </span>
+                  <button
+                    className={held ? 'primary' : undefined}
+                    onClick={() =>
+                      onAim(held ? null : { shipId: ship.id, weaponId: weapon.id, kind: 'flak' })
+                    }
+                  >
+                    {held ? 'Click a point…' : 'Barrage'}
+                  </button>
+                  <span style={{ color: 'var(--ink-dim)' }}>
+                    bursts on anything flying through, yours included (5.16)
+                  </span>
+                </div>
+              )
+            }
             if (weapon.weaponClass === 'rocket-pod') {
               // 6.7 picks a ship and rolls both rockets now, so the choice is
               // which hull rather than which patch of table.

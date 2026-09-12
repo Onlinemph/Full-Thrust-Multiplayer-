@@ -33,7 +33,7 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
-import { maxSpinalMountMass } from '../engine/weapons/kinetics'
+import { canMountFlak, maxSpinalMountMass } from '../engine/weapons/kinetics'
 import { checkMagazine } from '../engine/ordnance'
 import {
   tenderBayMassFor,
@@ -374,6 +374,8 @@ export type DesignFault =
   | { kind: 'mispriced-ship-bay'; carried: number; mass: number; points: number }
   /** 5.23: more Spinal Mount than 16 mass per 50 of hull. */
   | { kind: 'spinal-overmounted'; fitted: number; allowed: number }
+  /** 5.16: some but not all of a ship's K-Guns carry Flak ammunition. */
+  | { kind: 'partial-flak'; equipped: number; eligible: number }
   /** 6.6: a Salvo Missile Launcher with no magazine behind it. */
   | { kind: 'launcher-unfed'; weaponId: string }
   /** 6.6: a launcher drawing from more than one magazine, or a magazine overpacked. */
@@ -415,6 +417,8 @@ export function describeFault(fault: DesignFault): string {
       return fault.problem
     case 'mispriced-ship-bay':
       return `ship bay for ${fault.carried} mass of carried hull: 11.6 charges ${fault.mass} mass and ${fault.points} points`
+    case 'partial-flak':
+      return `${fault.equipped} of ${fault.eligible} K-Guns carry Flak ammunition: 5.16 says "all the K-Guns on a ship (except K-1s) must be so equipped"`
     case 'launcher-unfed':
       return `${fault.weaponId} is a Salvo Missile Launcher with no magazine: 6.6 lets it "fire one salvo per turn provided ammunition is left in the magazine", and there is none`
     case 'bad-magazine':
@@ -608,6 +612,19 @@ export function validateDesign(
     if (Math.abs(system.mass - mass) > 1e-6 || Math.abs(system.points - points) > 1e-6) {
       faults.push({ kind: 'mispriced-ship-bay', carried, mass, points })
     }
+  }
+
+  // 5.16: "All the K-Guns on a ship (except K-1s) must be so equipped." Flak
+  // is a magazine decision for the whole battery, not a per-gun option — a
+  // ship either loads shrapnel or it does not.
+  const flakEligible = design.weapons.filter((weapon) => canMountFlak(weapon))
+  const flakFitted = flakEligible.filter((weapon) => weapon.flak === true)
+  if (flakFitted.length > 0 && flakFitted.length < flakEligible.length) {
+    faults.push({
+      kind: 'partial-flak',
+      equipped: flakFitted.length,
+      eligible: flakEligible.length,
+    })
   }
 
   // 6.6: a launcher is not a missile. A Salvo Missile Rack is crossed off when

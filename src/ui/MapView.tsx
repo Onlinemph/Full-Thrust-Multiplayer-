@@ -4,8 +4,9 @@ import { applyOrder, driveFromDef, type MovementState } from '../engine/movement
 import { stationaryCollisionRisk } from '../engine/terrain'
 import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
-import { optional } from '../engine/actions'
+import { flakMarkers, optional } from '../engine/actions'
 import { isGateActive } from '../engine/ftl'
+import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
 import type { GameState, ShipState } from '../engine/game'
 import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
@@ -55,7 +56,7 @@ export interface MapViewProps {
   aimWith?: {
     shipId: string
     weaponId: string
-    kind: 'missile' | 'plasma-bolt' | 'spinal'
+    kind: 'missile' | 'plasma-bolt' | 'spinal' | 'flak'
   } | null
   /** Called once the aim point is taken, so the launcher leaves the hand. */
   onAimed?: () => void
@@ -184,7 +185,9 @@ export function MapView({
             // onto a ship.
             aimWith.kind === 'spinal'
             ? { type: 'fire-spinal-mount', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
-            : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
+            : aimWith.kind === 'flak'
+              ? { type: 'fire-flak-barrage', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
+              : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
       )
       onAimed?.()
       return
@@ -526,6 +529,19 @@ export function MapView({
               cx={marker.position.x * scale}
               cy={marker.position.y * scale}
               r={marker.kind === 'plasma-bolt' ? 5 : 3}
+            />
+          ))}
+
+          {/* 5.16's Blast Marker. Drawn at its true 2 MU radius, because the
+              thing a player has to read off the table is which lane is now
+              lethal — and 5.16 does not ask whose fighters fly down it. */}
+          {flakMarkers(game).map((marker) => (
+            <circle
+              key={marker.id}
+              className={`flak-marker side-${marker.side}`}
+              cx={marker.position.x * scale}
+              cy={marker.position.y * scale}
+              r={FLAK_BLAST_RADIUS_MU * scale}
             />
           ))}
 

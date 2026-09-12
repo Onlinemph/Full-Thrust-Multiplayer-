@@ -66,7 +66,7 @@ import {
   pulseTorpedoMass,
   pulserCanPointDefend,
   pulserMass,
-  rollFlakBarrage,
+  flakBarrageDice,
   rollFusionArrayVsFighters,
   rollPlasmaDice,
   rollPointDefenceDice,
@@ -502,12 +502,12 @@ describe('Flak ammunition / barrage fire (5.16)', () => {
     expect(canMountFlak(weapon({ weaponClass: 'pulser', rating: 3 }))).toBe(false)
   })
 
-  it('throws PDS dice equal to the gun class at -1', () => {
-    // Three dice for a K-3: a natural 6 (→5, one kill) re-rolls into a 4 (→3,
-    // nothing), then a 5 (→4, one kill) and a 3 (→2, nothing).
-    const volley = rollFlakBarrage(3, new ScriptedRng([6, 4, 5, 3]))
-    expect(volley.rolls).toEqual([6, 4, 5, 3])
-    expect(volley.kills).toBe(2)
+  it('throws PDS dice equal to the gun class', () => {
+    // 5.16: "a number of PDS dice equal to the class of the gun that fired
+    // the barrage (at a -1 DRM)". The dice are rolled by defences.ts, which
+    // owns both point-defence tables; this says only how many there are.
+    expect(flakBarrageDice(3)).toBe(3)
+    expect(flakBarrageDice(1)).toBe(1)
   })
 
   it('catches anything within 2 MU of the marker, in flight or at rest', () => {

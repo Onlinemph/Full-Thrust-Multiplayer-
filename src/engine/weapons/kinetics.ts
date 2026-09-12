@@ -591,17 +591,22 @@ export function canMountFlak(weapon: WeaponDef): boolean {
 }
 
 /**
- * Resolve a Flak barrage against one fighter or missile marker caught in the
- * blast (5.16): *"a number of PDS dice equal to the class of the gun that fired
- * the barrage (at a -1 DRM)"*.
+ * How many dice a Flak barrage throws (5.16): *"a number of PDS dice equal to
+ * the class of the gun that fired the barrage (at a -1 DRM)"*.
+ *
+ * The dice themselves are rolled by `defences.rollPointDefenceDice`, which
+ * owns both point-defence tables. This module's own copy has no heavy-missile
+ * branch, and 6.4 makes a heavy missile need a 5 rather than a 4 and denies it
+ * the double kill on a 6 — so a barrage rolled here would have killed roughly
+ * twice what the rule allows over a Heavy Missile marker.
  *
  * Against a Salvo Missile marker the kills are banked, not applied: 5.16 has
  * the player *"roll to see how many hits the Flak barrage scores on the missile
  * marker and keep track of it until the Missile Attack Phase. Then subtract
  * that from the number of missiles that lock on."*
  */
-export function rollFlakBarrage(rating: number, rng: Rng): PointDefenceVolley {
-  return rollPointDefenceDice(rating, rng, FLAK_DRM)
+export function flakBarrageDice(rating: number): number {
+  return rating
 }
 
 /**

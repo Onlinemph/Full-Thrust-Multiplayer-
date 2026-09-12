@@ -525,3 +525,15 @@
   border-color: var(--side-a);
   color: var(--side-a);
 }
+
+/* 5.16's Blast Marker: drawn at its true 2 MU radius, because what a player
+   needs off the table is the size of the cloud, not a dot where the gun aimed.
+   Hollow and dashed — it is shrapnel hanging in space, not a thing. */
+.flak-marker {
+  fill: var(--warn);
+  fill-opacity: 0.06;
+  stroke: var(--warn);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.8;
+}

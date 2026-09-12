@@ -223,6 +223,7 @@ import {
   type PdDefender,
   type PdMount,
   type PdMountKind,
+  rollPointDefenceDice,
   type PdTargetKind,
   type PdThreat,
   type StealthLevel,
@@ -238,8 +239,16 @@ import {
   type WeaponResult,
 } from './weapons'
 import {
+  canMountFlak,
+  flakBarrageDice,
+  flakCatchesPath,
+  flakCatchesPoint,
   isInSpinalArc,
   isSpinalMount,
+  projectileLine,
+  rollFlakShipHit,
+  FLAK_DRM,
+  FLAK_MARKER_RANGE,
   spinalBeamCatches,
   spinalCanFire,
   spinalLocksShip,
@@ -568,6 +577,12 @@ export type GameAction =
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
   /**
+   * 5.16 — a K-Gun of class 2 or larger throws a Flak barrage: a Blast Marker
+   * placed up-range at the beginning of the Launch Missile Phase, before
+   * anything moves, that detonates against whatever flies through it.
+   */
+  | { type: 'fire-flak-barrage'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
+  /**
    * 5.23 — a Spinal Mount is laid on a *point*, not a ship: *"Spinal Mounts
    * all fire a beam of energy that can hit any model caught within"*, and the
    * aim may be *"an 'empty point of space'"*. Everything in the swathe takes
@@ -841,6 +856,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // movement phase" — which is here.
         resolveMines(state)
       }
+      // 5.16's Blast Markers answer the same question the mines do, but one
+      // phase later: a fighter has a secondary move (phase 6) as well as a
+      // main one, and a barrage that burned out before it would let a wing
+      // fly straight through the shrapnel on the second leg. Ships have
+      // finished moving by here, so their endpoint is settled either way.
+      if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
       // 17.5: a hull that has just been overkilled may come apart. Swept at the
       // boundary so that every way of dying reaches it, rather than at the
       // seven separate places a ship can be destroyed.
@@ -1805,6 +1826,77 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // ship one, and choosing not to use it is using it.
       markShipFired(ship)
       FIRING_ACTIVATION.delete(state)
+      return OK
+    }
+
+    /**
+     * 5.16's Flak barrage.
+     *
+     * *"At the beginning of the Launch Missile Phase"* a barraging gun places
+     * one Blast Marker *"up to 24 MU away for long range guns, 18 for
+     * standard and 12 for short"*, and *"one FireCon is required to fire a
+     * barrage"*. The marker goes up before anything moves, which is what lets
+     * it catch things *"travelling through"* it rather than only things that
+     * happen to stop in it.
+     */
+    case 'fire-flak-barrage': {
+      if (state.phase !== 'launch-missiles') {
+        return refuse('A Flak barrage goes up at the beginning of phase 3 (5.16)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (!canMountFlak(weapon)) {
+        return refuse(`Only a K-Gun of class 2 or larger fires Flak (5.16)`)
+      }
+      if (weapon.flak !== true) {
+        return refuse(`${weapon.label} does not carry Flak ammunition (5.16)`)
+      }
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired`)
+
+      const reach = FLAK_MARKER_RANGE[projectileLine(weapon.variant)]
+      const range = distance(ship.placement.position, action.aimPoint)
+      if (range > reach) {
+        return refuse(`A ${weapon.label} throws its barrage ${reach} MU, and that is ${range.toFixed(1)} (5.16)`)
+      }
+      const arc = arcTo(ship.placement.position, ship.placement.facing, action.aimPoint)
+      if (!weaponArcs(ship, weapon).includes(arc)) {
+        return refuse(`${weapon.label} does not bear on that point`)
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
+      }
+      // "One FireCon is required to fire a barrage."
+      if (!assignFireCon(ship, `flak-${weapon.id}`, state.phase)) {
+        return refuse(`No FireCon free to lay a barrage (5.16)`)
+      }
+
+      markWeaponFired(ship, weapon.id, state.phase)
+      const markers = flakMarkers(state)
+      markers.push({
+        id: `flak-${state.turn}-${markers.length + 1}-${ship.id}`,
+        side: ship.side,
+        sourceShipId: ship.id,
+        position: { ...action.aimPoint },
+        rating: flakBarrageDice(weapon.rating),
+      })
+      // Everything that can move is stamped where it stands, so the barrage
+      // is answered by the move rather than by where the move ended.
+      const origins = flakOrigins(state)
+      for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+        if (group.status === 'in-flight') origins.set(group.id, { ...group.position })
+      }
+      for (const ordnance of ordnanceOf(state)) origins.set(ordnance.id, { ...ordnance.position })
+      pushLog(state, {
+        kind: 'launch',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} throws a Flak barrage ${range.toFixed(1)} MU out (5.16)`,
+      })
       return OK
     }
 
@@ -5029,6 +5121,164 @@ function spent(ship: ShipState): ActionOutcome {
   return refuse(
     `${ship.name} has had its fire this turn — play moved on to another ship (2.6)`,
   )
+}
+
+// ---------------------------------------------------------------------------
+// Flak barrages (5.16)
+// ---------------------------------------------------------------------------
+
+/**
+ * A Blast Marker on the table (5.16).
+ *
+ * Placed at the beginning of the Launch Missile Phase, before anything moves,
+ * which is the whole point of it: *"The Flak round will detonate against any
+ * fighter or missile travelling **through** or within 2 MU of the Blast
+ * Marker"*, so it is a tripwire laid across a move rather than a shot at
+ * where something already is. *"All 'Blast Markers' are removed at the end of
+ * the turn."*
+ */
+export interface FlakMarker {
+  id: string
+  side: SideId
+  sourceShipId: string
+  position: Point
+  /** PDS dice the barrage throws — the class of the gun that fired it. */
+  rating: number
+}
+
+const FLAK = new WeakMap<GameState, FlakMarker[]>()
+
+export function flakMarkers(state: GameState): FlakMarker[] {
+  let markers = FLAK.get(state)
+  if (!markers) {
+    markers = []
+    FLAK.set(state, markers)
+  }
+  return markers
+}
+
+/**
+ * Where each mobile thing was when the barrage went up, so "travelling
+ * through" can be tested against the move rather than the endpoint.
+ *
+ * Recorded when the barrage is fired rather than when the thing moves,
+ * because that is the moment the rule freezes. A fighter that also takes a
+ * secondary move (8.4) is read as one straight line from where it stood in
+ * phase 3 to where it finished in phase 6, which is the flown path whenever
+ * the wing is running in on something and a chord across it when the wing
+ * turned mid-flight.
+ */
+const FLAK_ORIGINS = new WeakMap<GameState, Map<string, Point>>()
+
+function flakOrigins(state: GameState): Map<string, Point> {
+  let map = FLAK_ORIGINS.get(state)
+  if (!map) {
+    map = new Map()
+    FLAK_ORIGINS.set(state, map)
+  }
+  return map
+}
+
+/**
+ * Resolve every Blast Marker against everything that moved through it (5.16).
+ *
+ * Run as the movement phase closes, beside the mines, for the same reason:
+ * both are laid before the move and answered by it.
+ */
+function resolveFlak(state: GameState): void {
+  const markers = flakMarkers(state)
+  if (markers.length === 0) return
+  const origins = flakOrigins(state)
+
+  const caughtOnPath = (marker: FlakMarker, id: string, now: Point): boolean => {
+    const from = origins.get(id)
+    if (from === undefined) return flakCatchesPoint(marker.position, now)
+    return flakCatchesPath(marker.position, from, now)
+  }
+
+  for (const marker of markers) {
+    // 5.16: "It is possible to affect multiple targets including your own
+    // ordnance or fighters." A barrage is a cloud of shrapnel and does not
+    // ask whose side anything is on.
+    for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+      if (group.status !== 'in-flight') continue
+      if (!caughtOnPath(marker, group.id, group.position)) continue
+      const volley = rollPointDefenceDice(marker.rating, 'pds', state.rng, { drm: FLAK_DRM })
+      if (volley.kills <= 0) {
+        pushLog(state, {
+          kind: 'point-defence',
+          side: marker.side,
+          dice: volley.rolls,
+          text: `Flak bursts around ${group.label} and misses (5.16)`,
+        })
+        continue
+      }
+      const killed = Math.min(volley.kills, 'strength' in group ? group.strength : 1)
+      if ('strength' in group) {
+        group.strength = Math.max(0, group.strength - killed)
+        if (group.strength === 0) group.status = 'destroyed'
+      } else {
+        group.status = 'destroyed'
+      }
+      pushLog(state, {
+        kind: 'point-defence',
+        side: marker.side,
+        dice: volley.rolls,
+        text: `Flak catches ${group.label}: ${killed} killed (5.16)`,
+      })
+    }
+
+    // 5.16 against a salvo: "do not roll for the number of missiles that lock
+    // on until the Missile Attack Phase. Simply roll to see how many hits the
+    // Flak barrage scores on the missile marker and keep track of it." The
+    // count goes on the marker, where 6.4's lock-on already subtracts it.
+    for (const ordnance of ordnanceOf(state)) {
+      if (!caughtOnPath(marker, ordnance.id, ordnance.position)) continue
+      const heavy = ordnance.kind === 'heavy' || ordnance.kind === 'antimatter'
+      const volley = rollPointDefenceDice(marker.rating, 'pds', state.rng, {
+        drm: FLAK_DRM,
+        heavyMissile: heavy,
+      })
+      if (volley.kills <= 0) continue
+      const killed = Math.min(volley.kills, ordnance.missiles)
+      ordnance.missiles = Math.max(0, ordnance.missiles - killed)
+      ordnance.hits += killed
+      pushLog(state, {
+        kind: 'point-defence',
+        side: marker.side,
+        dice: volley.rolls,
+        text: `Flak scores ${killed} on an inbound ${ordnance.kind} — subtracted when it locks on (5.16, 6.4)`,
+      })
+    }
+
+    // "If a ship, friendly or enemy, is within the blast range it will take a
+    // single point of damage on a roll of 1." One die per ship, and the ship
+    // is tested where it ended up rather than along its whole track: shrapnel
+    // is a cloud sitting in one place, and a hull is not a fighter.
+    for (const ship of state.ships) {
+      if (ship.destroyed || ship.offTable || ship.carriedBy !== null) continue
+      if (!flakCatchesPoint(marker.position, ship.placement.position)) continue
+      const hit = rollFlakShipHit(state.rng)
+      if (hit.damage <= 0) continue
+      markHullBoxes(ship, hit.damage)
+      pushLog(state, {
+        kind: 'damage',
+        shipId: ship.id,
+        side: ship.side,
+        dice: [hit.roll],
+        text: `${ship.name} takes a splinter from a Flak burst (5.16)`,
+      })
+    }
+  }
+
+  setOrdnance(
+    state,
+    ordnanceOf(state).filter((marker) => marker.missiles > 0),
+  )
+  projectOrdnance(state)
+  // "All 'Blast Markers' are removed at the end of the turn."
+  FLAK.set(state, [])
+  origins.clear()
 }
 
 /**

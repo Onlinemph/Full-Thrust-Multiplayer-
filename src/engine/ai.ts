@@ -56,6 +56,12 @@ import {
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
 import {
+  canMountFlak,
+  projectileLine,
+  FLAK_BLAST_RADIUS_MU,
+  FLAK_MARKER_RANGE,
+} from './weapons/kinetics'
+import {
   collisionAvoidanceTarget,
   createGravityWell,
   gravityZoneAt,
@@ -561,6 +567,8 @@ export function aiActions(
             aimPoint: aim,
           })
         }
+
+        for (const shot of flakBarrages(game, ship)) actions.push(shot)
       }
       break
 
@@ -977,4 +985,101 @@ function standoff(from: Point, to: Point, allowance: number, keep: number): Poin
   const travel = Math.min(allowance, want)
   const t = travel / span
   return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
+}
+
+/**
+ * 5.16's Flak barrages, from the computer's side of the table.
+ *
+ * A barrage is a tripwire, not a shot: the Blast Marker goes up in phase 3 and
+ * kills whatever flies through it before phase 7. So the computer looks for
+ * something that is going to be somewhere — an enemy salvo, which sits still
+ * on the table until the Missile Attack Phase, or an enemy wing, which will be
+ * running in on the nearest hull it can reach — and lays the shrapnel there.
+ *
+ * The rule cuts both ways: *"It is possible to affect multiple targets
+ * including your own ordnance or fighters."* Anything of the computer's own
+ * inside the blast cancels the barrage, because a captain who shreds his own
+ * escort to scratch a missile has not read the weapon.
+ */
+function flakBarrages(game: GameState, ship: ShipState): GameAction[] {
+  const guns = ship.design.weapons.filter(
+    (weapon) =>
+      canMountFlak(weapon) &&
+      weapon.flak === true &&
+      !ship.destroyedSystems.has(weapon.id) &&
+      canWeaponFire(ship, weapon.id),
+  )
+  if (guns.length === 0) return []
+
+  // 5.16: "one FireCon is required to fire a barrage", so however many guns
+  // are loaded, only as many barrages go up as there are FireCons free.
+  let budget = availableFireCons(ship, game.phase)
+  if (budget <= 0) return []
+
+  const threats: Point[] = []
+  // A salvo does not move until phase 7, so the marker is its own prediction.
+  for (const marker of game.ordnance) {
+    if (marker.side === ship.side) continue
+    threats.push(marker.position)
+  }
+  // A wing has not written an order — it flies in phase 4, at a hull. The one
+  // it is closest to is the one worth guessing at.
+  for (const group of game.fighterGroups) {
+    if (group.side === ship.side || group.status !== 'in-flight') continue
+    const prey = nearestEnemyHull(game, group.side, group.position)
+    if (!prey) continue
+    const run = standoff(
+      group.position,
+      prey.placement.position,
+      mainMoveAllowance(group, game.turn),
+      FIGHTER_ATTACK_RANGE,
+    )
+    threats.push(run ?? group.position)
+  }
+  if (threats.length === 0) return []
+
+  const friendlyInBlast = (aim: Point): boolean =>
+    game.ships.some(
+      (other) =>
+        other.side === ship.side &&
+        !other.destroyed &&
+        !other.offTable &&
+        distance(predict(other, 1), aim) <= FLAK_BLAST_RADIUS_MU,
+    ) ||
+    game.fighterGroups.some(
+      (group) =>
+        group.side === ship.side &&
+        group.status === 'in-flight' &&
+        distance(group.position, aim) <= FLAK_BLAST_RADIUS_MU,
+    ) ||
+    game.ordnance.some(
+      (marker) => marker.side === ship.side && distance(marker.position, aim) <= FLAK_BLAST_RADIUS_MU,
+    )
+
+  const actions: GameAction[] = []
+  const taken: Point[] = []
+  for (const weapon of guns) {
+    if (budget <= 0) break
+    const reach = FLAK_MARKER_RANGE[projectileLine(weapon.variant)]
+    const aim = threats.find((point) => {
+      if (distance(ship.placement.position, point) > reach) return false
+      if (!bearsOn(weapon.arcs, arcTo(ship.placement.position, ship.placement.facing, point))) {
+        return false
+      }
+      // Two markers 2 MU apart is one marker's worth of shrapnel and two
+      // FireCons spent.
+      if (taken.some((used) => distance(used, point) <= FLAK_BLAST_RADIUS_MU * 2)) return false
+      return !friendlyInBlast(point)
+    })
+    if (!aim) continue
+    taken.push(aim)
+    budget -= 1
+    actions.push({
+      type: 'fire-flak-barrage',
+      shipId: ship.id,
+      weaponId: weapon.id,
+      aimPoint: aim,
+    })
+  }
+  return actions
 }

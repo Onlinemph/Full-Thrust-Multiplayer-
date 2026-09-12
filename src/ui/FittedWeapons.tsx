@@ -1,5 +1,6 @@
 import type { Arc, ShipDesign, WeaponDef } from '../engine/types'
 import { ALL_ARCS } from '../data/buildCatalog'
+import { canMountFlak, FLAK_UPGRADE_POINTS } from '../engine/weapons/kinetics'
 
 /**
  * The weapons already on the hull (4.2, 5.22, 6.6).
@@ -104,6 +105,39 @@ export function FittedWeapons({
               <span className="spacer" />
               <span className="rule-detail">
                 a turret bears through every arc it can traverse (5.22)
+              </span>
+            </div>
+          ) : null}
+
+          {/* 5.16: "For an additional 2 points a K-Gun may be equipped with
+              Flak ammunition. All the K-Guns on a ship (except K-1s) must be
+              so equipped" — so the toggle loads the whole battery at once. */}
+          {canMountFlak(weapon) ? (
+            <div className="panel-row">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={weapon.flak === true}
+                  onChange={(event) => {
+                    const on = event.target.checked
+                    edit({
+                      weapons: design.weapons.map((w) =>
+                        canMountFlak(w)
+                          ? {
+                              ...w,
+                              flak: on ? true : undefined,
+                              points: w.points + (on ? FLAK_UPGRADE_POINTS : -FLAK_UPGRADE_POINTS),
+                            }
+                          : w,
+                      ),
+                    })
+                  }}
+                />{' '}
+                Flak ammunition
+              </label>
+              <span className="spacer" />
+              <span className="rule-detail">
+                +{FLAK_UPGRADE_POINTS} points a gun, and every K-Gun above class 1 takes it (5.16)
               </span>
             </div>
           ) : null}
