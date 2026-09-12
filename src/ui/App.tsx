@@ -10,7 +10,12 @@ import {
   type GameState,
   type ShipState,
 } from '../engine/game'
-import { deployingSide, optional, tableIsCrowded } from '../engine/actions'
+import {
+  deployingSide,
+  optional,
+  shipsAwaitingFtlEntry,
+  tableIsCrowded,
+} from '../engine/actions'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
@@ -549,18 +554,38 @@ function PhaseControls({
           </button>
         </div>
       )
-    case 'move-ships':
+    case 'move-ships': {
+      // 11.5: "The FTL entry is the ship's movement for that turn." An inbound
+      // hull is not on the plot to be clicked, so it is listed here, and it
+      // arrives before anybody flies.
+      const inbound = shipsAwaitingFtlEntry(game)
       return (
         <div className="panel">
           <h3>Phase 5 · Move ships</h3>
           <p style={{ color: 'var(--ink-dim)' }}>
             Ships move in initiative order, the side with initiative moving last.
           </p>
+          {inbound.map((ship) => (
+            <div className="panel-row" key={ship.id}>
+              <span>{ship.name}</span>
+              <span className="spacer" />
+              <span style={{ color: 'var(--ink-dim)' }}>
+                inbound, {ship.ftlArrival?.entryPoint.x}/{ship.ftlArrival?.entryPoint.y}
+              </span>
+              <button
+                disabled={viewingSide !== null && ship.side !== viewingSide}
+                onClick={() => bringOutOfFtl(ship.id)}
+              >
+                Drop out
+              </button>
+            </div>
+          ))}
           <button className="primary" onClick={() => moveEveryone()}>
             Move all ships
           </button>
         </div>
       )
+    }
     case 'launch-missiles':
       return (
         <OrdnancePanel game={game} side={viewingSide} aiming={aiming} onAim={onAim} />
@@ -719,6 +744,9 @@ function PhaseControls({
  * rather than the whole phase.
  */
 function moveEveryone(): void {
+  // 11.5's arrival is a move, and it can land on top of somebody, so the
+  // inbound hulls come out first and the rest of the table flies around them.
+  for (const ship of shipsAwaitingFtlEntry(currentGame())) bringOutOfFtl(ship.id)
   // Read the live game rather than the render's snapshot: each dispatch below
   // mutates it, and the movement order depends on what has already moved.
   for (const ship of shipMovementOrder(currentGame())) {
@@ -727,6 +755,24 @@ function moveEveryone(): void {
   }
   // Markers fly in the same phase the ships do (2.6 phase 5).
   dispatch({ type: 'move-ordnance' })
+}
+
+/**
+ * Drop a ship out of hyperspace where its orders said (11.5).
+ *
+ * The scatter and the danger roll happen inside the action; all the button
+ * knows is which ship and what was written down.
+ */
+function bringOutOfFtl(shipId: string): void {
+  const ship = currentGame().ships.find((candidate) => candidate.id === shipId)
+  if (!ship?.ftlArrival) return
+  dispatch({
+    type: 'enter-from-ftl',
+    shipId,
+    entryPoint: ship.ftlArrival.entryPoint,
+    course: ship.ftlArrival.course,
+    velocity: ship.ftlArrival.velocity,
+  })
 }
 
 function download(text: string): void {

@@ -126,6 +126,13 @@ SYSTEMS = {
     # the rack is included in the gunboat cost", and "Bays are 24 mass and cost
     # 0 points". A rack launches a squadron and cannot take it back.
     'gunboat-rack': (18, 0), 'gunboat-bay': (24, 0),
+    # 11.6's ship bay: "every 1.5 mass used for hangar bay space provides
+    # capacity for 1 mass of carried ship(s) … The points cost of such space is
+    # the same as for other hangar facilities, 3 x the total mass used." One
+    # entry is one mass of carried hull, so it costs 1.5 mass and 4.5 points.
+    # 13.12's boat bay shares the mass rate and is free, because a boat is not
+    # a ship.
+    'tender': (1.5, 4.5),
     'cargo': (1, 0), 'troop-berthing': (1, 0), 'minesweeper': (5, 15),
     'ortillery': (3, 9), 'shipyard': (1, 2), 'antimatter-charge': (1, 5),
     # 14.1 prices a stealth hull per hull/armour box, not flat; the catalogue
@@ -191,7 +198,7 @@ LABELS = {
     'weasel-emitter': 'Weasel Emitter',
     'cloaking-field': 'Cloaking Field', 'tuffley-cloak': 'Tuffley Cloak',
     'reflex-field': 'Reflex Field',
-    'boat-bay': 'Boat Bay', 'cargo': 'Cargo', 'troop-berthing': 'Troops',
+    'boat-bay': 'Boat Bay', 'tender': 'Ship Bay', 'cargo': 'Cargo', 'troop-berthing': 'Troops',
     'minesweeper': 'Minesweeper', 'ortillery': 'Ortillery', 'shipyard': 'Shipyard',
     'antimatter-charge': 'AM Charge', 'stealth-hull': 'Stealth Hull',
 }

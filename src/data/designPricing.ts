@@ -33,6 +33,7 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
+import { tugDriveMass } from '../engine/ftl'
 import {
   factionById,
   traitsFor,
@@ -237,12 +238,38 @@ export interface DesignCost {
   spare: number
 }
 
+/**
+ * The mass of a design's FTL package (13.10, 11.6).
+ *
+ * An ordinary drive is 10% of the hull. A tug's is that plus what it hauls:
+ * *"for every 1 additional FTL Drive mass they can tow an additional 5
+ * transfer mass"*, which `tugDriveMass` inverts.
+ */
+export function ftlPackageMass(design: ShipDesign): number {
+  if (design.ftl === 'none') return 0
+  if (design.ftl === 'tug') return tugDriveMass(design.mass, design.ftlTransferMass ?? 0)
+  return ftlMass(design.mass)
+}
+
+/**
+ * The points of that package.
+ *
+ * 13.10 prices an FTL drive by its own mass, so a tug's bigger drive costs
+ * proportionally more — charging it 13.10's rate on the hull's 10% instead
+ * would give away the tow capacity for nothing.
+ */
+export function ftlPackagePoints(design: ShipDesign): number {
+  if (design.ftl === 'none') return 0
+  const advanced = design.ftl === 'advanced'
+  return ftlPackageMass(design) * (advanced ? 3 : 2)
+}
+
 export function priceDesign(design: ShipDesign): DesignCost {
   const m = design.mass
   const massUsed =
     design.hullBoxes +
     driveMass(m, design.drive.thrust) +
-    (design.ftl === 'none' ? 0 : ftlMass(m)) +
+    ftlPackageMass(design) +
     streamliningMass(m, design.streamlining) +
     armourMass(design.armour) +
     screenMass(m, design.screens.level, design.screens.advanced) +
@@ -253,7 +280,7 @@ export function priceDesign(design: ShipDesign): DesignCost {
   const points =
     design.hullBoxes * HULL_POINTS_PER_BOX[design.hullRows] +
     drivePoints(m, design.drive.thrust, design.drive.advanced) +
-    (design.ftl === 'none' ? 0 : ftlPoints(m, design.ftl === 'advanced')) +
+    ftlPackagePoints(design) +
     armourPoints(design.armour) +
     screenPoints(m, design.screens.level, design.screens.advanced) +
     design.weapons.reduce((sum, w) => sum + w.points, 0) +

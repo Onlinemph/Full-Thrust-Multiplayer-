@@ -514,6 +514,19 @@ export function aiActions(
       break
 
     case 'move-ships':
+      // 11.5: an inbound hull's arrival IS its move, so it comes in before
+      // anything else is flown. The computer brings it out where the scenario
+      // said; the dice decide where that turns out to be.
+      for (const ship of game.ships) {
+        if (ship.side !== side || ship.ftlArrival === null || ship.destroyed) continue
+        actions.push({
+          type: 'enter-from-ftl',
+          shipId: ship.id,
+          entryPoint: ship.ftlArrival.entryPoint,
+          course: ship.ftlArrival.course,
+          velocity: ship.ftlArrival.velocity,
+        })
+      }
       for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
       // Ordnance flies with the ships (2.6 phase 5), once for the whole table.
       if (side === game.sides[0]?.id) actions.push({ type: 'move-ordnance' })

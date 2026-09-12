@@ -45,6 +45,10 @@ export function damageLevelOf(ship: ShipState): DamageLevel {
   // "Ships still under cloak at end of game count as destroyed" (4.12) — a
   // cloaked ship never came to the battle, so it is treated as lost.
   if (ship.cloaked) return 'destroyed'
+  // 11.5: a hull that is still inbound has not disengaged — it has not
+  // arrived. Counting it as a withdrawal would score the attacker for its own
+  // reinforcements before they turn up.
+  if (ship.ftlArrival !== null) return 'unhurt'
   if (ship.offTable) return 'disengaged'
 
   const rowsGone = hullRowsCompleted(ship)

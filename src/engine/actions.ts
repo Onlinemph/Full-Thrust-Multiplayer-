@@ -126,7 +126,12 @@ import {
   type VectorOrder,
 } from './vectormovement'
 import {
+  ftlExitMove,
   ftlExitRestrictions,
+  ftlPermittedAt,
+  isAdvancedFtl,
+  resolveFtlEntry,
+  type HyperLimitRules,
   ftlExitStage,
   resolveFtlExit,
   type FtlExitStage,
@@ -529,6 +534,18 @@ export type GameAction =
    * course and the ship is gone for good.
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
+  /**
+   * 11.5 — a ship drops out of hyperspace onto the table. The entry point, the
+   * course and the velocity are what the player wrote down; where the ship
+   * actually appears is the scatter's business.
+   */
+  | {
+      type: 'enter-from-ftl'
+      shipId: string
+      entryPoint: { x: number; y: number }
+      course: Course
+      velocity: number
+    }
   /**
    * 16.7: a ram is declared in orders like any other move — *"Deliberate
    * attempts to ram another ship are possible"* but not as a reaction — and
@@ -3442,6 +3459,166 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 11.5: a ship arrives out of hyperspace.
+     *
+     * *"The FTL entry is the ship's movement for that turn"*, so it happens in
+     * phase 5 and the ship does not also fly. Scatter first — a D12 for the
+     * direction on the course gauge and a D6 for the distance — and then the
+     * danger roll, measured from where the ship actually turned up rather than
+     * from where it meant to.
+     *
+     * The bystander clause is not conditional: anything within 6 MU takes 2D6
+     * whatever the arriving ship rolled for itself, which is the opposite of
+     * 11.4 and the easiest thing in section 11 to get backwards.
+     */
+    case 'enter-from-ftl': {
+      if (state.phase !== 'move-ships') return refuse('An FTL entry is the ship\'s move, phase 5 (11.5)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed) return refuse('Ship is out of the battle')
+      if (!ship.offTable) return refuse(`${ship.name} is already on the table`)
+      if (ship.ftlArrival === null) return refuse(`${ship.name} is not inbound from hyperspace`)
+      if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
+      if (ship.design.ftl === 'none') return refuse(`${ship.name} has no FTL drive`)
+
+      const bounds = tableBounds(state)
+      const result = resolveFtlEntry(
+        {
+          shipId: ship.id,
+          turn: state.turn,
+          entryPoint: action.entryPoint,
+          course: action.course,
+          velocity: action.velocity,
+        },
+        {
+          advancedDrive: isAdvancedFtl(ship.design.ftl),
+          bounds,
+          hyperLimit: hyperLimitOf(state),
+          nearby: state.ships
+            .filter(
+              (other) =>
+                other.id !== ship.id && !other.destroyed && !other.offTable && !other.captured,
+            )
+            .map((other) => ({ id: other.id, position: other.placement.position })),
+          lightCraft: [
+            ...state.fighterGroups
+              .filter((group) => group.status === 'in-flight')
+              .map((group) => ({ id: group.id, position: group.position })),
+            ...state.gunboatSquadrons
+              .filter((group) => group.status === 'in-flight')
+              .map((group) => ({ id: group.id, position: group.position })),
+            ...state.ordnance.map((marker) => ({ id: marker.id, position: marker.position })),
+          ],
+        },
+        state.rng,
+      )
+
+      if (result.refusal) return refuse(`${ship.name}: ${result.refusal}`)
+
+      ship.lastKnown = {
+        course: action.course,
+        velocity: action.velocity,
+        turn: state.turn,
+        cloaked: false,
+      }
+      ship.ftlArrival = null
+      ship.ftlTransit = 'none'
+
+      if (result.barredFromBattle) {
+        // "deemed unable to enter the table during the battle" — it is out
+        // there somewhere and it is not coming.
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          dice: [result.scatter.directionRoll, result.scatter.distanceRoll].filter(
+            (die): die is number => die !== null,
+          ),
+          text: `${ship.name} drops out too far off station and misses the battle (11.5)`,
+        })
+        return OK
+      }
+      if (!result.entered || !result.arrival) {
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name} does not arrive: ${result.scatter.note}`,
+        })
+        return OK
+      }
+
+      ship.offTable = false
+      ship.exitEdge = null
+      ship.reentryTurn = null
+      ship.placement = { position: result.arrival, facing: action.course }
+      // "its current velocity being applied from the start of the next" turn:
+      // the entry IS the move, so nothing else happens to the ship now.
+      ship.velocity = action.velocity
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        dice: [result.scatter.directionRoll, result.scatter.distanceRoll].filter(
+          (die): die is number => die !== null,
+        ),
+        text: `${ship.name} drops out of hyperspace: ${result.scatter.note}`,
+      })
+
+      const danger = result.danger
+      if (danger) {
+        // 11.5: "Damage from FTL entry or exit cannot be absorbed by screens or
+        // armor."
+        const hurt = (target: ShipState, damage: number, dice: number[], why: string): void => {
+          if (damage <= 0) return
+          markHullBoxes(target, damage)
+          pushLog(state, {
+            kind: 'damage',
+            shipId: target.id,
+            side: target.side,
+            dice,
+            text: `${target.name}: ${damage} from ${why}, past screens and armour (11.5)`,
+          })
+          if (target.destroyed) {
+            pushLog(state, {
+              kind: 'destroyed',
+              shipId: target.id,
+              text: `${target.name} is destroyed`,
+            })
+          }
+        }
+        hurt(
+          ship,
+          danger.selfDamage,
+          [danger.roll, danger.secondRoll].filter((die): die is number => die !== null),
+          'its own arrival',
+        )
+        for (const hit of danger.bystanders) {
+          const other = shipById(state, hit.id)
+          if (other) hurt(other, hit.damage, hit.dice, `${ship.name} arriving on top of it`)
+        }
+        for (const id of danger.lightCraftDestroyed) {
+          const group =
+            state.fighterGroups.find((g) => g.id === id) ??
+            state.gunboatSquadrons.find((g) => g.id === id)
+          if (group) {
+            group.status = 'destroyed'
+            pushLog(state, {
+              kind: 'destroyed',
+              text: `${group.label} is caught in ${ship.name}'s arrival (11.5)`,
+            })
+          }
+          setOrdnance(
+            state,
+            ordnanceOf(state).filter((marker) => marker.id !== id),
+          )
+        }
+        projectOrdnance(state)
+      }
+      return OK
+    }
+
     case 'plot-ftl-exit': {
       if (state.phase !== 'orders') return refuse('An FTL exit is announced in orders (11.4)')
       const ship = shipById(state, action.shipId)
@@ -3455,6 +3632,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.design.ftl === 'none') return refuse(`${ship.name} has no FTL drive`)
       if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot enter hyperspace (7.20)`)
       if (ship.ftlWarmupTurn !== null) return refuse(`${ship.name} is already spinning up`)
+      // 11.2: inside a hyper limit the jump is not attempted and fails, it is
+      // simply not available — "FTL entry or exit is only permitted by player
+      // agreement or scenario design". Refused in phase 1, before the drive
+      // has spent a turn spinning up for nothing.
+      const permission = ftlPermittedAt(ship.placement.position, hyperLimitOf(state))
+      if (!permission.permitted) return refuse(`${ship.name} is ${permission.reason}`)
       ship.ftlTransit = 'exiting'
       ship.ftlWarmupTurn = state.turn
       pushLog(state, {
@@ -4061,6 +4244,33 @@ function reportFleetMorale(state: GameState): void {
         `commander to break off (12.8)`,
     })
   }
+}
+
+// ---------------------------------------------------------------------------
+// FTL entry and the hyper limit (11.2, 11.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The scenario's hyper limits, if it has any (11.2).
+ *
+ * Held on the scenario rather than in `GameState`, because it describes the
+ * system the battle is fought in and not anything that changes during it —
+ * and because a `GameState` field would have to be serialised into every
+ * saved battle that has no hyper limit at all.
+ */
+const HYPER_LIMITS = new WeakMap<GameState, HyperLimitRules>()
+
+export function setHyperLimit(state: GameState, rules: HyperLimitRules | undefined): void {
+  if (rules) HYPER_LIMITS.set(state, rules)
+}
+
+function hyperLimitOf(state: GameState): HyperLimitRules | undefined {
+  return HYPER_LIMITS.get(state)
+}
+
+/** Ships still in hyperspace, waiting to drop out (11.5). */
+export function shipsAwaitingFtlEntry(state: GameState): ShipState[] {
+  return state.ships.filter((ship) => ship.ftlArrival !== null && !ship.destroyed)
 }
 
 // ---------------------------------------------------------------------------
@@ -5299,20 +5509,24 @@ function ftlStageOf(ship: ShipState, turn: number): FtlExitStage | null {
  * neighbours with it.
  */
 function jumpToFtl(state: GameState, ship: ShipState): ActionOutcome {
-  const before = movementStateOf(ship)
-  const half = applyOrder({ ...before, velocity: Math.floor(before.velocity / 2) }, BLANK_ORDER)
   ship.lastKnown = {
     course: ship.placement.facing,
     velocity: ship.velocity,
     turn: state.turn,
     cloaked: ship.cloaked,
   }
-  ship.placement = half.placement
+  // 11.4: "the ship moves half its current velocity on its present course,
+  // then disappears from the playing area." The module owns the arithmetic,
+  // including the floor.
+  ship.placement = {
+    ...ship.placement,
+    position: ftlExitMove(ship.placement.position, ship.placement.facing, ship.velocity).position,
+  }
 
   const report = resolveFtlExit(
     {
       exitPoint: ship.placement.position,
-      advancedDrive: ship.design.ftl === 'advanced',
+      advancedDrive: isAdvancedFtl(ship.design.ftl),
       nearby: state.ships
         .filter((other) => other.id !== ship.id && !other.destroyed && !other.offTable)
         .map((other) => ({ id: other.id, position: other.placement.position })),

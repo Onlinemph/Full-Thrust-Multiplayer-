@@ -154,6 +154,7 @@ export const CATALOGUE_SYSTEMS: readonly CatalogueSystem[] = [
   { kind: 'stealth-field', label: "Stealth Field", mass: 0, points: 0 },
   { kind: 'stealth-hull', label: "Stealth Hull", mass: 0, points: 0 },
   { kind: 'superior-sensors', label: "Sup Sensors", mass: 4, points: 16 },
+  { kind: 'tender', label: "Ship Bay", mass: 1.5, points: 4.5 },
   { kind: 'troop-berthing', label: "Troops", mass: 1, points: 0 },
   { kind: 'tuffley-cloak', label: "Tuffley Cloak", mass: 0, points: 0 },
   { kind: 'weasel-emitter', label: "Weasel Emitter", mass: 2, points: 8 },

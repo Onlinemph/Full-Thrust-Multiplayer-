@@ -18,7 +18,9 @@ import {
   type TerrainFeature,
   type SideId,
 } from '../engine/game'
+import { setHyperLimit } from '../engine/actions'
 import { Rng } from '../engine/dice'
+import type { HyperLimitRules } from '../engine/ftl'
 import {
   createFighterGroup,
   rollPilotQuality,
@@ -88,6 +90,13 @@ export interface ForceEntry {
    * round it from turn one.
    */
   orbit?: { featureId: string; marker: Course }
+  /**
+   * 11.5: this hull is not on the table at the start — it is inbound, and
+   * drops out of hyperspace at the point and heading written here. 18.1's
+   * *"the attacker (if permitted) may make an FTL entry"* is what puts one in
+   * a scenario.
+   */
+  ftlArrival?: { entryPoint: Point; course: Course; velocity: number }
 }
 
 export interface ScenarioSide {
@@ -136,6 +145,12 @@ export interface Scenario {
   placementBatch?: number
   /** 18.1: the attacker *"(if permitted)"* may make an FTL entry. */
   ftlEntryPermitted?: boolean
+  /**
+   * 11.2: *"decent sized planets or the local sun have a 'hyper limit'
+   * distance within which FTL travel is not possible."* A property of the
+   * system the battle is fought in, so the scenario owns it.
+   */
+  hyperLimit?: HyperLimitRules
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +507,73 @@ export const ORBITAL_APPROACH: Scenario = {
   ],
 }
 
+/**
+ * 11.2 and 11.5: a relief force arriving out of hyperspace, into a system
+ * whose sun will not let anybody leave the same way.
+ *
+ * The Confederation squadron is inbound — it is not on the table on turn one
+ * and drops out where its commander wrote down, give or take a D12 for the
+ * direction and a D6 for the distance. Arriving on top of someone hurts both
+ * of them, past screens and armour, and the bystander clause is not
+ * conditional: a ship 6 MU away takes 2D6 whatever the arriving ship rolled.
+ *
+ * The star's hyper limit reaches 24 MU and sits over the middle of the table,
+ * where the fighting is: a ship that wants out has to run for the rim first,
+ * and the relief force has to drop out on the rim and fly in. 11.2 costs both
+ * sides turns, which is the whole of its effect.
+ */
+export const HYPER_LIMIT: Scenario = {
+  id: 'hyper-limit',
+  name: 'Inside the Limit',
+  briefing:
+    'A yellow star, a contested refuelling station, and a Confederation relief squadron dropping ' +
+    'out of hyperspace somewhere near the fight. Nobody is leaving by FTL: the star sees to that.',
+  objective:
+    'Break the enemy division. The relief force arrives when its commander says, and where the ' +
+    'dice say.',
+  table: { width: 84, height: 60 },
+  hyperLimit: {
+    zones: [{ id: 'star', centre: { x: 42, y: 30 }, radius: 24, label: 'the star' }],
+    permittedInsideLimit: false,
+  },
+  turnLimit: 12,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-battlecruiser', position: { x: 14, y: 24 }, facing: 3, velocity: 6 },
+        { designId: 'esu-heavy-cruiser', position: { x: 10, y: 34 }, facing: 3, velocity: 6 },
+        { designId: 'esu-destroyer', position: { x: 8, y: 16 }, facing: 3, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-heavy-cruiser', position: { x: 72, y: 30 }, facing: 9, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 76, y: 38 }, facing: 9, velocity: 8 },
+        // The relief force, still in hyperspace on turn one.
+        {
+          designId: 'nac-battlecruiser',
+          name: 'Relief Flagship',
+          position: { x: 76, y: 12 },
+          facing: 9,
+          ftlArrival: { entryPoint: { x: 76, y: 12 }, course: 9, velocity: 8 },
+        },
+        {
+          designId: 'nac-light-cruiser',
+          name: 'Relief Escort',
+          position: { x: 78, y: 48 },
+          facing: 9,
+          ftlArrival: { entryPoint: { x: 78, y: 48 }, course: 9, velocity: 8 },
+        },
+      ],
+    },
+  ],
+}
+
 export const SCENARIOS: Scenario[] = [
   INTRODUCTORY_SCENARIO,
   BORDER_SKIRMISH,
@@ -499,6 +581,7 @@ export const SCENARIOS: Scenario[] = [
   GRAVITY_WELL,
   FLARE_STAR,
   ORBITAL_APPROACH,
+  HYPER_LIMIT,
 ]
 
 /**
@@ -712,11 +795,18 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
       // 17.8's satellites and starbases start on the track rather than flying
       // onto it, so they are put there before the first turn opens.
       if (entry.orbit) ship.orbit = { ...entry.orbit }
+      // 11.5: an inbound hull is not on the table until it drops out, so it
+      // starts off it with its arrival written down.
+      if (entry.ftlArrival) {
+        ship.ftlArrival = { ...entry.ftlArrival }
+        ship.offTable = true
+        ship.ftlTransit = 'entering'
+      }
       return ship
     })
   })
 
-  return createGame({
+  const game = createGame({
     seed: opts.seed,
     table: { ...scenario.table },
     deployment: deploymentFor(scenario, opts),
@@ -729,4 +819,9 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
     sides: scenario.sides.map((s) => ({ id: s.id, name: s.name, team: s.team })),
     ships,
   })
+  // 11.2's hyper limits describe the system the battle is fought in, so they
+  // are stamped on here with the rest of the scenario rather than by whoever
+  // happens to build the game.
+  setHyperLimit(game, scenario.hyperLimit)
+  return game
 }

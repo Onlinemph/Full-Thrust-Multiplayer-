@@ -343,6 +343,15 @@ export interface ShipState {
     corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   } | null
   /**
+   * 11.5: still in hyperspace, due to drop out at the point and heading
+   * written here. `offTable` is true while it is; the ship is not on the table
+   * and has no station until it arrives.
+   *
+   * Null for every ship that started the battle on the table, which is nearly
+   * all of them.
+   */
+  ftlArrival: { entryPoint: Point; course: Course; velocity: number } | null
+  /**
    * 17.8's orbit: the body being orbited and the clock marker the ship sits on.
    *
    * A ship in orbit is not flying: *"the ship does not have to have any course
@@ -496,6 +505,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     departure: null,
     orbit: null,
     landed: null,
+    ftlArrival: null,
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,

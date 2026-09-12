@@ -333,6 +333,15 @@ export interface ShipDesign {
 
   drive: DriveDef
   ftl: FtlKind
+  /**
+   * 11.6: what a tug's drive can haul besides itself, in mass.
+   *
+   * *"Tugs need a FTL Drive equal to 10% of their mass just to provide their
+   * own FTL capability, plus for every 1 additional FTL Drive mass they can
+   * tow an additional 5 transfer mass."* Only an `ftl: 'tug'` design has one;
+   * optional, so every design and every saved custom design parses unchanged.
+   */
+  ftlTransferMass?: number
   streamlining: Streamlining
 
   armour: ArmourDef
