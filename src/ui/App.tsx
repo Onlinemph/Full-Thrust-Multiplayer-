@@ -314,6 +314,11 @@ export function App() {
                 />
               </div>
 
+              {/* 12.12 swaps out the movement order, not the phase. The
+                  vector sheet replaces the turn and thrust controls; the
+                  declarations written beside them — cloaks, mines, an armed
+                  Nova Cannon, a charging Wave Gun, a detonate order, a turret
+                  facing — are other sections' rules and stay. */}
               {optional(game).movementSystem === 'vector' ? (
                 <VectorOrderPanel
                   ship={selected}
@@ -321,16 +326,15 @@ export function App() {
                     game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
                   }
                 />
-              ) : (
-                <OrderPanel
-                  game={game}
-                  ship={selected}
-                  editable={
-                    game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
-                  }
-                  emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
-                />
-              )}
+              ) : null}
+              <OrderPanel
+                game={game}
+                ship={selected}
+                editable={
+                  game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                }
+                emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
+              />
             </>
           ) : (
             <div className="panel">

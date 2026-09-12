@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setRulesReading, stealthLevelOf } from './actions'
+import {
+  antiShipPdMounts,
+  applyAction,
+  pointDefenceCanEngage,
+  setRulesReading,
+  stealthLevelOf,
+} from './actions'
 import { aiActions } from './ai'
 import {
   createGame,
@@ -404,5 +410,98 @@ describe("the stealth ship's scan mode (7.4)", () => {
         targetId: 'mark',
       }).refused ?? ''),
     ).not.toMatch(/running passive/)
+  })
+})
+
+describe('the panel and the engine ask the same question (7.12)', () => {
+  it('offers the shot 7.23 opened up by taking the target’s screens away', () => {
+    // A ship that armed its Nova Cannon has no screens for the turn (7.23),
+    // which is what makes it soft enough for 7.12 — but only if the question
+    // is asked the way the engine asks it. `effectiveScreenLevel` reads the
+    // design's generators and would still say 2.
+    const base = designById('esu-heavy-cruiser') as ShipDesign
+    const nova = designById('goliath-dreadnought') as ShipDesign
+    const armed = createShipState({
+      id: 'armed',
+      side: 'b',
+      // A Mercator with screens bolted on: the roster's Nova ship carries
+      // none, and the whole point is a hull whose screens would have hidden it.
+      design: {
+        ...nova,
+        armour: { layers: [0], regenerative: false },
+        screens: { level: 2, generators: 2, advanced: false },
+        systems: [
+          ...nova.systems,
+          { id: 'screen-1', kind: 'screen-generator', label: 'Screen', mass: 1, points: 3 },
+          { id: 'screen-2', kind: 'screen-generator', label: 'Screen', mass: 1, points: 3 },
+        ],
+      },
+      placement: { position: { x: 24, y: 50 }, facing: 9 },
+      velocity: 0,
+    })
+    const game = battle([
+      createShipState({
+        id: 'pd',
+        side: 'a',
+        design: base,
+        placement: { position: { x: 20, y: 50 }, facing: 3 },
+        velocity: 0,
+      }),
+      armed,
+    ])
+    // Screens up: 7.12 says no.
+    expect(pointDefenceCanEngage(game, shipOf(game, 'pd'), shipOf(game, 'armed'))).toBe(false)
+
+    advanceTo(game, 'orders')
+    const cannon = nova.weapons.find((w) => w.weaponClass === 'nova-cannon')!
+    applyAction(game, {
+      type: 'arm-nova-cannon',
+      shipId: 'armed',
+      weaponId: cannon.id,
+      on: true,
+    })
+    // 7.23 took them down, so 7.12 says yes — and the panel, the computer and
+    // the handler all read the same predicate to find that out.
+    expect(pointDefenceCanEngage(game, shipOf(game, 'pd'), shipOf(game, 'armed'))).toBe(true)
+    advanceTo(game, 'ship-fire')
+    const mount = antiShipPdMounts(game, shipOf(game, 'pd'), shipOf(game, 'armed'))[0]
+    expect(mount).toBeDefined()
+    expect(
+      applyAction(game, {
+        type: 'fire-point-defence',
+        shipId: 'pd',
+        systemId: mount.id,
+        targetId: 'armed',
+      }).refused,
+    ).toBeUndefined()
+  })
+
+  it('mirrors the mount arcs when the ship has rolled (16.2)', () => {
+    // `pdMountsOf` runs the arcs through `arcsWhenInverted`, so the panel's
+    // list has to come from there rather than from the raw design.
+    const base = designById('esu-heavy-cruiser') as ShipDesign
+    const narrow: ShipDesign = {
+      ...base,
+      systems: base.systems.map((system) =>
+        system.kind === 'pds' ? { ...system, arcs: ['FS' as const] } : system,
+      ),
+    }
+    const game = battle([
+      createShipState({
+        id: 'pd',
+        side: 'a',
+        design: narrow,
+        placement: { position: { x: 20, y: 50 }, facing: 3 },
+        velocity: 0,
+      }),
+      ship('hulk', 'b', 'goliath-battleship', { x: 22, y: 47 }, 9),
+    ])
+    strip(shipOf(game, 'hulk'))
+    const upright = antiShipPdMounts(game, shipOf(game, 'pd'), shipOf(game, 'hulk')).length
+    shipOf(game, 'pd').rollStatus = { ...shipOf(game, 'pd').rollStatus, inverted: true }
+    const rolled = antiShipPdMounts(game, shipOf(game, 'pd'), shipOf(game, 'hulk')).length
+    // Rolling swaps port and starboard, so a mount that bore does not and a
+    // mount that did not now does. One of the two counts has to change.
+    expect(upright).not.toBe(rolled)
   })
 })

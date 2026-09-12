@@ -2494,16 +2494,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!mount.arcs.includes(arc)) return refuse(`No point-defence mount bears on ${target.name}`)
-      if (
-        !pdMayEngageShip({
-          screenLevel: screensAgainst(state, target, ship.placement.position),
-          armourRemaining: target.design.armour.layers.reduce(
-            (left, boxes, layer) => left + Math.max(0, boxes - (target.armourMarked[layer] ?? 0)),
-            0,
-          ),
-          fieldsUp: target.cloaked || target.reflexFieldActive,
-        })
-      ) {
+      if (!pointDefenceCanEngage(state, ship, target)) {
         return refuse(
           `${target.name} still has screens or armour — "undamaged warships are not vulnerable to such light weapons" (7.12)`,
         )
@@ -6287,6 +6278,17 @@ function spentCharges(state: GameState): Set<string> {
   return spent
 }
 
+/**
+ * Charges still aboard and intact, for the panel (7.9).
+ *
+ * The panel used to count them off the design, which is the wrong list twice
+ * over: it counted a charge a needle beam had shot out, and it counted one
+ * that had already gone off.
+ */
+export function antimatterChargesAboard(state: GameState, ship: ShipState): number {
+  return liveAntimatterCharges(state, ship).length
+}
+
 /** Charges still aboard and intact (7.9). */
 function liveAntimatterCharges(state: GameState, ship: ShipState): string[] {
   const spent = spentCharges(state)
@@ -9318,6 +9320,58 @@ function blockingTerrain(state: GameState): TerrainBody[] {
  * 7.20 switches it off entirely under a cloak: *"The ship does not gain any
  * bonuses for stealth while the cloak is active."*
  */
+/**
+ * Whether 7.12 will let point defence be fired at this hull, from over there.
+ *
+ * Exported because the panel and the computer both have to ask it before they
+ * offer the shot, and asking it any other way gets a different answer: the
+ * screen level a shot meets is `screensAgainst`, which knows about 7.23's
+ * powered-down reactor and 7.24's open bow arc, and the design's own level
+ * does not.
+ */
+export function pointDefenceCanEngage(
+  state: GameState,
+  shooter: ShipState,
+  target: ShipState,
+): boolean {
+  if (target.destroyed || target.offTable || target.carriedBy !== null) return false
+  if (distance(shooter.placement.position, target.placement.position) > PDS_RANGE) return false
+  return pdMayEngageShip({
+    screenLevel: screensAgainst(state, target, shooter.placement.position),
+    armourRemaining: target.design.armour.layers.reduce(
+      (left, boxes, layer) => left + Math.max(0, boxes - (target.armourMarked[layer] ?? 0)),
+      0,
+    ),
+    fieldsUp: target.cloaked || target.reflexFieldActive,
+  })
+}
+
+/**
+ * The PDS and ADS mounts that bear on a hull and have not fired (7.12, 7.13).
+ *
+ * Reads `pdMountsOf`, which is the same list the handler checks against — so a
+ * mount whose arcs 16.2 mirrored, or which already point-defended in phase 9,
+ * is absent here for the same reason the shot would be refused.
+ */
+export function antiShipPdMounts(
+  state: GameState,
+  shooter: ShipState,
+  target: ShipState,
+): Array<{ id: string; label: string }> {
+  void state
+  const arc = arcTo(
+    shooter.placement.position,
+    shooter.placement.facing,
+    target.placement.position,
+  )
+  const labels = new Map(shooter.design.systems.map((system) => [system.id, system.label]))
+  return pdMountsOf(shooter)
+    .filter(
+      (mount) => (mount.kind === 'pds' || mount.kind === 'ads') && mount.arcs.includes(arc),
+    )
+    .map((mount) => ({ id: mount.id, label: labels.get(mount.id) ?? mount.id }))
+}
+
 export function stealthLevelOf(ship: ShipState): StealthLevel {
   if (ship.cloaked) return 0
   const built = Math.min(2, operationalCount(ship, 'stealth-hull')) as StealthLevel
@@ -9967,8 +10021,25 @@ export function actionSide(state: GameState, action: GameAction): SideId | null 
   if ('flightId' in action) {
     return state.fighterGroups.find((g) => g.id === action.flightId)?.side ?? null
   }
+  // 3.7's squadron of ships and 9.1's squadron of gunboats share a field name
+  // and nothing else, so a `squadronId` has to be read against both lists. The
+  // gunboat one first, because it is the older meaning; then the ships, which
+  // is where a `form-squadron` or `break-squadron` id lives. Getting this
+  // wrong returns null, and a null side is waved through the online ownership
+  // check — one player breaking the other's formation.
   if ('squadronId' in action) {
-    return state.gunboatSquadrons.find((s) => s.id === action.squadronId)?.side ?? null
+    const boats = state.gunboatSquadrons.find((s) => s.id === action.squadronId)
+    if (boats) return boats.side
+    const member = state.ships.find((ship) => ship.squadronId === action.squadronId)
+    if (member) return member.side
+  }
+  // A squadron being formed has no members yet, so its side is the side of the
+  // ships being put into it.
+  if ('shipIds' in action) {
+    for (const id of action.shipIds) {
+      const ship = shipById(state, id)
+      if (ship) return ship.side
+    }
   }
   return null
 }

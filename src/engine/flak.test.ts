@@ -155,10 +155,16 @@ describe('placing a Blast Marker (5.16)', () => {
   })
 
   it('will not fire a gun that has no Flak in it', () => {
+    // The Hegemony's monitor and gun cruiser both carry Flak now, so the
+    // negative case has to be a hull that did not buy it: 5.16 sells the
+    // ammunition per ship, and most navies do not.
+    const design = designById('esu-battleship') as ShipDesign
+    const gun = design.weapons.find((w) => w.weaponClass === 'k-gun' && w.rating >= 2)!
+    expect(gun.flak).toBeUndefined()
     const plain = createShipState({
       id: 'plain',
       side: 'a',
-      design: designById('goliath-longgun') as ShipDesign,
+      design,
       placement: { position: { x: 20, y: 36 }, facing: 3 },
       velocity: 0,
     })
@@ -168,10 +174,24 @@ describe('placing a Blast Marker (5.16)', () => {
       applyAction(game, {
         type: 'fire-flak-barrage',
         shipId: 'plain',
-        weaponId: 'w1',
-        aimPoint: { x: 36, y: 36 },
+        weaponId: gun.id,
+        aimPoint: { x: 32, y: 36 },
       }).refused,
     ).toMatch(/does not carry Flak/)
+  })
+
+  it('is on a ship a player can just pick out of the roster', () => {
+    // 5.16 was invisible in every out-of-the-box game: the rule was wired end
+    // to end and not one design in the roster carried the ammunition, so the
+    // Barrage row never appeared and the computer never laid one.
+    const monitor = designById('goliath-monitor') as ShipDesign
+    const loaded = monitor.weapons.filter((w) => w.flak === true)
+    expect(loaded.length).toBeGreaterThan(0)
+    // "All the K-Guns on a ship (except K-1s) must be so equipped."
+    for (const weapon of monitor.weapons) {
+      if (weapon.weaponClass !== 'k-gun' || weapon.rating < 2) continue
+      expect(weapon.flak).toBe(true)
+    }
   })
 
   it('throws the marker as far as the line reaches and no further', () => {

@@ -1868,7 +1868,7 @@ export const GOLIATH_MONITOR: ShipDesign = {
   armour: { layers: [4], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
-    {"id": "w1", "label": "K-2", "weaponClass": "k-gun", "rating": 2, "variant": "standard", "arcs": ["F"], "mass": 3, "points": 12},
+    {"id": "w1", "label": "K-2", "weaponClass": "k-gun", "rating": 2, "variant": "standard", "arcs": ["F"], "mass": 3, "points": 14, "flak": true},
     {"id": "w2", "label": "MKP", "weaponClass": "mkp", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 1, "points": 4},
     {"id": "w3", "label": "K-1", "weaponClass": "k-gun", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 2, "points": 8},
   ],
@@ -1882,7 +1882,7 @@ export const GOLIATH_MONITOR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 108,
+  points: 110,
 }
 
 export const GOLIATH_CRUISER: ShipDesign = {
@@ -1935,10 +1935,10 @@ export const GOLIATH_LONGGUN: ShipDesign = {
   armour: { layers: [7], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
-    {"id": "w1", "label": "LRK-2", "weaponClass": "k-gun", "rating": 2, "variant": "long", "arcs": ["F"], "mass": 6, "points": 24},
+    {"id": "w1", "label": "LRK-2", "weaponClass": "k-gun", "rating": 2, "variant": "long", "arcs": ["F"], "mass": 6, "points": 26, "flak": true},
     {"id": "w2", "label": "LRK-1", "weaponClass": "k-gun", "rating": 1, "variant": "long", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 4, "points": 16},
     {"id": "w3", "label": "MKP", "weaponClass": "mkp", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 1, "points": 4},
-    {"id": "w4", "label": "K-2", "weaponClass": "k-gun", "rating": 2, "variant": "standard", "arcs": ["A", "AP"], "mass": 4, "points": 16},
+    {"id": "w4", "label": "K-2", "weaponClass": "k-gun", "rating": 2, "variant": "standard", "arcs": ["A", "AP"], "mass": 4, "points": 18, "flak": true},
   ],
   turrets: [], 
   systems: [
@@ -1952,7 +1952,7 @@ export const GOLIATH_LONGGUN: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 203,
+  points: 207,
 }
 
 export const GOLIATH_BATTLESHIP: ShipDesign = {

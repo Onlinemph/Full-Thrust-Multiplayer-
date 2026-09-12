@@ -56,7 +56,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
-import { ANTIMATTER_CHARGE_BLAST_RADIUS, PDS_RANGE } from './defences'
+import { ANTIMATTER_CHARGE_BLAST_RADIUS } from './defences'
 import { NOVA_SWEEPS, WAVE_GUN_BANDS, WAVE_GUN_CHARGE_TARGET, templateContacts } from './ew'
 import {
   canMountFlak,
@@ -75,10 +75,11 @@ import {
 } from './terrain'
 import { arcsWhenInverted } from './specialmoves'
 import {
+  antiShipPdMounts,
   deployingSide,
-  effectiveScreenLevel,
   novaArmedOn,
   optional,
+  pointDefenceCanEngage,
   waveGunCharge,
   proposeDeployment,
   shipsAwaitingGateEntry,
@@ -86,7 +87,7 @@ import {
 } from './actions'
 import { isGateActive } from './ftl'
 import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
-import type { Arc, MovementOrder, Point, TurnDirection, WeaponDef } from './types'
+import type { MovementOrder, Point, TurnDirection, WeaponDef } from './types'
 import type { Rng } from './dice'
 
 /**
@@ -857,39 +858,21 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
  * computer only ever reaches for the ones a quiet phase 9 left loaded.
  */
 function antiShipPointDefence(game: GameState, ship: ShipState): GameAction[] {
-  const soft = enemiesOf(game, ship).filter((enemy) => {
-    if (enemy.destroyed || enemy.offTable || enemy.carriedBy !== null) return false
-    if (enemy.cloaked || enemy.reflexFieldActive) return false
-    if (effectiveScreenLevel(enemy) > 0) return false
-    if (distance(ship.placement.position, enemy.placement.position) > PDS_RANGE) return false
-    return enemy.design.armour.layers.every(
-      (boxes, layer) => boxes - (enemy.armourMarked[layer] ?? 0) <= 0,
-    )
-  })
+  const soft = enemiesOf(game, ship).filter((enemy) => pointDefenceCanEngage(game, ship, enemy))
   if (soft.length === 0) return []
   // The one nearest going: 4.12 scores a cripple once it is finished.
   const mark = soft.reduce((best, enemy) =>
     hullRemaining(enemy) < hullRemaining(best) ? enemy : best,
   )
-  const arc = arcTo(ship.placement.position, ship.placement.facing, mark.placement.position)
-  return ship.design.systems
-    .filter(
-      (system) =>
-        (system.kind === 'pds' || system.kind === 'ads') &&
-        !ship.destroyedSystems.has(system.id) &&
-        canWeaponFire(ship, system.id) &&
-        bearsOn(system.arcs ?? PD_ALL_ARCS, arc),
-    )
-    .map((system) => ({
-      type: 'fire-point-defence' as const,
-      shipId: ship.id,
-      systemId: system.id,
-      targetId: mark.id,
-    }))
+  return antiShipPdMounts(game, ship, mark).map((mount) => ({
+    type: 'fire-point-defence' as const,
+    shipId: ship.id,
+    systemId: mount.id,
+    targetId: mark.id,
+  }))
 }
 
-/** 4.2 gives point defence "all-round (6-arc) fire capabilities" by default. */
-const PD_ALL_ARCS: readonly Arc[] = ['F', 'FS', 'AS', 'A', 'AP', 'FP']
+
 
 /**
  * Where a ship would end up under an order — exported because the UI draws the

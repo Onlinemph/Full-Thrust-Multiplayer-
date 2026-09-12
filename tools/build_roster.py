@@ -246,6 +246,10 @@ MAGAZINE_POINTS_PER_MASS = 3
 # example buys ("a single mass 8 magazine ... 4 standard salvoes").
 DEFAULT_SALVO_LOADS = 4
 
+# 5.16: "For an additional 2 points a K-Gun may be equipped with Flak
+# ammunition." Mirrors kinetics.FLAK_UPGRADE_POINTS, which the Shipyard charges.
+FLAK_UPGRADE_POINTS = 2
+
 
 def sml_ids(d):
     """Weapon ids of every Salvo Missile Launcher on this design."""
@@ -369,6 +373,16 @@ def price(d):
             entry['ammo'] = 1
         weapons.append(entry)
         mass += wm; pts += wp
+    # 5.16: "For an additional 2 points a K-Gun may be equipped with Flak
+    # ammunition. All the K-Guns on a ship (except K-1s) must be so equipped."
+    # A fleet-wide flag on the design, because the rule is a ship-wide one and
+    # designPricing's `partial-flak` fault enforces exactly that.
+    if d.get('flak'):
+        for entry in weapons:
+            if entry['weaponClass'] == 'k-gun' and entry['rating'] >= 2:
+                entry['flak'] = True
+                entry['points'] += FLAK_UPGRADE_POINTS
+                pts += FLAK_UPGRADE_POINTS
     systems = []
     for n, (key, count) in enumerate(d.get('systems', [])):
         sm, sp = SYSTEMS[key]
@@ -790,7 +804,11 @@ DESIGNS = [
   # the privilege. K-guns mount in one or two arcs and never in three (14.4),
   # which is why the broadsides are paired arcs rather than the usual P3/S3 —
   # a Goliath turns to shoot, and turning is what it is worst at.
-  dict(id='goliath-monitor', name='Anvil-class Monitor', faction='Goliath Corporate Hegemony',
+  # 5.16's Flak ship. A monitor sits on the line and a K-2 throwing a Blast
+  # Marker 18 MU up-range is worth more to a formation than a K-2 shooting at
+  # one hull — and the rule is all-or-nothing on the hull, so every gun above
+  # class 1 on this one carries the ammunition.
+  dict(id='goliath-monitor', flak=True, name='Anvil-class Monitor', faction='Goliath Corporate Hegemony',
        group='escort', mass=44, hull='strong', rows=4, thrust=4, armour=[4],
        weapons=[('k-gun',2,['F']), ('mkp',1,F3), ('k-gun',1,ALL6)],
        systems=[('firecon',1),('pds',1),('grapeshot',1)], marines=1),
@@ -801,7 +819,7 @@ DESIGNS = [
   # Long-ranged K-guns are four times the mass of the standard gun for the
   # same class (14.4), so this is a 78-mass hull carrying two guns. It opens
   # at 48 MU and is still firing when the Ledgers arrive.
-  dict(id='goliath-longgun', name='Escrow-class Gun Cruiser', faction='Goliath Corporate Hegemony',
+  dict(id='goliath-longgun', flak=True, name='Escrow-class Gun Cruiser', faction='Goliath Corporate Hegemony',
        group='cruiser', mass=78, hull='strong', rows=4, thrust=3, armour=[7],
        weapons=[('k-gun-long',2,['F']), ('k-gun-long',1,ALL6), ('mkp',1,F3), ('k-gun',2,['A','AP'])],
        systems=[('firecon',2),('pds',2),('grapeshot',1)], marines=2),

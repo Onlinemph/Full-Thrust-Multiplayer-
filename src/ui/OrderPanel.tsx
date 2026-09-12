@@ -18,6 +18,7 @@ import {
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
 import {
+  antimatterChargesAboard,
   carriedHulls,
   isJumpPointDisoriented,
   novaArmedOn,
@@ -89,9 +90,9 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
       { position: other.placement.position, facing: other.placement.facing, velocity: other.velocity },
     ).matched
   })
-  const charges = ship.design.systems.filter(
-    (system) => system.kind === 'antimatter-charge' && !ship.destroyedSystems.has(system.id),
-  )
+  // 7.9, counted the way the engine counts it: a charge a needle beam shot
+  // out is not there to set off, and neither is one that has already gone.
+  const charges = antimatterChargesAboard(game, ship)
   // 16.6: anything on the table that is not this ship and not a wreck.
   const dockable = game.ships.filter(
     (other) => other.id !== ship.id && !other.destroyed && !other.offTable,
@@ -110,10 +111,22 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
     ? game.terrain.find((feature) => feature.id === ship.orbit?.featureId)
     : undefined
 
+  // 12.12 replaces 3.5's order and nothing else: "a completely OPTIONAL
+  // alternative movement system, which players may use instead of the standard
+  // FT movement rules". Everything written *beside* the movement order in phase
+  // 1 — a cloak, a Reflex Field, mines, an armed Nova Cannon, a charging Wave
+  // Gun, detonate orders, a turret facing — is section 5, 6, 7 and 16 and is
+  // untouched by it. So under vector the movement half is dropped and the rest
+  // of the phase stays where it is; a vector battle that hid it made six rules
+  // unreachable at once.
+  const vector = optional(game).movementSystem === 'vector'
+
   return (
     <div className="panel order-panel">
-      <h3>Orders</h3>
+      <h3>{vector ? 'Declared with the order' : 'Orders'}</h3>
 
+      {vector ? null : (
+      <>
       {/* 17.8: "the ship does not have to have any course change orders written
           for it." The turn and thrust controls below still work, and the
           throttle still means something — it is how a ship leaves — but the
@@ -260,6 +273,8 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           <span style={{ color: 'var(--warn)' }}>up to 150%, drive at risk</span>
         </div>
       ) : null}
+      </>
+      )}
 
       {/* Everything else 2.6 phase 1 asks for. These are written beside the
           movement order, not in it, and each one is a commitment the ship
@@ -416,7 +431,12 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
               ? 'linked — it goes where the line takes it'
               : `${ship.tow.turnsSpent} of ${TOW_LINK_TURNS[ship.tow.rig]} turns`}
           </span>
-          <button onClick={() => dispatch({ type: 'release-tow', loadId: ship.id })}>Let go</button>
+          <button
+            disabled={!editable}
+            onClick={() => dispatch({ type: 'release-tow', loadId: ship.id })}
+          >
+            Let go
+          </button>
         </div>
       ) : towable.length > 0 ? (
         <div className="panel-row">
@@ -443,6 +463,7 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           <label>
             <input
               type="checkbox"
+              disabled={!editable}
               checked={ship.activeScan}
               onChange={(event) =>
                 dispatch({ type: 'set-active-scan', shipId: ship.id, on: event.target.checked })
@@ -462,7 +483,7 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
       {/* 7.9: "A ship may write 'detonate' orders during phase 1. At the
           beginning of phase 13 just before threshold checks are rolled, the
           ship explodes." A last resort, and the panel says what it costs. */}
-      {charges.length > 0 ? (
+      {charges > 0 ? (
         <div className="panel-row">
           <label>
             <input
@@ -472,12 +493,12 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
                 dispatch({ type: 'plot-detonate', shipId: ship.id, on: event.target.checked })
               }
             />{' '}
-            Detonate {charges.length > 1 ? `${charges.length} charges` : 'the charge'}
+            Detonate {charges > 1 ? `${charges} charges` : 'the charge'}
           </label>
           <span className="spacer" />
           <span style={{ color: 'var(--warn)' }}>
-            {3 * charges.length}D6 within 1 MU, {2 * charges.length} within 2, {charges.length}{' '}
-            within 3 — and the ship goes with it (7.9)
+            {3 * charges}D6 within 1 MU, {2 * charges} within 2, {charges} within 3 — and the ship
+            goes with it (7.9)
           </span>
         </div>
       ) : null}
