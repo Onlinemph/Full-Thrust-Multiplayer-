@@ -25,6 +25,7 @@ import {
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
+import { UPRIGHT, type RollStatus } from './specialmoves'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -167,6 +168,14 @@ export interface ShipState {
   ftlWarmupTurn: number | null
   /** A ram declared in orders (16.7), resolved when this ship finishes moving. */
   ramTargetId: string | null
+  /**
+   * Upside down, and when it turned over (16.2). *"An inverted ship may roll
+   * back 'upright' in any subsequent turn, or may remain inverted as long as
+   * the player wishes"* — so this is a standing condition and the per-turn
+   * reset deliberately leaves it alone. What it changes is which side the
+   * batteries bear to, and nothing else about the ship.
+   */
+  rollStatus: RollStatus
   /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
   fixedPath: boolean
   /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
@@ -284,6 +293,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ftlTransit: 'none',
     ftlWarmupTurn: null,
     ramTargetId: null,
+    rollStatus: { ...UPRIGHT },
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
     cloak: cloakFitOf(opts.design),

@@ -49,7 +49,7 @@ What the rest costs, and what stands in for it:
 | 13 Ship design and construction | Covered, and now checked against the section itself rather than only the spreadsheet. |
 | 14 Ship construction summary | Covered and verified. Every price the catalogue already carried matches 14.1–14.8 exactly — hulls, drives, screens, armour, every direct-fire weapon, ordnance, fighters and gunboats. What the checking found was omissions, not errors: eighteen weapon classes the engine could resolve but nobody could buy, eleven gunboat types, and one real bug, the stealth hull sold at a flat 2 points where 14.1 charges 2 *per hull and armour box*. |
 | 15 The Imperial Tech Base | Tables and the availability predicate in `techbase.ts`, tested; not yet enforced by the fleet picker. |
-| 16 Special moves | Implemented and tested in `specialmoves.ts`. Ramming is wired end to end; rolling, towing, docking, disengaging and the moving table are resolvers waiting on a phase to call them. |
+| 16 Special moves | Implemented and tested in `specialmoves.ts`. Ramming and rolling are wired end to end — a roll is written in the order, costs its thrust point out of the turning allowance, and mirrors every arc the ship fires through, the computer's included. Towing, docking, disengaging and the moving table are resolvers waiting on a phase to call them. |
 | 17 Terrain effects | Implemented and tested in `terrain.ts`. Line of fire is wired — a planet or planetoid blocks a shot — and the rest (clouds, meteor fields, gravity wells, orbits, atmospheric entry, debris) are resolvers waiting on a phase. |
 | 18 Battles, scenarios and CPV | Points are computed; deployment and tournament composition are in `battles.ts`, tested, and advisory in the fleet picker. |
 

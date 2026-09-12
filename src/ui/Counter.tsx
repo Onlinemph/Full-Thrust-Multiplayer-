@@ -22,6 +22,13 @@ export interface CounterProps {
   destroyed?: boolean
   /** Drawn as an outline: visible to its own side, not to the enemy (7.20). */
   cloaked?: boolean
+  /**
+   * Rolled 180° on its long axis (16.2): *"a marker is placed by the model to
+   * indicate its inverted condition"*. Here the marker is a bar across the
+   * hull, because the one thing it has to say is that this ship's port guns
+   * are firing to starboard.
+   */
+  inverted?: boolean
   /** Pixels per MU, from the map's zoom. */
   scale: number
   /** Custom counter art, drawn nose-up and fitted to the counter. */
@@ -53,6 +60,7 @@ export function Counter({
   selected = false,
   destroyed = false,
   cloaked = false,
+  inverted = false,
   scale,
   art,
   onClick,
@@ -65,6 +73,7 @@ export function Counter({
   if (selected) classes.push('is-selected')
   if (destroyed) classes.push('is-destroyed')
   if (cloaked) classes.push('is-cloaked')
+  if (inverted) classes.push('is-inverted')
 
   return (
     <g
@@ -72,7 +81,11 @@ export function Counter({
       transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${courseToDegrees(facing)})`}
       onClick={onClick}
       role={onClick ? 'button' : 'img'}
-      aria-label={label ? `${label}, facing ${facing} o'clock` : undefined}
+      aria-label={
+        label
+          ? `${label}, facing ${facing} o'clock${inverted ? ', inverted' : ''}`
+          : undefined
+      }
       tabIndex={onClick ? 0 : undefined}
     >
       {art ? (
@@ -95,6 +108,18 @@ export function Counter({
               L ${(-r * 0.72).toFixed(2)} ${(r * 0.85).toFixed(2)} Z`}
         />
       )}
+      {inverted ? (
+        /* A bar across the beam. It rotates with the hull on purpose: the bar
+           lies along the axis the ship has turned over about, which is the
+           thing being marked (16.2). */
+        <line
+          className="counter-inverted"
+          x1={(-r * 0.95).toFixed(2)}
+          y1={(r * 0.15).toFixed(2)}
+          x2={(r * 0.95).toFixed(2)}
+          y2={(r * 0.15).toFixed(2)}
+        />
+      ) : null}
       {label ? (
         /* Counter-rotated, so the name stays horizontal however the ship is
            heading — a label that turns with the hull is unreadable. */

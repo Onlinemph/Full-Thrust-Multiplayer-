@@ -1,6 +1,7 @@
 import { canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
+import { arcsWhenInverted } from '../engine/specialmoves'
 import type { Arc, WeaponDef } from '../engine/types'
 import { dispatch } from './store'
 
@@ -96,7 +97,9 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
                       className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
                       disabled={blocked !== null || (needsNew && fireCons <= 0 && needsFireCon(weapon))}
                       title={blocked ?? `${dice}D6 at ${range.toFixed(1)} MU`}
-                      onMouseEnter={() => onHoverWeapon?.(weapon.arcs)}
+                      onMouseEnter={() =>
+                        onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
+                      }
                       onMouseLeave={() => onHoverWeapon?.(undefined)}
                       onClick={() =>
                         dispatch({
@@ -129,7 +132,12 @@ function reachOf(ship: ShipState, weapon: WeaponDef, range: number, arc: Arc): R
   if (ship.destroyedSystems.has(weapon.id)) return { weapon, blocked: 'Knocked out', dice: 0 }
   // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
   if (!canWeaponFire(ship, weapon.id)) return { weapon, blocked: 'Already fired', dice: 0 }
-  if (!weapon.arcs.includes(arc)) return { weapon, blocked: `Cannot bear into ${arc}`, dice: 0 }
+  // 16.2: the arcs the gun actually covers, which are mirrored while the ship
+  // is inverted. The rose drawn on the map is mirrored the same way, so what a
+  // player sees lit is what the engine will accept.
+  if (!arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(arc)) {
+    return { weapon, blocked: `Cannot bear into ${arc}`, dice: 0 }
+  }
   const reach = maxRangeOf(weapon)
   if (reach === 0) return { weapon, blocked: 'Not implemented yet', dice: 0 }
   if (range > reach) return { weapon, blocked: `Out of range (${reach} MU)`, dice: 0 }

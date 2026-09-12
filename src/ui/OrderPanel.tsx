@@ -113,6 +113,27 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         </button>
       </div>
 
+      {/* 16.2. It sits with the turn and the velocity because it is charged
+          against the same thrust and shown in the same pip row, and because
+          the question a player is answering is a manoeuvre question. */}
+      <div className="panel-row">
+        <label>
+          <input
+            type="checkbox"
+            disabled={!editable}
+            checked={order.roll === true}
+            onChange={(event) =>
+              dispatch({ type: 'plot-roll', shipId: ship.id, on: event.target.checked })
+            }
+          />{' '}
+          Roll
+        </label>
+        <span className="spacer" />
+        <span style={{ color: ship.rollStatus.inverted ? 'var(--warn)' : 'var(--ink-dim)' }}>
+          {ship.rollStatus.inverted ? 'inverted — P and S swapped' : '1 thrust, off the turn'}
+        </span>
+      </div>
+
       {emergencyThrustAllowed ? (
         <div className="panel-row">
           <label>

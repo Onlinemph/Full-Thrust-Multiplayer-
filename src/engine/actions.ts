@@ -52,7 +52,7 @@ import {
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import { hasLineOfFire, type TerrainBody } from './terrain'
-import { resolveRam } from './specialmoves'
+import { arcsWhenInverted, resolveRam, rollShip } from './specialmoves'
 import {
   ftlExitRestrictions,
   ftlExitStage,
@@ -175,6 +175,13 @@ export type GameAction =
   | { type: 'plot-second-turn'; shipId: string; direction: TurnDirection | null; points: number }
   | { type: 'plot-accel'; shipId: string; accel: number }
   | { type: 'plot-emergency-thrust'; shipId: string; on: boolean }
+  /**
+   * 16.2: *"the player simply writes 'Roll' in the movement orders for that
+   * turn"*. It rides in the order because that is where the rulebook puts it
+   * and because it is charged against the same thrust; the attitude it
+   * produces outlives the turn and lives on the ship.
+   */
+  | { type: 'plot-roll'; shipId: string; on: boolean }
   | { type: 'plot-mines'; shipId: string; on: boolean }
   | { type: 'clear-order'; shipId: string }
 
@@ -307,6 +314,20 @@ function refuse(reason: string): ActionOutcome {
 
 const BLANK_ORDER: MovementOrder = { turn: null, accel: 0 }
 
+/**
+ * A mounting's arcs as they actually bear (16.2, 4.2).
+ *
+ * *"Rolling has no effect on combat (except that the port batteries now bear
+ * to starboard and vice versa)"* — so an inverted ship's guns are mirrored
+ * through its long axis and nothing else about the shot changes. Every place
+ * the engine asks whether a weapon covers an arc goes through here, because a
+ * ship that rolls to bring its good broadside round and then finds the engine
+ * still reading the printed arcs has been sold the manoeuvre and not given it.
+ */
+function bearingArcs(ship: ShipState, arcs: readonly Arc[]): readonly Arc[] {
+  return ship.rollStatus.inverted ? arcsWhenInverted(arcs, true) : arcs
+}
+
 /** Orders are written in phase 1 and nowhere else (2.6). */
 function orderable(state: GameState, ship: ShipState | undefined): ActionOutcome | ShipState {
   if (!ship) return refuse('No such ship')
@@ -408,6 +429,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         emergencyThrust: action.on,
       }))
 
+    case 'plot-roll':
+      return editOrder(state, action.shipId, (order) => ({ ...order, roll: action.on }))
+
     case 'plot-mines': {
       const found = orderable(state, shipById(state, action.shipId))
       if (!('id' in found)) return found
@@ -470,6 +494,23 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
 
       const result = applyOrder(movementStateOf(ship), effective)
+
+      // 16.2: "The roll then occurs at the start of the ship's movement." It
+      // is read off `flown` rather than off the written order because 3.5
+      // throws an illegal order away entirely — a ship that could not pay for
+      // its plot does not get the free half of it.
+      if (result.flown.roll === true) {
+        ship.rollStatus = rollShip(ship.rollStatus, state.turn)
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: ship.rollStatus.inverted
+            ? `${ship.name} rolls inverted — port and starboard batteries swap (16.2)`
+            : `${ship.name} rolls upright (16.2)`,
+        })
+      }
+
       ship.lastKnown = {
         course: ship.placement.facing,
         velocity: ship.velocity,
@@ -584,7 +625,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const rules = optional(state)
       const range = distance(ship.placement.position, target.placement.position)
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
-      if (!weapon.arcs.includes(arc)) return refuse('Target is not in that arc')
+      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+        return refuse('Target is not in that arc')
+      }
       // 17.1: a planet or planetoid across the line stops the shot. Measured
       // centre to centre, because that is how the models are measured.
       if (!hasLineOfFire(ship.placement.position, target.placement.position, blockingTerrain(state))) {
@@ -761,7 +804,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         grade: weapon.variant === 'extended' ? 'extended' : 'standard',
         stages: weapon.variant === 'two-stage' ? 2 : 1,
         origin: { position: ship.placement.position, facing: ship.placement.facing },
-        arcs: weapon.arcs,
+        arcs: bearingArcs(ship, weapon.arcs),
         aim: action.aimPoint,
         turn: state.turn,
         fireConsAvailable: availableFireCons(ship, state.phase),
@@ -1356,7 +1399,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
       const arc = arcTo(ship.placement.position, ship.placement.facing, flight.position)
-      if (!weapon.arcs.includes(arc)) return refuse(`${weapon.label} does not bear on ${flight.label}`)
+      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+        return refuse(`${weapon.label} does not bear on ${flight.label}`)
+      }
       if (!hasLineOfFire(ship.placement.position, flight.position, blockingTerrain(state))) {
         return refuse(`${flight.label} is behind cover (17.1)`)
       }
@@ -1729,7 +1774,7 @@ function pdMountsOf(ship: ShipState): PdMount[] {
     mounts.push({
       id: system.id,
       kind,
-      arcs: system.arcs ?? ALL_ARCS,
+      arcs: bearingArcs(ship, system.arcs ?? ALL_ARCS),
       // The roll table this mount uses (8.8): a scattergun rolls four dice but
       // reads each on the PDS table, and a beam-1 reads a worse one.
       mode: 'pds',
@@ -1739,7 +1784,12 @@ function pdMountsOf(ship: ShipState): PdMount[] {
     if (weapon.weaponClass !== 'beam' || weapon.rating !== 1) continue
     if (ship.destroyedSystems.has(weapon.id)) continue
     if (!canWeaponFire(ship, weapon.id)) continue
-    mounts.push({ id: weapon.id, kind: 'beam-1', arcs: weapon.arcs, mode: 'beam-1' })
+    mounts.push({
+      id: weapon.id,
+      kind: 'beam-1',
+      arcs: bearingArcs(ship, weapon.arcs),
+      mode: 'beam-1',
+    })
   }
   return mounts
 }

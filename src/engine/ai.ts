@@ -46,6 +46,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { hasLineOfFire } from './terrain'
+import { arcsWhenInverted } from './specialmoves'
 import type { GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
@@ -218,7 +219,7 @@ export function scoreOrder(
   const band = rangeBand(range)
   for (const weapon of ship.design.weapons) {
     if (ship.destroyedSystems.has(weapon.id)) continue
-    if (!bearsOn(weapon.arcs, arc)) continue
+    if (!bearsOn(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted), arc)) continue
     // A weapon out of range contributes nothing, and one deep inside its range
     // contributes its full class (4.5).
     score += Math.max(0, weapon.rating - (band - 1)) * 6
@@ -451,7 +452,9 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
     const able = ship.design.weapons
       .filter((weapon) => !ship.destroyedSystems.has(weapon.id))
       .filter((weapon) => canWeaponFire(ship, weapon.id))
-      .filter((weapon) => weapon.arcs.includes(arc))
+      // 16.2: an inverted ship's port batteries bear to starboard, so the
+      // computer has to read its own attitude before it decides what bears.
+      .filter((weapon) => arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(arc))
       .filter((weapon) => range <= maxRangeOf(weapon))
       .map((weapon) => ({ weapon, dice: Math.max(1, weapon.rating - (rangeBand(range) - 1)) }))
     if (able.length > 0) shots.set(enemy.id, able)

@@ -15,6 +15,7 @@
 
 import { beamDamage, d6, type Rng } from './dice'
 import { advance, courseVector, moveShip, turnCourse } from './geometry'
+import { rollBudget, ROLL_THRUST_COST } from './specialmoves'
 import type {
   Course,
   DriveDef,
@@ -175,6 +176,8 @@ export interface ThrustBudget {
   turnPoints: number
   /** Points spent changing velocity — one point per MU (3.2). */
   velocityPoints: number
+  /** The one point a roll costs, or zero (16.2). */
+  rollPoints: number
   totalUsed: number
   /** Points left unspent. Negative means the order overruns the drive. */
   remaining: number
@@ -195,11 +198,18 @@ export function thrustBudget(order: MovementOrder, drive: DriveState): ThrustBud
   // 3.6 lifts the half-rating cap on turning but names no replacement, so the
   // only remaining ceiling is the budget itself. Turning more than six points
   // one way is never worth doing anyway — the short way round is cheaper.
-  const turnAllowance = emergencyThrust ? Math.max(standard, available) : standard
+  const beforeRoll = emergencyThrust ? Math.max(standard, available) : standard
+
+  // 16.2: a roll "expends 1 thrust factor which comes off the turning
+  // allowance". `specialmoves.rollBudget` owns that arithmetic; here it is
+  // simply one more claim on the same pot, so the thrust pips in the order
+  // panel show the roll spent alongside the turn and the acceleration.
+  const rollPoints = order.roll === true ? ROLL_THRUST_COST : 0
+  const turnAllowance = rollPoints > 0 ? rollBudget(available, beforeRoll).turnAllowance : beforeRoll
 
   const turnPoints = orderTurnPoints(order)
   const velocityPoints = Math.abs(order.accel)
-  const totalUsed = turnPoints + velocityPoints
+  const totalUsed = turnPoints + velocityPoints + rollPoints
 
   return {
     printedRating: drive.rating,
@@ -210,6 +220,7 @@ export function thrustBudget(order: MovementOrder, drive: DriveState): ThrustBud
     turnAllowance,
     turnPoints,
     velocityPoints,
+    rollPoints,
     totalUsed,
     remaining: available - totalUsed,
   }
@@ -306,7 +317,13 @@ export function clampOrder(order: MovementOrder, ship: MovementState): MovementO
   const rating = currentThrust(drive)
   const turnAllowance = standardTurnAllowance(drive)
 
-  let turnLeft = Math.min(turnAllowance, rating)
+  // 16.2: a roll is an attitude, not a course change, and it survives the
+  // re-plot as long as the drive has one point to spend on it. It is charged
+  // before anything else because the ship turns over at the start of its move.
+  const roll = order.roll === true && rating >= ROLL_THRUST_COST
+  const spentOnRoll = roll ? ROLL_THRUST_COST : 0
+
+  let turnLeft = Math.max(0, Math.min(turnAllowance - spentOnRoll, rating - spentOnRoll))
   const clampLeg = (
     leg: { direction: TurnDirection; points: number } | null | undefined,
   ): { direction: TurnDirection; points: number } | null => {
@@ -320,7 +337,7 @@ export function clampOrder(order: MovementOrder, ship: MovementState): MovementO
   const secondTurn = clampLeg(order.secondTurn)
   const spentOnTurn = (turn?.points ?? 0) + (secondTurn?.points ?? 0)
 
-  const accelRoom = rating - spentOnTurn
+  const accelRoom = rating - spentOnRoll - spentOnTurn
   const wanted = Math.trunc(order.accel)
   const magnitude = Math.min(Math.abs(wanted), Math.max(0, accelRoom))
   let accel = Math.sign(wanted) * magnitude
@@ -328,7 +345,7 @@ export function clampOrder(order: MovementOrder, ship: MovementState): MovementO
   // as far as a dead stop.
   if (ship.velocity + accel < 0) accel = -ship.velocity
 
-  return { turn, secondTurn, accel, emergencyThrust: false }
+  return { turn, secondTurn, accel, emergencyThrust: false, roll }
 }
 
 // ---------------------------------------------------------------------------
@@ -479,8 +496,11 @@ export function formatOrder(order: MovementOrder, startVelocity: number): string
   const turns = legToNotation(order.turn) + legToNotation(order.secondTurn)
   const accel = order.accel === 0 ? '' : (order.accel > 0 ? '+' : '-') + String(Math.abs(order.accel))
   const et = order.emergencyThrust === true ? ' ET' : ''
+  // 16.2 says to write "Roll" in the order and gives no shorthand; R keeps the
+  // line the same shape as the rest of the notation.
+  const roll = order.roll === true ? ' R' : ''
   const final = Math.max(0, startVelocity + order.accel)
-  return `${startVelocity}${turns}${accel}${et}: ${final}`
+  return `${startVelocity}${turns}${accel}${et}${roll}: ${final}`
 }
 
 const ORDER_PATTERN = /^\s*(\d+)?\s*((?:[ps]\s*\d+\s*){0,2})([+-]\s*\d+)?\s*(et)?\s*(?::\s*(\d+))?\s*$/i

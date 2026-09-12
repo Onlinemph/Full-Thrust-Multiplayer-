@@ -194,6 +194,194 @@ describe('a rock in the way (17.1)', () => {
   })
 })
 
+/**
+ * Two ships side by side at the origin, both facing 12, with an enemy off the
+ * starboard bow. Everything about them is identical except what the test does
+ * to them, which is what makes "the roll changed this and nothing else"
+ * something a test can say.
+ */
+function rollingPair(thrust = 4): GameState {
+  const gun = design({
+    id: 'portside',
+    name: 'Portside',
+    drive: { thrust, advanced: false },
+    weapons: [
+      {
+        id: 'p1',
+        label: 'Beam-3',
+        weaponClass: 'beam',
+        rating: 3,
+        variant: 'standard',
+        arcs: ['FP'],
+        mass: 4,
+        points: 12,
+      },
+    ],
+  })
+  return createGame({
+    seed: 0x1602,
+    sides: [{ id: 'a' }, { id: 'b' }],
+    ships: [
+      createShipState({
+        id: 'roller',
+        side: 'a',
+        design: gun,
+        placement: { position: { x: 0, y: 0 }, facing: 12 },
+        velocity: 0,
+      }),
+      createShipState({
+        id: 'control',
+        side: 'a',
+        design: gun,
+        name: 'Control',
+        placement: { position: { x: 0, y: 40 }, facing: 12 },
+        velocity: 0,
+      }),
+      // Bearing 60° from the origin: off the starboard bow, so a port-only
+      // battery cannot see it until the ship turns over.
+      createShipState({
+        id: 'target',
+        side: 'b',
+        design: design({ id: 'target', name: 'Target' }),
+        placement: { position: { x: 17.32, y: -10 }, facing: 6 },
+        velocity: 0,
+      }),
+    ],
+  })
+}
+
+describe('rolling (16.2)', () => {
+  it('spends a thrust point out of the turning allowance', () => {
+    // The book's own worked example: "a thrust-4 ship, normally capable of 2
+    // points of turn, could only turn 1 point if it also rolled that move; but
+    // would still be able to use its other two thrust factors to accelerate".
+    const game = rollingPair(4)
+    applyAction(game, { type: 'plot-roll', shipId: 'roller', on: true })
+    applyAction(game, { type: 'plot-turn', shipId: 'roller', direction: 'port', points: 1 })
+    applyAction(game, { type: 'plot-accel', shipId: 'roller', accel: 2 })
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'roller' })
+
+    const roller = game.ships[0]
+    expect(roller.rollStatus.inverted, '1 + 1 + 2 is exactly thrust 4').toBe(true)
+    expect(roller.velocity).toBe(2)
+  })
+
+  it('takes the second point of turn away from a thrust-4 ship', () => {
+    // The other half of the worked example. A thrust-4 ship turns 2 points
+    // ordinarily; with a roll written in the same order the second point is
+    // refused at the moment the player asks for it, which is where they can
+    // still change their mind.
+    const plain = rollingPair(4)
+    expect(
+      applyAction(plain, { type: 'plot-turn', shipId: 'roller', direction: 'port', points: 2 })
+        .refused,
+    ).toBeUndefined()
+
+    const rolling = rollingPair(4)
+    applyAction(rolling, { type: 'plot-roll', shipId: 'roller', on: true })
+    expect(
+      applyAction(rolling, { type: 'plot-turn', shipId: 'roller', direction: 'port', points: 2 })
+        .refused,
+      'the roll spent the second point of the turning allowance (16.2)',
+    ).toBe('turn-exceeded')
+    expect(
+      applyAction(rolling, { type: 'plot-turn', shipId: 'roller', direction: 'port', points: 1 })
+        .refused,
+      'one point still fits',
+    ).toBeUndefined()
+  })
+
+  it('cannot be done by a ship with no thrust at all', () => {
+    // A thrust-0 hull has no factor to spend, so the order is refused where it
+    // is written rather than silently dropped at the moment it would happen.
+    const game = rollingPair(0)
+    expect(applyAction(game, { type: 'plot-roll', shipId: 'roller', on: true }).refused).toBe(
+      'drive-disabled',
+    )
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'roller' })
+    expect(game.ships[0].rollStatus.inverted).toBe(false)
+  })
+
+  it('swaps which side the batteries bear to', () => {
+    const game = rollingPair()
+    advanceTo(game, 'ship-fire')
+    expect(
+      applyAction(game, { type: 'fire-weapon', shipId: 'roller', weaponId: 'p1', targetId: 'target' })
+        .refused,
+      'a port battery should not bear on a target off the starboard bow',
+    ).toContain('arc')
+
+    const rolled = rollingPair()
+    applyAction(rolled, { type: 'plot-roll', shipId: 'roller', on: true })
+    advanceTo(rolled, 'move-ships')
+    applyAction(rolled, { type: 'move-ship', shipId: 'roller' })
+    advanceTo(rolled, 'ship-fire')
+    expect(rolled.ships[0].rollStatus.inverted).toBe(true)
+    expect(
+      applyAction(rolled, {
+        type: 'fire-weapon',
+        shipId: 'roller',
+        weaponId: 'p1',
+        targetId: 'target',
+      }).refused,
+      'inverted, the port battery bears to starboard (16.2)',
+    ).toBeUndefined()
+  })
+
+  it('does not mirror the course change written for the model', () => {
+    // "An order written for a port turn will still turn the model to the left,
+    // even though to the inverted ship this would actually be a starboard
+    // turn." The control ship turns the same way without rolling.
+    const game = rollingPair()
+    applyAction(game, { type: 'plot-roll', shipId: 'roller', on: true })
+    applyAction(game, { type: 'plot-turn', shipId: 'roller', direction: 'port', points: 1 })
+    applyAction(game, { type: 'plot-turn', shipId: 'control', direction: 'port', points: 1 })
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'roller' })
+    applyAction(game, { type: 'move-ship', shipId: 'control' })
+
+    expect(game.ships[0].rollStatus.inverted).toBe(true)
+    expect(game.ships[0].placement.facing).toBe(game.ships[1].placement.facing)
+  })
+
+  it('stays inverted until the ship rolls back', () => {
+    const game = rollingPair()
+    applyAction(game, { type: 'plot-roll', shipId: 'roller', on: true })
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'roller' })
+    expect(game.ships[0].rollStatus.inverted).toBe(true)
+
+    // Round the whole sequence and into the next turn: the per-turn reset
+    // clears the order but not the attitude.
+    const turn = game.turn
+    while (game.turn === turn) advancePhase(game)
+    expect(game.ships[0].order).toBeNull()
+    expect(game.ships[0].rollStatus.inverted, 'an attitude is not a per-turn flag').toBe(true)
+
+    applyAction(game, { type: 'plot-roll', shipId: 'roller', on: true })
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'roller' })
+    expect(game.ships[0].rollStatus.inverted, 'rolling back upright is the same manoeuvre').toBe(
+      false,
+    )
+  })
+
+  it('is something the computer reads before it allocates fire', () => {
+    const upright = rollingPair()
+    advanceTo(upright, 'ship-fire')
+    expect(planFire(upright, upright.ships[0])).toEqual([])
+
+    const rolled = rollingPair()
+    applyAction(rolled, { type: 'plot-roll', shipId: 'roller', on: true })
+    advanceTo(rolled, 'move-ships')
+    applyAction(rolled, { type: 'move-ship', shipId: 'roller' })
+    advanceTo(rolled, 'ship-fire')
+    expect(planFire(rolled, rolled.ships[0]).length).toBeGreaterThan(0)
+  })
+})
+
 describe('ramming (16.7)', () => {
   it('is declared in orders and nowhere else', () => {
     const game = facingPair()

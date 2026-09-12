@@ -396,6 +396,14 @@ export interface MovementOrder {
   accel: number
   /** Emergency thrust: up to 150% of the drive rating, at risk (3.6). */
   emergencyThrust?: boolean
+  /**
+   * Roll the ship 180° on its long axis (16.2): *"the player simply writes
+   * 'Roll' in the movement orders for that turn"*. It costs one thrust factor,
+   * charged against the turning allowance, and swaps which side the port and
+   * starboard batteries bear to. The attitude itself is not part of the order
+   * — it persists on the ship until it rolls back.
+   */
+  roll?: boolean
 }
 
 // ---------------------------------------------------------------------------

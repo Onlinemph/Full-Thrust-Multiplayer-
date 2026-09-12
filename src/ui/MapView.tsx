@@ -343,6 +343,7 @@ export function MapView({
                 selected={ship.id === selectedId}
                 destroyed={ship.destroyed}
                 cloaked={ship.cloaked}
+                inverted={ship.rollStatus.inverted}
                 scale={scale}
                 art={ship.design.art}
                 onClick={() => {
