@@ -461,7 +461,7 @@ is `strength` D6 per target.
 > will at -1 DRM for each level of screens. Damage is Semi-Armor Piercing."*
 
 **Not implemented: the to-hit roll.** The Projectile Weapon Hit Probability Table is *"page 153"*
-(5.16), and the text extract ends at page 80, so the chart's numbers are not available. The damage
+(5.16), and the extract ends part-way through page 81, so the chart's numbers are not available. The damage
 half is implemented and takes the hit as an input the caller supplies.
 
 ---

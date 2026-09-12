@@ -6,7 +6,8 @@ Damage (optional)** rule that follows it (`continuum-rulebook-extract.txt` lines
 say which symbols are rolled for and how often.
 
 **Core Systems (bridge, life support, power core) and damage control are NOT in the text extract.**
-The extract is the text layer of the PDF and stops part-way through 9.2, so sections 10.3 and 10.4
+The extract stops part-way through 9.2 — a limit of the tool that produced it, not of the
+rulebook (`SOURCES.md`) — so sections 10.3 and 10.4
 are missing (see `SOURCES.md`). Everything in part 6 and part 7 below is taken from the **Full
 Thrust XD Quick Reference**, cross-checked against the three places the rulebook text does touch
 these systems (2.4, 5.13, 7.9). Every such rule is marked **[XD]**. Rules marked **[reading]** are

@@ -76,9 +76,11 @@ and a test fails the build if any ship in the roster carries one.
 
 ### What is not
 
-**The rulebook PDF's text layer ends at page 80 of 151**, so sections 10–22 are not available as
-quoted prose. Everything the engine implements from beyond that point comes from another source and
-is marked as such. `docs/rules/SOURCES.md` has the full account; the short version:
+**The rules text this engine was built from stops at page 81 of 151**, so sections 10–22 are not
+available as quoted prose. That is a limit of the Google Drive connector that extracted it — it
+caps PDF text at around 270,000 characters, and this book is about twice that — and not of the
+rulebook, whose later pages are ordinary text. `docs/rules/SOURCES.md` shows the measurements and
+what closes the gap; the short version of what is missing:
 
 | Section | Status |
 | --- | --- |
@@ -91,12 +93,13 @@ is marked as such. `docs/rules/SOURCES.md` has the full account; the short versi
 | 17 Terrain | **Not implemented** |
 | 18 Battles and CPV | Points are computed; fleet-composition guidance is advisory in the fleet picker |
 
-Section 9's own gap: the text layer stops on page 80, mid-way through the list of gunboat types, so
-whatever 9.2 catalogues after the Needle Gunboat is missing. The five types that are quoted are
-implemented.
+Section 9's own gap: the extract stops mid-way through the list of gunboat types, so whatever 9.2
+catalogues after the Needle Gunboat is missing. The five types that are quoted are implemented.
 
-Dropping the missing pages into `docs/rules/continuum-rulebook-extract.txt` is what it takes to
-close these: the engine is written against the spec documents in `docs/rules/`, not against the PDF.
+Appending the missing pages to `docs/rules/continuum-rulebook-extract.txt` is what it takes to
+close these: the engine is written against the spec documents in `docs/rules/`, not against the
+PDF. Splitting the book in two before extracting it is the reliable way to get them, since the
+ceiling counts characters rather than megabytes.
 
 Rules whose source is silent are marked `[reading]` in the spec docs with the reading taken and
 why — what life-support failure costs a ship, for instance, or which way round Flawed Design's

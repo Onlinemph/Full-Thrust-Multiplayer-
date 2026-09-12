@@ -57,7 +57,7 @@ read as having no re-rolls.
 
 **This is the one table in this domain that could not be read.** 5.14, 5.16 and 5.18 all defer to
 the *"Projectile Weapon Hit Probability Table (page 153)"*, and the text extract we work from stops
-at page 80 (see `SOURCES.md`). Nothing else in the extract prints a line of it.
+part-way through page 81 (see `SOURCES.md`). Nothing else in the extract prints a line of it.
 
 The table below is a reconstruction from what the extract *does* say. It is one constant,
 `PROJECTILE_HIT_TABLE`, and every projectile weapon in the module reads it; dropping in the real

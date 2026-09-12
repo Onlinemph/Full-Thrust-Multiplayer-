@@ -131,7 +131,7 @@ own, because 9.2 gives it two range bands where 5.10 gives the ship battery one.
 
 | Rule | Why |
 | --- | --- |
-| Gunboat types past the Needle Gunboat | The text layer of the rulebook PDF ends on page 80, mid-list. Whatever 9.2 lists after "Needle Gunboat" is not in the extract. `SOURCES.md` records the gap. |
+| Gunboat types past the Needle Gunboat | The extract ends mid-list: the Drive connector that produced it caps PDF text at ~270,000 characters. Whatever 9.2 lists after "Needle Gunboat" is not in it. `SOURCES.md` has the measurements. |
 | Escorting a ship ("They can fly in escort of a ship like fighters") | The squadron carries no mission field: 8.6's screening and pursuit rules are implemented for fighters, and extending them to gunboats needs the same escort plumbing on this side. |
 | Splitting fire between several fighter or ordnance targets | 9.1 allows it "just like fighters"; the engine resolves a squadron's attack against one target at a time. Against ships — the common case — the book forbids splitting anyway. |
 | The Gatling Gunboat's forward 30° arc | 4.2's arcs are 60° wide, so a 30° arc has no representation in the geometry. The engine treats it as the forward arc, which is the narrowest it can express, and this is recorded here rather than silently widened. |

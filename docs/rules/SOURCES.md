@@ -11,9 +11,39 @@ The engine is built from these, and every rule reference in the code points at o
 
 ## A known gap
 
-`continuum-rulebook-extract.txt` is the text layer of the rulebook PDF, and it ends part-way
-through section 9.2 — page 80 of 151. Everything from section 10 on is therefore **not** quoted
-prose.
+`continuum-rulebook-extract.txt` stops part-way through section 9.2 — page 81 of 151 — and
+everything from section 10 on is therefore **not** quoted prose.
+
+**The rulebook is not the problem.** The extract stops because the Google Drive connector that
+produced it caps its PDF text extraction at roughly 270,000 characters, and this book is about
+twice that. Measured, not guessed:
+
+| Document in the same Drive | File size | Characters returned | Ends |
+| --- | --- | --- | --- |
+| *Project Continuum* | 13.5 MB | 276,641 | mid-list, page 81 |
+| *Squadron Strike 2e* | 21 MB | 268,299 | mid-sentence |
+| *Interceptor 2e* | 15.6 MB | 183,077 | at its own copyright notice — complete |
+
+Two long books stop within 3% of each other and a shorter one comes through whole, so the ceiling
+is the connector's, not any document's. The connector returns the same capped text however it is
+asked: `read_file_content` and a `fullText` search snippet return byte-identical output, so a
+targeted search cannot reach past it either. Direct download is refused above 10 MB (this file is
+13.5 MB) and `drive.google.com` is blocked by the environment's network egress policy, so there is
+no way round it from inside a session.
+
+**What would close the gap**, in order of reliability:
+
+1. **Split the PDF** — pages 1–80 and 81–151 as two files in Drive. Each half is under the
+   character ceiling and extracts in full. Shrinking the file on its own does *not* help: the cap
+   counts extracted characters, not megabytes, so a "text only" re-save of the same 151 pages
+   truncates in exactly the same place.
+2. **Paste sections 10–22 into a Google Doc** (or two). A document under the ceiling reads whole.
+3. **Drop a text file into `docs/rules/`** — the engine is written against the spec documents in
+   this directory, not against the PDF, so a `continuum-81-151.txt` committed to the repository is
+   all the engine ever needed.
+
+Roughly 70 of 151 pages are behind that ceiling. Until they are through, what they contain is
+recorded below as not implemented rather than guessed at.
 
 Section 9 is covered as far as the text goes: 9.1 in full and five gunboat types from 9.2 (Beam,
 Plasma, Graser, Gatling, Needle), plus the FTL and Heavy modifications. The list is cut off after
@@ -33,5 +63,5 @@ What the rest costs, and what stands in for it:
 | 17 Terrain effects | **Not implemented.** |
 | 18 Battles, scenarios and CPV | Points are computed from the construction tables; fleet-composition guidance is not encoded. |
 
-Re-extracting the missing pages and dropping them into `continuum-rulebook-extract.txt` is all it
-takes to close these — the engine reads rules from spec documents, not from the PDF.
+Appending the missing pages to `continuum-rulebook-extract.txt` is all it takes to close these —
+the engine reads rules from the spec documents in this directory, not from the PDF.
