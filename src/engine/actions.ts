@@ -24,6 +24,7 @@ import {
   availableDamageControlParties,
   availableFireCons,
   canWeaponFire,
+  currentThrust,
   engagedTargets,
   hullRowsCompleted,
   markHullBoxes,
@@ -34,6 +35,7 @@ import {
   setInitiativeOrder,
   shipById,
   type FighterGroupState,
+  type TerrainKind,
   type GameState,
   type GunboatSquadronState,
   type ShipState,
@@ -49,6 +51,8 @@ import {
   type MovementState,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
+import { hasLineOfFire, type TerrainBody } from './terrain'
+import { resolveRam } from './specialmoves'
 import {
   ftlExitRestrictions,
   ftlExitStage,
@@ -259,6 +263,12 @@ export type GameAction =
    * course and the ship is gone for good.
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
+  /**
+   * 16.7: a ram is declared in orders like any other move — *"Deliberate
+   * attempts to ram another ship are possible"* but not as a reaction — and
+   * resolved at the end of the movement phase, when both ships have arrived.
+   */
+  | { type: 'plot-ram'; shipId: string; targetId: string | null }
 
   /**
    * Answers to questions the rules put to a player mid-resolution — which
@@ -500,6 +510,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         text: `${ship.name} ${formatOrder(effective, before.velocity)}`,
         side: ship.side,
       })
+      resolveDeclaredRam(state, ship)
       return OK
     }
 
@@ -574,6 +585,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const range = distance(ship.placement.position, target.placement.position)
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!weapon.arcs.includes(arc)) return refuse('Target is not in that arc')
+      // 17.1: a planet or planetoid across the line stops the shot. Measured
+      // centre to centre, because that is how the models are measured.
+      if (!hasLineOfFire(ship.placement.position, target.placement.position, blockingTerrain(state))) {
+        return refuse(`${target.name} is behind cover (17.1)`)
+      }
 
       // 7.17 – 7.22: what the target's electronic warfare fit does to this
       // particular shot. It can change the range as well as the die roll — a
@@ -1335,6 +1351,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
       const arc = arcTo(ship.placement.position, ship.placement.facing, flight.position)
       if (!weapon.arcs.includes(arc)) return refuse(`${weapon.label} does not bear on ${flight.label}`)
+      if (!hasLineOfFire(ship.placement.position, flight.position, blockingTerrain(state))) {
+        return refuse(`${flight.label} is behind cover (17.1)`)
+      }
       if (distance(ship.placement.position, flight.position) > maxRangeOf(weapon)) {
         return refuse(`${flight.label} is out of ${weapon.label}'s reach`)
       }
@@ -1415,6 +1434,29 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name} raises its Reflex Field — no weapons this turn (7.25)`,
         })
       }
+      return OK
+    }
+
+    case 'plot-ram': {
+      if (state.phase !== 'orders') return refuse('A ram is declared in orders (16.7)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (action.targetId === null) {
+        ship.ramTargetId = null
+        return OK
+      }
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.side === ship.side) return refuse('A ship does not ram its own fleet')
+      ship.ramTargetId = target.id
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        visibleTo: [ship.side],
+        text: `${ship.name} will attempt to ram ${target.name} (16.7)`,
+      })
       return OK
     }
 
@@ -2110,6 +2152,96 @@ function defaultBoardingPlan(ship: BoardedShip, boarders: readonly BoardingForce
     dcps,
     marines: engaged.map((unit) => ({ targetId: unit.id, marines: 1 })),
   }
+}
+
+/**
+ * A ram declared in orders, resolved the moment the rammer arrives (16.7).
+ *
+ * Both ships' damage comes off the hull boxes they had *before* contact, and
+ * both are inflicted at once — "simultaneous" is the whole character of the
+ * move, and it is why the two numbers are computed before either is applied.
+ * A rammer is as likely to die as its victim, which is what makes it a threat
+ * rather than a trick.
+ */
+function resolveDeclaredRam(state: GameState, ship: ShipState): void {
+  if (!ship.ramTargetId) return
+  const target = shipById(state, ship.ramTargetId)
+  ship.ramTargetId = null
+  if (!target || target.destroyed || target.offTable || ship.destroyed) return
+
+  const result = resolveRam(
+    {
+      position: ship.placement.position,
+      // 4.11: a shot-out drive makes a worse rammer, so the current rating is
+      // the one that counts, not what the SSD was printed with.
+      thrust: currentThrust(ship),
+      hullBoxes: ship.design.hullBoxes - ship.hullMarked,
+    },
+    {
+      position: target.placement.position,
+      thrust: currentThrust(target),
+      hullBoxes: target.design.hullBoxes - target.hullMarked,
+    },
+    state.rng,
+  )
+
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    targetId: target.id,
+    side: ship.side,
+    dice: [result.nerveRoll, result.attackerEvasionRoll, result.targetEvasionRoll].filter(
+      (roll): roll is number => roll !== null,
+    ),
+    text: `${ship.name} rams ${target.name}: ${result.detail}`,
+  })
+  if (!result.damage) return
+
+  // Both totals were computed above off pre-contact hulls; applying them in
+  // either order now cannot change the other.
+  const smash = (victim: ShipState, damage: number, dice: number[]): void => {
+    if (damage <= 0) return
+    const applied = applyDamage(
+      targetStateOf(victim),
+      {
+        normalDamage: damage,
+        penetratingDamage: 0,
+        mode: result.damage?.mode ?? 'standard',
+        dice,
+        detail: 'ramming',
+      },
+      { rearArcRule: false, rearArc: false, source: 'direct-fire' },
+    )
+    writeBackDamage(victim, applied.target)
+    markHullBoxes(victim, applied.hullDamage)
+    pushLog(state, {
+      kind: 'damage',
+      shipId: victim.id,
+      side: victim.side,
+      text: `${victim.name} takes ${damage} from the collision (16.7)`,
+    })
+    if (victim.destroyed) {
+      pushLog(state, { kind: 'destroyed', shipId: victim.id, text: `${victim.name} is destroyed` })
+    }
+  }
+  smash(target, result.damage.damageToTarget, [result.damage.attackerRoll])
+  smash(ship, result.damage.damageToAttacker, [result.damage.targetRoll])
+}
+
+/**
+ * Solid bodies that a shot cannot pass through (17.1).
+ *
+ * *"Any line between two ships that crosses any part of the asteroid is
+ * blocked. (Between center points of models, remember.)"* Planets and
+ * planetoids are solid; a dust cloud, a nebula or an asteroid field is not
+ * something a shot stops at, and each of those has its own rule instead.
+ */
+const SOLID_TERRAIN: ReadonlySet<TerrainKind> = new Set<TerrainKind>(['planet', 'planetoid'])
+
+function blockingTerrain(state: GameState): TerrainBody[] {
+  return state.terrain
+    .filter((feature) => SOLID_TERRAIN.has(feature.kind))
+    .map((feature) => ({ id: feature.id, position: feature.position, radius: feature.radius }))
 }
 
 /**

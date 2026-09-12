@@ -88,10 +88,10 @@ what closes the gap; the short version of what is missing:
 | 11 Faster Than Light | Exit implemented: the warm-up turn, the half move, the proximity roll and what it does to bystanders. Jump gates, tenders and battleriders are in the module, not yet in a scenario |
 | 12 Optional rules | Boarding combat, fleet morale, striking the colors and civil wars, from the section itself |
 | 13, 14 Ship construction | Covered — the construction tables encode every cost these sections state |
-| 15 Imperial Tech Base | **Not implemented.** No faction availability restrictions |
-| 16 Special moves | **Not implemented** — thrust-0 drives, rolling, towing, docking, ramming |
-| 17 Terrain | **Not implemented** |
-| 18 Battles and CPV | Points are computed; fleet-composition guidance is advisory in the fleet picker |
+| 15 Imperial Tech Base | The tables and the availability predicate are in `techbase.ts`; the fleet picker does not yet enforce them |
+| 16 Special moves | Implemented and tested in `specialmoves.ts`; ramming is wired to orders and phase 5, the rest wait on a phase to call them |
+| 17 Terrain | Implemented and tested in `terrain.ts`; a planet or planetoid now blocks fire, and the border skirmish has a rock to hide behind |
+| 18 Battles and CPV | Points are computed; deployment and tournament composition are in `battles.ts` and advisory in the picker |
 
 Section 9's own gap: the extract stops mid-way through the list of gunboat types, so whatever 9.2
 catalogues after the Needle Gunboat is missing. The five types that are quoted are implemented.

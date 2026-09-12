@@ -15,6 +15,7 @@ import {
   type GameState,
   type GunboatSquadronState,
   type ShipState,
+  type TerrainFeature,
   type SideId,
 } from '../engine/game'
 import {
@@ -96,6 +97,12 @@ export interface Scenario {
   introductoryPhases?: boolean
   /** Hull groups the scenario allows, for a scenario that limits the force. */
   allowedGroups?: ShipGroup[]
+  /**
+   * Rocks and clouds on the table (17). A planet or planetoid blocks fire
+   * across it, which is the one thing in Full Thrust that gives a captain
+   * somewhere to be that is not simply further away.
+   */
+  terrain?: TerrainFeature[]
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +179,18 @@ export const BORDER_SKIRMISH: Scenario = {
     'Nobody has declared anything. Somebody is about to.',
   objective: 'Break the enemy division. Points are scored on what you cripple, not what you chase off.',
   table: { width: 72, height: 48 },
+  // 17.1: a planetoid blocks the line between two ships entirely, so the rock
+  // in the middle of this table is cover — the only cover in the game that is
+  // not just distance.
+  terrain: [
+    {
+      id: 'rock',
+      kind: 'planetoid',
+      position: { x: 36, y: 24 },
+      radius: 5,
+      label: 'Unnamed planetoid',
+    },
+  ],
   turnLimit: 10,
   victory: INTRODUCTORY_VICTORY,
   sides: [
@@ -404,6 +423,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
 
   return createGame({
     seed: opts.seed,
+    terrain: scenario.terrain ? scenario.terrain.map((f) => ({ ...f })) : undefined,
     fighterGroups: ships.flatMap(embarkedFlights),
     gunboatSquadrons: ships.flatMap(embarkedSquadrons),
     scenario: scenario.id,

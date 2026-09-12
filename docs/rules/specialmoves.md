@@ -239,6 +239,14 @@ reading (any shot between the two) is defensible and tidier, but it was rejected
 is plainly about a hulk resisting capture, and reading it symmetrically would invent a rule the
 text does not contain.
 
+**[reading] — the break clause covers the procedure, not the finished tow.** *"During this time"*
+scopes both break conditions to the turns the link is being established, and *"the procedure must
+be restarted from the beginning"* is a statement about the procedure too. So `advanceTowLink`
+leaves a completed link alone. The alternative — the conditions run for the life of the tow, and a
+hulk can shoot itself free after the link is made — is the more dramatic reading, and it was
+rejected because 16.3 would then owe an answer it never gives: what happens to a *moving, linked*
+pair the moment the link parts. Where a scenario wants a tow cut, the integrator can sever it.
+
 Two further points on the break clause that the code takes literally:
 
 - **Hull boxes, not damage.** A volley entirely soaked by screens or armour inflicts zero hull
@@ -291,6 +299,12 @@ for them: `crowdedEdge` takes the margin as an argument and reports which edge, 
 fleet is inside; `shiftTable` takes the distance. The alternative was to default them to something
 plausible — a margin of one turn's movement, say — which would have been an invented number
 dressed as a rule.
+
+**[reading] — "all ships" means all of them.** One straggler at the far end of the table and
+`crowdedEdge` reports nothing, because the shift is only free of consequences while nobody is
+about to be pushed off the opposite side; a looser reading ("most of the action") would let the
+table slide out from under a ship that was still fighting. Where a fleet has run into a corner and
+two edges both qualify, the tighter one is reported.
 
 It also changes what leaving the table means, which is 3.9's business:
 
@@ -355,7 +369,9 @@ counts at its current rating under 4.11 rather than the printed one, on the grou
 bonus is about who can actually outrun whom. The alternative — printed ratings, so a fleet keeps
 its +2 after its fast escorts have had their drives shot out — was rejected because the whole
 clause is a speed comparison at the moment of the chase. In practice the caller supplies the
-numbers, so this is a documented expectation of the caller as much as a rule.
+numbers, so this is a documented expectation of the caller as much as a rule. An empty fleet on
+either side scores no bonus rather than winning it by vacuous truth: with no opposing ships there
+is nothing to be faster than, and no chase to be faster in.
 
 **Repeat attempts carry nothing forward.** *"The fleeing player may then attempt the disengagement
 again"* — a fresh pair of dice, the same bonus test, on the opposite edge of the new table. The

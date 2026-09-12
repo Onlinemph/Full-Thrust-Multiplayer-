@@ -10,7 +10,7 @@ advanced sensor rules, 13.11 atmospheric streamlining, 16.7 ramming.
 Implementation: `src/engine/terrain.ts`. Tests: `src/engine/terrain.test.ts`.
 
 Readings taken where the text genuinely admits more than one are marked **[reading]** with the
-alternative that was rejected and why. There are twenty-three of them, which is high for one
+alternative that was rejected and why. There are twenty-two of them, which is high for one
 section, and the reason is section 17's own opening: *"The following suggestions are mostly pure
 space opera"*. It is written as suggestions to a games master, not as procedure, and a great deal of
 it names a quantity without saying how to measure it.
@@ -167,7 +167,7 @@ predicate; `blockingBodies` names what is in the way, for the log.
 | A larger one | 100 |
 | Anything else | *"etc."* — the scenario's call |
 
-> **[reading] 22 — a chunk's course is a clock point drawn uniformly from the twelve; its speed is
+> **[reading] 21 — a chunk's course is a clock point drawn uniformly from the twelve; its speed is
 > not rolled at all.** "Random courses" has exactly one representation in this engine, the twelve
 > point clock of 3.1, so a chunk gets `rng.int(12) + 1`. "Random … speeds" has no range anywhere in
 > the book — no minimum, no maximum, no die named — so `shatterAsteroid` reports the count and the
@@ -661,7 +661,7 @@ chain through four zones in one move.
 > the book's own example. When a worked example and an obvious mechanic disagree, the example is the
 > rule.
 
-> **[reading] 23 — velocity cannot be driven below zero by a gravity zone.** An aft-arc pass
+> **[reading] 22 — velocity cannot be driven below zero by a gravity zone.** An aft-arc pass
 > subtracts the zone strength, and a sun's inner zone subtracts 8; nothing in 3.2 gives a cinematic
 > ship a negative velocity. *Rejected:* allowing negative velocity as "falling back", which the
 > movement rules cannot express and `movement.ts` does not accept.
@@ -791,11 +791,8 @@ and the only question is whether the fighters get out. Even a fully streamlined 
 | 18 | 17.10 | inches are MU |
 | 19 | 17.10 | wrong velocity in the 2–3 band flies past |
 | 20 | 12.11 | 4.11's extra-rows modifier carries into the knock-off-course roll |
-| 22 | 17.1 | chunk courses are uniform clock points; speeds are not rolled |
-| 23 | 17.9 | gravity cannot drive velocity below zero |
-
-(21 was retired: "30 degrees is one clock point" is arithmetic, not a reading —
-`geometry.DEGREES_PER_POINT` is 30.)
+| 21 | 17.1 | chunk courses are uniform clock points; speeds are not rolled |
+| 22 | 17.9 | gravity cannot drive velocity below zero |
 
 ---
 

@@ -165,6 +165,8 @@ export interface ShipState {
    * has to survive the per-turn reset that clears `ftlTransit`.
    */
   ftlWarmupTurn: number | null
+  /** A ram declared in orders (16.7), resolved when this ship finishes moving. */
+  ramTargetId: string | null
   /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
   fixedPath: boolean
   /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
@@ -281,6 +283,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     layingMines: false,
     ftlTransit: 'none',
     ftlWarmupTurn: null,
+    ramTargetId: null,
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
     cloak: cloakFitOf(opts.design),
@@ -1002,6 +1005,7 @@ function onBeginTurn(state: GameState): void {
     // drive a warm-up turn and a jump turn, and the order that started it
     // stands until the ship is gone.
     if (ship.ftlWarmupTurn === null) ship.ftlTransit = 'none'
+    ship.ramTargetId = null
     // "In Full Thrust weapons can only be used once per turn" (2.6) — the
     // turn is the unit, so this is the one place the record is wiped.
     ship.weaponsFired.clear()
