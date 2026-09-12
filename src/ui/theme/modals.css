@@ -358,3 +358,13 @@
   width: 100%;
   accent-color: var(--thrust);
 }
+
+/* A rule the engine does not read yet: shown, explained, and not settable. */
+.rule-toggle.is-not-yet {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rule-toggle.is-not-yet:hover {
+  background: none;
+}

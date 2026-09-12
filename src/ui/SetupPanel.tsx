@@ -25,9 +25,18 @@ interface Toggle {
   label: string
   rule: string
   detail: string
+  /**
+   * Why this one is not in force yet.
+   *
+   * A switch that does nothing is worse than a switch that is not there: the
+   * player sets it, plays a battle under a rule they think they chose, and the
+   * engine never hears about it. `setupPassthrough.test.ts` holds the rest of
+   * this list to the opposite standard.
+   */
+  notYet?: string
 }
 
-const OPTIONAL_RULES: Toggle[] = [
+export const OPTIONAL_RULES: Toggle[] = [
   {
     key: 'emergencyThrust',
     label: 'Emergency thrust',
@@ -95,18 +104,21 @@ const OPTIONAL_RULES: Toggle[] = [
     label: 'Fighter morale',
     rule: '8.17',
     detail: 'Fighter groups may break off rather than press a hopeless attack.',
+    notYet: 'the roll is written, but nothing in the fighter phases asks for it yet',
   },
   {
     key: 'fighterQuality',
     label: 'Aces and turkeys',
     rule: '8.18',
     detail: 'Pilot quality varies: some groups are far better than average, some far worse.',
+    notYet: 'groups are rolled for at creation nowhere, so every pilot is average',
   },
   {
     key: 'multiStageMissiles',
     label: 'Multi-stage missiles',
     rule: '6.6',
     detail: 'Missiles that fly on after a first stage burns out.',
+    notYet: 'a two-stage mount flies its two stages already; the magazine rules are not in',
   },
   {
     key: 'terrainHazards',
@@ -441,16 +453,28 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
           <h3>Optional rules</h3>
           <p>Settle these before the first order is written. They ride in the battle file.</p>
           {OPTIONAL_RULES.map((option) => (
-            <label key={option.key} className="rule-toggle">
+            <label
+              key={option.key}
+              className={option.notYet ? 'rule-toggle is-not-yet' : 'rule-toggle'}
+            >
               <input
                 type="checkbox"
-                checked={Boolean(draft[option.key])}
+                disabled={option.notYet !== undefined}
+                checked={option.notYet ? false : Boolean(draft[option.key])}
                 onChange={() => toggle(option.key)}
               />
               <span>
                 <b>{option.label}</b> <span className="rule-ref">{option.rule}</span>
                 <br />
                 <span className="rule-detail">{option.detail}</span>
+                {option.notYet ? (
+                  <>
+                    <br />
+                    <span className="rule-detail" style={{ color: 'var(--warn)' }}>
+                      Not in force — {option.notYet}.
+                    </span>
+                  </>
+                ) : null}
               </span>
             </label>
           ))}
