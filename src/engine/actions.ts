@@ -214,6 +214,7 @@ import { advance, arcTo, distance, incomingArc, isRearArcAttack } from './geomet
 import {
   combinedStealthLevel,
   effectiveScreenLevel as screenLevelOf,
+  stealthScanState,
   pointDefenceOptions,
   regenerateArmour,
   rollAntimatterChargeBlast,
@@ -225,9 +226,12 @@ import {
   resolvePointDefence,
   PDS_RANGE,
   type PdAllocation,
+  type PdAlly,
   type PdDefender,
   type PdMount,
   type PdMountKind,
+  pdMayEngageShip,
+  rollPointDefenceAtShip,
   rollPointDefenceDice,
   type PdTargetKind,
   type PdThreat,
@@ -385,6 +389,22 @@ export type GameAction =
    * explodes."* The order stands for the turn it was written in and no longer.
    */
   | { type: 'plot-detonate'; shipId: string; on: boolean }
+  /**
+   * 7.12 — point defence used as a gun: *"Point Defense Systems can only be
+   * fired against ships without an operational screen/field (of any type) or
+   * any remaining armor boxes"*. Phase 11, because 2.6 says a mount that
+   * point-defended in phase 9 *"cannot be used again in that turn against a
+   * ship"* — and a mount that shoots here has spent its turn the other way.
+   */
+  | { type: 'fire-point-defence'; shipId: string; systemId: string; targetId: string }
+  /**
+   * 7.4 — the Stealth-2 trade, written in orders. Passive keeps the second
+   * level of stealth but *"the ship may only target units out to 24 MU"*;
+   * active buys back *"the normal FireCon range of 54 MU"* and the ship *"is
+   * only treated as being Stealth-1 as long as the FireCon is in active
+   * mode"*.
+   */
+  | { type: 'set-active-scan'; shipId: string; on: boolean }
   /** 17.11 — this turn's deceleration in orbit is meant as a landing. */
   | { type: 'plot-landing'; shipId: string; on: boolean }
   /**
@@ -1533,6 +1553,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ftlStageOf(ship, state.turn) !== null) {
         return refuse(`${ship.name} is entering hyperspace and cannot fire (11.4)`)
       }
+      // 7.4: a Stealth-2 ship running passive "may only target units out to 24
+      // MU". Going active lifts it and costs a level of stealth, which is the
+      // whole trade — and the trade is only real if the limit is.
+      const reach = targetingRangeOf(ship)
+      const toTarget = distance(ship.placement.position, target.placement.position)
+      if (toTarget > reach) {
+        return refuse(
+          `${ship.name} is running passive and cannot target past ${reach} MU — go active (7.4)`,
+        )
+      }
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
@@ -2086,6 +2116,90 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       })
       const laid = mount.state.bursts[mount.state.bursts.length - 1]
       if (laid) resolveNovaSweep(state, mount, laid)
+      return OK
+    }
+
+    /**
+     * 7.12 and 7.13's anti-ship mode.
+     *
+     * *"Each Point Defense System rolls only 1D6, with a roll of 6 inflicting
+     * 1 damage point with no re-roll"*, and 7.13 gives the ADS the same. No
+     * FireCon: 4.4 exempts point defence, and this is the same mount doing the
+     * same thing at a different sort of target.
+     */
+    case 'fire-point-defence': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      const target = shipById(state, action.targetId)
+      if (!ship || !target) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (ship.side === target.side) return refuse('That is a friendly ship')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const activation = openFiringActivation(state, ship)
+      if (activation) return activation
+
+      const mount = pdMountsOf(ship).find((candidate) => candidate.id === action.systemId)
+      if (!mount) {
+        // 2.6: "any system used for point defense ... cannot be used again in
+        // that turn against a ship." A mount that fired in phase 9 is gone
+        // from this list, which is exactly the rule.
+        return refuse(`${ship.name} has no point-defence mount free to fire (2.6, 7.12)`)
+      }
+      // 7.14's scattergun is a one-shot with its own table and 7.15's
+      // grapeshot throws four dice at ordnance; neither is the single die
+      // 7.12 describes.
+      if (mount.kind !== 'pds' && mount.kind !== 'ads') {
+        return refuse(`Only a PDS or an ADS fires at a ship this way (7.12, 7.13)`)
+      }
+      const range = distance(ship.placement.position, target.placement.position)
+      if (range > PDS_RANGE) {
+        return refuse(`Point defence reaches ${PDS_RANGE} MU, and that is ${range.toFixed(1)} (7.12)`)
+      }
+      const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+      if (!mount.arcs.includes(arc)) return refuse(`No point-defence mount bears on ${target.name}`)
+      if (
+        !pdMayEngageShip({
+          screenLevel: screensAgainst(state, target, ship.placement.position),
+          armourRemaining: target.design.armour.layers.reduce(
+            (left, boxes, layer) => left + Math.max(0, boxes - (target.armourMarked[layer] ?? 0)),
+            0,
+          ),
+          fieldsUp: target.cloaked || target.reflexFieldActive,
+        })
+      ) {
+        return refuse(
+          `${target.name} still has screens or armour — "undamaged warships are not vulnerable to such light weapons" (7.12)`,
+        )
+      }
+
+      const shot = rollPointDefenceAtShip(1, state.rng, mount.drm ?? 0)
+      markWeaponFired(ship, mount.id, state.phase)
+      if (shot.damage <= 0) {
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          side: ship.side,
+          dice: shot.rolls,
+          text: `${ship.name} rakes ${target.name} with point defence and misses (7.12)`,
+        })
+        return OK
+      }
+      markHullBoxes(target, shot.damage)
+      pushLog(state, {
+        kind: 'damage',
+        shipId: ship.id,
+        targetId: target.id,
+        side: ship.side,
+        dice: shot.rolls,
+        text: `${ship.name}'s point defence puts ${shot.damage} into ${target.name} (7.12)`,
+      })
+      if (target.destroyed) {
+        pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+      }
       return OK
     }
 
@@ -2680,6 +2794,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       resolveBoltDefence(state)
       const markers = ordnanceOf(state)
       if (markers.length === 0) return OK
+      // Who each marker will take when phase 10 comes, worked out once for the
+      // whole phase. 6.3's seeker takes the nearest hostile hull inside its
+      // attack radius and everything has already moved, so this is the answer
+      // phase 10 will reach — and it is the answer 7.10 needs a phase early,
+      // to know whose problem each salvo is.
+      const prospective = prospectiveMissileTargets(state)
 
       for (const ship of state.ships) {
         if (ship.destroyed || ship.offTable) continue
@@ -2708,12 +2828,39 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
             // stamped.
             kind: pdThreatKind(marker.kind, rulesReading(state)),
             position: marker.position,
-            attacking: ship.id,
+            // Which hull the marker is coming for. Phase 9 runs before phase
+            // 10's acquisition, so the marker has not locked on yet — but
+            // everything has moved and 6.3's seeker is deterministic, so the
+            // ship it *will* take is already settled and `acquireMissileTargets`
+            // is the function that settles it. Every marker used to arrive
+            // here stamped as attacking whichever ship was resolving its own
+            // point defence, so every ship defended every salvo on the table
+            // as if it were the target — and nothing ever needed an ADFC to
+            // reach a neighbour, because nothing was ever a neighbour's
+            // problem.
+            attacking:
+              rulesReading(state) >= 8 ? (prospective.get(marker.id) ?? null) : ship.id,
           }))
         if (threats.length === 0) continue
 
         const defender = pdDefenderOf(state, ship, mounts)
-        const options = pointDefenceOptions(defender, threats)
+        // 7.10, 7.11, 7.14 and 8.8 all turn on a ship covering the ship next
+        // to it, and the option builder has always known how; it was never
+        // handed anybody to cover.
+        const allies: PdAlly[] =
+          rulesReading(state) >= 8
+            ? state.ships
+                .filter(
+                  (other) =>
+                    other.side === ship.side &&
+                    other.id !== ship.id &&
+                    !other.destroyed &&
+                    !other.offTable &&
+                    other.carriedBy === null,
+                )
+                .map((other) => ({ id: other.id, position: other.placement.position }))
+            : []
+        const options = pointDefenceOptions(defender, threats, allies)
         // A mount the player has aimed goes where they aimed it; the rest
         // follow doctrine — every mount at the nearest thing it can reach,
         // which is what a player does when missiles are inbound, because
@@ -2740,18 +2887,46 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
         const outcome = resolvePointDefence(defender, threats, allocations, state.rng)
 
+        const covering = new Map<string, string>()
+        for (const allocation of allocations) {
+          if (allocation.coveringShipId) covering.set(allocation.threatId, allocation.coveringShipId)
+        }
         for (const result of outcome.results) {
           if (result.kills <= 0) continue
           const marker = markers.find((m) => m.id === result.threatId)
           if (!marker) continue
           marker.missiles = Math.max(0, marker.missiles - result.kills)
+          const coveredId = covering.get(result.threatId)
+          const covered = coveredId ? shipById(state, coveredId) : undefined
           pushLog(state, {
             kind: 'point-defence',
             shipId: ship.id,
             side: ship.side,
             dice: result.rolls,
-            text: `${ship.name} point defence: ${result.detail}`,
+            text: covered
+              ? `${ship.name} covers ${covered.name}: ${result.detail} (7.10)`
+              : `${ship.name} point defence: ${result.detail}`,
           })
+        }
+
+        // 7.14: a scattergun fired in support of an ally is a shotgun aimed
+        // across the gap between two ships, and "on a roll of 1 the covering
+        // fire hits the ship being covered". The resolver has always counted
+        // it; nothing had ever asked for the number.
+        for (const stray of outcome.friendlyFire) {
+          const hit = shipById(state, stray.shipId)
+          if (!hit || stray.damage <= 0) continue
+          markHullBoxes(hit, stray.damage)
+          pushLog(state, {
+            kind: 'damage',
+            shipId: ship.id,
+            targetId: hit.id,
+            side: ship.side,
+            text: `${ship.name}'s covering fire catches ${hit.name}: ${stray.damage} (7.14)`,
+          })
+          if (hit.destroyed) {
+            pushLog(state, { kind: 'destroyed', shipId: hit.id, text: `${hit.name} is destroyed` })
+          }
         }
         // A mount that fires as point defence has fired for the turn (2.6).
         for (const allocation of allocations) markWeaponFired(ship, allocation.mountId, state.phase)
@@ -4192,6 +4367,32 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // Written orders are the one secret in an open-book game (2.6).
         visibleTo: [ship.side],
         text: `${ship.name} will cloak for ${turns} turn${turns === 1 ? '' : 's'} (7.20)`,
+      })
+      return OK
+    }
+
+    case 'set-active-scan': {
+      if (state.phase !== 'orders') {
+        return refuse('The scan mode is written in orders, phase 1 (7.4)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      // Only Stealth-2 has anything to trade: 7.4's targeting limit and its
+      // one-level cost both exist only at the second level.
+      if (action.on && stealthLevelOf(ship) < 2) {
+        return refuse(`${ship.name} is not Stealth-2 and has no passive limit to lift (7.4)`)
+      }
+      ship.activeScan = action.on
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        // The whole point of going active is that the enemy can see you doing
+        // it — that is what the lost stealth level means.
+        text: action.on
+          ? `${ship.name} goes active: 54 MU of FireCon, and Stealth-1 while it lasts (7.4)`
+          : `${ship.name} runs passive: Stealth-2, and nothing beyond 24 MU (7.4)`,
       })
       return OK
     }
@@ -8784,11 +8985,31 @@ function blockingTerrain(state: GameState): TerrainBody[] {
  * 7.20 switches it off entirely under a cloak: *"The ship does not gain any
  * bonuses for stealth while the cloak is active."*
  */
-function stealthLevelOf(ship: ShipState): StealthLevel {
+export function stealthLevelOf(ship: ShipState): StealthLevel {
   if (ship.cloaked) return 0
   const built = Math.min(2, operationalCount(ship, 'stealth-hull')) as StealthLevel
   const field = Math.min(2, operationalCount(ship, 'stealth-field')) as StealthLevel
-  return combinedStealthLevel(stealthHullLevel(built, hullRowsCompleted(ship)), field, true)
+  const fitted = combinedStealthLevel(
+    stealthHullLevel(built, hullRowsCompleted(ship)),
+    field,
+    true,
+  )
+  // 7.4: a Stealth-2 ship that has gone active "is only treated as being
+  // Stealth-1 as long as the FireCon is in active mode". What it is worth to
+  // the shot coming in is what it is running, not what it was built with.
+  return stealthScanState(fitted, ship.activeScan).effectiveLevel
+}
+
+/** How far this ship's FireCon reaches this turn (7.4). */
+function targetingRangeOf(ship: ShipState): number {
+  const built = Math.min(2, operationalCount(ship, 'stealth-hull')) as StealthLevel
+  const field = Math.min(2, operationalCount(ship, 'stealth-field')) as StealthLevel
+  const fitted = combinedStealthLevel(
+    stealthHullLevel(built, hullRowsCompleted(ship)),
+    field,
+    true,
+  )
+  return stealthScanState(fitted, ship.activeScan).targetingRange
 }
 
 /**
@@ -8831,6 +9052,28 @@ function ewDefencesOf(state: GameState, target: ShipState): EwDefences {
  * that carriers exist. The ship's own mounts still fire — only the umbrella it
  * holds over its neighbours goes down.
  */
+/**
+ * The hull each marker on the table is going to attack (6.3), read a phase
+ * early.
+ *
+ * Phase 9 fires before phase 10 acquires, so `marker.targetShipId` is still
+ * null when point defence has to decide whose salvo is whose. The acquisition
+ * is deterministic and rolls nothing — nearest hostile hull inside the attack
+ * radius, and every ship has already moved — so asking the same function that
+ * will settle it in phase 10 gives the same answer without touching a die or
+ * a marker.
+ */
+function prospectiveMissileTargets(state: GameState): Map<string, string> {
+  const alive = state.ships.filter(
+    (ship) => !ship.destroyed && !ship.offTable && ship.carriedBy === null,
+  )
+  const acquired = acquireMissileTargets(
+    ordnanceOf(state).map((marker) => ({ ...marker })),
+    alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
+  )
+  return new Map(acquired.acquisitions.map((hit) => [hit.markerId, hit.targetShipId]))
+}
+
 function pdDefenderOf(state: GameState, ship: ShipState, mounts: PdMount[]): PdDefender {
   const busy = adfcLockedOut({
     launchedThisTurn: launchedThisTurn(state, ship),
@@ -8842,6 +9085,10 @@ function pdDefenderOf(state: GameState, ship: ShipState, mounts: PdMount[]): PdD
     mounts,
     adfc: busy ? 0 : adfcCount(ship, 'adfc'),
     advancedAdfc: busy ? 0 : adfcCount(ship, 'advanced-adfc'),
+    // 7.10 locks out the ADFC and leaves the scattergun's own capability
+    // alone (7.14), which is a difference `pointDefenceOptions` can only make
+    // if it is told which of the two is going on.
+    flightOpsThisTurn: busy,
   }
 }
 

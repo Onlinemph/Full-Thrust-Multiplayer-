@@ -1,9 +1,10 @@
 import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
-import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
+import { arcTo, bearsOn, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
-import { novaArmedOn, optional, waveGunCharge } from '../engine/actions'
+import { effectiveScreenLevel, novaArmedOn, optional, waveGunCharge } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
+import { PDS_RANGE } from '../engine/defences'
 import type { Arc, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
@@ -266,6 +267,35 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                 <span className="num arcs">{arc}</span>
               </div>
 
+              {/* 7.12: "Point Defense Systems can only be fired against ships
+                  without an operational screen/field (of any type) or any
+                  remaining armor boxes — i.e. undamaged warships are not
+                  vulnerable to such light weapons." So the row appears only
+                  when the target is stripped, which is exactly when a player
+                  would think to look for it. */}
+              {softTarget(ship, target) ? (
+                <div className="ssd-systems">
+                  {antiShipPd(ship, target).map((mount) => (
+                    <button
+                      key={mount.id}
+                      className="system-chip weapon-fire"
+                      title={`One die at ${range.toFixed(1)} MU; a 6 puts one point through (7.12)`}
+                      onClick={() =>
+                        dispatch({
+                          type: 'fire-point-defence',
+                          shipId: ship.id,
+                          systemId: mount.id,
+                          targetId: target.id,
+                        })
+                      }
+                    >
+                      {mount.label}
+                      <span className="num">1D6</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               {able.length === 0 ? (
                 <p className="nothing-bears">Nothing bears on them.</p>
               ) : (
@@ -376,3 +406,38 @@ function reachOf(
   // the engine is the authority.
   return { weapon, blocked: null, dice: Math.max(1, weapon.rating - (rangeBand(range) - 1)) }
 }
+
+/**
+ * Whether 7.12 will let point defence be fired at this hull.
+ *
+ * *"Point Defense Systems can only be fired against ships without an
+ * operational screen/field (of any type) or any remaining armor boxes – i.e.
+ * undamaged warships are not vulnerable to such light weapons."* Read as
+ * neither: the gloss that follows settles it, since an undamaged warship has
+ * both and must not be a legal target.
+ */
+function softTarget(ship: ShipState, target: ShipState): boolean {
+  if (target.cloaked || target.reflexFieldActive) return false
+  if (effectiveScreenLevel(target) > 0) return false
+  if (distance(ship.placement.position, target.placement.position) > PDS_RANGE) return false
+  return target.design.armour.layers.every(
+    (boxes, layer) => boxes - (target.armourMarked[layer] ?? 0) <= 0,
+  )
+}
+
+/** The PDS and ADS mounts that bear on a stripped hull and have not fired (7.12, 7.13). */
+function antiShipPd(ship: ShipState, target: ShipState): Array<{ id: string; label: string }> {
+  const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+  return ship.design.systems
+    .filter(
+      (system) =>
+        (system.kind === 'pds' || system.kind === 'ads') &&
+        !ship.destroyedSystems.has(system.id) &&
+        canWeaponFire(ship, system.id) &&
+        bearsOn(system.arcs ?? PD_ALL_ARCS, arc),
+    )
+    .map((system) => ({ id: system.id, label: system.label }))
+}
+
+/** 4.2 gives point defence "all-round (6-arc) fire capabilities" by default. */
+const PD_ALL_ARCS: readonly Arc[] = ['F', 'FS', 'AS', 'A', 'AP', 'FP']

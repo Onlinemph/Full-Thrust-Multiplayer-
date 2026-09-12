@@ -41,6 +41,7 @@ import {
   currentThrust,
   enemiesOf,
   engagedTargets,
+  hullRemaining,
   shipsAwaitingDeployment,
   type GameState,
   type ShipState,
@@ -55,7 +56,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
-import { ANTIMATTER_CHARGE_BLAST_RADIUS } from './defences'
+import { ANTIMATTER_CHARGE_BLAST_RADIUS, PDS_RANGE } from './defences'
 import { NOVA_SWEEPS, WAVE_GUN_BANDS, WAVE_GUN_CHARGE_TARGET, templateContacts } from './ew'
 import {
   canMountFlak,
@@ -75,6 +76,7 @@ import {
 import { arcsWhenInverted } from './specialmoves'
 import {
   deployingSide,
+  effectiveScreenLevel,
   novaArmedOn,
   optional,
   waveGunCharge,
@@ -84,7 +86,7 @@ import {
 } from './actions'
 import { isGateActive } from './ftl'
 import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
-import type { MovementOrder, Point, TurnDirection, WeaponDef } from './types'
+import type { Arc, MovementOrder, Point, TurnDirection, WeaponDef } from './types'
 import type { Rng } from './dice'
 
 /**
@@ -833,9 +835,61 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
     }
   }
 
+  // 7.12: a hull with no screens and no armour left is soft enough for point
+  // defence to finish, and a PDS that has nothing inbound to shoot at is
+  // otherwise doing nothing at all this turn.
+  for (const shot of antiShipPointDefence(game, ship)) actions.push(shot)
+
   if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
   return actions
 }
+
+/**
+ * Point defence used as a gun (7.12, 7.13).
+ *
+ * *"Point Defense Systems can only be fired against ships without an
+ * operational screen/field (of any type) or any remaining armor boxes – i.e.
+ * undamaged warships are not vulnerable to such light weapons."* One die each,
+ * a 6 for a point, 6 MU — worth nothing against a fresh cruiser and worth
+ * having against a hulk that is one box from going.
+ *
+ * A mount that shot at a missile in phase 9 is already spent (2.6), so the
+ * computer only ever reaches for the ones a quiet phase 9 left loaded.
+ */
+function antiShipPointDefence(game: GameState, ship: ShipState): GameAction[] {
+  const soft = enemiesOf(game, ship).filter((enemy) => {
+    if (enemy.destroyed || enemy.offTable || enemy.carriedBy !== null) return false
+    if (enemy.cloaked || enemy.reflexFieldActive) return false
+    if (effectiveScreenLevel(enemy) > 0) return false
+    if (distance(ship.placement.position, enemy.placement.position) > PDS_RANGE) return false
+    return enemy.design.armour.layers.every(
+      (boxes, layer) => boxes - (enemy.armourMarked[layer] ?? 0) <= 0,
+    )
+  })
+  if (soft.length === 0) return []
+  // The one nearest going: 4.12 scores a cripple once it is finished.
+  const mark = soft.reduce((best, enemy) =>
+    hullRemaining(enemy) < hullRemaining(best) ? enemy : best,
+  )
+  const arc = arcTo(ship.placement.position, ship.placement.facing, mark.placement.position)
+  return ship.design.systems
+    .filter(
+      (system) =>
+        (system.kind === 'pds' || system.kind === 'ads') &&
+        !ship.destroyedSystems.has(system.id) &&
+        canWeaponFire(ship, system.id) &&
+        bearsOn(system.arcs ?? PD_ALL_ARCS, arc),
+    )
+    .map((system) => ({
+      type: 'fire-point-defence' as const,
+      shipId: ship.id,
+      systemId: system.id,
+      targetId: mark.id,
+    }))
+}
+
+/** 4.2 gives point defence "all-round (6-arc) fire capabilities" by default. */
+const PD_ALL_ARCS: readonly Arc[] = ['F', 'FS', 'AS', 'A', 'AP', 'FP']
 
 /**
  * Where a ship would end up under an order — exported because the UI draws the

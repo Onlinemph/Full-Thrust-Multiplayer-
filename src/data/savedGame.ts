@@ -45,8 +45,10 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *   6  5.23 — a Spinal Mount is laid on a point and has its own action.
  *   7  7.23 — the Nova Cannon is armed and fired by its own actions, and no
  *             longer resolves as an ordinary shot at a named ship.
+ *   8  7.10 — phase 9 reads which hull a marker is actually coming for, so a
+ *             ship covering its neighbour needs an ADFC to do it.
  */
-export const CURRENT_RULES_VERSION = 7
+export const CURRENT_RULES_VERSION = 8
 
 export interface GameSetup {
   scenarioId: string

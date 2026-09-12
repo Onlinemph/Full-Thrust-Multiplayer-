@@ -195,6 +195,13 @@ export interface ShipState {
   thrustUsed: number
   layingMines: boolean
   /**
+   * 7.4: the FireCon is in active mode this turn. A Stealth-2 ship that goes
+   * active buys the full 54 MU FireCon range and *"is only treated as being
+   * Stealth-1 as long as the FireCon is in active mode"*; passive keeps
+   * Stealth-2 and may only shoot out to 24 MU.
+   */
+  activeScan: boolean
+  /**
    * 7.9: the turn a *"detonate"* order was written in, or null. The order is
    * good for that turn only — *"at the beginning of phase 13 ... the ship
    * explodes"* — so a turn stamp says both whether it stands and when.
@@ -554,6 +561,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     vectorOrders: null,
     thrustUsed: 0,
     layingMines: false,
+    activeScan: false,
     detonateOrderedTurn: null,
     landing: false,
     ftlTransit: 'none',
@@ -1513,6 +1521,9 @@ function onBeginTurn(state: GameState): void {
     // 7.25: the field is declared afresh every turn, along with the movement
     // order it is written beside.
     ship.reflexFieldActive = false
+    // 7.4's scan mode is the same kind of order: it lasts "as long as the
+    // FireCon is in active mode", and the mode is written each turn.
+    ship.activeScan = false
     // 16.6's clock turns here, because both of its steps are "the following
     // turn" and "one full turn" — durations measured in whole turns, which is
     // what a turn boundary is for.

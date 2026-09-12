@@ -22,6 +22,7 @@ import {
   isJumpPointDisoriented,
   novaArmedOn,
   optional,
+  stealthLevelOf,
   waveGunCharge,
 } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
@@ -367,6 +368,30 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
             {waveGunCharge(game, ship, waveGun.id) >= WAVE_GUN_CHARGE_TARGET
               ? 'ready — and a knocked-out capacitor takes the hull with it (7.24)'
               : 'one die a turn, and the charge is what the hull takes if it is shot out (7.24)'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* 7.4: the Stealth-2 trade. Passive keeps the second level of stealth
+          and caps targeting at 24 MU; active buys the full 54 MU FireCon range
+          and drops the ship to Stealth-1 while it lasts. */}
+      {stealthLevelOf(ship) >= 2 || ship.activeScan ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={ship.activeScan}
+              onChange={(event) =>
+                dispatch({ type: 'set-active-scan', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Go active
+          </label>
+          <span className="spacer" />
+          <span style={{ color: ship.activeScan ? 'var(--warn)' : 'var(--ink-dim)' }}>
+            {ship.activeScan
+              ? 'Stealth-1 while it lasts, and 54 MU of FireCon (7.4)'
+              : 'passive: Stealth-2, and nothing beyond 24 MU (7.4)'}
           </span>
         </div>
       ) : null}
