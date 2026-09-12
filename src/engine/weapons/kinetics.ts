@@ -1018,6 +1018,11 @@ export const SPINAL_MOUNT_PROFILE: Record<
 /** 5.23: a Spinal Mount's arc is *"half the normal width (30 degrees)"*. */
 export const SPINAL_ARC_DEGREES = 30
 
+/** Whether this mounting is a Spinal Mount (5.23). */
+export function isSpinalMount(weapon: WeaponDef): boolean {
+  return weapon.weaponClass.startsWith('spinal-')
+}
+
 /** 5.23: *"A ship may only mount up to 16 mass of Spinal Mount weapon per 50 mass of ship."* */
 export const SPINAL_MASS_PER_50 = 16
 

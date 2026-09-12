@@ -52,7 +52,11 @@ export interface MapViewProps {
    * plasma bolt are both aimed at a point on the table rather than at a ship,
    * so the aim is a click on bare table like a fighter's move is.
    */
-  aimWith?: { shipId: string; weaponId: string; kind: 'missile' | 'plasma-bolt' } | null
+  aimWith?: {
+    shipId: string
+    weaponId: string
+    kind: 'missile' | 'plasma-bolt' | 'spinal'
+  } | null
   /** Called once the aim point is taken, so the launcher leaves the hand. */
   onAimed?: () => void
   /**
@@ -175,7 +179,12 @@ export function MapView({
       dispatch(
         aimWith.kind === 'plasma-bolt'
           ? { type: 'launch-plasma-bolt', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
-          : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
+          : // 5.23: a Spinal Mount is laid on a point and catches everything
+            // in the swathe, so it is aimed like a bolt rather than clicked
+            // onto a ship.
+            aimWith.kind === 'spinal'
+            ? { type: 'fire-spinal-mount', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
+            : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
       )
       onAimed?.()
       return

@@ -73,6 +73,7 @@ import {
   type GameAction,
 } from './actions'
 import { isGateActive } from './ftl'
+import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
 
@@ -672,6 +673,38 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
   const enemies = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
   if (enemies.length === 0) return actions
 
+  // 5.23: a Spinal Mount is laid on a point, and the point worth laying it on
+  // is whatever enemy is nearest the bow — the beam catches everything behind
+  // it down the line, so aiming at the closest target in arc puts the most
+  // table behind the shot.
+  for (const weapon of ship.design.weapons) {
+    if (!isSpinalMount(weapon)) continue
+    if (ship.destroyedSystems.has(weapon.id)) continue
+    if (!canWeaponFire(ship, weapon.id)) continue
+    if (!spinalCanFire(ship.weaponLastFiredTurn.get(weapon.id) ?? null, game.turn)) continue
+    const inArc = enemies
+      .filter((enemy) =>
+        isInSpinalArc(ship.placement.position, ship.placement.facing, enemy.placement.position),
+      )
+      .filter(
+        (enemy) =>
+          distance(ship.placement.position, enemy.placement.position) <= maxRangeOf(weapon),
+      )
+      .sort(
+        (a, b) =>
+          distance(ship.placement.position, a.placement.position) -
+          distance(ship.placement.position, b.placement.position),
+      )
+    const aim = inArc[0]
+    if (!aim) continue
+    actions.push({
+      type: 'fire-spinal-mount',
+      shipId: ship.id,
+      weaponId: weapon.id,
+      aimPoint: { ...aim.placement.position },
+    })
+  }
+
   // 17.1: a target behind a planet cannot be shot at, so it is not a target.
   // Filtering here rather than at the shot keeps the computer from spending
   // FireCons on hulls it cannot reach.
@@ -692,6 +725,9 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
     if (arc === 'A' && !aftOpen) continue
     const able = ship.design.weapons
       .filter((weapon) => !ship.destroyedSystems.has(weapon.id))
+      // A Spinal Mount has already been laid above, on a point rather than
+      // at a ship, and `fire-weapon` refuses it (5.23).
+      .filter((weapon) => !isSpinalMount(weapon))
       .filter((weapon) => canWeaponFire(ship, weapon.id))
       // 16.2: an inverted ship's port batteries bear to starboard, so the
       // computer has to read its own attitude before it decides what bears.

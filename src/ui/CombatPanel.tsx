@@ -4,6 +4,13 @@ import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
 import { optional } from '../engine/actions'
 import type { Arc, WeaponDef } from '../engine/types'
+import {
+  isSpinalMount,
+  spinalCanFire,
+  spinalSize,
+  SPINAL_MOUNT_PROFILE,
+} from '../engine/weapons/kinetics'
+import type { AimingMount } from './OrdnancePanel'
 import { dispatch } from './store'
 
 /**
@@ -20,6 +27,9 @@ export interface CombatPanelProps {
   ship: ShipState
   /** Lets the map draw the arcs of whatever weapon is being considered. */
   onHoverWeapon?: (arcs: readonly Arc[] | undefined) => void
+  /** 5.23's Spinal Mount is laid on a point, so it goes in hand like a bolt. */
+  aiming?: AimingMount | null
+  onAim?: (mount: AimingMount | null) => void
 }
 
 interface Reach {
@@ -30,7 +40,7 @@ interface Reach {
   dice: number
 }
 
-export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
+export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: CombatPanelProps) {
   const targets = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
   const engaged = engagedTargets(ship, game.phase)
   const fireCons = availableFireCons(ship, game.phase)
@@ -58,7 +68,14 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
     )
   }
 
-  if (targets.length === 0 && gates.length === 0) {
+  // 5.23: a Spinal Mount is not fired at a target, it is laid down a line.
+  // It gets its own row above the target list, because picking a ship for it
+  // is the wrong gesture — the beam catches whatever the line crosses.
+  const spinals = ship.design.weapons.filter(
+    (weapon) => isSpinalMount(weapon) && !ship.destroyedSystems.has(weapon.id),
+  )
+
+  if (targets.length === 0 && gates.length === 0 && spinals.length === 0) {
     return (
       <div className="panel">
         <h3>Phase 11 · Fire</h3>
@@ -92,6 +109,36 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
           Release
         </button>
       </div>
+
+      {spinals.map((weapon) => {
+        const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null
+        const ready = spinalCanFire(lastFired, game.turn)
+        const held = aiming?.weaponId === weapon.id
+        return (
+          <div className="panel-row" key={weapon.id}>
+            <span>{weapon.label}</span>
+            <span className="spacer" />
+            <span className="num">{SPINAL_MOUNT_PROFILE[spinalSize(weapon)].range} MU</span>
+            <button
+              className={held ? 'primary' : undefined}
+              disabled={!ready || !canWeaponFire(ship, weapon.id)}
+              title={
+                ready
+                  ? 'Click a point on the table; the beam catches everything it crosses'
+                  : `Fired on turn ${lastFired} — a Spinal Mount reloads every other turn (5.23)`
+              }
+              onClick={() =>
+                onAim?.(held ? null : { shipId: ship.id, weaponId: weapon.id, kind: 'spinal' })
+              }
+            >
+              {held ? 'Click a point…' : ready ? 'Lay the beam' : 'Reloading'}
+            </button>
+            <span className="rule-detail">
+              30° off the bow, and the ship holds course next turn (5.23)
+            </span>
+          </div>
+        )
+      })}
 
       {targets
         .slice()

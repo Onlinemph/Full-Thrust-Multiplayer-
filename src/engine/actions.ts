@@ -237,7 +237,17 @@ import {
   rollsBeamDice,
   type WeaponResult,
 } from './weapons'
-import { turretFiringArcs, turretMountedArcs } from './weapons/kinetics'
+import {
+  isInSpinalArc,
+  isSpinalMount,
+  spinalBeamCatches,
+  spinalCanFire,
+  spinalLocksShip,
+  spinalSize,
+  turretFiringArcs,
+  turretMountedArcs,
+  SPINAL_ARC_DEGREES,
+} from './weapons/kinetics'
 import {
   acquireMissileTargets,
   canEngagePlasmaBolt,
@@ -557,6 +567,13 @@ export type GameAction =
    * course and the ship is gone for good.
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
+  /**
+   * 5.23 — a Spinal Mount is laid on a *point*, not a ship: *"Spinal Mounts
+   * all fire a beam of energy that can hit any model caught within"*, and the
+   * aim may be *"an 'empty point of space'"*. Everything in the swathe takes
+   * the same dice.
+   */
+  | { type: 'fire-spinal-mount'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
   /**
    * 5.22 — *"During the Write Orders Phase the facing of each turret must be
    * recorded."* One 60-degree arc; null lets the turret take any arc it
@@ -1189,8 +1206,19 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
 
       // A ship with no written order holds its course: velocity is conserved
-      // and it must move its full velocity anyway (3.1).
-      const order = ftl === 'warming-up' ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
+      // and it must move its full velocity anyway (3.1). 5.23 puts a ship
+      // that laid its Spinal Mount last turn in the same position whatever it
+      // wrote — "cannot maneuver at all, apply thrust".
+      const locked = spinalLockout(ship, state.turn)
+      if (locked) {
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name} is locked out by its Spinal Mount and holds course (5.23)`,
+        })
+      }
+      const order = ftl === 'warming-up' || locked ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
       const before = movementStateOf(ship)
 
       // Emergency thrust is checked immediately after orders are written, and
@@ -1381,6 +1409,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
       if (ship.destroyedSystems.has(weapon.id)) return refuse('That weapon is knocked out')
+      // 5.23: a Spinal Mount is laid on a point and catches everything in the
+      // beam, so it has its own action. Firing one at a named ship through
+      // here gave it a 60-degree arc, no reload and no lockout.
+      if (isSpinalMount(weapon) && rulesReading(state) >= 6) {
+        return refuse(`${weapon.label} is laid on a point, not a ship (5.23)`)
+      }
       // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
       if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
 
@@ -1619,6 +1653,146 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       if (target.destroyed) {
         pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+      }
+      return OK
+    }
+
+    /**
+     * 5.23's Spinal Mount, which is four rules a beam does not have.
+     *
+     * It is laid on a point rather than a ship and catches *"any model caught
+     * within"* the beam — every ship, fighter group, gunboat squadron and
+     * marker in a swathe of the mount's own width, all taking the same dice,
+     * friend and enemy alike. It fires every other turn. It bears only into a
+     * 30-degree arc off the bow, half a normal one. And the turn after it
+     * fires the ship *"cannot maneuver at all, apply thrust, nor can it charge
+     * its FTL drive"*, which `move-ship` and `plot-ftl-exit` enforce.
+     *
+     * All four were written in `kinetics.ts` and none was reachable: the mount
+     * fired through `fire-weapon` at a single named ship, in the full 60-degree
+     * forward arc, every turn, with no consequence afterwards.
+     */
+    case 'fire-spinal-mount': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (!isSpinalMount(weapon)) return refuse(`${weapon.label} is not a Spinal Mount (5.23)`)
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      const activation = openFiringActivation(state, ship)
+      if (activation) return activation
+
+      const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null
+      if (!spinalCanFire(lastFired, state.turn)) {
+        return refuse(`${weapon.label} fired on turn ${lastFired} and reloads every other turn (5.23)`)
+      }
+      if (!isInSpinalArc(ship.placement.position, ship.placement.facing, action.aimPoint)) {
+        return refuse(
+          `${weapon.label} lays on a ${SPINAL_ARC_DEGREES} degree arc off the bow, and that point is outside it (5.23)`,
+        )
+      }
+
+      const size = spinalSize(weapon)
+      // One roll for the shot, applied to everything the beam crosses: 5.23's
+      // "if multiple ships are within the beam area, they all sustain the same
+      // number of dice of hits".
+      const shot = fireWeapon(weapon, {
+        range: distance(ship.placement.position, action.aimPoint),
+        arc: 'F',
+        targetScreens: 0,
+        rearArc: false,
+        drm: 0,
+        rng: state.rng,
+      })
+      markWeaponFired(ship, weapon.id, state.phase)
+      ship.weaponLastFiredTurn.set(weapon.id, state.turn)
+      if ('refused' in shot) {
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} does not fire — ${shot.refused}`,
+        })
+        return OK
+      }
+
+      const caught = state.ships.filter(
+        (other) =>
+          other.id !== ship.id &&
+          !other.destroyed &&
+          !other.offTable &&
+          other.carriedBy === null &&
+          spinalBeamCatches(
+            ship.placement.position,
+            action.aimPoint,
+            other.placement.position,
+            size,
+          ),
+      )
+      pushLog(state, {
+        kind: 'fire',
+        shipId: ship.id,
+        side: ship.side,
+        dice: shot.dice,
+        text:
+          `${ship.name} lays ${weapon.label} down the ${size} beam: ${shot.detail}` +
+          (caught.length === 0 ? ' — nothing in it' : ` — ${caught.length} caught`),
+      })
+
+      for (const target of caught) {
+        // 7.3 and 4.9 still apply to each hull the beam crosses: the shot is
+        // shared, the defences are not.
+        const applied = applyDamage(targetStateOf(target), shot, {
+          rearArcRule: optional(state).rearArcAttacks,
+          rearArc: false,
+          source: 'direct-fire',
+        })
+        writeBackDamage(target, applied.target)
+        markHullBoxes(target, applied.hullDamage)
+        pushLog(state, {
+          kind: 'damage',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          text: `${target.name} is in the beam: ${applied.hullDamage} through (5.23)`,
+        })
+        if (target.destroyed) {
+          pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+        }
+      }
+
+      // "Missiles, fighters, gunboats and Plasma Bolts are caught the same
+      // way" — and a fighter group in an anti-ship beam is simply gone.
+      for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+        if (group.status !== 'in-flight') continue
+        if (!spinalBeamCatches(ship.placement.position, action.aimPoint, group.position, size)) {
+          continue
+        }
+        group.status = 'destroyed'
+        pushLog(state, {
+          kind: 'destroyed',
+          side: group.side,
+          text: `${group.label} is caught in ${ship.name}'s beam (5.23)`,
+        })
+      }
+      const survivors = ordnanceOf(state).filter(
+        (marker) =>
+          !spinalBeamCatches(ship.placement.position, action.aimPoint, marker.position, size),
+      )
+      if (survivors.length !== ordnanceOf(state).length) {
+        pushLog(state, {
+          kind: 'note',
+          side: ship.side,
+          text: `Ordnance in the beam is burned away (5.23)`,
+        })
+        setOrdnance(state, survivors)
+        projectOrdnance(state)
       }
       return OK
     }
@@ -4375,6 +4549,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.design.ftl === 'none') return refuse(`${ship.name} has no FTL drive`)
       if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot enter hyperspace (7.20)`)
       if (ship.ftlWarmupTurn !== null) return refuse(`${ship.name} is already spinning up`)
+      // 5.23: the turn after a Spinal Mount fires the ship "cannot ... charge
+      // its FTL drive", which is exactly what this order starts.
+      if (spinalLockout(ship, state.turn)) {
+        return refuse(`${ship.name} cannot charge its FTL drive the turn after a Spinal Mount fires (5.23)`)
+      }
       // 11.2: inside a hyper limit the jump is not attempted and fails, it is
       // simply not available — "FTL entry or exit is only permitted by player
       // agreement or scenario design". Refused in phase 1, before the drive
@@ -4849,6 +5028,21 @@ function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome 
 function spent(ship: ShipState): ActionOutcome {
   return refuse(
     `${ship.name} has had its fire this turn — play moved on to another ship (2.6)`,
+  )
+}
+
+/**
+ * 5.23: *"The turn after a Spinal Mount if fired a ship cannot maneuver at
+ * all, apply thrust, nor can it charge its FTL drive."*
+ *
+ * The whole hull, not the mount: a ship that laid its beam last turn spends
+ * this one holding course and velocity while the capacitors recover.
+ */
+function spinalLockout(ship: ShipState, turn: number): boolean {
+  return ship.design.weapons.some(
+    (weapon) =>
+      isSpinalMount(weapon) &&
+      spinalLocksShip(ship.weaponLastFiredTurn.get(weapon.id) ?? null, turn),
   )
 }
 

@@ -199,7 +199,11 @@ export function App() {
               : null
           }
           onTerrainPlaced={() => setPlacingTerrain(null)}
-          aimWith={game.phase === 'launch-missiles' ? aiming : null}
+          aimWith={
+            game.phase === 'launch-missiles' || (game.phase === 'ship-fire' && aiming?.kind === 'spinal')
+              ? aiming
+              : null
+          }
           onAimed={() => setAiming(null)}
         />
 
@@ -227,7 +231,13 @@ export function App() {
               onVelocity={setDeployVelocity}
             />
           ) : game.phase === 'ship-fire' && selected ? (
-            <CombatPanel game={game} ship={selected} onHoverWeapon={setLitArcs} />
+            <CombatPanel
+              game={game}
+              ship={selected}
+              onHoverWeapon={setLitArcs}
+              aiming={aiming}
+              onAim={setAiming}
+            />
           ) : (
             <PhaseControls
               phase={game.phase}

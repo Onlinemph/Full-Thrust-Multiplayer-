@@ -14,7 +14,12 @@ import type { WeaponDef } from '../engine/types'
  * table it will go off on regardless of who is standing there.
  */
 
-export type AimingMount = { shipId: string; weaponId: string; kind: 'missile' | 'plasma-bolt' }
+export type AimingMount = {
+  shipId: string
+  weaponId: string
+  /** 5.23's Spinal Mount is aimed like a bolt: at a point, not a ship. */
+  kind: 'missile' | 'plasma-bolt' | 'spinal'
+}
 
 export interface OrdnancePanelProps {
   game: GameState
