@@ -24,6 +24,7 @@ import {
   availableFireCons,
   canWeaponFire,
   engagedTargets,
+  hullRowsCompleted,
   markHullBoxes,
   markShipFired,
   markWeaponFired,
@@ -66,14 +67,18 @@ import {
 } from './fighters'
 import { arcTo, distance, isRearArcAttack } from './geometry'
 import {
+  combinedStealthLevel,
   effectiveScreenLevel as screenLevelOf,
   pointDefenceOptions,
+  stealthHullLevel,
+  STEALTH_BAND_SCALE,
   resolvePointDefence,
   type PdAllocation,
   type PdDefender,
   type PdMount,
   type PdMountKind,
   type PdThreat,
+  type StealthLevel,
 } from './defences'
 import type { ScreenLevel } from './dice'
 import {
@@ -557,6 +562,25 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ew.untargetable) {
         return refuse(`${target.name} is not on the table (7.21)`)
       }
+      // 7.4, 7.5: stealth shrinks the attacker's range brackets, which is the
+      // same arithmetic as stretching the range — a Stealth-1 target 12 MU
+      // away is ranged as though it were at 14.4. Applied AFTER the electronic
+      // warfare stack rather than before it, so the holofield's "ignored
+      // inside 6 MU" test still measures the true distance (7.17).
+      const stealth = stealthLevelOf(target)
+      const rangeToUse = stealth > 0 ? ew.effectiveRange / STEALTH_BAND_SCALE[stealth] : ew.effectiveRange
+      if (stealth > 0 && rangeToUse > maxRangeOf(weapon)) {
+        markWeaponFired(ship, weapon.id, state.phase)
+        markShipFired(ship)
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} cannot range ${target.name} — Stealth-${stealth} (7.4)`,
+        })
+        return OK
+      }
       if (ew.autoMiss) {
         markWeaponFired(ship, weapon.id, state.phase)
         markShipFired(ship)
@@ -571,7 +595,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
 
       const result = fireWeapon(weapon, {
-        range: ew.effectiveRange,
+        range: rangeToUse,
         arc,
         targetScreens: effectiveScreenLevel(target),
         rearArc: isRearArcAttack(
@@ -1835,6 +1859,25 @@ function reflexField(
     result: { ...result, normalDamage: normal, penetratingDamage: penetrating },
     back: roll.toAttacker,
   }
+}
+
+/**
+ * How stealthy the target is right now (7.4, 7.5).
+ *
+ * Stealth is not electronic warfare and does not stack with it: it is a hull
+ * shape and a coating, and 7.4 wears it away as the hull is opened up — a
+ * Stealth-1 hull is bare once two rows are gone, a Stealth-2 hull drops a
+ * level per row after the first. A stealth *field* adds to it, and 7.5 caps
+ * the total at 2.
+ *
+ * 7.20 switches it off entirely under a cloak: *"The ship does not gain any
+ * bonuses for stealth while the cloak is active."*
+ */
+function stealthLevelOf(ship: ShipState): StealthLevel {
+  if (ship.cloaked) return 0
+  const built = Math.min(2, operationalCount(ship, 'stealth-hull')) as StealthLevel
+  const field = Math.min(2, operationalCount(ship, 'stealth-field')) as StealthLevel
+  return combinedStealthLevel(stealthHullLevel(built, hullRowsCompleted(ship)), field, true)
 }
 
 /**

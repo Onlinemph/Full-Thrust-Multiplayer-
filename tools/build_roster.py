@@ -48,7 +48,12 @@ SYSTEMS = {
     'gunboat-rack': (18, 0), 'gunboat-bay': (24, 0),
     'cargo': (1, 0), 'troop-berthing': (1, 0), 'minesweeper': (5, 15),
     'ortillery': (3, 9), 'shipyard': (1, 2), 'antimatter-charge': (1, 5),
-    'stealth-hull': (0, 2),
+    # 14.1 prices a stealth hull per hull/armour box, not flat; the catalogue
+    # carries a placeholder that designPricing.proportionalCost replaces.
+    'stealth-hull': (0, 0),
+    'stealth-field': (0, 0),
+    'catapult': (1, 0),
+    'weasel-emitter': (2, 8),
     # The optional systems of 7.17 - 7.25 are shares of the hull, not flat
     # fits, so the catalogue carries a placeholder and `proportionalCost` in
     # designPricing.ts prices one the moment it is fitted to a design.
@@ -68,6 +73,8 @@ LABELS = {
     'superior-sensors': 'Sup Sensors', 'hangar-bay': 'Hangar', 'launch-tube': 'Launch Tube',
     'gunboat-rack': 'Gunboat Rack', 'gunboat-bay': 'Gunboat Bay',
     'holofield': 'Holofield', 'cloaking-device': 'Cloaking Device',
+    'stealth-field': 'Stealth Field', 'catapult': 'Catapult',
+    'weasel-emitter': 'Weasel Emitter',
     'cloaking-field': 'Cloaking Field', 'tuffley-cloak': 'Tuffley Cloak',
     'reflex-field': 'Reflex Field',
     'boat-bay': 'Boat Bay', 'cargo': 'Cargo', 'troop-berthing': 'Troops',

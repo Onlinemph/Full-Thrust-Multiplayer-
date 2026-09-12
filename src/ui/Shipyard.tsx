@@ -224,7 +224,7 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                   onClick={() => {
                     // A share-of-hull system is priced against this hull, not
                     // off the catalogue's flat figures (7.17 – 7.25).
-                    const scaled = proportionalCost(entry.kind, design.mass)
+                    const scaled = proportionalCost(entry.kind, design)
                     edit({
                       systems: [
                         ...design.systems,

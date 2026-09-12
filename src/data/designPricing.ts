@@ -104,27 +104,57 @@ export function armourPoints(armour: ArmourDef): number {
  * under them, and `validateDesign` reports it when they have not been.
  */
 export const PROPORTIONAL_SYSTEMS: Partial<
-  Record<SystemKind, { mass: number | 'fraction'; massFraction?: number; pointsPerMass?: number; pointsFraction?: number }>
+  Record<
+    SystemKind,
+    {
+      mass: number | 'fraction'
+      massFraction?: number
+      pointsPerMass?: number
+      pointsFraction?: number
+      /** 14.1: priced *per hull and armour box* rather than off mass. */
+      pointsPerProtectionBox?: number
+    }
+  >
 > = {
   holofield: { mass: 'fraction', massFraction: 0.1, pointsPerMass: 5 },
   'tuffley-cloak': { mass: 'fraction', massFraction: 0.1, pointsPerMass: 10 },
   'reflex-field': { mass: 'fraction', massFraction: 0.1, pointsPerMass: 6 },
   'cloaking-device': { mass: 1, pointsFraction: 0.5 },
   'cloaking-field': { mass: 1, pointsFraction: 1 },
+  // 14.1: "Stealth Hull -Level 1: None, 2 per Hull/Armour Box. Stealth Hull
+  // -Level 2: None, 4 per Hull/Armour Box." Fitting two entries is what makes
+  // a hull Stealth-2, and two at 2 a box is the printed 4 a box.
+  'stealth-hull': { mass: 0, pointsPerProtectionBox: 2 },
+  // 14.2: "Stealth Fields 5% total mass per level (max 2), x6".
+  'stealth-field': { mass: 'fraction', massFraction: 0.05, pointsPerMass: 6 },
 }
 
-/** What one proportional system weighs and costs on a hull of this mass. */
+/** Hull boxes plus every armour box: what 14.1 prices a stealth hull against. */
+export function protectionBoxes(design: ShipDesign): number {
+  return design.hullBoxes + design.armour.layers.reduce((a, b) => a + b, 0)
+}
+
+/**
+ * What one proportional system weighs and costs on this hull.
+ *
+ * It takes the design rather than the mass because not all of them scale with
+ * mass: 14.1 prices a stealth hull off the boxes it has to hide, which is the
+ * hull track plus the armour wrapped round it.
+ */
 export function proportionalCost(
   kind: SystemKind,
-  shipMass: number,
+  design: ShipDesign,
 ): { mass: number; points: number } | null {
   const spec = PROPORTIONAL_SYSTEMS[kind]
   if (!spec) return null
+  const shipMass = design.mass
   const mass = spec.mass === 'fraction' ? (spec.massFraction ?? 0) * shipMass : spec.mass
   const points =
-    spec.pointsFraction !== undefined
-      ? spec.pointsFraction * shipMass
-      : mass * (spec.pointsPerMass ?? 0)
+    spec.pointsPerProtectionBox !== undefined
+      ? spec.pointsPerProtectionBox * protectionBoxes(design)
+      : spec.pointsFraction !== undefined
+        ? spec.pointsFraction * shipMass
+        : mass * (spec.pointsPerMass ?? 0)
   return { mass: round2(mass), points: Math.floor(points + 0.5) }
 }
 
@@ -139,7 +169,7 @@ export function repriceProportional(design: ShipDesign): ShipDesign {
   return {
     ...design,
     systems: design.systems.map((system) => {
-      const cost = proportionalCost(system.kind, design.mass)
+      const cost = proportionalCost(system.kind, design)
       return cost ? { ...system, ...cost } : system
     }),
   }
@@ -333,7 +363,7 @@ export function validateDesign(
   }
 
   for (const system of design.systems) {
-    const cost = proportionalCost(system.kind, design.mass)
+    const cost = proportionalCost(system.kind, design)
     if (!cost) continue
     if (Math.abs(system.mass - cost.mass) > 1e-6 || system.points !== cost.points) {
       faults.push({

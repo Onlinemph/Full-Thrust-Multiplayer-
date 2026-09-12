@@ -150,6 +150,63 @@ describe('a holofield, once the shot goes through the engine (7.17)', () => {
   })
 })
 
+describe('a stealth hull, through the action layer (7.4)', () => {
+  /** Fire a Beam-3 at 30 MU: in range bare, out of range against Stealth-2. */
+  function shotAt(distance: number, stealth: number): { hit: boolean; log: string } {
+    const game = createGame({
+      seed: 0x57ea,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      ships: [
+        createShipState({
+          id: 'shooter',
+          side: 'a',
+          design: design('Shooter', []),
+          placement: { position: { x: 0, y: 0 }, facing: 6 },
+        }),
+        createShipState({
+          id: 'target',
+          side: 'b',
+          design: design(
+            'Target',
+            Array(stealth).fill('stealth-hull') as SystemKind[],
+          ),
+          placement: { position: { x: 0, y: distance }, facing: 12 },
+        }),
+      ],
+    })
+    advanceTo(game, 'ship-fire')
+    applyAction(game, {
+      type: 'fire-weapon',
+      shipId: 'shooter',
+      weaponId: 'b1',
+      targetId: 'target',
+    })
+    const last = game.log[game.log.length - 1]
+    return { hit: (game.ships[1].hullMarked ?? 0) > 0, log: last?.text ?? '' }
+  }
+
+  it('shortens a Beam-3 from 36 MU to 30, and to 24 at level 2', () => {
+    // "A class 3 beam normally has a range of 36 MU. Against a Stealth-1
+    // target it would have a range of 30 MU; against a Stealth-2 target it
+    // would have a range of 24 MU" (7.4).
+    expect(shotAt(34, 0).log, 'bare hull, inside 36 MU').not.toContain('cannot range')
+    expect(shotAt(34, 1).log, 'past the 30 MU a Stealth-1 target allows').toContain('cannot range')
+    expect(shotAt(28, 1).log, 'inside 30 MU').not.toContain('cannot range')
+    expect(shotAt(28, 2).log, 'past the 24 MU a Stealth-2 target allows').toContain('cannot range')
+  })
+
+  it('costs the attacker dice by shrinking the range bands', () => {
+    // Same seed, same distance, one difference: fewer dice reach.
+    const bare = shotAt(20, 0)
+    const hidden = shotAt(20, 2)
+    expect(bare.log).not.toContain('cannot range')
+    expect(hidden.log).not.toContain('cannot range')
+    // 20 MU is the second band bare and the third against Stealth-2, so the
+    // Beam-3 rolls two dice rather than three.
+    expect(hidden.log).not.toBe(bare.log)
+  })
+})
+
 describe('a Reflex Field, through the action layer (7.25)', () => {
   /** Fire the same volley many times and total what the field let through. */
   function volleys(count: number, raise: boolean): { landed: number; back: number } {
