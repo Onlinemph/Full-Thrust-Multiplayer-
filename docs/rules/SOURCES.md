@@ -46,8 +46,8 @@ What the rest costs, and what stands in for it:
 | 10 Threshold Points | Covered: 4.11 states the threshold rules in full, and the Core Systems effects come from the XD quick reference. Two consequences the XD sheet gives timings but not effects for — what life support failure and being out of control actually cost — are judgement calls, marked `[reading]` in `threshold.md`. |
 | 11 Faster Than Light | Exit implemented end to end (11.4); entry, jump gates, tugs, battleriders and hyperspace battles are implemented in `ftl.ts` and wait on a scenario to place them. |
 | 12 Optional Rules | Covered from the section itself now: sensors and ECM, boarding combat (12.7), fleet morale, striking the colors and civil wars. |
-| 13 Ship design and construction | Covered by the construction tables, which encode every cost the section states. |
-| 14 Ship construction summary | Covered — the tables *are* section 14. |
+| 13 Ship design and construction | Covered, and now checked against the section itself rather than only the spreadsheet. |
+| 14 Ship construction summary | Covered and verified. Every price the catalogue already carried matches 14.1–14.8 exactly — hulls, drives, screens, armour, every direct-fire weapon, ordnance, fighters and gunboats. What the checking found was omissions, not errors: eighteen weapon classes the engine could resolve but nobody could buy, eleven gunboat types, and one real bug, the stealth hull sold at a flat 2 points where 14.1 charges 2 *per hull and armour box*. |
 | 15 The Imperial Tech Base | **Not implemented.** No faction availability restrictions. |
 | 16 Special moves | **Not implemented** (thrust-0 drives, rolling, towing, docking, ramming). |
 | 17 Terrain effects | **Not implemented.** |

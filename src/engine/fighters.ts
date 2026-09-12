@@ -298,10 +298,16 @@ const gun = (
 ): FighterGunProfile => ({ drm, cef, hit, range })
 
 /**
- * The fighter catalogue of 8.15. Costs are quoted per fighter and per wing
- * exactly as printed; every printed pair is consistent with six to a wing
- * (3×6=18, 4×6=24, 6×6=36, 7×6=42, 5×6=30), except the Assault Shuttle, which
- * the book prices only as "6 points per wing".
+ * The fighter catalogue of 8.15, cross-checked against the price table at
+ * 14.7. Costs are quoted per fighter and per wing exactly as printed, and
+ * every printed pair is consistent with six to a wing (3×6=18, 4×6=24, 6×6=36,
+ * 7×6=42, 5×6=30, 1×6=6).
+ *
+ * The Light Fighter is the one that looks wrong and is not: 14.7 prices it "4
+ * each, 18 for standard wing, 24 for attack" while a Light group is eight
+ * craft. The per-wing figures are the ones that bind, and they are the same as
+ * an ordinary wing's — which is why the Light modification costs nothing per
+ * fighter here and simply changes the group's size and its endurance.
  */
 export const FIGHTER_TYPES: Record<FighterTypeId, FighterType> = {
   standard: {
@@ -476,7 +482,8 @@ export const FIGHTER_TYPES: Record<FighterTypeId, FighterType> = {
     cef: 6,
     move: FIGHTER_MOVE,
     secondaryMove: FIGHTER_SECONDARY_MOVE,
-    // "Assault Shuttles cost 6 points per wing" — the only type priced per wing.
+    // 8.15 quotes only "6 points per wing"; 14.7's table gives both figures,
+    // "1 point each, 6 per wing", and they agree.
     pointsPerFighter: 1,
     pointsPerWing: 6,
     antiShip: null,
