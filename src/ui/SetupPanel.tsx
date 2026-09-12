@@ -450,6 +450,7 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             forces={draft.forces ?? {}}
             techBases={draft.techBases ?? {}}
             cpv={Boolean(draft.cpv)}
+            bannedSystems={draft.bannedSystems}
             factions={draft.factions ?? {}}
             clans={draft.clans ?? {}}
             onChange={(forces) => setDraft((d) => ({ ...d, forces }))}

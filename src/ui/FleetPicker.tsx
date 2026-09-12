@@ -39,6 +39,12 @@ export interface FleetPickerProps {
   techBases?: Partial<Record<string, TechBaseChoice>>
   /** 18.3: price the fleet in Combat Points Value rather than printed points. */
   cpv?: boolean
+  /**
+   * Systems the table has barred for this battle. The campaign rules bar three
+   * outright and a tournament may bar a different set; either way a hull that
+   * carries one is not a hull that may be picked.
+   */
+  bannedSystems?: readonly string[]
   /** The campaign faction each side flies under, and its clan where it has one. */
   factions?: Partial<Record<string, string>>
   clans?: Partial<Record<string, string>>
@@ -61,6 +67,7 @@ export function FleetPicker({
   forces,
   techBases,
   cpv = false,
+  bannedSystems,
   factions,
   clans,
   onChange,
@@ -96,12 +103,17 @@ export function FleetPicker({
   // faction flying it.
   const factionId = factions?.[side]
   const clanId = clans?.[side]
-  const factionFaults = (target: ShipDesign) =>
-    factionId
-      ? validateDesign(target, { factionId, clanId }).filter(
-          (fault) => fault.kind === 'faction-prohibition' || fault.kind === 'faction-design',
-        )
-      : []
+  // The two refusals a picker can act on: what the faction will not build, and
+  // what this table has barred. Everything else `validateDesign` reports is
+  // about how the hull was drawn, which is the shipyard's business, not this
+  // panel's.
+  const pickFaults = (target: ShipDesign) =>
+    validateDesign(target, { factionId, clanId, bannedSystems }).filter(
+      (fault) =>
+        fault.kind === 'banned' ||
+        ((fault.kind === 'faction-prohibition' || fault.kind === 'faction-design') &&
+          factionId !== undefined),
+    )
   const techReport = checkFleetTechBase(
     techBase,
     picked.map((id) => byId(designs, id)).filter((d): d is ShipDesign => Boolean(d)),
@@ -222,7 +234,7 @@ export function FleetPicker({
               {available.map((design) => {
                 const problems = [
                   ...designProblems(techBase, design),
-                  ...factionFaults(design).map(describeFault),
+                  ...pickFaults(design).map(describeFault),
                 ]
                 return (
                   <button

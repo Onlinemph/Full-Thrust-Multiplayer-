@@ -17,6 +17,7 @@ import {
 } from '../engine/ftl'
 import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
+import { validateDesign } from './designPricing'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
 import type { BattleType } from '../engine/battles'
 import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
@@ -193,6 +194,31 @@ export function buildGame(setup: GameSetup): GameState {
         : `${side.name} plays the ${report.baseName} tech base, which could not have built ` +
           `${report.designs.length} of its ships (15)`,
     })
+  }
+
+  // The systems this table barred. Reported rather than refused, like the tech
+  // base and 11.8 above, because a scenario writes its own forces and a table
+  // that bars a system after the scenario was written should not be unable to
+  // play it — but it should be told.
+  if ((setup.bannedSystems?.length ?? 0) > 0) {
+    for (const side of game.sides) {
+      const carrying = game.ships.filter(
+        (ship) =>
+          ship.side === side.id &&
+          validateDesign(ship.design, { bannedSystems: setup.bannedSystems }).some(
+            (fault) => fault.kind === 'banned',
+          ),
+      )
+      if (carrying.length === 0) continue
+      pushLog(game, {
+        kind: 'note',
+        side: side.id,
+        text:
+          `${side.name} fields ${carrying.length} ` +
+          `${carrying.length === 1 ? 'hull' : 'hulls'} carrying a system this table barred: ` +
+          carrying.map((ship) => ship.name).join(', '),
+      })
+    }
   }
 
   // 11.8, reported the same way and for the same reason: a scenario that puts
