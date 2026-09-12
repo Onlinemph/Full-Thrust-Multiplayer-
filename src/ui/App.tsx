@@ -22,6 +22,7 @@ import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
 import { FlightPanel } from './FlightPanel'
+import { GatePanel } from './GatePanel'
 import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { ReplayBar } from './ReplayBar'
@@ -220,6 +221,8 @@ export function App() {
           {optional(game).movingTable ? <MovingTablePanel game={game} /> : null}
 
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
+
+          <GatePanel game={game} viewingSide={viewingSide} />
 
           {game.fighterGroups.length > 0 || game.gunboatSquadrons.length > 0 ? (
             <FlightPanel

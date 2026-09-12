@@ -1364,6 +1364,10 @@ export function isGateActive(gate: GateDef, state: GateState, turn: number): boo
  */
 export function gateBearsOn(gate: GateDef, from: Point): boolean {
   if (gate.facing === null) return true
+  // A ship standing on the gate is not on either side of it — it is at it,
+  // which is where 11.9 puts a ship about to transfer. `arcTo` of a zero-length
+  // vector has no answer, so the question is refused rather than guessed.
+  if (distance(gate.position, from) <= EPSILON) return true
   return arcTo(gate.position, gate.facing, from) === 'F'
 }
 

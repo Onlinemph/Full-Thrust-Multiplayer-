@@ -337,6 +337,37 @@
   opacity: 0.1;
 }
 
+/* 11.9's gates. A ring rather than a disc, because a gate is a hole: ships
+   pass through it and nothing is standing there. Dashed while it is inactive,
+   solid once it will lift anything, and the tick marks the entry facing —
+   "the marker or model should be clearly marked" (11.9). */
+.gate {
+  fill: none;
+  stroke: var(--side-c);
+  stroke-width: 1.5;
+  opacity: 0.75;
+}
+
+.gate.is-inactive {
+  stroke-dasharray: 3 3;
+  opacity: 0.4;
+}
+
+.gate.is-portal {
+  stroke: var(--screens);
+}
+
+.gate-facing {
+  stroke: inherit;
+  stroke-width: 1.5;
+}
+
+.gate-label {
+  fill: var(--ink-dim);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
 /* ── Fire effects ─────────────────────────────────────────────────────────── */
 
 /* Weapon fire is a line that draws itself and fades. It is decoration: the log

@@ -50,6 +50,9 @@ export function damageLevelOf(ship: ShipState): DamageLevel {
   // arrived. Counting it as a withdrawal would score the attacker for its own
   // reinforcements before they turn up.
   if (ship.ftlArrival !== null) return 'unhurt'
+  // 11.9: same for a hull still waiting behind a gate. It has not withdrawn;
+  // it has not turned up.
+  if (ship.awaitingGate !== null) return 'unhurt'
   if (ship.offTable) return 'disengaged'
 
   const rowsGone = hullRowsCompleted(ship)

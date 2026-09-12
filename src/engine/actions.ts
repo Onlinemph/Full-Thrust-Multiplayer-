@@ -45,6 +45,7 @@ import {
   type GunboatSquadronState,
   type ShipState,
   type SideId,
+  type TableGate,
 } from './game'
 import {
   applyOrder,
@@ -129,6 +130,15 @@ import {
   allocateBattleriderDamage,
   attachedBattleriderDefence,
   canDetachBattlerider,
+  currentTransferMass,
+  gateActivation,
+  GATE_HULL_FRACTION,
+  gateBearsOn,
+  gateEntry,
+  isGateActive,
+  jumpPointDisorientation,
+  portalPairTransit,
+  resolveGateTransfer,
   ftlExitMove,
   ftlExitRestrictions,
   ftlPermittedAt,
@@ -212,7 +222,7 @@ import {
   type PdThreat,
   type StealthLevel,
 } from './defences'
-import { d6, thresholdTarget, type ScreenLevel } from './dice'
+import { d6, thresholdCheck, thresholdTarget, type ScreenLevel } from './dice'
 import {
   fireWeapon,
   isAreaEffect,
@@ -283,6 +293,7 @@ import type {
   Course,
   DamageMode,
   MovementOrder,
+  Phase,
   Point,
   SystemKind,
   TurnDirection,
@@ -537,6 +548,42 @@ export type GameAction =
    * course and the ship is gone for good.
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
+  /**
+   * 11.9 — "The player writes a 'Gate Activate' order at the beginning of the
+   * turn". Written in phase 1; the roll comes when the order is announced in
+   * phase 5, so nobody gets to see the initiative before deciding.
+   */
+  | { type: 'plot-gate-activation'; gateId: string; side: SideId; on: boolean }
+  /** 11.9 — "and announces the activation when ships are moved". */
+  | { type: 'announce-gate-activation'; gateId: string }
+  /**
+   * 11.9 — a ship comes onto the table through a gate, on the course opposite
+   * the gate's facing and at a velocity up to its own drive rating.
+   */
+  | {
+      type: 'gate-entry'
+      shipId: string
+      gateId: string
+      velocity: number
+      /** Required only for a gate usable from any angle, which has no facing. */
+      course?: Course
+    }
+  /**
+   * 11.9 — both ends of a Portal on the table: a ship goes in one and comes
+   * out the other *"with the same velocity that it entered"*.
+   */
+  | { type: 'portal-hop'; shipId: string; gateId: string }
+  /**
+   * 11.9 — "At the end of the turn, the transfer takes place." The named ships
+   * leave through the gate; whether they arrive is the gate's capacity's
+   * business, and 1 is the good result.
+   */
+  | { type: 'gate-transfer'; gateId: string; shipIds: string[] }
+  /**
+   * 11.9 — an artificial gate has hull boxes and can be shot at. A natural one
+   * *"cannot be destroyed by normal weapons fire"*.
+   */
+  | { type: 'fire-at-gate'; shipId: string; weaponId: string; gateId: string }
   /**
    * 11.7 — a battlerider lets go of its Mothership, or a tug drops its tow
    * (11.6). Written in orders, because the rider then flies its own move in
@@ -3682,6 +3729,374 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    // ── Jump Gates and Portals (11.9, 11.10) ─────────────────────────────
+
+    /**
+     * 11.9: *"The player writes a 'Gate Activate' order at the beginning of
+     * the turn and announces the activation when ships are moved."*
+     *
+     * The split matters. Writing in phase 1 and announcing in phase 5 means
+     * the decision is taken before initiative is rolled, which is the whole
+     * point of writing orders down; collapsing the two would let an attacker
+     * wait to see who moves last before committing to the gate.
+     */
+    case 'plot-gate-activation': {
+      if (state.phase !== 'orders') {
+        return refuse('A Gate Activate order is written in orders, phase 1 (11.9)')
+      }
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      if (gate.def.natural) {
+        return refuse(`${gateName(gate)} is a natural jump point and needs no activation (11.10)`)
+      }
+      if (!action.on) {
+        gate.activationOrderedBy = null
+        gate.activationOrderTurn = null
+        return OK
+      }
+      const side = action.side
+      if (!state.sides.some((candidate) => candidate.id === side)) return refuse('No such side')
+      gate.activationOrderedBy = side
+      gate.activationOrderTurn = state.turn
+      pushLog(state, {
+        kind: 'orders',
+        side,
+        text: `Gate Activate ordered for ${gateName(gate)} (11.9)`,
+      })
+      return OK
+    }
+
+    /**
+     * The announcement, and the roll (11.9).
+     *
+     * Whose dice these are is the trap: *"the defender rolls a D6"* — the
+     * player who does **not** control the gate — even though it is the
+     * attacker who wants it switched on.
+     */
+    case 'announce-gate-activation': {
+      if (state.phase !== 'move-ships') {
+        return refuse('A gate activation is announced when ships are moved, phase 5 (11.9)')
+      }
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      if (gate.def.natural) {
+        return refuse(`${gateName(gate)} is a natural jump point and needs no activation (11.10)`)
+      }
+      const side = gate.activationOrderedBy
+      if (side === null || gate.activationOrderTurn !== state.turn) {
+        return refuse(`No Gate Activate order was written for ${gateName(gate)} this turn (11.9)`)
+      }
+      const result = gateActivation(
+        { ...gate.def, playerControlled: gate.controllingSide === side },
+        state.turn,
+        state.rng,
+      )
+      gate.state = { ...gate.state, activeFromTurn: result.activeFromTurn }
+      gate.activationOrderedBy = null
+      gate.activationOrderTurn = null
+      pushLog(state, {
+        kind: 'note',
+        side,
+        dice: result.roll === null ? undefined : [result.roll],
+        text: `${gateName(gate)}: ${result.note} — usable from turn ${result.activeFromTurn}`,
+      })
+      return OK
+    }
+
+    /**
+     * 11.9: a ship arrives through a gate — *"placed on the gate with an
+     * initial course that is 180° opposite … and then moves the distance
+     * specified by the velocity order."*
+     *
+     * No scatter and no danger roll: *"Ships that enter or exit normal space
+     * through a Jump Gate or Portal never suffer from direction or distance
+     * errors, unlike normal FTL Drives."* A natural jump point still
+     * disorientates whoever comes through it (11.10).
+     */
+    case 'gate-entry': {
+      if (state.phase !== 'move-ships') return refuse('A gate entry is the ship’s move, phase 5 (11.9)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed) return refuse('Ship is out of the battle')
+      if (!ship.offTable) return refuse(`${ship.name} is already on the table`)
+      if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      if (!isGateActive(gate.def, gate.state, state.turn)) {
+        return refuse(`${gateName(gate)} is not active (11.9)`)
+      }
+
+      const result = gateEntry(gate.def, {
+        velocity: action.velocity,
+        driveRating: currentThrust(ship),
+        course: action.course,
+      })
+      if (!result.placed) return refuse(`${ship.name}: ${result.reason}`)
+      const course = result.course
+      if (course === null) return refuse(`${ship.name}: the gate gave no course`)
+
+      ship.offTable = false
+      ship.exitEdge = null
+      ship.reentryTurn = null
+      ship.ftlArrival = null
+      ship.awaitingGate = null
+      ship.ftlTransit = 'none'
+      ship.lastKnown = { course, velocity: action.velocity, turn: state.turn, cloaked: false }
+      ship.placement = { position: result.position, facing: course }
+      ship.velocity = action.velocity
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} comes through ${gateName(gate)} on course ${course} at velocity ${action.velocity} (11.9)`,
+      })
+      disorientIfJumpPoint(state, ship, gate)
+      dragCarriedHulls(state, ship)
+      return OK
+    }
+
+    /**
+     * 11.9's linked pair: *"If for some reason both ends of the Portal are on
+     * the playing area, a ship exiting through one and entering again through
+     * the other does so with the same velocity that it entered."*
+     *
+     * The velocity crosses untouched — it is not re-ordered, so the drive
+     * rating does not cap it — and two Jump Gates cannot do this at all,
+     * because *"The two Jump Gates are not linked."*
+     */
+    case 'portal-hop': {
+      if (state.phase !== 'move-ships') return refuse('A portal hop is the ship’s move, phase 5 (11.9)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.carriedBy !== null) return refuse(`${ship.name} is not flying its own move (11.7)`)
+      if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      const far = gate.pairedGateId === undefined ? undefined : gateById(state, gate.pairedGateId)
+      if (!far) return refuse(`${gateName(gate)} has no far end on the table (11.9)`)
+      if (!isGateActive(gate.def, gate.state, state.turn)) {
+        return refuse(`${gateName(gate)} is not active (11.9)`)
+      }
+      if (distance(ship.placement.position, gate.def.position) > GATE_REACH) {
+        return refuse(`${ship.name} is not at ${gateName(gate)}`)
+      }
+      if (!gateBearsOn(gate.def, ship.placement.position)) {
+        return refuse(`${ship.name} is not on ${gateName(gate)}'s working side (11.9)`)
+      }
+
+      const result = portalPairTransit(
+        gate.def,
+        far.def,
+        ship.velocity,
+        far.def.facing === null ? ship.placement.facing : undefined,
+      )
+      if (!result.placed) return refuse(`${ship.name}: ${result.reason}`)
+      const course = result.course
+      if (course === null) return refuse(`${ship.name}: the far end gave no course`)
+
+      ship.lastKnown = {
+        course: ship.placement.facing,
+        velocity: ship.velocity,
+        turn: state.turn,
+        cloaked: ship.cloaked,
+      }
+      ship.placement = { position: result.position, facing: course }
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} crosses from ${gateName(gate)} to ${gateName(far)}, still making ${ship.velocity} (11.9)`,
+      })
+      disorientIfJumpPoint(state, ship, far)
+      dragCarriedHulls(state, ship)
+      return OK
+    }
+
+    /**
+     * 11.9's transfer out, and the most inverted table in section 11.
+     *
+     * *"roll 1D6 die for each ship. On a roll of 1 the ship transferred
+     * successfully, on a roll of 2 it manages to back out in time … on a roll
+     * of 3 or higher it is destroyed."* One is the good result and two thirds
+     * of the die kills the ship — the opposite of 11.4, and a reader who
+     * carries that habit across here will lose a fleet.
+     */
+    case 'gate-transfer': {
+      if (state.phase !== lastPhaseOf(state)) {
+        return refuse('A gate transfer happens at the end of the turn (11.9)')
+      }
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      const ships = action.shipIds.map((id) => shipById(state, id))
+      if (ships.some((ship) => ship === undefined)) return refuse('No such ship')
+      const going = ships.filter((ship): ship is ShipState => ship !== undefined)
+      if (going.length === 0) return refuse('No ships named for the transfer')
+      for (const ship of going) {
+        if (ship.destroyed || ship.offTable) return refuse(`${ship.name} is out of the battle`)
+        if (ship.captured) return refuse(`${ship.name} is a prize and does not transfer (12.7)`)
+        if (distance(ship.placement.position, gate.def.position) > GATE_REACH) {
+          return refuse(`${ship.name} is not at ${gateName(gate)}`)
+        }
+        if (!gateBearsOn(gate.def, ship.placement.position)) {
+          return refuse(`${ship.name} is not on ${gateName(gate)}'s working side (11.9)`)
+        }
+      }
+
+      const result = resolveGateTransfer(
+        gate.def,
+        gate.state,
+        going.map((ship) => ({ id: ship.id, mass: ship.design.mass })),
+        state.turn,
+        state.rng,
+      )
+      if (result.refused) return refuse(`${gateName(gate)}: ${result.refused}`)
+
+      pushLog(state, {
+        kind: 'note',
+        side: going[0]?.side,
+        text: `${gateName(gate)}: ${result.note}`,
+      })
+      for (const outcome of result.ships) {
+        const ship = shipById(state, outcome.id)
+        if (!ship) continue
+        const dice = outcome.roll === null ? undefined : [outcome.roll]
+        if (outcome.outcome === 'transferred') {
+          // Gone from the table the way an FTL exit goes: not destroyed, not
+          // disengaged under fire, simply somewhere else.
+          ship.offTable = true
+          ship.reentryTurn = null
+          ship.ftlTransit = 'none'
+          pushLog(state, {
+            kind: 'move',
+            shipId: ship.id,
+            side: ship.side,
+            dice,
+            text: `${ship.name} transfers out through ${gateName(gate)} (11.9)`,
+          })
+        } else if (outcome.outcome === 'backed-out' && outcome.position) {
+          ship.placement = { position: outcome.position, facing: ship.placement.facing }
+          ship.velocity = outcome.velocity ?? 0
+          pushLog(state, {
+            kind: 'move',
+            shipId: ship.id,
+            side: ship.side,
+            dice,
+            text: `${ship.name} backs out of ${gateName(gate)} in time and sits there dead in space (11.9)`,
+          })
+        } else {
+          markHullBoxes(ship, ship.design.hullBoxes)
+          pushLog(state, {
+            kind: 'destroyed',
+            shipId: ship.id,
+            side: ship.side,
+            dice,
+            text: `${ship.name} is torn apart in ${gateName(gate)} (11.9)`,
+          })
+        }
+        dragCarriedHulls(state, ship)
+      }
+      return OK
+    }
+
+    /**
+     * Shooting a gate (11.9). An artificial one has hull boxes and its
+     * capacity falls with them; a natural one *"cannot be destroyed by normal
+     * weapons fire"* and the shot is refused rather than wasted.
+     */
+    case 'fire-at-gate': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const gate = gateById(state, action.gateId)
+      if (!gate) return refuse('No such gate')
+      if (gate.def.natural) {
+        return refuse(`${gateName(gate)} cannot be destroyed by normal weapons fire (11.9)`)
+      }
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
+      const arc = arcTo(ship.placement.position, ship.placement.facing, gate.def.position)
+      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+        return refuse(`${weapon.label} does not bear on ${gateName(gate)}`)
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
+      }
+      const range = distance(ship.placement.position, gate.def.position)
+      if (range > maxRangeOf(weapon)) return refuse(`${gateName(gate)} is out of ${weapon.label}'s reach`)
+      if (!hasLineOfFire(ship.placement.position, gate.def.position, blockingTerrain(state))) {
+        return refuse(`${gateName(gate)} is behind cover (17.1)`)
+      }
+      if (needsFireCon(weapon) && !assignFireCon(ship, gate.def.id, state.phase)) {
+        return refuse(`No FireCon left to hold ${gateName(gate)} (4.4)`)
+      }
+
+      // A gate is a structure: no screens, no armour, nothing but hull boxes,
+      // so what the mount rolled is what comes off it, penetrating damage and
+      // all — there is nothing for the split to mean.
+      const shot = fireWeapon(weapon, {
+        range,
+        arc,
+        targetScreens: 0,
+        rearArc: false,
+        drm: 0,
+        rng: state.rng,
+      })
+      if ('refused' in shot) return refuse(shot.refused)
+      const damage = shot.normalDamage + shot.penetratingDamage
+      const before = currentTransferMass(gate.def, gate.state)
+      gate.state = {
+        ...gate.state,
+        hullMarked: Math.min(gate.def.hullBoxes, gate.state.hullMarked + damage),
+      }
+      const after = currentTransferMass(gate.def, gate.state)
+      markWeaponFired(ship, weapon.id, state.phase)
+      markShipFired(ship)
+      pushLog(state, {
+        kind: 'damage',
+        shipId: ship.id,
+        side: ship.side,
+        dice: shot.dice,
+        text:
+          `${ship.name}'s ${weapon.label} into ${gateName(gate)}: ${damage} — ` +
+          (after < before
+            ? `transfer mass down from ${before} to ${after} (11.9)`
+            : `${gate.def.hullBoxes - gate.state.hullMarked} hull boxes left`),
+      })
+
+      // 11.9 makes the transfer roll turn on damage *or* on the gate's FTL
+      // having "failed a threshold check", so a gate must be able to fail one.
+      //
+      // **[reading]** The threshold points are the same 10% bands 11.9 already
+      // uses to cut the transfer mass, and the check is 4.11's. A gate has hull
+      // boxes but no printed rows, so the section gives no other place to put a
+      // threshold point; taking the one it does state keeps the rule inside the
+      // arithmetic the reader already has. The alternative — never rolling —
+      // would leave half of 11.9's own transfer condition unreachable.
+      const band = Math.max(1, Math.ceil(gate.def.hullBoxes * GATE_HULL_FRACTION))
+      const bandsBefore = Math.floor((gate.state.hullMarked - damage) / band)
+      const bandsAfter = Math.floor(gate.state.hullMarked / band)
+      if (!gate.state.ftlFailed && bandsAfter > bandsBefore) {
+        const check = thresholdCheck(bandsAfter, bandsAfter - bandsBefore - 1, state.rng)
+        if (check.destroyed) gate.state = { ...gate.state, ftlFailed: true }
+        pushLog(state, {
+          kind: 'note',
+          side: ship.side,
+          dice: [check.roll],
+          text: check.destroyed
+            ? `${gateName(gate)}'s FTL fails its threshold check — every ship through it now rolls (11.9, 4.11)`
+            : `${gateName(gate)}'s FTL holds its threshold check (11.9, 4.11)`,
+        })
+      }
+      return OK
+    }
+
     /**
      * 11.7: *"If the Mothership makes an FTL entry, the battleriders cannot
      * detach and move independently until the next turn."*
@@ -4407,6 +4822,66 @@ export function setHyperLimit(state: GameState, rules: HyperLimitRules | undefin
 
 function hyperLimitOf(state: GameState): HyperLimitRules | undefined {
   return HYPER_LIMITS.get(state)
+}
+
+// ---------------------------------------------------------------------------
+// Jump Gates and Portals (11.9, 11.10)
+// ---------------------------------------------------------------------------
+
+/**
+ * How close a ship has to be to use a gate.
+ *
+ * **[reading]** 11.9 says a transferring ship *"must be at the gate"* and puts
+ * a backed-out one *"at the location of the gate"*, without a distance. One MU
+ * is the table's own answer to "the same place" — it is what 17.8 uses for two
+ * hulls sharing an orbit marker — and a measured tolerance is needed because
+ * a ship's move lands it where the arithmetic puts it, not on a point.
+ */
+export const GATE_REACH = 1
+
+export function gateById(state: GameState, id: string): TableGate | undefined {
+  return state.gates.find((gate) => gate.def.id === id)
+}
+
+function gateName(gate: TableGate): string {
+  return gate.def.label ?? (gate.def.kind === 'portal' ? 'the Portal' : 'the Jump Gate')
+}
+
+/** The last phase this battle plays, which is where 11.9 puts the transfer. */
+function lastPhaseOf(state: GameState): Phase {
+  return state.phases[state.phases.length - 1] as Phase
+}
+
+/**
+ * 11.10: *"Ships exiting a jump point function as if they have taken a bridge
+ * critical hit until the next turn."*
+ *
+ * Natural jump points only. An artificial gate is engineered arrival — 11.9
+ * sells them on *"a more accurate arrival point"* — and says nothing about
+ * disorientation; 11.10 is where the recommendation lives, and it is about
+ * jump points.
+ */
+function disorientIfJumpPoint(state: GameState, ship: ShipState, gate: TableGate): void {
+  if (!gate.def.natural) return
+  const effect = jumpPointDisorientation(state.turn)
+  ship.ongoing.push({
+    id: `jump-point-${ship.id}-${state.turn}`,
+    source: effect.source,
+    appliedTurn: effect.appliedTurn,
+    expiresAfterTurn: effect.expiresAfterTurn,
+    note: effect.note,
+  })
+  pushLog(state, {
+    kind: 'note',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name} comes out of ${gateName(gate)} disorientated — out of control until next turn (11.10)`,
+  })
+}
+
+/** Ships waiting behind a gate to come onto the table (11.9). */
+export function shipsAwaitingGateEntry(state: GameState): ShipState[] {
+  return state.ships.filter((ship) => ship.awaitingGate !== null && !ship.destroyed)
 }
 
 /** Ships still in hyperspace, waiting to drop out (11.5). */
@@ -6884,6 +7359,12 @@ export function undoableInMatch(action: GameAction): boolean {
     case 'move-ship':
     case 'fire-weapon':
     case 'fire-at-flight':
+    // Every one of these rolls dice the other console has already read: a
+    // gate's activation delay, its transfer table, and the shot that took its
+    // hull boxes off (11.9).
+    case 'fire-at-gate':
+    case 'announce-gate-activation':
+    case 'gate-transfer':
     case 'threshold-check':
     case 'resolve-damage-control':
     case 'resolve-point-defence':

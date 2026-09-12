@@ -19,7 +19,12 @@ import {
   type SideId,
 } from '../engine/game'
 import { setHyperLimit } from '../engine/actions'
-import { battleriderRecovery, carryingCapacity } from '../engine/ftl'
+import {
+  battleriderRecovery,
+  carryingCapacity,
+  validateGateBuild,
+  type GateDef,
+} from '../engine/ftl'
 import { Rng } from '../engine/dice'
 import type { HyperLimitRules } from '../engine/ftl'
 import {
@@ -92,6 +97,12 @@ export interface ForceEntry {
    */
   orbit?: { featureId: string; marker: Course }
   /**
+   * 11.9: this hull comes onto the table through a gate rather than starting
+   * on it. The velocity is written when the entry is made; all the scenario
+   * says is which gate it is waiting behind.
+   */
+  gateEntry?: string
+  /**
    * 11.5: this hull is not on the table at the start — it is inbound, and
    * drops out of hyperspace at the point and heading written here. 18.1's
    * *"the attacker (if permitted) may make an FTL entry"* is what puts one in
@@ -146,6 +157,25 @@ export interface Scenario {
   placementBatch?: number
   /** 18.1: the attacker *"(if permitted)"* may make an FTL entry. */
   ftlEntryPermitted?: boolean
+  /**
+   * 11.9's Jump Gates and Portals, and 11.10's natural jump points. Each is
+   * the gate as built plus who holds it; the battle keeps the damage.
+   */
+  gates?: Array<{
+    def: GateDef
+    /**
+     * The FTL drive the gate was built with, in mass (11.9). Stated rather
+     * than derived so `validateGateBuild` has something to check: a Portal
+     * needs ten times a Jump Gate's drive for the same throughput, and that
+     * ratio is the whole balance of the section.
+     */
+    driveMass: number
+    controllingSide?: SideId
+    /** The far end of a Portal, by gate id (11.9). */
+    pairedGateId?: string
+    /** A gate that starts switched on, for a scenario that wants one. */
+    activeFromTurn?: number
+  }>
   /**
    * 11.2: *"decent sized planets or the local sun have a 'hyper limit'
    * distance within which FTL travel is not possible."* A property of the
@@ -627,6 +657,93 @@ export const RIDE_TO_BATTLE: Scenario = {
   ],
 }
 
+/**
+ * 11.9: a raid on a Jump Gate, and the gate itself is the ground.
+ *
+ * The Confederation holds a mass-120 Jump Gate — 12 mass of FTL drive and 12
+ * hull boxes, which is the minimum 11.9 allows — with a relief squadron
+ * standing by on the far side. The Khanate wants it: activation while it is
+ * still in Confederation hands is the *defender's* D6, which can push the
+ * attacker back three turns, and every hull box the raiders knock off takes
+ * 10 mass of capacity with it.
+ *
+ * The trap is 11.9's transfer table, which is the most inverted in section 11.
+ * A gate asked for more than it can lift rolls a D6 per ship: 1 transfers, 2
+ * backs out dead in space, and 3 or higher destroys the ship. A commander who
+ * reads it like 11.4's danger roll — where 1 means nothing happened — will put
+ * a squadron through a shot-up gate and lose most of it.
+ */
+export const GATE_RAID: Scenario = {
+  id: 'gate-raid',
+  name: 'The Gate at Kepler Reach',
+  briefing:
+    'A Confederation Jump Gate, a Khanate raiding force that wants it switched on for them, and ' +
+    'a relief squadron one transfer away on the far side.',
+  objective:
+    'Khanate: break the garrison, or shoot the gate until it cannot lift what the relief needs. ' +
+    'Confederation: hold, and bring the relief through.',
+  table: { width: 84, height: 60 },
+  turnLimit: 12,
+  victory: INTRODUCTORY_VICTORY,
+  gates: [
+    {
+      def: {
+        id: 'kepler-gate',
+        kind: 'jump-gate',
+        natural: false,
+        position: { x: 66, y: 30 },
+        // One entry and exit facing, so it emits on course 3 and only a ship
+        // to its west may use it.
+        facing: 9,
+        transferMass: 120,
+        hullBoxes: 12,
+        playerControlled: false,
+        label: 'the Kepler Reach Gate',
+      },
+      // 11.9: "10 transfer mass points for every 1 point of FTL Drive mass".
+      driveMass: 12,
+      controllingSide: 'b',
+    },
+  ],
+  sides: [
+    {
+      id: 'a',
+      name: 'Durani Star-Khanate',
+      force: [
+        { designId: 'durani-flagship', position: { x: 12, y: 30 }, facing: 3, velocity: 6 },
+        { designId: 'durani-corsair', position: { x: 10, y: 18 }, facing: 3, velocity: 6 },
+        { designId: 'durani-corsair', position: { x: 10, y: 42 }, facing: 3, velocity: 6 },
+        { designId: 'durani-raider', position: { x: 6, y: 24 }, facing: 3, velocity: 8 },
+        { designId: 'durani-raider', position: { x: 6, y: 36 }, facing: 3, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-heavy-cruiser', position: { x: 58, y: 24 }, facing: 9, velocity: 4 },
+        { designId: 'nac-heavy-cruiser', position: { x: 58, y: 36 }, facing: 9, velocity: 4 },
+        { designId: 'nac-destroyer', position: { x: 62, y: 16 }, facing: 9, velocity: 6 },
+        // The relief, still on the far side of the gate.
+        {
+          designId: 'nac-battlecruiser',
+          name: 'Relief Flagship',
+          position: { x: 66, y: 30 },
+          facing: 3,
+          gateEntry: 'kepler-gate',
+        },
+        {
+          designId: 'nac-light-cruiser',
+          name: 'Relief Escort',
+          position: { x: 66, y: 30 },
+          facing: 3,
+          gateEntry: 'kepler-gate',
+        },
+      ],
+    },
+  ],
+}
+
 export const SCENARIOS: Scenario[] = [
   INTRODUCTORY_SCENARIO,
   BORDER_SKIRMISH,
@@ -636,6 +753,7 @@ export const SCENARIOS: Scenario[] = [
   ORBITAL_APPROACH,
   HYPER_LIMIT,
   RIDE_TO_BATTLE,
+  GATE_RAID,
 ]
 
 /**
@@ -856,6 +974,14 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
         ship.offTable = true
         ship.ftlTransit = 'entering'
       }
+      // 11.9: a hull waiting behind a gate is not on the table until it comes
+      // through, and it comes through on the gate's course rather than its
+      // own — so the scenario's `position` and `facing` are only where the
+      // counter sits until then.
+      if (entry.gateEntry) {
+        ship.awaitingGate = entry.gateEntry
+        ship.offTable = true
+      }
       return ship
     })
   })
@@ -906,6 +1032,27 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
     phases: scenario.introductoryPhases ? INTRODUCTORY_PHASES : undefined,
     sides: scenario.sides.map((s) => ({ id: s.id, name: s.name, team: s.team })),
     ships,
+    gates: (scenario.gates ?? []).map((gate) => {
+      // 11.9's build rules, checked where the gate is written rather than
+      // where it is used: an under-driven gate is an authoring mistake, and
+      // the earliest place to say so is the moment the battle is set up.
+      const problems = validateGateBuild(gate.def, gate.driveMass)
+      if (problems.length > 0) {
+        throw new Error(`${scenario.id}: ${gate.def.id} — ${problems.join('; ')}`)
+      }
+      return {
+        def: { ...gate.def },
+        state: {
+          hullMarked: 0,
+          ftlFailed: false,
+          activeFromTurn: gate.activeFromTurn ?? null,
+        },
+        controllingSide: gate.controllingSide ?? null,
+        activationOrderedBy: null,
+        activationOrderTurn: null,
+        pairedGateId: gate.pairedGateId,
+      }
+    }),
   })
   // 11.2's hyper limits describe the system the battle is fought in, so they
   // are stamped on here with the rest of the scenario rather than by whoever

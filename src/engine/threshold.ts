@@ -76,7 +76,20 @@ export const THRESHOLD_EFFECT_SOURCES = {
   lifeSupportCountdown: 'life-support',
   /** Life support has failed — the crew is gone (10.3). */
   lifeSupportFailed: 'life-support-failed',
+  /**
+   * 11.10: *"Ships exiting a jump point function as if they have taken a
+   * bridge critical hit until the next turn."* A second way to lose control,
+   * with nothing to do with the bridge — which is why the out-of-control
+   * questions below ask about a set of sources rather than one.
+   */
+  jumpPoint: 'jump-point',
 } as const
+
+/** Everything that takes a ship out of control (10.3, 11.10). */
+const OUT_OF_CONTROL_SOURCES: readonly string[] = [
+  THRESHOLD_EFFECT_SOURCES.outOfControl,
+  THRESHOLD_EFFECT_SOURCES.jumpPoint,
+]
 
 /**
  * Systems whose SSD symbol carries more than one damage box, each of which
@@ -453,23 +466,35 @@ export function knockOutCoreSystem(
 }
 
 /** Whether the ship has nobody at the helm (10.3). */
+/** Every live reason this ship is not steering (10.3, 11.10). */
+function outOfControlEffects(ship: ShipState, turn?: number): OngoingEffect[] {
+  return ship.ongoing.filter(
+    (effect) => OUT_OF_CONTROL_SOURCES.includes(effect.source) && effectLiveOn(effect, turn),
+  )
+}
+
 export function isOutOfControl(ship: ShipState, turn?: number): boolean {
-  const effect = findEffect(ship, THRESHOLD_EFFECT_SOURCES.outOfControl)
-  return effect !== undefined && effectLiveOn(effect, turn)
+  return outOfControlEffects(ship, turn).length > 0
 }
 
 /** Whether the loss of control is the permanent kind — a 6 on the bridge roll. */
 export function isPermanentlyOutOfControl(ship: ShipState): boolean {
-  const effect = findEffect(ship, THRESHOLD_EFFECT_SOURCES.outOfControl)
-  return effect !== undefined && effect.expiresAfterTurn === null
+  return outOfControlEffects(ship).some((effect) => effect.expiresAfterTurn === null)
 }
 
-/** Turns of lost control still to run, or `null` if permanent or in control. */
+/**
+ * Turns of lost control still to run, or `null` if permanent or in control.
+ *
+ * A ship with two reasons to be out of control — 11.10's disorientation on top
+ * of 10.3's bridge hit — comes back when the longer of them runs out. Neither
+ * cause shortens the other.
+ */
 export function outOfControlTurnsRemaining(ship: ShipState, turn: number): number | null {
-  const effect = findEffect(ship, THRESHOLD_EFFECT_SOURCES.outOfControl)
-  if (!effect || effect.expiresAfterTurn === null) return null
-  if (effect.expiresAfterTurn < turn) return null
-  return effect.expiresAfterTurn - turn + 1
+  const live = outOfControlEffects(ship, turn)
+  if (live.length === 0) return null
+  if (live.some((effect) => effect.expiresAfterTurn === null)) return null
+  const last = Math.max(...live.map((effect) => effect.expiresAfterTurn ?? turn))
+  return last - turn + 1
 }
 
 /** The turn the crew is lost, or `null` when life support is intact (10.3). */

@@ -17,6 +17,7 @@
  */
 
 import { d6, Rng } from './dice'
+import type { GateDef, GateState } from './ftl'
 import { capturedShipDestroyed } from './boarding'
 import {
   beginFighterTurn,
@@ -361,6 +362,12 @@ export interface ShipState {
    */
   carriedBy: string | null
   /**
+   * 11.9: the gate this hull is waiting behind, if it is coming onto the
+   * table through one rather than starting on it or dropping out of
+   * hyperspace. `offTable` is true until it comes through.
+   */
+  awaitingGate: string | null
+  /**
    * 11.7: the hull in an attached group that damage is being put on, at the
    * defending player's choice — *"Damage received can be applied to either the
    * Mothership or battleriders at the choice of the defending player."*
@@ -539,6 +546,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     landed: null,
     ftlArrival: null,
     carriedBy: null,
+    awaitingGate: null,
     damageSink: null,
     ftlEntryTurn: null,
     weaponsFired: new Map<string, Phase>(),
@@ -808,6 +816,32 @@ export interface DeploymentState {
   terrainPlaced: boolean
 }
 
+/**
+ * A gate on the table (11.9, 11.10).
+ *
+ * `def` is the gate as built and `state` is what the battle has done to it;
+ * both are the pure module's own types, so every rule about gates is answered
+ * by `ftl.ts` and this is only where the answer is kept.
+ */
+export interface TableGate {
+  def: GateDef
+  state: GateState
+  /**
+   * *"If the gate is under control of the player … activation is automatic"*
+   * (11.9). Control is a fact about the battle, not about the gate, so it is
+   * held here and folded into `GateDef.playerControlled` per activating side.
+   */
+  controllingSide: SideId | null
+  /** The side that wrote a "Gate Activate" order, and the turn it wrote it. */
+  activationOrderedBy: SideId | null
+  activationOrderTurn: number | null
+  /**
+   * The far end of a Portal, when both ends are on the table (11.9). Jump
+   * Gates are never paired: *"The two Jump Gates are not linked."*
+   */
+  pairedGateId?: string
+}
+
 export interface GameState {
   /** Scenario or battle identifier, for the journal. */
   scenario: string
@@ -833,6 +867,8 @@ export interface GameState {
   gunboatSquadrons: GunboatSquadronState[]
   ordnance: OrdnanceMarkerState[]
   terrain: TerrainFeature[]
+  /** 11.9's Jump Gates and Portals, and 11.10's natural jump points. */
+  gates: TableGate[]
   initiative: InitiativeState | null
   /** 18.1's deployment, or null for a scenario that writes its own positions. */
   deployment: DeploymentState | null
@@ -847,6 +883,7 @@ export interface GameOptions {
   gunboatSquadrons?: GunboatSquadronState[]
   ordnance?: OrdnanceMarkerState[]
   terrain?: TerrainFeature[]
+  gates?: TableGate[]
   phases?: readonly Phase[]
   scenario?: string
   table?: { width: number; height: number }
@@ -900,6 +937,7 @@ export function createGame(opts: GameOptions): GameState {
     gunboatSquadrons: opts.gunboatSquadrons ?? [],
     ordnance: opts.ordnance ?? [],
     terrain: opts.terrain ?? [],
+    gates: opts.gates ?? [],
     initiative: null,
     deployment: opts.deployment ?? null,
     log: [],

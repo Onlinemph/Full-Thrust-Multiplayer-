@@ -38,7 +38,12 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
   // through its own drive plume this turn.
   const aftOpen = optional(game).aftArcFire === true && ship.thrustUsed === 0
 
-  if (targets.length === 0) {
+  // 11.9: an artificial gate is a structure with hull boxes, and knocking
+  // them off takes its transfer mass down with them. A natural one "cannot be
+  // destroyed by normal weapons fire", so it is not offered.
+  const gates = game.gates.filter((gate) => !gate.def.natural && gate.state.hullMarked < gate.def.hullBoxes)
+
+  if (targets.length === 0 && gates.length === 0) {
     return (
       <div className="panel">
         <h3>Phase 11 · Fire</h3>
@@ -125,6 +130,48 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
             </div>
           )
         })}
+
+      {gates.map((gate) => {
+        const range = distance(ship.placement.position, gate.def.position)
+        const arc = arcTo(ship.placement.position, ship.placement.facing, gate.def.position)
+        const reach = ship.design.weapons.map((weapon) => reachOf(ship, weapon, range, arc, aftOpen))
+        if (reach.every((r) => r.blocked !== null)) return null
+        const name = gate.def.label ?? gate.def.id
+        return (
+          <div key={gate.def.id} className="target-block">
+            <div className="panel-row">
+              <span>{name}</span>
+              <span className="spacer" />
+              <span style={{ color: 'var(--ink-dim)' }}>
+                {gate.def.hullBoxes - gate.state.hullMarked}/{gate.def.hullBoxes} hull
+              </span>
+              <span className="num">{range.toFixed(1)} MU</span>
+              <span className="num arcs">{arc}</span>
+            </div>
+            <div className="ssd-systems">
+              {reach.map(({ weapon, blocked, dice }) => (
+                <button
+                  key={weapon.id}
+                  className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
+                  disabled={blocked !== null || (!engaged.includes(gate.def.id) && fireCons <= 0 && needsFireCon(weapon))}
+                  title={blocked ?? `${dice}D6 at ${range.toFixed(1)} MU`}
+                  onClick={() =>
+                    dispatch({
+                      type: 'fire-at-gate',
+                      shipId: ship.id,
+                      weaponId: weapon.id,
+                      gateId: gate.def.id,
+                    })
+                  }
+                >
+                  {weapon.label}
+                  {blocked ? null : <span className="num">{dice}D6</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
 
       <button onClick={() => dispatch({ type: 'pass-fire', shipId: ship.id })}>
         Hold fire this turn

@@ -65,7 +65,14 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from './terrain'
 import { arcsWhenInverted } from './specialmoves'
-import { deployingSide, optional, proposeDeployment, type GameAction } from './actions'
+import {
+  deployingSide,
+  optional,
+  proposeDeployment,
+  shipsAwaitingGateEntry,
+  type GameAction,
+} from './actions'
+import { isGateActive } from './ftl'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
 
@@ -429,6 +436,26 @@ export function aiActions(
         }
         break
       }
+      // 11.9: a gate this side holds with ships waiting behind it is switched
+      // on now, because the order is written in phase 1 and the announcement
+      // is a phase away. A gate somebody else holds is the defender's roll,
+      // and the computer tries it anyway: three turns of delay is the worst
+      // it can cost, and the relief is not coming any other way.
+      for (const gate of game.gates) {
+        if (gate.def.natural) continue
+        if (isGateActive(gate.def, gate.state, game.turn + 1)) continue
+        if (gate.activationOrderedBy !== null) continue
+        const waiting = shipsAwaitingGateEntry(game).some((ship) => ship.side === side)
+        const leaving = game.ships.some(
+          (ship) =>
+            ship.side === side &&
+            !ship.destroyed &&
+            !ship.offTable &&
+            distance(ship.placement.position, gate.def.position) <= 1,
+        )
+        if (!waiting && !leaving) continue
+        actions.push({ type: 'plot-gate-activation', gateId: gate.def.id, side, on: true })
+      }
       // 11.7: the riders come off when the enemy is close enough that they can
       // do something about it. Too early and they lose the Mothership's
       // screens for nothing; too late and the Mothership is dead with them
@@ -537,6 +564,25 @@ export function aiActions(
       break
 
     case 'move-ships':
+      // 11.9: the announcement the order in phase 1 was written for, and then
+      // whatever the gate will let through.
+      for (const gate of game.gates) {
+        if (gate.activationOrderedBy === side && gate.activationOrderTurn === game.turn) {
+          actions.push({ type: 'announce-gate-activation', gateId: gate.def.id })
+        }
+      }
+      for (const ship of shipsAwaitingGateEntry(game)) {
+        if (ship.side !== side) continue
+        const gate = game.gates.find((candidate) => candidate.def.id === ship.awaitingGate)
+        if (!gate || !isGateActive(gate.def, gate.state, game.turn)) continue
+        actions.push({
+          type: 'gate-entry',
+          shipId: ship.id,
+          gateId: gate.def.id,
+          velocity: currentThrust(ship),
+          course: gate.def.facing === null ? ship.placement.facing : undefined,
+        })
+      }
       // 11.5: an inbound hull's arrival IS its move, so it comes in before
       // anything else is flown. The computer brings it out where the scenario
       // said; the dice decide where that turns out to be.

@@ -5,6 +5,7 @@ import { stationaryCollisionRisk } from '../engine/terrain'
 import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
 import { optional } from '../engine/actions'
+import { isGateActive } from '../engine/ftl'
 import type { GameState, ShipState } from '../engine/game'
 import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
@@ -364,6 +365,42 @@ export function MapView({
             />
           ))}
 
+          {/* 11.9's gates. Drawn as a ring with a tick on the entry facing,
+              because "the marker or model should be clearly marked to show
+              which way it is oriented" — and a player who cannot see which
+              side of the gate bears on them cannot use it. */}
+          {game.gates.map((gate) => {
+            const active = isGateActive(gate.def, gate.state, game.turn)
+            const at = gate.def.position
+            const r = 2.4 * scale
+            const nose =
+              gate.def.facing === null ? null : advance(at, gate.def.facing, 3.6)
+            return (
+              <g key={gate.def.id}>
+                <circle
+                  className={
+                    `gate is-${gate.def.kind}` + (active ? '' : ' is-inactive')
+                  }
+                  cx={at.x * scale}
+                  cy={at.y * scale}
+                  r={r}
+                />
+                {nose ? (
+                  <line
+                    className={`gate is-${gate.def.kind}` + (active ? '' : ' is-inactive')}
+                    x1={at.x * scale}
+                    y1={at.y * scale}
+                    x2={nose.x * scale}
+                    y2={nose.y * scale}
+                  />
+                ) : null}
+                <text className="gate-label" x={at.x * scale} y={(at.y + 4.4) * scale}>
+                  {gate.def.label ?? gate.def.id}
+                </text>
+              </g>
+            )
+          })}
+
           {/* 17.8's orbit track: the planet's own edge, marked with the twelve
               clock points a ship is placed on. Without the markers the rule is
               invisible — a player cannot see which point is "immediately in
@@ -676,6 +713,12 @@ function stackFlights<T extends { id: string; position: Point }>(
  * everything is drawn.
  */
 function visible(ship: ShipState, viewingSide: string | null): boolean {
+  // A hull that is not on the table has no counter on it. 11.5's inbound
+  // ships and 11.9's ships waiting behind a gate are listed in their phase's
+  // panel instead, and a hull that flew off the edge (3.9) has gone. Drawing
+  // them at whatever station they were last written at put four counters on
+  // top of a Jump Gate before anybody had come through it.
+  if (ship.offTable) return false
   if (viewingSide === null) return true
   if (!ship.cloaked) return true
   return ship.side === viewingSide
