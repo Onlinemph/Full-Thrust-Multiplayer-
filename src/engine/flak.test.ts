@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, flakMarkers, type GameAction } from './actions'
+import { applyAction, flakMarkers, setRulesReading, type GameAction } from './actions'
+import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import { aiActions } from './ai'
 import {
   createGame,
@@ -492,5 +493,50 @@ describe('the blast radius', () => {
   it('is 2 MU, inclusive', () => {
     expect(flakCatchesPoint({ x: 0, y: 0 }, { x: FLAK_BLAST_RADIUS_MU, y: 0 })).toBe(true)
     expect(flakCatchesPoint({ x: 0, y: 0 }, { x: FLAK_BLAST_RADIUS_MU + 0.01, y: 0 })).toBe(false)
+  })
+})
+
+describe('flak against a warhead and a squadron (5.16, 6.6, 9.1)', () => {
+  it('needs three hits to disrupt an antimatter warhead', () => {
+    // 6.6: "Three hits will disrupt the warhead sufficiently to prevent any
+    // meaningful explosion." Subtracting a flak kill from the marker's one
+    // missile killed it outright on the first.
+    let sawSurvivor = false
+    let sawHit = false
+    for (let seed = 0; seed < 40 && !sawSurvivor; seed++) {
+      const shooter = createShipState({
+        id: 'shooter',
+        side: 'b',
+        design: designById('tyrant-arsenal') as ShipDesign,
+        placement: { position: { x: 50, y: 36 }, facing: 9 },
+        velocity: 0,
+      })
+      const am = shooter.design.weapons.find((w) => w.weaponClass === 'antimatter-missile')!
+      const game = battle({ ships: [gunship('gun', 'a', { x: 20, y: 36 }), shooter], seed })
+      // 6.6's three-hit rule is gated with the rest of the marker accounting,
+      // and `createGame` stamps reading 1 where `buildGame` stamps the
+      // current one.
+      setRulesReading(game, CURRENT_RULES_VERSION)
+      advanceTo(game, 'launch-missiles')
+      applyAction(game, {
+        type: 'launch-ordnance',
+        shipId: 'shooter',
+        weaponId: am.id,
+        aimPoint: { x: 36, y: 36 },
+      })
+      if (game.ordnance.length === 0) continue
+      applyAction(game, {
+        type: 'fire-flak-barrage',
+        shipId: 'gun',
+        weaponId: 'w1',
+        aimPoint: { x: 36, y: 36 },
+      })
+      advanceTo(game, 'allocate-attacks')
+      const hit = game.log.some((entry) => /hit.? on an inbound warhead/.test(entry.text))
+      if (hit) sawHit = true
+      if (hit && game.ordnance.length > 0) sawSurvivor = true
+    }
+    expect(sawHit).toBe(true)
+    expect(sawSurvivor).toBe(true)
   })
 })

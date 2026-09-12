@@ -599,3 +599,62 @@ describe('what a phase-9 kill does to the marker (6.4, 6.6)', () => {
     expect(sawSurvivor).toBe(true)
   })
 })
+
+describe('a shot that never happens takes nothing with it (2.6)', () => {
+  it('leaves the firing activation where it was when the shot is refused', () => {
+    // "After a ship has fired some or all of its weaponry and play has moved
+    // on to another ship that ship may not fire any other ship to ship weapons
+    // in that game turn." Play moves on when a shot is taken, not when one is
+    // attempted — so a click on a gun that turns out not to bear must not end
+    // the fire of whoever was shooting.
+    const game = battle([
+      ship('first', 'a', 'esu-heavy-cruiser', { x: 20, y: 50 }),
+      ship('second', 'a', 'esu-heavy-cruiser', { x: 22, y: 50 }),
+      ship('mark', 'b', 'esu-heavy-cruiser', { x: 30, y: 50 }, 9),
+    ])
+    advanceTo(game, 'ship-fire')
+    const beam = shipOf(game, 'first').design.weapons.find(
+      (w) => w.weaponClass === 'beam' && w.arcs.includes('F'),
+    )!
+    expect(
+      applyAction(game, {
+        type: 'fire-weapon',
+        shipId: 'first',
+        weaponId: beam.id,
+        targetId: 'mark',
+      }).refused,
+    ).toBeUndefined()
+
+    // The second ship reaches for a gun that does not bear. The shot is
+    // refused, and the first ship's activation has to survive it.
+    const astern = shipOf(game, 'second').design.weapons.find(
+      (w) => w.arcs.includes('A') && !w.arcs.includes('F'),
+    )
+    if (astern) {
+      expect(
+        applyAction(game, {
+          type: 'fire-weapon',
+          shipId: 'second',
+          weaponId: astern.id,
+          targetId: 'mark',
+        }).refused,
+      ).toBeDefined()
+    }
+
+    // The first ship fires again with another mount: still its activation.
+    const another = shipOf(game, 'first').design.weapons.find(
+      (w) => w.id !== beam.id && w.weaponClass === 'beam' && w.arcs.includes('F'),
+    )
+    if (another) {
+      expect(
+        applyAction(game, {
+          type: 'fire-weapon',
+          shipId: 'first',
+          weaponId: another.id,
+          targetId: 'mark',
+        }).refused,
+      ).toBeUndefined()
+    }
+    expect(shipOf(game, 'first').hasFiredThisTurn).toBe(false)
+  })
+})

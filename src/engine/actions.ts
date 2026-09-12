@@ -1802,6 +1802,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
       }
 
+      // Every guard is behind us and the shot is going to happen, so this is
+      // where play moves on to this ship (2.6) — not at the click, which may
+      // yet have turned out to be out of arc or out of range.
+      claimFiringActivation(state, ship)
       // 17.2 rules 2 and 3. The lock-on is one die per target nomination, not
       // per weapon, so the answer is remembered for the rest of the phase.
       const dust = cloudLockOn(state, ship, target, weapon)
@@ -2054,6 +2058,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`No FireCon free to lay on ${rock.label ?? rock.id} (4.4)`)
       }
 
+      claimFiringActivation(state, ship)
       const shot = fireWeapon(weapon, {
         range,
         arc,
@@ -2553,6 +2558,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         )
       }
 
+      claimFiringActivation(state, ship)
       const shot = rollPointDefenceAtShip(dice, state.rng, mount.drm ?? 0)
       markWeaponFired(ship, mount.id, state.phase)
       if (shot.damage <= 0) {
@@ -2606,6 +2612,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         )
       }
 
+      claimFiringActivation(state, ship)
       const size = spinalSize(weapon)
       // One roll for the shot, applied to everything the beam crosses: 5.23's
       // "if multiple ships are within the beam area, they all sustain the same
@@ -2762,6 +2769,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`No FireCon free to lay a barrage (5.16)`)
       }
 
+      claimFiringActivation(state, ship)
       markWeaponFired(ship, weapon.id, state.phase)
       const markers = flakMarkers(state)
       markers.push({
@@ -4730,6 +4738,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // "Ship to ship weapons roll 1D6 only against fighter groups, regardless
       // of range band or normal damage inflicted" (8.6) — so the mount's own
       // dice table does not come into it, and one mount is one die.
+      claimFiringActivation(state, ship)
       const result = shipFireAtFighters(flight, 1, state.rng)
       markWeaponFired(ship, weapon.id, state.phase)
       writeFlight(flight, result.group)
@@ -5504,6 +5513,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // A gate is a structure: no screens, no armour, nothing but hull boxes,
       // so what the mount rolled is what comes off it, penetrating damage and
       // all — there is nothing for the split to mean.
+      claimFiringActivation(state, ship)
       const shot = fireWeapon(weapon, {
         range,
         arc,
@@ -6127,13 +6137,31 @@ function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome 
   const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
   if (live && open.shipId === ship.id) return ship.hasFiredThisTurn ? spent(ship) : null
   if (ship.hasFiredThisTurn) return spent(ship)
+  return null
+}
+
+/**
+ * Take the turn's firing activation for this ship (2.6).
+ *
+ * Split from the check above, and the split is the rule: *"after a ship has
+ * fired some or all of its weaponry and play has moved on to another ship that
+ * ship may not fire any other ship to ship weapons in that game turn."* Play
+ * moves on when a shot is *taken*, not when one is attempted — so a click on a
+ * gun that turns out to be out of arc, out of range or knocked out must not
+ * end the fire of whoever was shooting. Call this at the point the shot is
+ * committed, after every guard has passed.
+ */
+function claimFiringActivation(state: GameState, ship: ShipState): void {
+  if (rulesReading(state) < 5) return
+  const open = FIRING_ACTIVATION.get(state)
+  const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
+  if (live && open.shipId === ship.id) return
   if (live) {
     // Play has moved on. Whoever was firing is finished for the turn.
     const previous = shipById(state, open.shipId)
     if (previous) markShipFired(previous)
   }
   FIRING_ACTIVATION.set(state, { shipId: ship.id, turn: state.turn, phase: state.phase })
-  return null
 }
 
 function spent(ship: ShipState): ActionOutcome {
@@ -6287,14 +6315,20 @@ function resolveFlak(state: GameState): void {
         heavyMissile: heavy,
       })
       if (volley.kills <= 0) continue
-      const killed = Math.min(volley.kills, ordnance.missiles)
-      ordnance.missiles = Math.max(0, ordnance.missiles - killed)
-      ordnance.hits += killed
+      // The same accounting phase 9 uses, and for the same reasons: a salvo's
+      // kills are banked so 6.4 measures its D6 against the salvo as launched,
+      // and 6.6's warhead needs three hits rather than one.
+      const before = ordnance.missiles
+      bankPointDefenceKills(state, ordnance, volley.kills)
+      const killed = ordnance.kind === 'antimatter' ? volley.kills : before - ordnance.missiles
       pushLog(state, {
         kind: 'point-defence',
         side: marker.side,
         dice: volley.rolls,
-        text: `Flak scores ${killed} on an inbound ${ordnance.kind} — subtracted when it locks on (5.16, 6.4)`,
+        text:
+          ordnance.kind === 'antimatter'
+            ? `Flak puts ${killed} hit${killed === 1 ? '' : 's'} on an inbound warhead — three disrupt it (5.16, 6.6)`
+            : `Flak scores ${killed} on an inbound ${ordnance.kind} — subtracted when it locks on (5.16, 6.4)`,
       })
     }
 
@@ -6320,7 +6354,7 @@ function resolveFlak(state: GameState): void {
 
   setOrdnance(
     state,
-    ordnanceOf(state).filter((marker) => marker.missiles > 0),
+    ordnanceOf(state).filter((marker) => !markerSpent(state, marker)),
   )
   projectOrdnance(state)
   // "All 'Blast Markers' are removed at the end of the turn."

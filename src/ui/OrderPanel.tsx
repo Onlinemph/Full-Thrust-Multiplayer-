@@ -497,8 +497,8 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           </label>
           <span className="spacer" />
           <span style={{ color: 'var(--warn)' }}>
-            {3 * charges}D6 within 1 MU, {2 * charges} within 2, {charges} within 3 — and the ship
-            goes with it (7.9)
+            {3 * charges}D6 within 1 MU, {2 * charges}D6 within 2, {charges}D6 within 3 — and the
+            ship goes with it (7.9)
           </span>
         </div>
       ) : null}
