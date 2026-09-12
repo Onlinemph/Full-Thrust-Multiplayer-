@@ -25,7 +25,7 @@ import {
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
-import { UPRIGHT, type RollStatus } from './specialmoves'
+import { movementPriority, UPRIGHT, type RollStatus } from './specialmoves'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -926,9 +926,18 @@ export function fighterActivationOrder(
  * Sub-order within the simultaneous ship movement phase (2.6 phase 5): fixed
  * paths first, then mine layers, then everyone else, with FTL transits placed
  * last. Lower ranks move earlier.
+ *
+ * 16.1 is what puts the first group first, and it keys off thrust rather than
+ * off a scenario flag: *"Ships with thrust 0 drives, and any asteroids or
+ * similar object that have significant movement relative to ships, never write
+ * orders… Each turn, the ship or asteroid moves along this predetermined
+ * course before all other ships."* A drive shot out under 4.11 leaves a ship at
+ * thrust 0 exactly as a thrust-0 hull is, so the wreck drifts with the rocks —
+ * which is the difference between it fouling somebody's firing line before they
+ * move and after.
  */
 export function shipMovementRank(ship: ShipState): number {
-  if (ship.fixedPath) return 0
+  if (ship.fixedPath || movementPriority(currentThrust(ship)) === 0) return 0
   if (ship.layingMines) return 1
   if (ship.ftlTransit !== 'none') return 3
   return 2

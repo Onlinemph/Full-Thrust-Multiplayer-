@@ -49,10 +49,16 @@ rolled. Recorded here so the omission is deliberate.
 > *"Optional rule: Aft arc fire is permitted on any game turn in which the firing ship did not use any
 > thrust from its main drive to accelerate, decelerate, or change course"*
 
-`planFireControl` refuses any **offensive** order into arc `A` unless `aftArcFire: true` is passed
-for that turn (the movement module knows whether thrust was spent). Point-defence orders are exempt:
-PD is not offensive weaponry, and 4.2 says systems with no directionality — *"e.g. PDS"* — *"have
-all-round (6-arc) fire capabilities"*.
+`applyAction` refuses any **offensive** shot into arc `A` — `fire-weapon` and `fire-at-flight` both
+— unless the table has switched on the optional exception *and* the firing ship's `thrustUsed` is
+zero for the turn. `thrustUsed` is written in `case 'move-ship'` from the budget of the order
+actually flown, so an illegal plot, which 3.5 flies as `STRAIGHT_AHEAD`, spends nothing and leaves
+the arc open. Point-defence orders are exempt: PD is not offensive weaponry, and 4.2 says systems
+with no directionality — *"e.g. PDS"* — *"have all-round (6-arc) fire capabilities"*.
+
+`combat.planFireControl` implements the same refusal over a batch of `FireOrder`s and is called by
+nothing outside `combat.test.ts`. It is the reason the ban looked implemented for as long as it did.
+`src/engine/firearcs.test.ts` tests the rule where it is now enforced.
 
 Weapons are otherwise checked only against the arcs they are built with. Broadside mountings
 (*"the two Port and two Starboard arcs but not the Fore and Aft"*) are stored as that pair of arc

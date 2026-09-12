@@ -32,6 +32,14 @@ const OPTIONAL_RULES: Toggle[] = [
     detail: 'Up to 150% of the drive rating, at the risk of damaging it.',
   },
   {
+    key: 'aftArcFire',
+    label: 'Aft arc fire',
+    rule: '4.2',
+    detail:
+      'A ship that spent no thrust at all this turn may shoot through its own drive plume. ' +
+      'Without this the aft arc is closed to offensive fire, always.',
+  },
+  {
     key: 'rearArcAttacks',
     label: 'Rear arc attacks',
     rule: '4.10',

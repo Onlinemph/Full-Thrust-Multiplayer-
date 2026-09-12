@@ -34,6 +34,8 @@ export interface GameSetup {
   emergencyThrust?: boolean
   /** 4.10 — fire from inside a target's rear arc ignores its armour. */
   rearArcAttacks?: boolean
+  /** 4.2 — a ship that spent no thrust this turn may fire through its aft arc. */
+  aftArcFire?: boolean
   /** The Drive Damage variant in the box after 4.11: two drive rolls. */
   driveDamage?: boolean
   /** 10.3 — the Core Systems block: bridge, life support, power core. */
@@ -107,6 +109,7 @@ export function buildGame(setup: GameSetup): GameState {
   setOptionalRules(game, {
     driveDamage: setup.driveDamage,
     rearArcAttacks: setup.rearArcAttacks,
+    aftArcFire: setup.aftArcFire,
     coreSystems: setup.coreSystems,
     reactorBreaches: setup.reactorBreaches,
     emergencyThrust: setup.emergencyThrust,

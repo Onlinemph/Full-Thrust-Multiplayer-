@@ -2,6 +2,7 @@ import { canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameS
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
+import { optional } from '../engine/actions'
 import type { Arc, WeaponDef } from '../engine/types'
 import { dispatch } from './store'
 
@@ -33,6 +34,9 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
   const targets = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
   const engaged = engagedTargets(ship, game.phase)
   const fireCons = availableFireCons(ship, game.phase)
+  // 4.2's optional exception: a ship that spent no thrust at all may shoot
+  // through its own drive plume this turn.
+  const aftOpen = optional(game).aftArcFire === true && ship.thrustUsed === 0
 
   if (targets.length === 0) {
     return (
@@ -69,7 +73,9 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
             target.placement.facing,
             ship.placement.position,
           )
-          const reach = ship.design.weapons.map((weapon) => reachOf(ship, weapon, range, arc))
+          const reach = ship.design.weapons.map((weapon) =>
+            reachOf(ship, weapon, range, arc, aftOpen),
+          )
           const able = reach.filter((r) => r.blocked === null)
           const needsNew = !engaged.includes(target.id)
 
@@ -128,7 +134,13 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
 }
 
 /** Whether a weapon can engage a target, and what it would roll (4.2 – 4.5). */
-function reachOf(ship: ShipState, weapon: WeaponDef, range: number, arc: Arc): Reach {
+function reachOf(
+  ship: ShipState,
+  weapon: WeaponDef,
+  range: number,
+  arc: Arc,
+  aftOpen: boolean,
+): Reach {
   if (ship.destroyedSystems.has(weapon.id)) return { weapon, blocked: 'Knocked out', dice: 0 }
   // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
   if (!canWeaponFire(ship, weapon.id)) return { weapon, blocked: 'Already fired', dice: 0 }
@@ -138,6 +150,9 @@ function reachOf(ship: ShipState, weapon: WeaponDef, range: number, arc: Arc): R
   if (!arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(arc)) {
     return { weapon, blocked: `Cannot bear into ${arc}`, dice: 0 }
   }
+  // 4.2: "No ship may fire offensive weaponry through its aft arc due to the
+  // interference of the ship's main drive."
+  if (arc === 'A' && !aftOpen) return { weapon, blocked: 'Blocked by the drive (4.2)', dice: 0 }
   const reach = maxRangeOf(weapon)
   if (reach === 0) return { weapon, blocked: 'Not implemented yet', dice: 0 }
   if (range > reach) return { weapon, blocked: `Out of range (${reach} MU)`, dice: 0 }

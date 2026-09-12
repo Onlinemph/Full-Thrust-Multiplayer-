@@ -315,6 +315,22 @@ function refuse(reason: string): ActionOutcome {
 const BLANK_ORDER: MovementOrder = { turn: null, accel: 0 }
 
 /**
+ * 4.2's aft-arc ban: *"No ship may fire offensive weaponry through its aft arc
+ * due to the interference of the ship's main drive."*
+ *
+ * This is a base rule, not an optional one — the optional rule is the
+ * exception: *"Aft arc fire is permitted on any game turn in which the firing
+ * ship did not use any thrust from its main drive to accelerate, decelerate,
+ * or change course."* Point defence is exempt because PD is not offensive
+ * weaponry and 4.2 gives systems with no directionality all-round fire.
+ */
+function aftArcBlocked(state: GameState, ship: ShipState, arc: Arc): boolean {
+  if (arc !== 'A') return false
+  if (!optional(state).aftArcFire) return true
+  return ship.thrustUsed > 0
+}
+
+/**
  * A mounting's arcs as they actually bear (16.2, 4.2).
  *
  * *"Rolling has no effect on combat (except that the port batteries now bear
@@ -519,6 +535,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       ship.placement = result.placement
       ship.velocity = result.velocity
+      // 4.2's optional exception and 8.3's scramble both turn on whether the
+      // ship touched its drive this turn, so the figure is recorded here — the
+      // one place a ship's thrust is actually spent. An illegal plot is flown
+      // as STRAIGHT_AHEAD (3.5), which spends nothing.
+      ship.thrustUsed = result.legal ? result.budget.totalUsed : 0
       // A wing still in the bay goes where the ship goes. Nothing in section 8
       // says so because on a real table the counters are the same counter —
       // but here they are two, and a group left behind at last turn's station
@@ -627,6 +648,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
         return refuse('Target is not in that arc')
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
       }
       // 17.1: a planet or planetoid across the line stops the shot. Measured
       // centre to centre, because that is how the models are measured.
@@ -1401,6 +1425,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const arc = arcTo(ship.placement.position, ship.placement.facing, flight.position)
       if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
         return refuse(`${weapon.label} does not bear on ${flight.label}`)
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
       }
       if (!hasLineOfFire(ship.placement.position, flight.position, blockingTerrain(state))) {
         return refuse(`${flight.label} is behind cover (17.1)`)
@@ -2453,6 +2480,12 @@ export interface OptionalRules {
   reactorBreaches?: boolean
   emergencyThrust?: boolean
   sensorRules?: boolean
+  /**
+   * 4.2's exception to the aft-arc ban: *"Aft arc fire is permitted on any game
+   * turn in which the firing ship did not use any thrust from its main drive."*
+   * Off by default, which leaves the ban absolute as the base rule states it.
+   */
+  aftArcFire?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

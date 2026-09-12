@@ -47,7 +47,7 @@ import {
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { hasLineOfFire } from './terrain'
 import { arcsWhenInverted } from './specialmoves'
-import type { GameAction } from './actions'
+import { optional, type GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
 
@@ -214,9 +214,12 @@ export function scoreOrder(
   let score = -(((range - want) / BEAM_RANGE_BAND) ** 2) * 10
 
   // Guns bearing. The arc the target will be in, counted by how much of the
-  // ship's surviving armament can fire into it (4.2).
+  // ship's surviving armament can fire into it (4.2). The aft arc counts for
+  // nothing: this is a position the ship is about to manoeuvre into, so it
+  // will have spent thrust and 4.2's exception cannot apply to it.
   const arc = arcTo(result.placement.position, result.placement.facing, enemyAt)
   const band = rangeBand(range)
+  if (arc === 'A') return score - edgePenalty(game, result.placement.position)
   for (const weapon of ship.design.weapons) {
     if (ship.destroyedSystems.has(weapon.id)) continue
     if (!bearsOn(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted), arc)) continue
@@ -445,10 +448,15 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
 
   // What each gun would do to each enemy, if anything.
   const shots = new Map<string, Array<{ weapon: (typeof ship.design.weapons)[number]; dice: number }>>()
+  // 4.2: the aft arc is shut to offensive fire unless the table plays the
+  // optional exception and this ship kept its hands off the throttle.
+  const aftOpen = optional(game).aftArcFire === true && ship.thrustUsed === 0
+
   for (const enemy of enemies) {
     if (!hasLineOfFire(ship.placement.position, enemy.placement.position, bodies)) continue
     const range = distance(ship.placement.position, enemy.placement.position)
     const arc = arcTo(ship.placement.position, ship.placement.facing, enemy.placement.position)
+    if (arc === 'A' && !aftOpen) continue
     const able = ship.design.weapons
       .filter((weapon) => !ship.destroyedSystems.has(weapon.id))
       .filter((weapon) => canWeaponFire(ship, weapon.id))
