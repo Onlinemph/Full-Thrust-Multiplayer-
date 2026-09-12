@@ -778,8 +778,13 @@ DESIGNS = [
   # mount is most of the design decision and everything else is what fits
   # around it. No Class-1 battery anywhere: their own prohibition, which is
   # why the close-in work is done by PDS and by nothing else.
+  # Mass 50 exactly, and that is 5.23 rather than taste: "A ship may only mount
+  # up to 16 mass of Spinal Mount weapon per 50 mass of ship", so 50 is the
+  # smallest hull that may carry one at all. Read with 13.4's "escorts have a
+  # maximum mass of 44" it also means no escort can ever carry a spinal mount,
+  # which is why the smallest lance in the fleet is a cruiser.
   dict(id='aethelgard-lance', name='Kestrel-class Lance', faction='Aethelgard Ascendancy',
-       group='escort', mass=32, hull='weak', rows=4, thrust=6, screens=1,
+       group='cruiser', mass=50, hull='weak', rows=4, thrust=6, screens=1,
        weapons=[('spinal-beam',1,['F'])],
        systems=[('advanced-firecon',1),('pds',2)]),
   dict(id='aethelgard-cruiser', name='Aurelian-class Lance Cruiser', faction='Aethelgard Ascendancy',

@@ -869,6 +869,41 @@ function rollAllocation(
 }
 
 /**
+ * 6.4's lock-on roll, for a salvo that has already run the gauntlet — **phase 10**.
+ *
+ * > *"The attacking player then rolls a D6 for each Salvo Missile marker. The
+ * > result is the number of missiles in the salvo that are actually on target.
+ * > Subtract the number of missiles killed from the D6 score that the attacker
+ * > rolled. Any positive number is the number of missiles that actually get
+ * > through the defenses and hit the target."*
+ *
+ * `resolveMissilePointDefence` does the whole of 6.4 in one call, defensive
+ * fire and lock-on together, and the engine's live phase 9 does not use it —
+ * it runs `defences.resolvePointDefence`, which knows nothing about lock-on.
+ * So the roll has to be made where the salvo arrives, on the survivors and the
+ * count already killed.
+ *
+ * The salvo is `missiles + hits`: phase 9 subtracts its kills from `missiles`
+ * and adds them to `hits`, and 6.4 measures the D6 against the salvo as
+ * launched, not against what is left of it.
+ */
+export function rollSalvoLockOn(
+  marker: MissileMarker,
+  rng: Rng,
+  drm = 0,
+): { roll: number; lockOn: number; hits: number } {
+  const salvo = marker.missiles + marker.hits
+  const roll = d6(rng)
+  const lockOn = Math.max(0, Math.min(salvo, roll + drm))
+  let hits = Math.max(0, Math.min(marker.missiles, lockOn - marker.hits))
+  // "If there are no defenses at all, at least one missile in a salvo will
+  // always get through." Unconditional, so it is written down even though a
+  // D6 cannot roll zero.
+  if (marker.hits === 0) hits = Math.max(hits, Math.min(1, marker.missiles))
+  return { roll, lockOn, hits }
+}
+
+/**
  * Resolve point defence against one marker — **phase 9** (6.4).
  *
  * Two tables, and which one applies is the whole difference between a salvo and

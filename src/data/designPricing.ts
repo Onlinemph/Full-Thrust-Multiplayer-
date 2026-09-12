@@ -33,6 +33,7 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
+import { maxSpinalMountMass } from '../engine/weapons/kinetics'
 import {
   tenderBayMassFor,
   tenderBayPoints,
@@ -365,6 +366,8 @@ export type DesignFault =
   | { kind: 'bad-battlerider'; problem: string }
   /** 11.6: hangar space for ships, priced at something other than the rule's rate. */
   | { kind: 'mispriced-ship-bay'; carried: number; mass: number; points: number }
+  /** 5.23: more Spinal Mount than 16 mass per 50 of hull. */
+  | { kind: 'spinal-overmounted'; fitted: number; allowed: number }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -402,6 +405,10 @@ export function describeFault(fault: DesignFault): string {
       return fault.problem
     case 'mispriced-ship-bay':
       return `ship bay for ${fault.carried} mass of carried hull: 11.6 charges ${fault.mass} mass and ${fault.points} points`
+    case 'spinal-overmounted':
+      return fault.allowed === 0
+        ? `${fault.fitted} mass of Spinal Mount on a hull too small to carry one: 5.23 allows 16 mass per 50 of ship, so nothing under mass 50 may mount any`
+        : `${fault.fitted} mass of Spinal Mount where 5.23 allows ${fault.allowed} — 16 mass per 50 of ship`
   }
 }
 
@@ -586,6 +593,20 @@ export function validateDesign(
     const points = tenderBayPoints(mass)
     if (Math.abs(system.mass - mass) > 1e-6 || Math.abs(system.points - points) > 1e-6) {
       faults.push({ kind: 'mispriced-ship-bay', carried, mass, points })
+    }
+  }
+
+  // 5.23: "A ship may only mount up to 16 mass of Spinal Mount weapon per 50
+  // mass of ship." Read with 13.4's 44-mass ceiling on escorts it also means
+  // no escort may carry one at all — which is how a mass-32 escort with a
+  // mass-8 Spinal Beam sat in the roster until something checked.
+  const spinalMass = design.weapons
+    .filter((weapon) => weapon.weaponClass.startsWith('spinal-'))
+    .reduce((sum, weapon) => sum + weapon.mass, 0)
+  if (spinalMass > 0) {
+    const allowed = maxSpinalMountMass(design.mass)
+    if (spinalMass > allowed) {
+      faults.push({ kind: 'spinal-overmounted', fitted: spinalMass, allowed })
     }
   }
 

@@ -36,7 +36,7 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  * old battle it replays. Files without a stamp replay under reading 1, exactly
  * as they were fought.
  */
-export const CURRENT_RULES_VERSION = 2
+export const CURRENT_RULES_VERSION = 3
 
 export interface GameSetup {
   scenarioId: string

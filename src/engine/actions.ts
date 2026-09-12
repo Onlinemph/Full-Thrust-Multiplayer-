@@ -248,6 +248,7 @@ import {
   nearestCourse,
   plasmaBoltLauncherLimit,
   resolveAntimatterDetonation,
+  rollSalvoLockOn,
   resolveOrdnanceAttack,
   resolvePlasmaBoltDefence,
   resolvePlasmaBoltDetonation,
@@ -1834,7 +1835,33 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           continue
         }
 
-        const result = resolveOrdnanceAttack(marker, marker.missiles, {
+        // 6.4: "The attacking player then rolls a D6 for each Salvo Missile
+        // marker. The result is the number of missiles in the salvo that are
+        // actually on target." Without it every missile that survived phase 9
+        // hit automatically, which is roughly twice what the rule allows on an
+        // average roll — the salvo's own accuracy was never tested at all.
+        //
+        // A new die in an existing path, so it is stamped: an older battle
+        // replays on the every-survivor-hits reading it was fought under.
+        let incoming = marker.missiles
+        let lockOnDice: number[] = []
+        if (marker.kind === 'salvo' && rulesReading(state) >= 3) {
+          const lock = rollSalvoLockOn(marker, state.rng)
+          incoming = lock.hits
+          lockOnDice = [lock.roll]
+          if (incoming <= 0) {
+            pushLog(state, {
+              kind: 'fire',
+              targetId: target.id,
+              side: marker.owner,
+              dice: lockOnDice,
+              text: `Salvo locks on ${lock.lockOn} against ${marker.hits} killed — nothing gets through ${target.name} (6.4)`,
+            })
+            continue
+          }
+        }
+
+        const result = resolveOrdnanceAttack(marker, incoming, {
           level: effectiveScreenLevel(target),
           advanced: target.design.screens.advanced,
         }, state.rng)
@@ -1850,7 +1877,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           kind: applied.hullDamage > 0 ? 'damage' : 'fire',
           targetId: target.id,
           side: marker.owner,
-          dice: result.dice,
+          dice: [...lockOnDice, ...result.dice],
           text: `Ordnance strikes ${target.name}: ${result.detail}`,
         })
         if (target.destroyed) {

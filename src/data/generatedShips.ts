@@ -2006,15 +2006,15 @@ export const AETHELGARD_LANCE: ShipDesign = {
   id: "aethelgard-lance",
   name: "Kestrel-class Lance",
   faction: "Aethelgard Ascendancy",
-  group: "escort",
-  mass: 32,
+  group: "cruiser",
+  mass: 50,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 6,
+  hullBoxes: 10,
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [], regenerative: false },
+  armour: { layers: [6], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "Spinal Beam-1", "weaponClass": "spinal-beam", "rating": 1, "variant": "standard", "arcs": ["F"], "mass": 8, "points": 32},
@@ -2030,7 +2030,7 @@ export const AETHELGARD_LANCE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 85,
+  points: 123,
 }
 
 export const AETHELGARD_CRUISER: ShipDesign = {
