@@ -118,6 +118,14 @@
   gap: 0.35rem;
 }
 
+/* The declared orders are a second block inside the same form — a rule above
+   them separates the movement order from the commitments written beside it. */
+.order-panel h4 {
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: 1px solid var(--line);
+}
+
 /* Narrow screens: the side column goes under the plot rather than squeezing
    it, and the plot keeps at least half the height so ships stay clickable. */
 @media (max-width: 900px) {

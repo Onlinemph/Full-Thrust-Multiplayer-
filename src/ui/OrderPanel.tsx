@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import type { ShipState } from '../engine/game'
+import type { GameState, ShipState } from '../engine/game'
 import {
   driveFromDef,
   formatOrder,
@@ -22,6 +22,7 @@ import { dispatch } from './store'
  * the thrust arithmetic obvious.
  */
 export interface OrderPanelProps {
+  game: GameState
   ship: ShipState
   /** Orders are written in phase 1 only (2.6). */
   editable: boolean
@@ -38,7 +39,7 @@ function movementStateOf(ship: ShipState): MovementState {
   }
 }
 
-export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPanelProps) {
+export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: OrderPanelProps) {
   /* 7.20 makes the player commit to a number of turns before switching the
      cloak on, so the count has to be chosen first and is local to the form. */
   const [cloakTurns, setCloakTurns] = useState(3)
@@ -47,6 +48,10 @@ export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPane
   const budget = thrustBudget(order, movement.drive)
   const check = validateOrder(order, movement)
   const turnCap = standardTurnAllowance(movement.drive)
+  const rammable = game.ships.filter(
+    (other) => other.side !== ship.side && !other.destroyed && !other.offTable,
+  )
+  const hasMines = ship.design.weapons.some((weapon) => weapon.weaponClass === 'mine-rack')
 
   const setTurn = (direction: TurnDirection | null, points: number) =>
     dispatch({ type: 'plot-turn', shipId: ship.id, direction, points })
@@ -131,9 +136,14 @@ export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPane
         </div>
       ) : null}
 
-      {/* The two things written beside the movement order rather than in it:
-          a cloak, with the number of turns declared in advance (7.20), and a
-          Reflex Field, which costs the ship its guns for the turn (7.25). */}
+      {/* Everything else 2.6 phase 1 asks for. These are written beside the
+          movement order, not in it, and each one is a commitment the ship
+          cannot take back once the turn starts: a cloak with its duration
+          declared in advance (7.20), a Reflex Field that costs the ship its
+          guns (7.25), mines that pull it early in the movement phase (6.9),
+          an FTL exit that takes two turns (11.4), and a ram (16.7). */}
+      <h4>Declared with the order</h4>
+
       {ship.cloak ? (
         <div className="panel-row">
           <label>
@@ -184,6 +194,83 @@ export function OrderPanel({ ship, editable, emergencyThrustAllowed }: OrderPane
           <span className="spacer" />
           <span style={{ color: 'var(--warn)' }}>no weapons this turn</span>
         </div>
+      ) : null}
+
+      {hasMines ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={ship.layingMines}
+              onChange={(event) =>
+                dispatch({ type: 'plot-mines', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Lay mines
+          </label>
+          <span className="spacer" />
+          {/* 2.6 phase 5: mine layers move after the fixed paths and before
+              everyone else, so declaring it changes when the ship moves. */}
+          <span style={{ color: 'var(--ink-dim)' }}>moves early in phase 5</span>
+        </div>
+      ) : null}
+
+      {ship.design.ftl !== 'none' ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable || (ship.cloaked && ship.ftlWarmupTurn === null)}
+              checked={ship.ftlWarmupTurn !== null}
+              onChange={(event) =>
+                dispatch({ type: 'plot-ftl-exit', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Jump out
+          </label>
+          <span className="spacer" />
+          <span style={{ color: 'var(--warn)' }}>
+            {ship.ftlWarmupTurn === null
+              ? 'two turns, no thrust, no guns'
+              : `spinning up since turn ${ship.ftlWarmupTurn}`}
+          </span>
+        </div>
+      ) : null}
+
+      {rammable.length > 0 ? (
+        <>
+          <div className="panel-row">
+            <span>Ram</span>
+            <span className="spacer" />
+            <select
+              aria-label="Ram target"
+              disabled={!editable}
+              value={ship.ramTargetId ?? ''}
+              onChange={(event) =>
+                dispatch({
+                  type: 'plot-ram',
+                  shipId: ship.id,
+                  targetId: event.target.value || null,
+                })
+              }
+            >
+              <option value="">nobody</option>
+              {rammable.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* 16.7 charges both hulls the same way, so the warning is about
+              this ship as much as about the target. */}
+          {ship.ramTargetId ? (
+            <p style={{ color: 'var(--damage)', margin: 0 }}>
+              Both ships take D6 damage per hull box of the other.
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {!check.legal ? (

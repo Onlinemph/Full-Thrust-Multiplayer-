@@ -195,6 +195,7 @@ export function App() {
               </div>
 
               <OrderPanel
+                game={game}
                 ship={selected}
                 editable={game.phase === 'orders'}
                 emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
