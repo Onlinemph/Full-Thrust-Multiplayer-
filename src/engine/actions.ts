@@ -60,14 +60,16 @@ import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import {
   attenuatedScreens,
   cloudSpeedDamage,
+  cloudTargetLock,
   createDebrisCloud,
+  createGravityWell,
   debrisCloudExpired,
   explosionCheck,
-  moveDebrisCloud,
-  cloudTargetLock,
   hasLineOfFire,
-  resolveKnockedOffCourse,
+  moveDebrisCloud,
   resolveCollision,
+  resolveGravityZone,
+  resolveKnockedOffCourse,
   resolveMeteorField,
   stationaryCollisionRisk,
   type DebrisCloud,
@@ -354,6 +356,12 @@ export type GameAction =
    * resolved at the end of the movement phase, when both ships have arrived.
    */
   | { type: 'plot-ram'; shipId: string; targetId: string | null }
+  /**
+   * 17.9: *"a ship that has unused thrust points for changing course may use
+   * them to change the gravity zone turn."* A magnitude; the direction is
+   * never the player's, it is always towards the centre.
+   */
+  | { type: 'plot-gravity-turn'; shipId: string; points: number }
   /**
    * 16.6: *"the ship's movement orders must be plotted so that it ends up
    * within 3 MU of the target ship/starbase at the end of the turn"*. The
@@ -771,6 +779,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const ftl = ftlStageOf(ship, state.turn)
       if (ftl === 'jumping') return jumpToFtl(state, ship)
 
+      // 17.9: a change earned by ending last turn inside a zone lands "at the
+      // start of the next turn movement", which is here, before anything else.
+      applyPendingGravity(state, ship)
+
       if (optional(state).movementSystem === 'vector') {
         return moveUnderVector(state, ship, ftl === 'warming-up')
       }
@@ -874,6 +886,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // before the ram, because a ship that flew into a planetoid does not go
       // on to hit anything else.
       resolveTerrainHazards(state, ship, [
+        before.placement.position,
+        ...result.legs.map((leg) => leg.to),
+      ])
+      resolveGravity(state, ship, [
         before.placement.position,
         ...result.legs.map((leg) => leg.to),
       ])
@@ -1866,6 +1882,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         visibleTo: [ship.side],
         text: `${ship.name} will attempt to ram ${target.name} (16.7)`,
       })
+      return OK
+    }
+
+    case 'plot-gravity-turn': {
+      const found = orderable(state, shipById(state, action.shipId))
+      if (!('id' in found)) return found
+      if (!Number.isInteger(action.points) || action.points < 0) {
+        return refuse('A gravity turn is a magnitude; the direction is towards the centre (17.9)')
+      }
+      found.gravityTurn = action.points
       return OK
     }
 
@@ -2874,6 +2900,88 @@ function cloudsOver(state: GameState, ...points: Point[]): boolean {
   )
 }
 
+/** Every body on the table that has a gravity well (17.9). */
+function gravityWells(state: GameState) {
+  return state.terrain
+    .filter((feature) => feature.gravity !== undefined)
+    .map((feature) => ({
+      feature,
+      well: createGravityWell(feature.position, feature.radius, feature.gravity),
+    }))
+}
+
+/** Whether the ship finished inside any of the well's zones (17.9). */
+function insideWell(well: ReturnType<typeof createGravityWell>, position: Point): boolean {
+  const range = distance(well.center, position)
+  return well.zones.some((zone) => range <= zone.radius)
+}
+
+/**
+ * What the well did to a ship that flew through it (17.9).
+ *
+ * *"Pause the ship in the innermost zone contacted"* — the deepest zone the
+ * whole path reached, not the one it happened to finish in — and then add to,
+ * subtract from or bend its course, according to the arc the centre lies in.
+ * A pass that actually changes course is a partial orbit and can neither hit
+ * the planet nor fall into the next zone in; a dive straight at the middle is
+ * not a partial orbit and gets neither protection.
+ *
+ * The thrust a player may spend arguing with the turn is whatever the order
+ * sheet left unspent, which is why this runs after the move rather than during
+ * it.
+ */
+function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[]): void {
+  if (!optional(state).terrainHazards) return
+  if (ship.destroyed || ship.offTable) return
+
+  for (const { feature, well } of gravityWells(state)) {
+    const unusedThrust = Math.max(0, currentThrust(ship) - ship.thrustUsed)
+    const effect = resolveGravityZone(
+      { position: ship.placement.position, facing: ship.placement.facing, velocity: ship.velocity },
+      well,
+      {
+        path,
+        endsInZone: insideWell(well, ship.placement.position),
+        turnPoints: ship.gravityTurn ?? undefined,
+        unusedThrust,
+      },
+    )
+    if (!effect.zone) continue
+
+    ship.thrustUsed += effect.thrustSpent
+    const name = feature.label ?? 'the well'
+    if (effect.timing === 'next-turn') {
+      ship.pendingGravity = { velocity: effect.velocity, facing: effect.facing }
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text:
+          `${ship.name} is still inside ${name} — strength ${effect.zone.strength} applies at the ` +
+          `start of its next move (17.9)`,
+      })
+      return
+    }
+    ship.velocity = effect.velocity
+    ship.placement = { ...ship.placement, facing: effect.facing }
+    pushLog(state, {
+      kind: 'move',
+      shipId: ship.id,
+      side: ship.side,
+      text:
+        `${ship.name} swings past ${name} — ${effect.arc} arc, strength ${effect.zone.strength}: ` +
+        `velocity ${effect.velocityChange >= 0 ? '+' : ''}${effect.velocityChange}` +
+        (effect.turnPoints === 0
+          ? ''
+          : `, ${Math.abs(effect.turnPoints)} points to ${effect.turnPoints > 0 ? 'starboard' : 'port'}`) +
+        (effect.shielded ? ', a partial orbit (17.9)' : ' (17.9)'),
+    })
+    // The immunity is to the planet and to the next zone in, so a shielded pass
+    // stops here rather than falling on through to a second well.
+    if (effect.shielded) return
+  }
+}
+
 /**
  * Getting a lock through dust (17.2 rules 2 and 3), or null when no cloud is
  * involved and the ordinary screen level stands.
@@ -3133,10 +3241,26 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
   // 12.12: "the tape-measure line, start position to finishing position" is
   // what a collision is tested against, and it is not the flown sequence.
   resolveTerrainHazards(state, ship, [result.chord.from, result.chord.to])
+  resolveGravity(state, ship, [result.chord.from, result.chord.to])
   resolveDeclaredRam(state, ship)
   resolveLeavingTable(state, ship)
   dragDockedShips(state, ship)
   return OK
+}
+
+/** 17.9's deferred change, landing at the start of the move it was deferred to. */
+function applyPendingGravity(state: GameState, ship: ShipState): void {
+  const pending = ship.pendingGravity
+  if (!pending) return
+  ship.pendingGravity = null
+  ship.velocity = pending.velocity
+  ship.placement = { ...ship.placement, facing: pending.facing }
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name} is carried round: velocity ${pending.velocity}, course ${pending.facing} (17.9)`,
+  })
 }
 
 /**

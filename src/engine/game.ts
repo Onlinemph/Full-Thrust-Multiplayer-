@@ -201,6 +201,19 @@ export interface ShipState {
   /** A ram declared in orders (16.7), resolved when this ship finishes moving. */
   ramTargetId: string | null
   /**
+   * 17.9: *"a ship that has unused thrust points for changing course may use
+   * them to change the gravity zone turn."* The magnitude the player wants,
+   * written in orders; the legal range is clamped when the zone is resolved,
+   * because it depends on the strength of the zone the ship actually reaches.
+   */
+  gravityTurn: number | null
+  /**
+   * 17.9: *"if the ship ends the Ship Movement Phase in a gravity zone, apply
+   * the changes in velocity and course to the start of the next turn movement
+   * instead."* Held here until that next move begins.
+   */
+  pendingGravity: { velocity: number; facing: Course } | null
+  /**
    * Upside down, and when it turned over (16.2). *"An inverted ship may roll
    * back 'upright' in any subsequent turn, or may remain inverted as long as
    * the player wishes"* — so this is a standing condition and the per-turn
@@ -384,6 +397,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ftlTransit: 'none',
     ftlWarmupTurn: null,
     ramTargetId: null,
+    gravityTurn: null,
+    pendingGravity: null,
     rollStatus: { ...UPRIGHT },
     dock: { ...UNDOCKED },
     dockTargetId: null,
@@ -521,6 +536,16 @@ export interface TerrainFeature {
   /** Radius in MU (2.1). */
   radius: number
   label?: string
+  /**
+   * 17.9's gravity zones, on a body that has them: *"a planet is surrounded by
+   * three concentric gravity zones, each extending the radius by at least 1 MU
+   * … treat a sun as a large planet with an extra inner zone of strength 8."*
+   *
+   * Optional, and it has to be: a `TerrainFeature` rides inside a saved custom
+   * scenario, so a battle file written before this existed must still parse.
+   * Absent means a body with no well, which is every rock the game has shipped.
+   */
+  gravity?: { sun?: boolean; zoneWidth?: number }
 }
 
 // ---------------------------------------------------------------------------
@@ -1221,6 +1246,10 @@ function onBeginTurn(state: GameState): void {
     if (ship.ftlWarmupTurn === null) ship.ftlTransit = 'none'
     ship.ramTargetId = null
     ship.dockTargetId = null
+    // 17.9's turn magnitude is written afresh each turn, like the ram beside
+    // it. The pending effect is NOT cleared: it is the change the last move
+    // earned, and it lands at the start of the next one.
+    ship.gravityTurn = null
     // "In Full Thrust weapons can only be used once per turn" (2.6) — the
     // turn is the unit, so this is the one place the record is wiped.
     ship.weaponsFired.clear()

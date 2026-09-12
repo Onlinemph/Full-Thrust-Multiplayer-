@@ -481,3 +481,106 @@ describe('battle debris (17.5)', () => {
     expect(game.terrain.some((f) => f.kind === 'debris')).toBe(false)
   })
 })
+
+describe('a gravity well (17.9)', () => {
+  const GIANT: GameState['terrain'] = [
+    {
+      id: 'giant',
+      kind: 'planet',
+      position: { x: 36, y: 24 },
+      radius: 4,
+      label: 'the giant',
+      gravity: { zoneWidth: 2 },
+    },
+  ]
+
+  /** One ship crossing the table with the planet off one bow or the other. */
+  function pass(from: { x: number; y: number }, facing: 1 | 3 | 6 | 9 | 12, velocity = 10, hazards = true): GameState {
+    const game = createGame({
+      seed: 0x1709,
+      sides: [{ id: 'a' }],
+      terrain: GIANT,
+      ships: [
+        createShipState({
+          id: 'red',
+          side: 'a',
+          design: design({ id: 'red', name: 'Red' }),
+          placement: { position: from, facing },
+          velocity,
+        }),
+      ],
+    })
+    setOptionalRules(game, { terrainHazards: hazards })
+    return game
+  }
+
+  it('holds a diving ship over to the start of its next move', () => {
+    // "If the center is in the fore arc of the ship, add the zone strength to
+    // the ship velocity" — and a ship still pointed at the planet is by
+    // definition still inside the well, so 17.9's other clause applies too:
+    // "if the ship ends the Ship Movement Phase in a gravity zone, apply the
+    // changes ... to the start of the next turn movement instead."
+    const game = pass({ x: 36, y: 4 }, 6, 12)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.log.some((e) => e.text.includes('fore arc'))).toBe(false)
+    const held = game.ships[0].pendingGravity
+    expect(held, 'the ship is still in the well').not.toBeNull()
+    expect(held!.velocity, 'the planet is pulling it in').toBeGreaterThan(12)
+
+    const turn = game.turn
+    while (game.turn === turn) advancePhase(game)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.log.some((e) => e.text.includes('carried round'))).toBe(true)
+  })
+
+  it('takes from one running away from it', () => {
+    // "If the center is in the aft arc, subtract the zone strength from
+    // velocity."
+    const game = pass({ x: 36, y: 32 }, 6, 12)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.log.some((e) => e.text.includes('aft arc'))).toBe(true)
+    expect(game.ships[0].velocity).toBeLessThan(12)
+  })
+
+  it('swings one that passes abeam, and calls that a partial orbit', () => {
+    // "If the center is in a port or starboard arc, add half the zone strength
+    // to the velocity, and turn the ship towards the center."
+    const game = pass({ x: 26, y: 10 }, 6, 28)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.log.some((e) => e.text.includes('port arc'))).toBe(true)
+    expect(game.ships[0].placement.facing, 'bent towards the planet').not.toBe(6)
+    expect(game.log.some((e) => e.text.includes('partial orbit'))).toBe(true)
+  })
+
+  it('lets a player spend leftover thrust arguing with the turn', () => {
+    const unassisted = pass({ x: 26, y: 10 }, 6, 28)
+    advanceTo(unassisted, 'move-ships')
+    applyAction(unassisted, { type: 'move-ship', shipId: 'red' })
+
+    const fought = pass({ x: 26, y: 10 }, 6, 28)
+    applyAction(fought, { type: 'plot-gravity-turn', shipId: 'red', points: 0 })
+    advanceTo(fought, 'move-ships')
+    applyAction(fought, { type: 'move-ship', shipId: 'red' })
+    expect(
+      fought.ships[0].placement.facing,
+      'thrust spent cancelling the swing leaves the bow where it was',
+    ).not.toBe(unassisted.ships[0].placement.facing)
+  })
+
+  it('does nothing at all with the hazards switched off', () => {
+    const game = pass({ x: 36, y: 32 }, 6, 12, false)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.ships[0].velocity).toBe(12)
+    expect(game.ships[0].pendingGravity).toBeNull()
+  })
+
+  it('is on a scenario, so a player can actually meet one', () => {
+    const game = buildGame({ scenarioId: 'gravity-well', seed: 1 })
+    expect(game.terrain.some((f) => f.gravity !== undefined)).toBe(true)
+  })
+})

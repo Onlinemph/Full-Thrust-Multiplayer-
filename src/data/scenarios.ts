@@ -292,7 +292,76 @@ export const LINE_OF_BATTLE: Scenario = {
   ],
 }
 
-export const SCENARIOS: Scenario[] = [INTRODUCTORY_SCENARIO, BORDER_SKIRMISH, LINE_OF_BATTLE]
+/**
+ * A battle fought around a planet, which is a different kind of battle.
+ *
+ * 17.9 gives a planet three concentric gravity zones — *"the outer zone is
+ * strength 1, the middle strength 2, and the innermost 4"* — and what they do
+ * is add to a ship's velocity, take from it, or swing it round, depending on
+ * which arc the planet lies in. A fleet crossing the middle of this table is
+ * not on the course it wrote.
+ *
+ * Deliberately no deployment step and no picked forces: the point of it is
+ * the well, so both sides come in from the short ends the way the introductory
+ * scenario does, and everything interesting happens between them.
+ */
+export const GRAVITY_WELL: Scenario = {
+  id: 'gravity-well',
+  name: 'The Weight of Worlds',
+  briefing:
+    'A gas giant nobody has bothered to name, and a survey station on its far side that both ' +
+    'navies now want. There is no way across this system that does not go past the planet, and ' +
+    'the planet does not care what course you wrote.',
+  objective:
+    'Break the enemy division. The planet will help you or ruin you depending on which side of ' +
+    'your bow it passes.',
+  table: { width: 96, height: 48 },
+  // A large planet: the zones are widened, so the well reaches 12 MU out and a
+  // ship crossing the middle of the table is inside it whether it meant to be
+  // or not. Solid, so it also blocks fire (17.1) and destroys anything that
+  // flies into it (17.6).
+  terrain: [
+    {
+      id: 'giant',
+      kind: 'planet',
+      position: { x: 48, y: 24 },
+      radius: 6,
+      label: 'the gas giant',
+      gravity: { zoneWidth: 2 },
+    },
+  ],
+  turnLimit: 12,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-heavy-cruiser', position: { x: 8, y: 18 }, facing: 3, velocity: 8 },
+        { designId: 'esu-light-cruiser', position: { x: 8, y: 30 }, facing: 3, velocity: 8 },
+        { designId: 'esu-destroyer', position: { x: 4, y: 12 }, facing: 3, velocity: 10 },
+        { designId: 'esu-destroyer', position: { x: 4, y: 36 }, facing: 3, velocity: 10 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-heavy-cruiser', position: { x: 88, y: 30 }, facing: 9, velocity: 8 },
+        { designId: 'nac-light-cruiser', position: { x: 88, y: 18 }, facing: 9, velocity: 8 },
+        { designId: 'nac-destroyer', position: { x: 92, y: 36 }, facing: 9, velocity: 10 },
+        { designId: 'nac-destroyer', position: { x: 92, y: 12 }, facing: 9, velocity: 10 },
+      ],
+    },
+  ],
+}
+
+export const SCENARIOS: Scenario[] = [
+  INTRODUCTORY_SCENARIO,
+  BORDER_SKIRMISH,
+  LINE_OF_BATTLE,
+  GRAVITY_WELL,
+]
 
 /**
  * A scenario designed in the app, embedded whole in a battle file so the save
