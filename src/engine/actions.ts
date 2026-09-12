@@ -44,6 +44,7 @@ import {
   type TerrainKind,
   type GameState,
   type GunboatSquadronState,
+  type OrdnanceKind,
   type ShipState,
   type SideId,
   type TableGate,
@@ -222,6 +223,7 @@ import {
   type PdDefender,
   type PdMount,
   type PdMountKind,
+  type PdTargetKind,
   type PdThreat,
   type StealthLevel,
 } from './defences'
@@ -1957,7 +1959,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           .filter((marker) => marker.owner !== ship.side && marker.missiles > 0)
           .map((marker) => ({
             id: marker.id,
-            kind: marker.kind === 'heavy' ? 'heavy-missile' : 'salvo-missile',
+            // 6.4 and 6.6 give a heavy missile and an antimatter warhead the
+            // harder table — 5 or 6 on a PDS rather than 4, no double kill on
+            // a 6 — and `usesHeavyMissileTable` in defences.ts has always
+            // known about 'antimatter-missile'. This mapping never sent one:
+            // everything that was not 'heavy' arrived as a salvo, so an
+            // antimatter warhead was shot down on the easy table and died
+            // about twice as often as 6.6 allows. Another die count, so it is
+            // stamped.
+            kind: pdThreatKind(marker.kind, rulesReading(state)),
             position: marker.position,
             attacking: ship.id,
           }))
@@ -4677,6 +4687,18 @@ function pdOrders(state: GameState): Map<string, string> {
     PD_ORDERS.set(state, orders)
   }
   return orders
+}
+
+/**
+ * Which point-defence table a marker is shot down on (6.4, 6.6).
+ *
+ * A rocket is 6.7's "as if they were conventional missiles", so it takes the
+ * salvo table; a plasma bolt and a mine are not shot at here at all.
+ */
+function pdThreatKind(kind: OrdnanceKind, reading: number): PdTargetKind {
+  if (kind === 'heavy') return 'heavy-missile'
+  if (kind === 'antimatter' && reading >= 4) return 'antimatter-missile'
+  return 'salvo-missile'
 }
 
 /** The point-defence mounts on this hull that could still fire (phase 9). */

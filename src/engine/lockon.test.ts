@@ -155,3 +155,48 @@ describe('in a battle', () => {
 function damageIn(result: { target: ShipState }): number {
   return result.target.hullMarked + result.target.armourMarked.reduce((a, b) => a + b, 0)
 }
+
+describe('6.6 an antimatter warhead is harder to shoot down', () => {
+  it('goes to the heavy-missile table, not the salvo one', () => {
+    // A PDS kills a salvo on a 4 and doubles on a 6; against a heavy or
+    // antimatter warhead it needs a 5 and there is no double. Phase 9 mapped
+    // everything that was not 'heavy' to 'salvo-missile', so a warhead was
+    // shot down on the easy table.
+    let easier = 0
+    let harder = 0
+    for (let seed = 0; seed < 40; seed += 1) {
+      easier += warheadSurvives(seed, 1) ? 0 : 1
+      harder += warheadSurvives(seed, CURRENT_RULES_VERSION) ? 0 : 1
+    }
+    // Under the old reading the warhead died more often than 6.6 allows.
+    expect(easier).toBeGreaterThan(harder)
+  })
+})
+
+/** Whether an antimatter warhead lives through one turn of point defence. */
+function warheadSurvives(seed: number, rulesVersion: number): boolean {
+  // The Proscription-class Arsenal Ship is the roster's antimatter carrier, so
+  // the marker is a real one rather than a projection with its kind rewritten.
+  const game = buildGame({
+    scenarioId: 'line-of-battle',
+    seed,
+    rulesVersion,
+    forces: { a: ['tyrant-arsenal'], b: ['nac-heavy-cruiser'] },
+  })
+  const shooter = game.ships.find((ship) => ship.design.id === 'tyrant-arsenal') as ShipState
+  const target = game.ships.find((ship) => ship.side !== shooter.side) as ShipState
+  shooter.placement = { position: { x: 30, y: 24 }, facing: 3 }
+  target.placement = { position: { x: 34, y: 24 }, facing: 9 }
+  const rack = shooter.design.weapons.find((w) => w.weaponClass === 'antimatter-missile')
+  if (!rack) throw new Error('no antimatter missile')
+  advanceTo(game, 'launch-missiles')
+  applyAction(game, {
+    type: 'launch-ordnance',
+    shipId: shooter.id,
+    weaponId: rack.id,
+    aimPoint: { ...target.placement.position },
+  })
+  advanceTo(game, 'point-defence')
+  applyAction(game, { type: 'resolve-point-defence' })
+  return game.ordnance.some((marker) => marker.kind === 'antimatter')
+}
