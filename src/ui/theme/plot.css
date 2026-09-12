@@ -252,6 +252,20 @@
   stroke-width: 1;
 }
 
+/* 6.9: a mine is laid and left. Hollow, because it is not going anywhere. */
+.missile-marker.is-mine {
+  fill: none;
+  stroke: var(--ordnance);
+  stroke-width: 1.5;
+}
+
+/* 6.8: a plasma bolt is a detonation point, and its blast is 6 MU across. */
+.missile-marker.is-plasma-bolt {
+  fill: var(--warn);
+  fill-opacity: 0.4;
+  stroke: var(--warn);
+}
+
 .missile-seek {
   fill: none;
   stroke: var(--ordnance);

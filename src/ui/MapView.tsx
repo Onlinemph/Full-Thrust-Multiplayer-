@@ -447,10 +447,12 @@ export function MapView({
           {game.ordnance.map((marker) => (
             <circle
               key={marker.id}
-              className="missile-marker"
+              // A mine sits still and a plasma bolt is a place rather than a
+              // thing on its way somewhere, so neither reads as a missile.
+              className={`missile-marker is-${marker.kind}`}
               cx={marker.position.x * scale}
               cy={marker.position.y * scale}
-              r={3}
+              r={marker.kind === 'plasma-bolt' ? 5 : 3}
             />
           ))}
 

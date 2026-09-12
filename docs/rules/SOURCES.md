@@ -39,6 +39,13 @@ Section 9 is covered as far as the text goes: 9.1 in full and five gunboat types
 Plasma, Graser, Gatling, Needle), plus the FTL and Heavy modifications. The list is cut off after
 the Needle Gunboat, so any further type is missing rather than omitted. `gunboats.md` records it.
 
+Section 6's ordnance is wired end to end now. The three families that were never reachable are:
+rocket pods (6.7) and plasma bolt launchers (6.8), which had no launch action at all, antimatter
+warheads (6.6), whose blast `resolveOrdnanceAttack` returned null for, and mines (6.9, 6.10), where
+`plot-mines` set a flag that changed only *when* a ship moved and no marker was ever laid. All four
+have actions and tests now, and a player has a phase 3 panel to launch from — before that, only the
+computer could launch anything at all.
+
 What the rest costs, and what stands in for it:
 
 | Section | Status |

@@ -185,6 +185,9 @@ import {
 import {
   acquireMissileTargets,
   canEngagePlasmaBolt,
+  layMines,
+  minesTriggeredBy,
+  resolveMineAttack,
   fireRocketPod,
   launchMissile,
   launchPlasmaBolt,
@@ -199,6 +202,7 @@ import {
   PLASMA_BOLT_BLAST_RADIUS,
   type BlastEffect,
   type BlastTarget,
+  type MineMarker,
   type MissileMarker,
   type PlasmaBolt,
   type PlasmaBoltDefence,
@@ -584,6 +588,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // not as each ship arrives.
       if (state.phase === 'move-ships') {
         for (const ship of state.ships) resolveDockingApproach(state, ship)
+        // 6.9: a mine fires on the move that passed it, and "after a mine has
+        // detonated, remove its marker from the table at the end of the
+        // movement phase" — which is here.
+        resolveMines(state)
       }
       // 17.5: a hull that has just been overkilled may come apart. Swept at the
       // boundary so that every way of dying reaches it, rather than at the
@@ -1046,6 +1054,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // 17.8's track is the planet's own edge, so a ship that met it has
       // already had its answer — orbit, a decaying orbit or the atmosphere —
       // and there is nothing left for 17.6's collision to say about it.
+      // 6.9 fires a mine on anything that "enter[ed] the radius … at any point
+      // during movement", so the whole flown path is kept until every ship has
+      // moved and the mines can be answered together.
+      tracksOf(state).set(ship.id, track)
+      dropMines(state, ship, track)
       const metTrack = resolveOrbitEntry(state, ship, track)
       if (!metTrack) {
         resolveTerrainHazards(state, ship, track, { shielded: swung })
@@ -2679,6 +2692,165 @@ function driftDebris(state: GameState): void {
     clouds.map(moveDebrisCloud).filter((cloud) => !debrisCloudExpired(cloud, state.turn)),
   )
   projectDebris(state)
+}
+
+// ---------------------------------------------------------------------------
+// Mines (6.9, 6.10)
+// ---------------------------------------------------------------------------
+
+// Markers on the table between turns, like the missiles, and rebuilt by replay
+// rather than saved. The tracks are this turn's flown paths: 6.9 fires a mine
+// on anything that entered its radius "at any point during movement, not just
+// at the end of a move", and a minelayer moves before its victims do, so the
+// question can only be answered once everyone has moved.
+const MINES = new WeakMap<GameState, MineMarker[]>()
+const TRACKS = new WeakMap<GameState, Map<string, Point[]>>()
+
+function minesOf(state: GameState): MineMarker[] {
+  let mines = MINES.get(state)
+  if (!mines) {
+    mines = []
+    MINES.set(state, mines)
+  }
+  return mines
+}
+
+function tracksOf(state: GameState): Map<string, Point[]> {
+  let tracks = TRACKS.get(state)
+  if (!tracks) {
+    tracks = new Map()
+    TRACKS.set(state, tracks)
+  }
+  return tracks
+}
+
+/** Copy the mines into GameState for drawing, beside the other markers. */
+function projectMines(state: GameState): void {
+  const others = state.ordnance.filter((marker) => marker.kind !== 'mine')
+  state.ordnance = [
+    ...others,
+    ...minesOf(state).map((mine) => ({
+      id: mine.id,
+      side: mine.owner,
+      sourceShipId: mine.sourceShipId,
+      kind: 'mine' as const,
+      grade: 'standard' as const,
+      missiles: 1,
+      position: mine.position,
+      launchedTurn: mine.laidTurn,
+      stagesRemaining: 0,
+      targetShipId: null,
+    })),
+  ]
+}
+
+/**
+ * Drop this ship's mines as it goes — **phase 5** (6.10).
+ *
+ * *"Each minelayer system fitted may deploy one mine per turn, so a ship with
+ * two mine systems may drop two markers during its movement."* They go along
+ * the path the ship actually flew, spaced down it, because that is what
+ * dropping something out of a moving ship looks like.
+ */
+function dropMines(state: GameState, ship: ShipState, path: readonly Point[]): void {
+  if (!ship.layingMines || ship.destroyed || ship.offTable) return
+  const racks = ship.design.weapons.filter(
+    (weapon) => weapon.weaponClass === 'mine-rack' && !ship.destroyedSystems.has(weapon.id),
+  )
+  if (racks.length === 0) return
+
+  const mines = minesOf(state)
+  const requests = racks.map((rack, index) => ({
+    id: `mine-${state.turn}-${mines.length + index + 1}-${ship.id}-${rack.id}`,
+    owner: ship.side,
+    sourceShipId: ship.id,
+    // Spread down the flown path: the first goes where the ship started the
+    // move, the last where it finished.
+    position: pointAlong(path, racks.length === 1 ? 1 : index / (racks.length - 1)),
+    turn: state.turn,
+  }))
+  // 6.10 counts loads off a magazine symbol no design in this roster buys, so
+  // the cap is the racks themselves: one mine each, every turn.
+  const result = layMines(requests, { layers: racks.length, loads: racks.length })
+  mines.push(...result.mines)
+  projectMines(state)
+  pushLog(state, {
+    kind: 'launch',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name} lays ${result.mines.length} mine(s) astern (6.10)`,
+  })
+}
+
+/** A point a fraction of the way down a flown path. */
+function pointAlong(path: readonly Point[], fraction: number): Point {
+  if (path.length === 0) return { x: 0, y: 0 }
+  if (path.length === 1) return path[0]
+  const spans: number[] = []
+  let total = 0
+  for (let i = 1; i < path.length; i++) {
+    const span = distance(path[i - 1], path[i])
+    spans.push(span)
+    total += span
+  }
+  if (total === 0) return path[0]
+  let want = Math.max(0, Math.min(1, fraction)) * total
+  for (let i = 0; i < spans.length; i++) {
+    if (want <= spans[i] || i === spans.length - 1) {
+      const at = spans[i] === 0 ? 0 : want / spans[i]
+      return {
+        x: path[i].x + (path[i + 1].x - path[i].x) * at,
+        y: path[i].y + (path[i + 1].y - path[i].y) * at,
+      }
+    }
+    want -= spans[i]
+  }
+  return path[path.length - 1]
+}
+
+/**
+ * Set off every mine that something flew past — the end of **phase 5** (6.9).
+ *
+ * *"All enemy vessels that enter the radius from the mine marker, at any point
+ * during movement, not just at the end of a move, will be detected and fired
+ * on by the mine."* A mine fires once: *"After a mine has detonated, remove its
+ * marker from the table at the end of the movement phase."*
+ */
+function resolveMines(state: GameState): void {
+  const mines = minesOf(state)
+  const tracks = tracksOf(state)
+  if (mines.length > 0 && tracks.size > 0) {
+    const triggers = minesTriggeredBy(
+      mines,
+      [...tracks.entries()].flatMap(([shipId, path]) => {
+        const ship = shipById(state, shipId)
+        if (!ship || ship.destroyed || ship.offTable) return []
+        return [{ shipId, owner: ship.side, path }]
+      }),
+      state.turn,
+    )
+    for (const trigger of triggers) {
+      const target = shipById(state, trigger.shipId)
+      if (!target || target.destroyed) continue
+      const result = resolveMineAttack(effectiveScreenLevel(target), state.rng)
+      const applied = applyDamage(targetStateOf(target), result, { source: 'ordnance' })
+      writeBackDamage(target, applied.target)
+      markHullBoxes(target, applied.hullDamage)
+      pushLog(state, {
+        kind: applied.hullDamage > 0 ? 'damage' : 'fire',
+        targetId: target.id,
+        dice: result.dice,
+        text: `A mine goes off ${trigger.approach.toFixed(1)} MU from ${target.name}: ${result.detail}`,
+      })
+      if (target.destroyed) {
+        pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+      }
+    }
+    const spent = new Set(triggers.map((trigger) => trigger.mineId))
+    MINES.set(state, mines.filter((mine) => !spent.has(mine.id)))
+    projectMines(state)
+  }
+  tracks.clear()
 }
 
 // ---------------------------------------------------------------------------
@@ -4385,10 +4557,15 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
   // 12.12: "the tape-measure line, start position to finishing position" is
   // what a collision is tested against, and it is not the flown sequence.
   const track = [result.chord.from, result.chord.to]
+  tracksOf(state).set(ship.id, track)
+  dropMines(state, ship, track)
   const swung = resolveGravity(state, ship, track)
-  resolveTerrainHazards(state, ship, track, { shielded: swung })
-  resolveDeclaredRam(state, ship)
-  resolveLeavingTable(state, ship)
+  const metTrack = resolveOrbitEntry(state, ship, track)
+  if (!metTrack) {
+    resolveTerrainHazards(state, ship, track, { shielded: swung })
+    resolveDeclaredRam(state, ship)
+    resolveLeavingTable(state, ship)
+  }
   dragDockedShips(state, ship)
   return OK
 }
