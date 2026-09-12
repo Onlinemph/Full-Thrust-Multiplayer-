@@ -450,22 +450,26 @@ DESIGNS = [
        weapons=[('gravitic-gun',3,F3), ('gravitic-gun',2,P3), ('gravitic-gun',2,S3),
                 ('gravitic-gun',1,ALL6)],
        systems=[('firecon',2),('pds',3),('ecm',1),('adfc',1)], marines=2),
-  # The first hull with a holofield: 7.19 puts 12 MU on every range measured
-  # against it, which is what "Holographic Superiority" is written around.
+  # The two holofield hulls, and they carry no screens at all: 7.17 says
+  # "Holofields cannot be combined with other screen or field technology", so
+  # the choice is between turning shots aside and not being where they are
+  # aimed. Everything the mass would have gone into screens goes into ECM
+  # instead, which stacks with the field rather than fighting it — 7.19 puts
+  # 12 MU on every range measured against a holofield and ECM takes more off
+  # a missile's or a fighter's lock.
   dict(id='cygnan-command-cruiser', name='Analemma-class Command Cruiser',
        faction='Cygnan Assembly',
-       group='cruiser', mass=86, hull='weak', rows=4, thrust=6, advDrive=True,
-       screens=1, advScreens=True,
-       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',2,P3), ('gravitic-gun',2,S3)],
-       systems=[('advanced-firecon',2),('pds',3),('area-ecm',1),('advanced-adfc',1),
-                ('holofield',1)], marines=2),
+       group='cruiser', mass=74, hull='weak', rows=4, thrust=6, advDrive=True,
+       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',2,P3), ('gravitic-gun',2,S3),
+                ('gravitic-gun',1,ALL6)],
+       systems=[('advanced-firecon',2),('pds',3),('area-ecm',1),('ecm',2),
+                ('advanced-adfc',1),('holofield',1)], marines=2),
   dict(id='cygnan-battleship', name='Syzygy-class Battleship', faction='Cygnan Assembly',
-       group='capital', mass=188, hull='weak', rows=4, thrust=6, advDrive=True,
-       screens=2, advScreens=True,
-       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',3,A3), ('gravitic-gun',2,P3),
-                ('gravitic-gun',2,S3), ('gravitic-gun',1,ALL6)],
-       systems=[('advanced-firecon',3),('pds',4),('area-ecm',1),('advanced-adfc',1),
-                ('holofield',1)], marines=3),
+       group='capital', mass=118, hull='weak', rows=4, thrust=6, advDrive=True,
+       weapons=[('gravitic-gun',3,['F']), ('gravitic-gun',3,F3), ('gravitic-gun',3,A3),
+                ('gravitic-gun',2,P3), ('gravitic-gun',2,S3), ('gravitic-gun',1,ALL6)],
+       systems=[('advanced-firecon',3),('pds',5),('area-ecm',1),('ecm',2),
+                ('advanced-adfc',1),('holofield',1)], marines=3),
 
   # ── Silent Sisterhood of Veil ────────────────────────────────────────────
   # Thin, fast hulls carrying needle beams and a Tuffley cloak, and nothing

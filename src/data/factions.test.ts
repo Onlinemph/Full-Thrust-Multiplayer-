@@ -190,6 +190,26 @@ describe('what a shipyard can check', () => {
     ).toBe(false)
   })
 
+  it('will not let a hull both hide and turn shots aside', () => {
+    // 7.17: "Holofields cannot be combined with other screen or field
+    // technology." 7.20 says the same of a cloak. The check for two fields on
+    // one hull was there; the check for a field on a screened hull was not,
+    // and the first Cygnan fleet went in with both until it caught them.
+    const screened = hull({
+      screens: { level: 1, generators: 1, advanced: false },
+      systems: [
+        { id: 'holo', kind: 'holofield', label: 'Holofield', mass: 4, points: 20 },
+      ],
+    })
+    expect(validateDesign(screened).some((f) => f.kind === 'field-with-screens')).toBe(true)
+
+    const bare = hull({
+      screens: { level: 0, generators: 0, advanced: false },
+      systems: screened.systems,
+    })
+    expect(validateDesign(bare).some((f) => f.kind === 'field-with-screens')).toBe(false)
+  })
+
   it('leaves a design with no faction alone', () => {
     expect(
       validateDesign(hull()).some(

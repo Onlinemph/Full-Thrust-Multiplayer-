@@ -303,6 +303,8 @@ export type DesignFault =
   | { kind: 'banned'; system: string }
   | { kind: 'mispriced-proportional'; system: string; mass: number; points: number }
   | { kind: 'two-cloaks' }
+  /** A cloak or a holofield on a hull that also carries screens (7.17, 7.20). */
+  | { kind: 'field-with-screens'; field: string }
   | { kind: 'too-many-parties'; bought: number; crew: number }
   /** A faction trait forbids this outright (`docs/rules/factions.md`). */
   | { kind: 'faction-prohibition'; faction: string; what: string; rule: string }
@@ -331,6 +333,8 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.system} is a share of hull mass: it should be ${fault.mass} mass and ${fault.points} points on this hull (7.17 – 7.25)`
     case 'two-cloaks':
       return 'two cloaks on one hull: a cloak may not be combined with any other field (7.20)'
+    case 'field-with-screens':
+      return `${fault.field} on a screened hull: "Holofields cannot be combined with other screen or field technology" (7.17), and a cloak "may not be combined with any fields or screens" (7.20)`
     case 'too-many-parties':
       return `${fault.bought} extra crew parties on a hull crewed for ${fault.crew}: a ship "may not mount more Damage Control Parties (and or additional Marines) than the number of crew it was initially designed with" (13.13)`
     case 'faction-prohibition':
@@ -540,8 +544,14 @@ export function validateDesign(
   // says the same of a Holofield, so one hull carries at most one of them.
   const fields = design.systems.filter((system) =>
     ['cloaking-device', 'cloaking-field', 'tuffley-cloak', 'holofield'].includes(system.kind),
-  ).length
-  if (fields > 1) faults.push({ kind: 'two-cloaks' })
+  )
+  if (fields.length > 1) faults.push({ kind: 'two-cloaks' })
+  // The other half of the same two sentences, and the half nobody was checking:
+  // it is not only that the fields exclude each other, it is that either of
+  // them excludes screens. A hull turns shots aside or it hides from them.
+  if (fields.length > 0 && (design.screens.level > 0 || design.screens.generators > 0)) {
+    faults.push({ kind: 'field-with-screens', field: fields[0].label })
+  }
 
   for (const banned of opts.bannedSystems ?? []) {
     if (design.systems.some((s) => s.kind === banned) ||
