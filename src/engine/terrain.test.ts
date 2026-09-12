@@ -747,12 +747,41 @@ describe('17.9 large scale gravity zones', () => {
   })
 
   it('shields the partial orbit from collisions and from a second zone', () => {
-    const inZone = resolveGravityZone({ position: at(0, -2.5), facing: 12, velocity: 10 }, planet)
-    expect(inZone.shielded).toBe(true)
+    // "The ship is considered to make a partial orbit within the zone while
+    // changing course, so cannot collide with the planet or enter another zone
+    // even if the straight line path would indicate otherwise."
+    const abeam = resolveGravityZone({ position: at(-3.5, 0), facing: 12, velocity: 10 }, planet)
+    expect(abeam.turnPoints).not.toBe(0)
+    expect(abeam.shielded).toBe(true)
+
     const clear = resolveGravityZone({ position: at(0, -50), facing: 12, velocity: 10 }, planet)
     expect(clear.shielded).toBe(false)
     expect(clear.zone).toBeNull()
     expect(clear.velocity).toBe(10)
+  })
+
+  it('shields nothing that is not changing course — [reading] 23', () => {
+    // A dive at the centre makes no partial orbit, so it gets no immunity: the
+    // rule scopes the protection to "while changing course", and reading it
+    // otherwise would make aiming at a planet the safe way past one.
+    const dive = resolveGravityZone({ position: at(0, 3.5), facing: 12, velocity: 10 }, planet)
+    expect(dive.arc).toBe('fore')
+    expect(dive.turnPoints).toBe(0)
+    expect(dive.shielded).toBe(false)
+
+    const stern = resolveGravityZone({ position: at(0, -3.5), facing: 12, velocity: 20 }, planet)
+    expect(stern.arc).toBe('aft')
+    expect(stern.shielded).toBe(false)
+
+    // And a ship that spends its thrust cancelling the turn has bought the
+    // same straight line.
+    const cancelled = resolveGravityZone(
+      { position: at(-3.5, 0), facing: 12, velocity: 20 },
+      planet,
+      { turnPoints: 0, unusedThrust: 4 },
+    )
+    expect(cancelled.turnPoints).toBe(0)
+    expect(cancelled.shielded).toBe(false)
   })
 
   it('defers the change to the next turn when the ship stops in a zone', () => {

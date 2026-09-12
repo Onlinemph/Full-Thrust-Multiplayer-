@@ -793,6 +793,7 @@ and the only question is whether the fighters get out. Even a fully streamlined 
 | 20 | 12.11 | 4.11's extra-rows modifier carries into the knock-off-course roll |
 | 21 | 17.1 | chunk courses are uniform clock points; speeds are not rolled |
 | 22 | 17.9 | gravity cannot drive velocity below zero |
+| 23 | 17.9 | the partial-orbit immunity belongs only to a pass that actually changes course |
 
 ---
 

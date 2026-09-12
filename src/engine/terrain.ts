@@ -1255,9 +1255,17 @@ export interface GravityEffect {
   thrustSpent: number
   /**
    * *"The ship is considered to make a partial orbit within the zone while
-   * changing course, so cannot collide with the planet or enter another zone"*
-   * (17.9). A rule, not colour: without it a dive at a sun would chain through
-   * four zones in one move.
+   * changing course, so cannot collide with the planet or enter another zone
+   * even if the straight line path would indicate otherwise"* (17.9). A rule,
+   * not colour: without it a beam pass at a sun would chain through four zones
+   * in one move.
+   *
+   * **[reading] 23:** the immunity is scoped to *"while changing course"*, so
+   * it belongs to the port and starboard branches and to no other. A ship that
+   * dives straight at the centre makes no partial orbit — it makes a dive —
+   * and 17.9 is not saying that the way to survive a planet is to aim at it.
+   * A ship that cancels its turn entirely by spending thrust has bought the
+   * same straight line and pays for it the same way.
    */
   shielded: boolean
   /**
@@ -1338,7 +1346,8 @@ export function resolveGravityZone(
     turnPoints: signed,
     facing: turnBy(ship.facing, signed),
     thrustSpent,
-    shielded: true,
+    // [reading] 23: no course change, no partial orbit, no immunity.
+    shielded: magnitude > 0,
     timing: opts.endsInZone === true ? 'next-turn' : 'now',
   }
 }
