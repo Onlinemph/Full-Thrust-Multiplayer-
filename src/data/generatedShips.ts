@@ -1203,6 +1203,43 @@ export const IZOTROPE_HEAVY_CRUISER: ShipDesign = {
   points: 246,
 }
 
+export const IZOTROPE_WAVEGUN: ShipDesign = {
+  id: "izotrope-wavegun",
+  name: "Maxwell-class Wave Cruiser",
+  faction: "Izotrope Technocracy",
+  group: "cruiser",
+  mass: 112,
+  hullClass: "average",
+  hullRows: 4,
+  hullBoxes: 33,
+  drive: { thrust: 4, advanced: false },
+  ftl: "standard",
+  streamlining: "none",
+  armour: { layers: [1], regenerative: false },
+  screens: { level: 2, generators: 2, advanced: true },
+  weapons: [
+    {"id": "w1", "label": "Wave Gun", "weaponClass": "wave-gun", "rating": 1, "variant": "standard", "arcs": ["F"], "mass": 12, "points": 36},
+    {"id": "w2", "label": "Plasma-2", "weaponClass": "plasma-cannon", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 4, "points": 12},
+    {"id": "w3", "label": "Plasma-2", "weaponClass": "plasma-cannon", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 4, "points": 12},
+    {"id": "w4", "label": "Plasma-1", "weaponClass": "plasma-cannon", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 2, "points": 6},
+  ],
+  turrets: [], 
+  systems: [
+    {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+    {"id": "screen-gen-2", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+  ],
+  fighterBays: [],
+  gunboats: [],
+  additionalDamageControlParties: 0,
+  marineParties: 2,
+  points: 295,
+}
+
 export const IZOTROPE_BATTLESHIP: ShipDesign = {
   id: "izotrope-battleship",
   name: "Tokamak-class Battleship",
@@ -3379,6 +3416,7 @@ export const GENERATED_DESIGNS: ShipDesign[] = [
   IZOTROPE_ESCORT,
   IZOTROPE_CRUISER,
   IZOTROPE_HEAVY_CRUISER,
+  IZOTROPE_WAVEGUN,
   IZOTROPE_BATTLESHIP,
   VOID_CORSAIRS_CUTTER,
   VOID_CORSAIRS_RAIDER,

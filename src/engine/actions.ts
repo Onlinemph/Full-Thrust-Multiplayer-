@@ -210,7 +210,7 @@ import {
   type FighterGroup,
   type RearmResult,
 } from './fighters'
-import { advance, arcTo, distance, isRearArcAttack } from './geometry'
+import { advance, arcTo, distance, incomingArc, isRearArcAttack } from './geometry'
 import {
   combinedStealthLevel,
   effectiveScreenLevel as screenLevelOf,
@@ -315,15 +315,24 @@ import {
   ewFireEffect,
   fireNovaCannon,
   isEnergyWeapon,
+  chargeWaveGun,
+  createWaveGunState,
+  dischargeWaveGun,
+  isWaveGunCharged,
   novaArmingLost,
   novaContact,
   orderCloak,
   rollReflexField,
+  rollWaveGunDamage,
+  waveGunContact,
+  waveGunKnockOutDamage,
   AREA_ECM_RADIUS,
   NOVA_SWEEPS,
+  WAVE_GUN_CHARGE_TARGET,
   type EwDefences,
   type NovaBurst,
   type NovaCannonState,
+  type WaveGunState,
 } from './ew'
 import type {
   Arc,
@@ -615,6 +624,21 @@ export type GameAction =
    */
   | { type: 'fire-nova-cannon'; shipId: string; weaponId: string }
   /**
+   * 7.24 — one turn's charging of the Wave Gun: *"Each turn that the player
+   * orders the weapon to charge, roll one D6 and write the result down; when
+   * the accumulated rolls reach six or more the weapon is fully charged."*
+   * Ordered in phase 1 and the die is thrown with the order, because that is
+   * when the player writes the number down.
+   */
+  | { type: 'charge-wave-gun'; shipId: string; weaponId: string }
+  /**
+   * 7.24 — the discharge. Like the Nova Cannon it fires down the bow line at
+   * everything the wave front touches, but unlike it *"a ship fitted with a
+   * Wave Gun may apply thrust or change course in the same turn that it fires
+   * the weapon"*.
+   */
+  | { type: 'fire-wave-gun'; shipId: string; weaponId: string }
+  /**
    * 5.22 — *"During the Write Orders Phase the facing of each turret must be
    * recorded."* One 60-degree arc; null lets the turret take any arc it
    * covers, which is what an unrecorded turret does.
@@ -891,6 +915,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // fly straight through the shrapnel on the second leg. Ships have
       // finished moving by here, so their endpoint is settled either way.
       if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
+      // 7.24: a Wave Gun knocked out with its capacitors up puts the charge
+      // through its own hull. Swept at the boundary for the same reason the
+      // debris is: the rule names a threshold roll and a needle beam, and
+      // those reach `destroyedSystems` by different routes. Zeroing the
+      // charge makes the sweep idempotent.
+      for (const ship of state.ships) waveGunBacklash(state, ship)
       // 17.5: a hull that has just been overkilled may come apart. Swept at the
       // boundary so that every way of dying reaches it, rather than at the
       // seven separate places a ship can be destroyed.
@@ -1493,6 +1523,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (weapon.weaponClass === 'nova-cannon' && rulesReading(state) >= 7) {
         return refuse(`${weapon.label} is armed in orders and fires down the bow line (7.23)`)
       }
+      // 7.24: the same for the Wave Gun, which through here fired without a
+      // charge, without discharging one, and at one named ship rather than
+      // everything the wave front crosses.
+      if (weapon.weaponClass === 'wave-gun' && rulesReading(state) >= 7) {
+        return refuse(`${weapon.label} is charged over turns and fires down the bow line (7.24)`)
+      }
       // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
       if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
 
@@ -1623,7 +1659,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // 17.2 rule 3: a cloud is worth one screen level against a beam or a
         // graser, capped at 2 — which is why it is worth least to the ship
         // that needed it least.
-        targetScreens: dust ? dust.screens : screensAgainst(state, target),
+        targetScreens: dust ? dust.screens : screensAgainst(state, target, ship.placement.position),
         rearArc: isRearArcAttack(
           target.placement.position,
           target.placement.facing,
@@ -1694,6 +1730,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${weapon.label} picks out ${target.name}'s ${systemId} — beyond repair (5.13)`,
         })
       }
+      // 7.24 names the needle beam as one of the two things that let a charged
+      // Wave Gun's capacitors go.
+      waveGunBacklash(state, target)
       // markHullBoxes owns the row accounting and the pending threshold, so
       // the hull damage goes through it rather than being written directly.
       markHullBoxes(target, applied.hullDamage)
@@ -1750,6 +1789,164 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
      * fired through `fire-weapon` at a single named ship, in the full 60-degree
      * forward arc, every turn, with no consequence afterwards.
      */
+    /**
+     * 7.24's charging order.
+     *
+     * The die is thrown here rather than at the end of the turn because that
+     * is what the rule describes a player doing: *"Each turn that the player
+     * orders the weapon to charge, roll one D6 and write the result down."*
+     * The total is not capped — the book says *"six or more"* and then has the
+     * number matter again if the gun is knocked out, so an over-charged
+     * capacitor is a bigger bang when it goes.
+     */
+    case 'charge-wave-gun': {
+      if (state.phase !== 'orders') {
+        return refuse('The Wave Gun is ordered to charge in this turn\u2019s orders (7.24)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'wave-gun') return refuse(`${weapon.label} is not a Wave Gun (7.24)`)
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      // 7.23's power-down does not exempt the capacitors: an armed Nova Cannon
+      // leaves the ship nothing to charge them with.
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
+      const charging = waveGunChargedTurns(state)
+      if (charging.get(novaKey(ship.id, weapon.id)) === state.turn) {
+        return refuse(`${weapon.label} has already taken this turn\u2019s charge (7.24)`)
+      }
+
+      const before = waveGunState(state, ship, weapon)
+      const step = chargeWaveGun(before, state.rng)
+      waveGunStates(state).set(novaKey(ship.id, weapon.id), step.state)
+      charging.set(novaKey(ship.id, weapon.id), state.turn)
+      pushLog(state, {
+        kind: 'note',
+        shipId: ship.id,
+        side: ship.side,
+        dice: [step.roll],
+        text:
+          `${ship.name} puts a turn into the ${weapon.label}: ${step.state.charge} in the ` +
+          `capacitors` +
+          (step.charged ? ' — fully charged (7.24)' : ` of ${WAVE_GUN_CHARGE_TARGET} (7.24)`),
+      })
+      return OK
+    }
+
+    /**
+     * 7.24's discharge.
+     *
+     * A wave front rather than a template that flies: it *"has a life of only
+     * one turn"*, so everything it touches is resolved here and nothing is
+     * left on the table afterwards. The band a target stands in decides both
+     * the width of the front there and how hard it is hit.
+     */
+    case 'fire-wave-gun': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'wave-gun') return refuse(`${weapon.label} is not a Wave Gun (7.24)`)
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
+      const gun = waveGunState(state, ship, weapon)
+      if (!isWaveGunCharged(gun)) {
+        return refuse(
+          `${weapon.label} has ${gun.charge} of ${WAVE_GUN_CHARGE_TARGET} in its capacitors (7.24)`,
+        )
+      }
+      // "The ship may not fire any other weaponry in the turn that it fires
+      // the Wave Gun." A gun that has already gone off this turn has spent
+      // the turn the Wave Gun needed.
+      if (ship.weaponsFired.size > 0) {
+        return refuse(`${ship.name} has already fired this turn, and 7.24 wants the whole turn`)
+      }
+
+      const origin = ship.placement.position
+      const course = ship.placement.facing
+      waveGunStates(state).set(novaKey(ship.id, weapon.id), dischargeWaveGun())
+      markWeaponFired(ship, weapon.id, state.phase)
+      markShipFired(ship)
+      // "Counts as being unscreened through its entire frontal arc while the
+      // weapon is being fired" — for the rest of the turn, since a shot at it
+      // can come at any point in phase 11 or later.
+      waveGunFiredTurns(state).set(ship.id, state.turn)
+      pushLog(state, {
+        kind: 'fire',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} lets the ${weapon.label} go down the bow line (7.24)`,
+      })
+
+      for (const target of state.ships) {
+        if (target.id === ship.id) continue
+        if (target.destroyed || target.offTable || target.carriedBy !== null) continue
+        const { contact, band, geometry } = waveGunContact(origin, course, target.placement.position)
+        if (!contact || !band) continue
+        // 7.3: "Advanced Screens affect Wave Gun damage rolls (-1 DRM per
+        // level), but will ignore Standard Screens and armor."
+        const advanced = target.design.screens.advanced ? screensAgainst(state, target, origin) : 0
+        const rolled = rollWaveGunDamage(band, advanced, state.rng)
+        const applied = applyDamage(
+          targetStateOf(target),
+          {
+            normalDamage: 0,
+            penetratingDamage: rolled.damage,
+            mode: 'AP',
+            dice: rolled.faces,
+            detail: `${band.damageDice}D6 at ${band.fromMu}-${band.toMu} MU`,
+          },
+          { rearArcRule: false, rearArc: false, source: 'direct-fire', ignoresArmour: true },
+        )
+        writeBackDamage(target, applied.target)
+        markHullBoxes(target, applied.hullDamage)
+        pushLog(state, {
+          kind: 'damage',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          dice: rolled.faces,
+          text:
+            `${target.name} is ${geometry.along.toFixed(1)} MU up the wave: ` +
+            `${applied.hullDamage} through (7.24)`,
+        })
+        if (target.destroyed) {
+          pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+        }
+      }
+
+      for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+        if (group.status !== 'in-flight') continue
+        if (!waveGunContact(origin, course, group.position).contact) continue
+        group.status = 'destroyed'
+        pushLog(state, {
+          kind: 'destroyed',
+          side: group.side,
+          text: `${group.label} is in the wave and is gone (7.24)`,
+        })
+      }
+      const survivors = ordnanceOf(state).filter(
+        (marker) => !waveGunContact(origin, course, marker.position).contact,
+      )
+      if (survivors.length !== ordnanceOf(state).length) {
+        pushLog(state, { kind: 'note', side: ship.side, text: `Ordnance in the wave is gone (7.24)` })
+        setOrdnance(state, survivors)
+        projectOrdnance(state)
+      }
+      return OK
+    }
+
     /**
      * 7.23's arming order, written in phase 1 with the movement orders.
      *
@@ -2348,7 +2545,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         }
 
         const result = resolveOrdnanceAttack(marker, incoming, {
-          level: screensAgainst(state, target),
+          level: screensAgainst(state, target, marker.position),
           advanced: target.design.screens.advanced,
         }, state.rng)
         if (!result) continue
@@ -3069,7 +3266,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const run = resolveAttackRun(
         flight,
         {
-          screens: screensAgainst(state, target),
+          screens: screensAgainst(state, target, flight.position),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -3168,7 +3365,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         flight,
         interceptor,
         {
-          screens: screensAgainst(state, target),
+          screens: screensAgainst(state, target, flight.position),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -3410,7 +3607,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const marines = (carrier?.design.marineParties ?? 0) > 0
       const result = resolveBoardingRun(flight, state.rng, {
         marines,
-        advancedScreens: target.design.screens.advanced && screensAgainst(state, target) > 0,
+        advancedScreens: target.design.screens.advanced && screensAgainst(state, target, flight.position) > 0,
       })
       if (!result.fired) return refuse(`${flight.label}: ${result.reason}`)
 
@@ -3704,7 +3901,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const result = resolveAttackRun(
         flight,
         {
-          screens: screensAgainst(state, target),
+          screens: screensAgainst(state, target, flight.position),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -4892,7 +5089,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const result = resolveGunboatAttack(
         squadron,
         {
-          screens: screensAgainst(state, target),
+          screens: screensAgainst(state, target, squadron.position),
           range,
           arc: arcTo(target.placement.position, target.placement.facing, squadron.position),
         },
@@ -5257,6 +5454,11 @@ function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome 
   // each handler because this is already the gate every gun passes through.
   const powered = novaPowerRefusal(state, ship)
   if (powered) return powered
+  // 7.24: "the ship may not fire any other weaponry in the turn that it fires
+  // the Wave Gun."
+  if (waveGunFrontOpen(state, ship)) {
+    return refuse(`${ship.name} let its Wave Gun go and fires nothing else this turn (7.24)`)
+  }
   if (rulesReading(state) < 5) return null
   const open = FIRING_ACTIVATION.get(state)
   const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
@@ -5649,6 +5851,118 @@ function closeNovaArming(state: GameState): void {
       text: `${ship?.name ?? 'A hull'} did not fire its Nova Cannon and the arming is lost (7.23)`,
     })
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Wave Gun (7.24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The capacitors, per mount.
+ *
+ * The charge is the whole rule: it is what decides whether the gun may fire,
+ * it is what firing spends, and it is what the ship takes as damage if the gun
+ * is knocked out with the capacitors full. `ew.ts` does the arithmetic and
+ * hands back a new state; this is where it is kept between turns.
+ */
+const WAVE_GUNS = new WeakMap<GameState, Map<string, WaveGunState>>()
+
+function waveGunStates(state: GameState): Map<string, WaveGunState> {
+  let guns = WAVE_GUNS.get(state)
+  if (!guns) {
+    guns = new Map()
+    WAVE_GUNS.set(state, guns)
+  }
+  return guns
+}
+
+function waveGunState(state: GameState, ship: ShipState, weapon: WeaponDef): WaveGunState {
+  const guns = waveGunStates(state)
+  const key = novaKey(ship.id, weapon.id)
+  let gun = guns.get(key)
+  if (!gun) {
+    gun = createWaveGunState()
+    guns.set(key, gun)
+  }
+  return gun
+}
+
+/** What is in this mount's capacitors, for the panel and the backlash. */
+export function waveGunCharge(state: GameState, ship: ShipState, weaponId: string): number {
+  return waveGunStates(state).get(novaKey(ship.id, weaponId))?.charge ?? 0
+}
+
+/**
+ * 7.24: *"If the Wave Gun is knocked out by a threshold roll or a Needle Beam
+ * hit while it is charging or charged, the carrying ship suffers damage equal
+ * to the current charge in the weapon's capacitors."*
+ *
+ * Swept after every way a system can be crossed off rather than hooked into
+ * each of them, because the two the rule names are a threshold roll and a
+ * needle beam and they reach `destroyedSystems` by different routes. Zeroing
+ * the charge makes it idempotent: a second sweep over the same wreck finds an
+ * empty capacitor and does nothing.
+ */
+function waveGunBacklash(state: GameState, ship: ShipState): void {
+  for (const weapon of ship.design.weapons) {
+    if (weapon.weaponClass !== 'wave-gun') continue
+    if (!ship.destroyedSystems.has(weapon.id)) continue
+    const gun = waveGunState(state, ship, weapon)
+    const damage = waveGunKnockOutDamage(gun)
+    if (damage <= 0) continue
+    waveGunStates(state).set(novaKey(ship.id, weapon.id), dischargeWaveGun())
+    markHullBoxes(ship, damage)
+    pushLog(state, {
+      kind: 'damage',
+      shipId: ship.id,
+      side: ship.side,
+      text: `${ship.name}'s Wave Gun capacitors let go: ${damage} through the hull (7.24)`,
+    })
+    if (ship.destroyed) {
+      pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
+    }
+  }
+}
+
+/**
+ * 7.24: *"counts as being unscreened through its entire frontal arc while the
+ * weapon is being fired"*.
+ *
+ * Set for the turn the gun goes off and read by `screensAgainst`, which is
+ * where every shot arriving at a hull asks what it has to get through.
+ */
+const WAVE_GUN_FIRED = new WeakMap<GameState, Map<string, number>>()
+
+function waveGunFiredTurns(state: GameState): Map<string, number> {
+  let fired = WAVE_GUN_FIRED.get(state)
+  if (!fired) {
+    fired = new Map()
+    WAVE_GUN_FIRED.set(state, fired)
+  }
+  return fired
+}
+
+/**
+ * The turn each mount last took a charging die (7.24).
+ *
+ * *"Each turn that the player orders the weapon to charge, roll one D6"* —
+ * one die a turn, so a player who clicks twice does not fill the capacitors
+ * twice as fast.
+ */
+const WAVE_GUN_CHARGED_TURN = new WeakMap<GameState, Map<string, number>>()
+
+function waveGunChargedTurns(state: GameState): Map<string, number> {
+  let charged = WAVE_GUN_CHARGED_TURN.get(state)
+  if (!charged) {
+    charged = new Map()
+    WAVE_GUN_CHARGED_TURN.set(state, charged)
+  }
+  return charged
+}
+
+/** Whether this ship's forward screens are down because it let a wave go (7.24). */
+function waveGunFrontOpen(state: GameState, ship: ShipState): boolean {
+  return waveGunFiredTurns(state).get(ship.id) === state.turn
 }
 
 /**
@@ -6146,7 +6460,13 @@ function resolveMines(state: GameState): void {
     for (const trigger of triggers) {
       const target = shipById(state, trigger.shipId)
       if (!target || target.destroyed) continue
-      const result = resolveMineAttack(screensAgainst(state, target), state.rng)
+      // The mine is where it was laid, and that is the direction the blast
+      // comes from — which is the only thing 7.24's open frontal arc asks.
+      const mine = minesOf(state).find((marker) => marker.id === trigger.mineId)
+      const result = resolveMineAttack(
+        screensAgainst(state, target, mine?.position),
+        state.rng,
+      )
       const applied = applyDamage(targetStateOf(target), result, { source: 'ordnance' })
       writeBackDamage(target, applied.target)
       markHullBoxes(target, applied.hullDamage)
@@ -6670,7 +6990,7 @@ function blastTargetsNear(state: GameState, centre: Point, radius: number): Blas
       id: ship.id,
       position: ship.placement.position,
       kind: 'ship',
-      screens: { level: screensAgainst(state, ship), advanced: ship.design.screens.advanced },
+      screens: { level: screensAgainst(state, ship, centre), advanced: ship.design.screens.advanced },
     })
   }
   for (const flight of state.fighterGroups) {
@@ -7599,14 +7919,14 @@ function cloudLockOn(
     return {
       locked: remembered,
       screens: beamOrGraser
-        ? attenuatedScreens(screensAgainst(state, target))
-        : screensAgainst(state, target),
+        ? attenuatedScreens(screensAgainst(state, target, ship.placement.position))
+        : screensAgainst(state, target, ship.placement.position),
       roll: null,
       reason: remembered ? '' : 'the dust already beat this nomination (17.2)',
     }
   }
   const result = cloudTargetLock(state.rng, {
-    screens: screensAgainst(state, target),
+    screens: screensAgainst(state, target, ship.placement.position),
     beamOrGraser,
   })
   ship.cloudLocks.set(target.id, result.locked)
@@ -8260,8 +8580,18 @@ function recoveredThisTurn(state: GameState, ship: ShipState): boolean {
  * screens do not function for that turn!"*, and a shot resolved against the
  * design's number would never notice.
  */
-function screensAgainst(state: GameState, ship: ShipState): ScreenLevel {
-  return novaPoweredDown(state, ship) ? 0 : effectiveScreenLevel(ship)
+function screensAgainst(state: GameState, ship: ShipState, from?: Point): ScreenLevel {
+  if (novaPoweredDown(state, ship)) return 0
+  // 7.24: a ship that let a wave go "counts as being unscreened through its
+  // entire frontal arc while the weapon is being fired". Only shots that come
+  // in through the bow arcs feel it, so the caller has to say where from —
+  // and a caller that has no origin to give (a solar flare, a dust cloud) is
+  // not a shot through an arc at all.
+  if (from !== undefined && waveGunFrontOpen(state, ship)) {
+    const arc = incomingArc(ship.placement.position, ship.placement.facing, from)
+    if (arc === 'F' || arc === 'FP' || arc === 'FS') return 0
+  }
+  return effectiveScreenLevel(ship)
 }
 
 export function effectiveScreenLevel(ship: ShipState): ScreenLevel {

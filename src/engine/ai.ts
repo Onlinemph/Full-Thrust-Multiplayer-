@@ -55,7 +55,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
-import { NOVA_SWEEPS, templateContacts } from './ew'
+import { NOVA_SWEEPS, WAVE_GUN_BANDS, WAVE_GUN_CHARGE_TARGET, templateContacts } from './ew'
 import {
   canMountFlak,
   projectileLine,
@@ -76,6 +76,7 @@ import {
   deployingSide,
   novaArmedOn,
   optional,
+  waveGunCharge,
   proposeDeployment,
   shipsAwaitingGateEntry,
   type GameAction,
@@ -486,6 +487,17 @@ export function aiActions(
           actions.push({ type: 'arm-nova-cannon', shipId: ship.id, weaponId: nova.id, on: true })
           continue
         }
+        // 7.24: charging costs nothing but the order — the ship may still
+        // thrust, turn and shoot while the capacitors fill — so a Wave Gun
+        // that is not yet charged is always charging. It stops on its own
+        // once full, because an over-charged capacitor is only a bigger bang
+        // for the ship carrying it if the gun is knocked out.
+        for (const gun of ship.design.weapons) {
+          if (gun.weaponClass !== 'wave-gun') continue
+          if (ship.destroyedSystems.has(gun.id)) continue
+          if (waveGunCharge(game, ship, gun.id) >= WAVE_GUN_CHARGE_TARGET) continue
+          actions.push({ type: 'charge-wave-gun', shipId: ship.id, weaponId: gun.id })
+        }
         // 8.1: a carrier with a wing still in the bay writes "Launch" and
         // nothing else — 8.2 refuses the launch outright if it spent thrust.
         // Holding station for a turn is what the launch costs, and a carrier
@@ -661,6 +673,14 @@ export function aiActions(
         )
         if (nova && novaArmedOn(game, ship)) {
           actions.push({ type: 'fire-nova-cannon', shipId: ship.id, weaponId: nova.id })
+          continue
+        }
+        // 7.24: letting the wave go costs every other gun on the hull for the
+        // turn and opens the forward screens, so it is worth it only when the
+        // front will actually touch something.
+        const wave = waveWorthFiring(game, ship)
+        if (wave) {
+          actions.push({ type: 'fire-wave-gun', shipId: ship.id, weaponId: wave.id })
           continue
         }
         actions.push(...planFire(game, ship))
@@ -1157,4 +1177,48 @@ function novaWorthArming(game: GameState, ship: ShipState): WeaponDef | null {
     )
   })
   return ownInPath ? null : cannon
+}
+
+/**
+ * Whether the wave is worth letting go this turn (7.24).
+ *
+ * The gun is charged or it is not, and a charged gun keeps its charge for
+ * nothing — *"may then be fired on any turn"* — so the only question is
+ * whether the front will touch a hull. It costs every other gun on the ship
+ * and the forward screens for the turn, so a wave fired down an empty lane is
+ * worse than not firing at all.
+ *
+ * The front is measured from where the ship is standing now, which is where it
+ * will be standing in phase 11: the ships have already moved by the time this
+ * is asked.
+ */
+function waveWorthFiring(game: GameState, ship: ShipState): WeaponDef | null {
+  const gun = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'wave-gun' && !ship.destroyedSystems.has(weapon.id),
+  )
+  if (!gun) return null
+  if (waveGunCharge(game, ship, gun.id) < WAVE_GUN_CHARGE_TARGET) return null
+
+  const origin = ship.placement.position
+  const course = ship.placement.facing
+  const touches = (other: ShipState): boolean =>
+    WAVE_GUN_BANDS.some((band) =>
+      templateContacts(origin, course, band.fromMu, band.toMu, band.diameter, other.placement.position),
+    )
+  const worthIt = game.ships.some(
+    (enemy) =>
+      enemy.side !== ship.side && !enemy.destroyed && !enemy.offTable && enemy.carriedBy === null &&
+      touches(enemy),
+  )
+  if (!worthIt) return null
+  // 7.24 does not exempt the firer's own fleet from the wave front either.
+  const ownInPath = game.ships.some(
+    (other) =>
+      other.side === ship.side &&
+      other.id !== ship.id &&
+      !other.destroyed &&
+      !other.offTable &&
+      touches(other),
+  )
+  return ownInPath ? null : gun
 }

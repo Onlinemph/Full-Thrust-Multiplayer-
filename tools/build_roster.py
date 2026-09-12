@@ -630,6 +630,19 @@ DESIGNS = [
        weapons=[('plasma-cannon-3',3,['F']), ('plasma-cannon',2,P3), ('plasma-cannon',2,S3),
                 ('plasma-cannon',1,ALL6)],
        systems=[('firecon',2),('pds',3),('adfc',1)], marines=2),
+  # The Wave Gun hull (7.24). The gun is 12 mass and does nothing at all on the
+  # turns it is charging — one D6 a turn, written down, and it may not fire
+  # until the total reaches six — so the ship is built to survive the wait:
+  # two levels of advanced screen and a Plasma-2 broadside to earn its keep in
+  # the meantime. It may still thrust and turn on the turn it fires, unlike a
+  # Nova Cannon ship, which is the whole reason to prefer it; what it gives up
+  # is its forward screens for that turn and every other gun on the hull.
+  dict(id='izotrope-wavegun', name='Maxwell-class Wave Cruiser', faction='Izotrope Technocracy',
+       group='cruiser', mass=96, hull='average', rows=4, thrust=4, armour=[1],
+       screens=2, advScreens=True,
+       weapons=[('wave-gun',1,['F']), ('plasma-cannon',2,P3), ('plasma-cannon',2,S3),
+                ('plasma-cannon',1,ALL6)],
+       systems=[('firecon',2),('pds',3)], marines=2),
   # Two levels of advanced screen and every arc covered. The Technocracy's own
   # "Efficient Power Distribution" trait would buy a third level, but 7.2 caps
   # screens at 2 and that trait is not one of the ones this engine reads yet —

@@ -2,7 +2,8 @@ import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCon
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
-import { novaArmedOn, optional } from '../engine/actions'
+import { novaArmedOn, optional, waveGunCharge } from '../engine/actions'
+import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
 import type { Arc, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
@@ -88,6 +89,15 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
     )
   }
 
+  // 7.24: a charged Wave Gun is a choice, not a mount in the fire plan. Firing
+  // it costs every other gun on the hull for the turn and opens the forward
+  // screens, so it gets its own row above the targets rather than a button
+  // beside a beam.
+  const waveGun = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'wave-gun' && !ship.destroyedSystems.has(weapon.id),
+  )
+  const waveCharge = waveGun ? waveGunCharge(game, ship, waveGun.id) : 0
+
   // 2.6: a ship's fire is one activation. Once play has moved on to another
   // ship this one is finished for the turn, so the panel says so rather than
   // offering buttons that will be refused.
@@ -110,7 +120,7 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
     (weapon) => isSpinalMount(weapon) && !ship.destroyedSystems.has(weapon.id),
   )
 
-  if (targets.length === 0 && gates.length === 0 && spinals.length === 0) {
+  if (targets.length === 0 && gates.length === 0 && spinals.length === 0 && !waveGun) {
     return (
       <div className="panel">
         <h3>Phase 11 · Fire</h3>
@@ -144,6 +154,39 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
           Release
         </button>
       </div>
+
+      {waveGun ? (
+        <div className="panel-row">
+          <span>{waveGun.label}</span>
+          <span className="spacer" />
+          <span
+            className="num"
+            style={{ color: waveCharge >= WAVE_GUN_CHARGE_TARGET ? 'var(--screens)' : 'var(--warn)' }}
+          >
+            {waveCharge} / {WAVE_GUN_CHARGE_TARGET}
+          </span>
+          <button
+            className={waveCharge >= WAVE_GUN_CHARGE_TARGET ? 'primary' : undefined}
+            disabled={waveCharge < WAVE_GUN_CHARGE_TARGET || ship.weaponsFired.size > 0}
+            title={
+              waveCharge < WAVE_GUN_CHARGE_TARGET
+                ? 'The capacitors are not full yet (7.24)'
+                : ship.weaponsFired.size > 0
+                  ? '7.24 wants the whole turn, and something has already fired'
+                  : '36 MU down the bow line, and nothing else on the hull fires this turn'
+            }
+            onClick={() =>
+              dispatch({ type: 'fire-wave-gun', shipId: ship.id, weaponId: waveGun.id })
+            }
+          >
+            {waveCharge >= WAVE_GUN_CHARGE_TARGET ? 'Let it go' : 'Charging'}
+          </button>
+          <span className="rule-detail">
+            4D6 to 12 MU, 3D6 to 24, 2D6 to 36 — no armour, no standard screens, and the ship is
+            open through its own bow arc for the turn (7.24)
+          </span>
+        </div>
+      ) : null}
 
       {spinals.map((weapon) => {
         const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null

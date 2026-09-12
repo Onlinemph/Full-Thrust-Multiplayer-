@@ -17,7 +17,14 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
-import { carriedHulls, isJumpPointDisoriented, novaArmedOn, optional } from '../engine/actions'
+import {
+  carriedHulls,
+  isJumpPointDisoriented,
+  novaArmedOn,
+  optional,
+  waveGunCharge,
+} from '../engine/actions'
+import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -64,6 +71,9 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
   // 7.23: at most one, "mounted in the spinal core of a capital ship".
   const novaCannon = ship.design.weapons.find(
     (weapon) => weapon.weaponClass === 'nova-cannon' && !ship.destroyedSystems.has(weapon.id),
+  )
+  const waveGun = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'wave-gun' && !ship.destroyedSystems.has(weapon.id),
   )
   // 16.6: anything on the table that is not this ship and not a wreck.
   const dockable = game.ships.filter(
@@ -318,6 +328,40 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           <span className="spacer" />
           <span style={{ color: 'var(--warn)' }}>
             no thrust, no other weapons, no screens (7.23)
+          </span>
+        </div>
+      ) : null}
+
+      {/* 7.24: "Each turn that the player orders the weapon to charge, roll one
+          D6 and write the result down; when the accumulated rolls reach six or
+          more the weapon is fully charged." Charging costs the ship nothing
+          else — it may thrust, turn and shoot in the same turn. */}
+      {waveGun ? (
+        <div className="panel-row">
+          <span>{waveGun.label}</span>
+          <span className="spacer" />
+          <span
+            className="num"
+            style={{
+              color:
+                waveGunCharge(game, ship, waveGun.id) >= WAVE_GUN_CHARGE_TARGET
+                  ? 'var(--screens)'
+                  : 'var(--ink-dim)',
+            }}
+          >
+            {waveGunCharge(game, ship, waveGun.id)} / {WAVE_GUN_CHARGE_TARGET}
+          </span>
+          <button
+            onClick={() =>
+              dispatch({ type: 'charge-wave-gun', shipId: ship.id, weaponId: waveGun.id })
+            }
+          >
+            Charge
+          </button>
+          <span className="rule-detail">
+            {waveGunCharge(game, ship, waveGun.id) >= WAVE_GUN_CHARGE_TARGET
+              ? 'ready — and a knocked-out capacitor takes the hull with it (7.24)'
+              : 'one die a turn, and the charge is what the hull takes if it is shot out (7.24)'}
           </span>
         </div>
       ) : null}
