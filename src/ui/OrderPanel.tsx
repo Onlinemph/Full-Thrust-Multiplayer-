@@ -70,6 +70,9 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
   const setTurn = (direction: TurnDirection | null, points: number) =>
     dispatch({ type: 'plot-turn', shipId: ship.id, direction, points })
 
+  const setSecondTurn = (direction: TurnDirection | null, points: number) =>
+    dispatch({ type: 'plot-second-turn', shipId: ship.id, direction, points })
+
   const setAccel = (accel: number) => dispatch({ type: 'plot-accel', shipId: ship.id, accel })
 
   const orbitBody = ship.orbit
@@ -132,6 +135,42 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           Straight
         </button>
       </div>
+
+      {/* 3.5's double course change: "A ship making a double course change
+          always makes the first course change before moving and the second at
+          the half way point." The point of it is `P1 S1` — a sidestep that
+          resumes the original course "at some distance to port" — so it is
+          offered as soon as there is a first turn to bend back from. */}
+      {order.turn ? (
+        <div className="panel-row">
+          <span>Then</span>
+          <span className="spacer" />
+          <button
+            disabled={!editable}
+            onClick={() => setSecondTurn('port', (order.secondTurn?.points ?? 0) + 1)}
+          >
+            ◀ Port
+          </button>
+          <span className="num">
+            {order.secondTurn
+              ? `${order.secondTurn.direction === 'port' ? 'P' : 'S'}${order.secondTurn.points}`
+              : '—'}
+          </span>
+          <button
+            disabled={!editable}
+            onClick={() => setSecondTurn('starboard', (order.secondTurn?.points ?? 0) + 1)}
+          >
+            Starboard ▶
+          </button>
+          <button
+            disabled={!editable || !order.secondTurn}
+            onClick={() => setSecondTurn(null, 0)}
+          >
+            None
+          </button>
+          <span style={{ color: 'var(--ink-dim)' }}>at the half way point (3.5)</span>
+        </div>
+      ) : null}
 
       <div className="panel-row">
         <span>Velocity</span>
@@ -268,6 +307,44 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           {/* 2.6 phase 5: mine layers move after the fixed paths and before
               everyone else, so declaring it changes when the ship moves. */}
           <span style={{ color: 'var(--ink-dim)' }}>moves early in phase 5</span>
+        </div>
+      ) : null}
+
+      {/* 17.9: "a ship that has unused thrust points for changing course may
+          use them to change the gravity zone turn." A magnitude only — the
+          direction is never the player's, it is always towards the centre. */}
+      {gravityWellNear(game, ship) ? (
+        <div className="panel-row">
+          <span>Fight the well</span>
+          <span className="spacer" />
+          <button
+            disabled={!editable || (ship.gravityTurn ?? 0) <= 0}
+            onClick={() =>
+              dispatch({
+                type: 'plot-gravity-turn',
+                shipId: ship.id,
+                points: Math.max(0, (ship.gravityTurn ?? 0) - 1),
+              })
+            }
+          >
+            −
+          </button>
+          <span className="num">{ship.gravityTurn ?? 0}</span>
+          <button
+            disabled={!editable}
+            onClick={() =>
+              dispatch({
+                type: 'plot-gravity-turn',
+                shipId: ship.id,
+                points: (ship.gravityTurn ?? 0) + 1,
+              })
+            }
+          >
+            +
+          </button>
+          <span style={{ color: 'var(--ink-dim)' }}>
+            thrust spent on the turn the well makes for you (17.9)
+          </span>
         </div>
       ) : null}
 
@@ -491,6 +568,25 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
  * still being written. A ship that dies in phase 5 for something it could not
  * see in phase 1 reads as a bug, whatever the rulebook says.
  */
+/**
+ * Whether this ship is close enough to a gravity well for 17.9 to be about
+ * anything. The zones are the feature's own radius bands, so "near" is a
+ * generous multiple of the radius rather than an exact zone test — the panel
+ * offers the control, and `resolveGravity` decides what the thrust buys.
+ */
+function gravityWellNear(game: GameState, ship: ShipState): boolean {
+  if (optional(game).terrainHazards !== true) return false
+  return game.terrain.some(
+    (feature) =>
+      (feature.kind === 'planet' || feature.kind === 'planetoid') &&
+      Math.hypot(
+        feature.position.x - ship.placement.position.x,
+        feature.position.y - ship.placement.position.y,
+      ) <=
+        feature.radius * 3,
+  )
+}
+
 function plottedHazards(
   game: GameState,
   ship: ShipState,

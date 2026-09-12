@@ -7,12 +7,17 @@ import {
   shipById,
   shipMovementOrder,
   shipsAwaitingDeployment,
+  shipsAwaitingThreshold,
   type GameState,
   type ShipState,
+  type TerrainKind,
 } from '../engine/game'
 import {
+  defendingSide,
   deployingSide,
   optional,
+  pointDefenceMounts,
+  pointDefenceOrder,
   shipsAwaitingFtlEntry,
   tableIsCrowded,
 } from '../engine/actions'
@@ -85,6 +90,9 @@ export function App() {
   /* 3.9 and 17.7 both place a returning ship "before orders", at an edge, so
      the ship is picked from a list and then the edge is clicked. */
   const [returning, setReturning] = useState<string | null>(null)
+  /* 18.1's feature is placed the same way a ship is: pick it up, click the
+     table. Held here because the map takes the click and the panel offers it. */
+  const [placingTerrain, setPlacingTerrain] = useState<TerrainKind | null>(null)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = game.table
@@ -178,6 +186,18 @@ export function App() {
           selectedFlightId={selectedFlightId}
           onSelectFlight={setSelectedFlightId}
           deployWith={deployWith}
+          placingTerrain={
+            placingTerrain && defendingSide(game)
+              ? {
+                  sideId: defendingSide(game) as string,
+                  kind: placingTerrain,
+                  // 17.1's planets are the biggest thing a table carries; a
+                  // dust cloud is scenery. Both are 18.1's "similar feature".
+                  radius: placingTerrain === 'planet' ? 8 : 5,
+                }
+              : null
+          }
+          onTerrainPlaced={() => setPlacingTerrain(null)}
           aimWith={game.phase === 'launch-missiles' ? aiming : null}
           onAimed={() => setAiming(null)}
         />
@@ -216,6 +236,8 @@ export function App() {
               onAim={setAiming}
               returning={returning}
               onReturn={setReturning}
+              placingTerrain={placingTerrain}
+              onPlaceTerrain={setPlacingTerrain}
             />
           )}
 
@@ -237,6 +259,26 @@ export function App() {
           {selected ? (
             <>
               <div className="panel">
+                {/* Christening a hull. Cosmetic, but journalled like anything
+                    else, so the name survives a save and a replay — which is
+                    the only reason it is an action rather than local state. */}
+                {viewingSide === null || selected.side === viewingSide ? (
+                  <div className="panel-row">
+                    <input
+                      aria-label="Ship name"
+                      className="ship-name-field"
+                      defaultValue={selected.name}
+                      key={selected.id}
+                      maxLength={40}
+                      onBlur={(event) => {
+                        const name = event.target.value.trim()
+                        if (name && name !== selected.name) {
+                          dispatch({ type: 'rename-ship', shipId: selected.id, name })
+                        }
+                      }}
+                    />
+                  </div>
+                ) : null}
                 <Ssd
                   design={selected.design}
                   name={selected.name}
@@ -504,6 +546,8 @@ function PhaseControls({
   onAim,
   returning,
   onReturn,
+  placingTerrain,
+  onPlaceTerrain,
 }: {
   phase: Phase
   game: GameState
@@ -512,6 +556,8 @@ function PhaseControls({
   onAim: (mount: AimingMount | null) => void
   returning: string | null
   onReturn: (shipId: string | null) => void
+  placingTerrain: TerrainKind | null
+  onPlaceTerrain: (kind: TerrainKind | null) => void
 }) {
   switch (phase) {
     case 'orders': {
@@ -546,18 +592,64 @@ function PhaseControls({
               </button>
             </div>
           ))}
+
+          {/* 18.1: "The defender can also place a planet or similar terrain
+              feature." One feature, at deployment, and only in an
+              offensive/defensive battle — so the control appears exactly when
+              the rule does. */}
+          {terrainDue(game) ? (
+            <div className="panel-row">
+              <span>Defender&rsquo;s feature</span>
+              <span className="spacer" />
+              {(['planet', 'planetoid', 'asteroid-field', 'dust-cloud'] as const).map((kind) => (
+                <button
+                  key={kind}
+                  className={placingTerrain === kind ? 'primary' : undefined}
+                  onClick={() => onPlaceTerrain(placingTerrain === kind ? null : kind)}
+                >
+                  {kind.replace('-', ' ')}
+                </button>
+              ))}
+              <span style={{ color: 'var(--ink-dim)' }}>
+                {placingTerrain ? 'click the table' : 'one feature, at deployment (18.1)'}
+              </span>
+            </div>
+          ) : null}
         </div>
       )
     }
-    case 'initiative':
+    case 'initiative': {
+      // 2.6: the roll settles who has initiative, and the order it produces is
+      // what every later phase alternates through. A table that re-rolls a tie
+      // by hand, or agrees an order, needs somewhere to write the answer down.
+      const order = game.initiative?.order ?? []
       return (
         <div className="panel">
           <h3>Phase 2 · Initiative</h3>
           <button className="primary" onClick={() => dispatch({ type: 'roll-initiative' })}>
             Roll initiative
           </button>
+          {order.length > 1 ? (
+            <div className="panel-row">
+              <span>
+                Order: {order.map((id) => game.sides.find((s) => s.id === id)?.name ?? id).join(' → ')}
+              </span>
+              <span className="spacer" />
+              <button
+                onClick={() =>
+                  dispatch({ type: 'set-initiative-order', order: [...order].reverse() })
+                }
+              >
+                Swap
+              </button>
+              <span style={{ color: 'var(--ink-dim)' }}>
+                for a tie settled at the table rather than on the dice (2.6)
+              </span>
+            </div>
+          ) : null}
         </div>
       )
+    }
     case 'move-ships': {
       // 11.5: "The FTL entry is the ship's movement for that turn." An inbound
       // hull is not on the plot to be clicked, so it is listed here, and it
@@ -594,7 +686,22 @@ function PhaseControls({
       return (
         <OrdnancePanel game={game} side={viewingSide} aiming={aiming} onAim={onAim} />
       )
-    case 'point-defence':
+    case 'point-defence': {
+      // Left to itself the engine puts every mount on the nearest thing it
+      // can reach. `assign-point-defence` is for the times a player would not:
+      // holding a scattergun for the salvo one turn behind, or putting
+      // everything on the heavy missile rather than splitting.
+      const markers = game.ordnance.filter((marker) => marker.missiles > 0)
+      const defenders = game.ships
+        .filter(
+          (ship) =>
+            !ship.destroyed &&
+            !ship.offTable &&
+            (viewingSide === null || ship.side === viewingSide) &&
+            markers.some((marker) => marker.side !== ship.side),
+        )
+        .map((ship) => ({ ship, mounts: pointDefenceMounts(ship) }))
+        .filter(({ mounts }) => mounts.length > 0)
       return (
         <div className="panel">
           <h3>Phase 9 · Point defence</h3>
@@ -602,11 +709,49 @@ function PhaseControls({
             Every mount that can reach an incoming marker engages it. A gun fired here has fired
             for the turn — a beam spent on missiles is a beam that does not fire at ships.
           </p>
+          {markers.length > 0
+            ? defenders.map(({ ship, mounts }) => (
+                <div className="panel-block" key={ship.id}>
+                  <div className="panel-row">
+                    <b>{ship.name}</b>
+                  </div>
+                  {mounts.map((mount) => (
+                    <div className="panel-row" key={mount.id}>
+                      <label>
+                        {mount.label}{' '}
+                        <select
+                          aria-label={`${ship.name} ${mount.label}`}
+                          value={pointDefenceOrder(game, mount.id) ?? ''}
+                          onChange={(event) =>
+                            dispatch({
+                              type: 'assign-point-defence',
+                              shipId: ship.id,
+                              systemId: mount.id,
+                              targetId: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="">nearest it can reach</option>
+                          {markers
+                            .filter((marker) => marker.side !== ship.side)
+                            .map((marker) => (
+                              <option key={marker.id} value={marker.id}>
+                                {marker.kind} × {marker.missiles}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ))
+            : null}
           <button className="primary" onClick={() => dispatch({ type: 'resolve-point-defence' })}>
             Resolve point defence
           </button>
         </div>
       )
+    }
     case 'ordnance-vs-ships':
       return (
         <div className="panel">
@@ -624,7 +769,11 @@ function PhaseControls({
           </button>
         </div>
       )
-    case 'threshold':
+    case 'threshold': {
+      // Listing them is the point: a sweep that resolves eight ships at once
+      // buries the one roll a player wanted to watch, and 4.11 is the roll
+      // that decides which of their ship's systems it keeps.
+      const owing = shipsAwaitingThreshold(game)
       return (
         <div className="panel">
           <h3>Phase 13 · Threshold checks</h3>
@@ -632,11 +781,29 @@ function PhaseControls({
             Every ship that crossed a hull row this turn rolls one die per surviving system: a 6
             at the first threshold, 5 or better at the second, 4 or better at the third.
           </p>
+          {owing.map((ship) => (
+            <div className="panel-row" key={ship.id}>
+              <span>{ship.name}</span>
+              <span className="spacer" />
+              <span className="num">
+                {ship.pendingThresholdRows} row{ship.pendingThresholdRows === 1 ? '' : 's'}
+              </span>
+              <button
+                onClick={() => dispatch({ type: 'threshold-check', shipId: ship.id })}
+              >
+                Roll
+              </button>
+            </div>
+          ))}
+          {owing.length === 0 ? (
+            <p style={{ color: 'var(--ink-faint)' }}>Nobody crossed a row this turn.</p>
+          ) : null}
           <button className="primary" onClick={() => dispatch({ type: 'threshold-sweep' })}>
             Roll threshold checks
           </button>
         </div>
       )
+    }
     case 'damage-control':
       return <DamageControlPanel game={game} viewingSide={viewingSide} />
     case 'move-fighters':
@@ -733,6 +900,17 @@ function PhaseControls({
  * Each ship is a separate journalled action, so undo takes back one ship's move
  * rather than the whole phase.
  */
+/** 18.1's one feature, and whether the defender still owes it. */
+function terrainDue(game: GameState): boolean {
+  return (
+    game.turn === 1 &&
+    game.deployment !== null &&
+    game.deployment.battleType === 'offensive-defensive' &&
+    !game.deployment.terrainPlaced &&
+    defendingSide(game) !== null
+  )
+}
+
 function moveEveryone(): void {
   // 11.5's arrival is a move, and it can land on top of somebody, so the
   // inbound hulls come out first and the rest of the table flies around them.

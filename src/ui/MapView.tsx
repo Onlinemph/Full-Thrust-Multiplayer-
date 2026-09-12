@@ -9,6 +9,7 @@ import { isGateActive } from '../engine/ftl'
 import type { GameState, ShipState } from '../engine/game'
 import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
+import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
@@ -55,6 +56,14 @@ export interface MapViewProps {
   /** Called once the aim point is taken, so the launcher leaves the hand. */
   onAimed?: () => void
   /**
+   * 18.1: *"The defender can also place a planet or similar terrain feature."*
+   * Set while the defender has the feature in hand; a click on bare table puts
+   * it down. Absent in every battle that is not offensive/defensive.
+   */
+  placingTerrain?: { sideId: string; kind: TerrainKind; radius: number } | null
+  /** Called once the feature is placed, so it leaves the hand. */
+  onTerrainPlaced?: () => void
+  /**
    * A ship waiting off the table that a click on bare table puts back
    * (3.9, 17.7). Both rules place it *"before orders"*, at an edge.
    */
@@ -74,6 +83,8 @@ export function MapView({
   onSelect,
   viewingSide,
   litArcs,
+  placingTerrain = null,
+  onTerrainPlaced,
   selectedFlightId = null,
   onSelectFlight,
   deployWith = null,
@@ -167,6 +178,19 @@ export function MapView({
           : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
       )
       onAimed?.()
+      return
+    }
+    // 18.1's feature goes down before the fleets do, and it is the one thing
+    // on the table that is nobody's ship, so it takes the click first.
+    if (placingTerrain) {
+      dispatch({
+        type: 'place-terrain',
+        sideId: placingTerrain.sideId,
+        kind: placingTerrain.kind,
+        position: to,
+        radius: placingTerrain.radius,
+      })
+      onTerrainPlaced?.()
       return
     }
     // 18.1 is placement, not movement, so it wins the bare-table click while

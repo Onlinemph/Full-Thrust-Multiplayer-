@@ -37,6 +37,7 @@ import {
   shipById,
   shipsAwaitingDeployment,
   tableBounds,
+  thresholdResolution,
   vectorStateOf,
   type FighterGroupState,
   type TerrainFeature,
@@ -646,20 +647,6 @@ export type GameAction =
    */
   | { type: 'resolve-disengagement'; sideId: SideId }
 
-  /**
-   * Answers to questions the rules put to a player mid-resolution — which
-   * system a needle beam took out, which of several equal targets a missile
-   * marker goes for. Journalled immediately ahead of the action that consumes
-   * it, so a replay makes the same choices. See docs/architecture.md.
-   */
-  | { type: 'queue-choices'; choices: PlayerChoice[] }
-
-/** One answer in a queued choice script. */
-export interface PlayerChoice {
-  kind: 'system' | 'target' | 'arc'
-  value: string
-  arc?: Arc
-}
 
 /**
  * What an action did. `refused` means the action was illegal and nothing
@@ -1875,6 +1862,36 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     }
 
     // ── Point defence (7.12 – 7.15, phase 9) ──────────────────────────────
+    /**
+     * Which marker a mount engages (phase 9).
+     *
+     * Left to itself the engine puts every mount on the nearest thing it can
+     * reach, which is what a player does most of the time. This is for the
+     * times they would not: holding a scattergun for the salvo that is one
+     * turn behind, or putting everything on the heavy missile rather than
+     * splitting between two. An unassigned mount still follows the doctrine.
+     */
+    case 'assign-point-defence': {
+      if (state.phase !== 'point-defence') return refuse('Point defence is phase 9')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const mount = pdMountsOf(ship).find((candidate) => candidate.id === action.systemId)
+      if (!mount) {
+        return refuse(`${ship.name} has no point-defence mount that can fire this turn`)
+      }
+      const orders = pdOrders(state)
+      if (action.targetId === '') {
+        orders.delete(action.systemId)
+        return OK
+      }
+      const marker = ordnanceOf(state).find((candidate) => candidate.id === action.targetId)
+      if (!marker) return refuse('No such marker')
+      if (marker.owner === ship.side) return refuse('That is your own ordnance')
+      orders.set(action.systemId, action.targetId)
+      return OK
+    }
+
     case 'resolve-point-defence': {
       if (state.phase !== 'point-defence') return refuse('Point defence is phase 9')
       // 6.8's bolts are shot at in this phase too, and by mounts that may have
@@ -1909,13 +1926,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
         const defender = pdDefenderOf(state, ship, mounts)
         const options = pointDefenceOptions(defender, threats)
-        // Doctrine: every mount at the nearest thing it can reach. That is what
-        // a player does when missiles are inbound, and splitting fire between
-        // two salvos usually stops neither.
+        // A mount the player has aimed goes where they aimed it; the rest
+        // follow doctrine — every mount at the nearest thing it can reach,
+        // which is what a player does when missiles are inbound, because
+        // splitting fire between two salvos usually stops neither.
+        const ordered = pdOrders(state)
         const used = new Set<string>()
         const allocations: PdAllocation[] = []
-        for (const option of [...options].sort((a, b) => a.range - b.range)) {
-          if (used.has(option.mountId)) continue
+        const take = (option: (typeof options)[number]): void => {
+          if (used.has(option.mountId)) return
           used.add(option.mountId)
           allocations.push({
             mountId: option.mountId,
@@ -1925,6 +1944,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
             dice: option.dice,
           })
         }
+        for (const option of options) {
+          if (ordered.get(option.mountId) === option.threatId) take(option)
+        }
+        for (const option of [...options].sort((a, b) => a.range - b.range)) take(option)
         if (allocations.length === 0) continue
 
         const outcome = resolvePointDefence(defender, threats, allocations, state.rng)
@@ -1946,6 +1969,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         for (const allocation of allocations) markWeaponFired(ship, allocation.mountId, state.phase)
       }
 
+      // The aim was for this resolution. Clearing it here rather than at the
+      // turn boundary means a phase resolved twice does not fire yesterday's
+      // orders at today's markers.
+      pdOrders(state).clear()
       setOrdnance(state, markers.filter((marker) => marker.missiles > 0))
       projectOrdnance(state)
       return OK
@@ -1953,6 +1980,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
     // ── Threshold checks (4.11, phase 13) ─────────────────────────────────
     case 'threshold-check': {
+      // 2.6 puts the checks in phase 13, with two exceptions 4.11 names — an
+      // ordnance hit and a reactor breach are resolved where they happen.
+      // `thresholdResolution` is what says which, and the sweep was gated on
+      // the phase while this, its per-ship twin, was gated on nothing at all.
+      if (state.phase !== 'threshold' && thresholdResolution(state.phase) !== 'immediate') {
+        return refuse('Threshold checks are phase 13 (2.6, 4.11)')
+      }
       const ship = shipById(state, action.shipId)
       if (!ship) return refuse('No such ship')
       const result = rollThresholdChecks(ship, state.rng, {
@@ -4368,13 +4402,18 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     }
 
     default:
-      // Handlers for combat, ordnance, flight operations, boarding, threshold
-      // and cloaks arrive with their engine modules. Refusing by name rather
-      // than falling through silently means an action dispatched before its
-      // module lands shows up as a refusal in the log instead of a no-op that
-      // looks like it worked.
-      return refuse(`Not yet implemented: ${action.type}`)
+      // Every action in the union has a handler above, and `action` is `never`
+      // here, so declaring a new one without writing its case is a compile
+      // error rather than a runtime refusal nobody reads. Two actions had sat
+      // in the union with no case at all, answering "Not yet implemented" to
+      // anything that sent them; this is what stops a third.
+      return exhaustive(action)
   }
+}
+
+/** A branch the type system says cannot be reached. */
+function exhaustive(action: never): ActionOutcome {
+  return refuse(`Unhandled action: ${JSON.stringify(action)}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -4579,6 +4618,39 @@ function dragEscortingFlights(state: GameState, ship: ShipState): void {
       })
     }
   }
+}
+
+/**
+ * 4.4, phase 9: which marker each point-defence mount has been told to engage,
+ * where the player has told it.
+ *
+ * Per-turn scratch keyed on the game, like every other marker in this file:
+ * rebuilt by replay from the actions, never serialised. Keyed by mount id,
+ * which is unique across the table because a system id is unique to a design
+ * and a mount belongs to one ship.
+ */
+const PD_ORDERS = new WeakMap<GameState, Map<string, string>>()
+
+function pdOrders(state: GameState): Map<string, string> {
+  let orders = PD_ORDERS.get(state)
+  if (!orders) {
+    orders = new Map()
+    PD_ORDERS.set(state, orders)
+  }
+  return orders
+}
+
+/** The point-defence mounts on this hull that could still fire (phase 9). */
+export function pointDefenceMounts(ship: ShipState): Array<{ id: string; label: string }> {
+  return pdMountsOf(ship).map((mount) => ({
+    id: mount.id,
+    label: ship.design.systems.find((system) => system.id === mount.id)?.label ?? mount.id,
+  }))
+}
+
+/** The marker this mount has been aimed at, or null for doctrine (phase 9). */
+export function pointDefenceOrder(state: GameState, mountId: string): string | null {
+  return pdOrders(state).get(mountId) ?? null
 }
 
 /**

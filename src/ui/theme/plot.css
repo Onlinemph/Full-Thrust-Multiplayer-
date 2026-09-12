@@ -480,3 +480,20 @@
   stroke: var(--ink-faint);
   stroke-width: 1;
 }
+
+/* Christening a hull, in the SSD header. Reads as the name it replaces until
+   it is focused, so the panel does not grow a form the player did not ask for. */
+.ship-name-field {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 2px 4px;
+}
+
+.ship-name-field:hover,
+.ship-name-field:focus {
+  border-color: var(--line);
+  background: var(--panel-2);
+}

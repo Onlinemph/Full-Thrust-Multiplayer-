@@ -61,6 +61,21 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
         <span className="num" style={{ color: fireCons > 0 ? 'var(--screens)' : 'var(--warn)' }}>
           {fireCons}
         </span>
+        {/* 4.4: "each FireCon can be allocated to one enemy target". Firing
+            claims one implicitly, which is enough most turns — but a ship that
+            wants to hold a FireCon for a target it has not shot at yet, or that
+            claimed one by mistake, needs to be able to say so. */}
+        <button
+          disabled={engaged.length === 0}
+          title={
+            engaged.length === 0
+              ? 'Nothing engaged this phase'
+              : `Release ${engaged.length} target${engaged.length === 1 ? '' : 's'} (4.4)`
+          }
+          onClick={() => dispatch({ type: 'clear-firecons', shipId: ship.id })}
+        >
+          Release
+        </button>
       </div>
 
       {targets
@@ -89,6 +104,19 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
               <div className="panel-row">
                 <span>{target.name}</span>
                 <span className="spacer" />
+                {/* Engaging before firing is 4.4's own order of events, and it
+                    is what lets a ship hold a FireCon on a target it means to
+                    shoot with a later mount. */}
+                {needsNew && fireCons > 0 ? (
+                  <button
+                    onClick={() =>
+                      dispatch({ type: 'assign-firecon', shipId: ship.id, targetId: target.id })
+                    }
+                  >
+                    Engage
+                  </button>
+                ) : null}
+                {!needsNew ? <span className="rear-flag">ENGAGED</span> : null}
                 {/* The rear arc is the single biggest thing a gunner wants to
                     know before choosing a target (4.10). */}
                 {rear ? <span className="rear-flag">REAR ARC</span> : null}
