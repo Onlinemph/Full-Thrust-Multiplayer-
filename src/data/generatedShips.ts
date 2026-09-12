@@ -1211,8 +1211,8 @@ export const IZOTROPE_BATTLESHIP: ShipDesign = {
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
-  screens: { level: 3, generators: 3, advanced: true },
+  armour: { layers: [16], regenerative: false },
+  screens: { level: 2, generators: 2, advanced: true },
   weapons: [
     {"id": "w1", "label": "Plasma-3", "weaponClass": "plasma-cannon", "rating": 3, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 12, "points": 36},
     {"id": "w2", "label": "Plasma-2", "weaponClass": "plasma-cannon", "rating": 2, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 4, "points": 12},
@@ -1234,13 +1234,12 @@ export const IZOTROPE_BATTLESHIP: ShipDesign = {
     {"id": "advanced-adfc-1", "kind": "advanced-adfc", "label": "Adv ADFC", "mass": 2, "points": 10},
     {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
     {"id": "screen-gen-2", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
-    {"id": "screen-gen-3", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
   ],
   fighterBays: [],
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 567,
+  points: 536,
 }
 
 export const VOID_CORSAIRS_CUTTER: ShipDesign = {

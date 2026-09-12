@@ -255,7 +255,19 @@ def solve_mass(d):
     return int(math.ceil(need / 2) * 2)
 
 
+# 7.2: "Screens may be of level 1 or 2" — the engine's ScreenLevel is 0 | 1 | 2,
+# so a level-3 design does not fail a test, it fails to compile, in a generated
+# file, a long way from the dict that asked for it.
+MAX_SCREEN_LEVEL = 2
+
+
 def price(d):
+    if d.get('screens', 0) > MAX_SCREEN_LEVEL:
+        raise SystemExit(
+            f"{d['id']}: level-{d['screens']} screens; 7.2 stops at {MAX_SCREEN_LEVEL}"
+        )
+    if d.get('rows', 4) not in HULL_PTS:
+        raise SystemExit(f"{d['id']}: {d['rows']} hull rows; 13.7 prices 3 to 6")
     mass = pts = 0.0
     boxes = math.floor(d['mass'] * HULL_FRACTION[d['hull']])
     mass += boxes; pts += boxes * HULL_PTS[d['rows']]
@@ -538,14 +550,15 @@ DESIGNS = [
        weapons=[('plasma-cannon-3',3,['F']), ('plasma-cannon',2,P3), ('plasma-cannon',2,S3),
                 ('plasma-cannon',1,ALL6)],
        systems=[('firecon',2),('pds',3),('adfc',1)], marines=2),
-  # Three levels of advanced screen, which is what the Technocracy spends a
-  # capital hull on: against a screen-3 ship a plasma cannon scores only on a 6
-  # and a beam die needs the same. Everything else is arcs — Plasma-3 forward,
-  # Plasma-2 on the other three faces — plus one PBL-3 for the turn before
-  # contact. One armour box: this ship is not meant to be hit through.
+  # Two levels of advanced screen and every arc covered. The Technocracy's own
+  # "Efficient Power Distribution" trait would buy a third level, but 7.2 caps
+  # screens at 2 and that trait is not one of the ones this engine reads yet —
+  # so the ship is built to the rules in force rather than to the ones it
+  # would like. Plasma-3 forward, Plasma-2 on the other faces, one PBL-3 for
+  # the turn before contact.
   dict(id='izotrope-battleship', name='Tokamak-class Battleship', faction='Izotrope Technocracy',
        group='capital', mass=202, hull='average', rows=4, thrust=3,
-       screens=3, advScreens=True,
+       screens=2, advScreens=True,
        weapons=[('plasma-cannon-3',3,F3), ('plasma-cannon',2,A3), ('plasma-cannon',2,P3),
                 ('plasma-cannon',2,S3), ('plasma-cannon',1,ALL6),
                 ('plasma-bolt-launcher',3,['F'])],
