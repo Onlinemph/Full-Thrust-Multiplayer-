@@ -276,3 +276,68 @@ describe('firing from the track (17.8)', () => {
     expect(outcome.refused).toMatch(/other side of the track/)
   })
 })
+
+describe('the simple way (17.10)', () => {
+  function objective(velocity: number, passBy: number): GameState {
+    const game = createGame({
+      seed: 0x51,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      table: { width: 96, height: 72 },
+      terrain: [
+        {
+          id: 'rock',
+          kind: 'planetoid',
+          position: { x: 48, y: 36 },
+          radius: 1,
+          label: 'the objective',
+          simpleOrbit: true,
+        },
+      ],
+      ships: [
+        createShipState({
+          id: 'ship',
+          side: 'a',
+          design: hull(),
+          // Flies straight past, offset so the closest approach is `passBy`
+          // and the run spans the objective.
+          placement: { position: { x: 48 - velocity / 2, y: 36 + passBy }, facing: 3 },
+          velocity,
+        }),
+      ],
+    })
+    setOptionalRules(game, { terrainHazards: true })
+    return game
+  }
+
+  it('parks a ship that passes the band at the right speed', () => {
+    const game = objective(7, 3)
+    flyOneTurn(game)
+    const ship = shipOf(game)
+    expect(ship.destroyed).toBe(false)
+    expect(ship.velocity).toBe(0)
+    expect(game.log.some((e) => /settles into orbit over the objective/.test(e.text ?? ''))).toBe(true)
+  })
+
+  it('crashes a ship that cuts inside two MU', () => {
+    const game = objective(7, 1)
+    flyOneTurn(game)
+    expect(shipOf(game).destroyed).toBe(true)
+    expect(game.log.some((e) => /gravity well and crashes/.test(e.text ?? ''))).toBe(true)
+  })
+
+  it('lets a ship at the wrong speed fly past unharmed', () => {
+    const game = objective(12, 3)
+    flyOneTurn(game)
+    const ship = shipOf(game)
+    expect(ship.destroyed).toBe(false)
+    expect(ship.velocity).toBe(12)
+    expect(game.log.some((e) => /settles into orbit/.test(e.text ?? ''))).toBe(false)
+  })
+
+  it('ignores a body that is not playing 17.10', () => {
+    const game = objective(7, 3)
+    game.terrain[0].simpleOrbit = false
+    flyOneTurn(game)
+    expect(shipOf(game).velocity).toBe(7)
+  })
+})

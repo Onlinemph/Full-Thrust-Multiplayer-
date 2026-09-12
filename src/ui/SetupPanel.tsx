@@ -118,6 +118,15 @@ const OPTIONAL_RULES: Toggle[] = [
       'this the rock on the table is only cover.',
   },
   {
+    key: 'orbitalTable',
+    rule: '17.7',
+    label: 'Orbital table',
+    detail:
+      'The table is a slice of orbit above a planet, so running off the edge is a lap round the ' +
+      'world rather than a retreat: the ship comes back on the opposite edge at the same course ' +
+      'and speed, three to five turns later depending on its thrust.',
+  },
+  {
     key: 'solarFlares',
     rule: '17.3',
     label: 'Solar flares',

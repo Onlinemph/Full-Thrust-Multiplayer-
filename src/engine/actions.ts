@@ -57,11 +57,13 @@ import {
   thrustBudget,
   validateOrder,
   type MovementState,
+  type TableEdge,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import {
   attenuatedScreens,
   cloudSpeedDamage,
+  closestApproach,
   cloudTargetLock,
   createDebrisCloud,
   createGravityWell,
@@ -74,6 +76,8 @@ import {
   orbitDecayCheck,
   orbitDepartureCourse,
   orbitFacing,
+  orbitReentryPlacementLegal,
+  orbitReentryTurn,
   orbitMarkerPosition,
   orbitTrackArrival,
   orbitVelocityChange,
@@ -84,6 +88,8 @@ import {
   resolveKnockedOffCourse,
   resolveMeteorField,
   resolveSolarFlare,
+  simpleOrbitApproach,
+  SIMPLE_ORBIT_BAND,
   advanceOrbit,
   canFireFromOrbit,
   deliberateLanding,
@@ -268,6 +274,11 @@ export type GameAction =
   | { type: 'plot-mines'; shipId: string; on: boolean }
   /** 17.11 — this turn's deceleration in orbit is meant as a landing. */
   | { type: 'plot-landing'; shipId: string; on: boolean }
+  /**
+   * 3.9 and 17.7 — put a ship that left the table back on it. Where it may
+   * go depends on which rule took it off.
+   */
+  | { type: 'return-to-table'; shipId: string; position: { x: number; y: number } }
   /**
    * 12.12's order sheet, replaced whole.
    *
@@ -804,6 +815,73 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * Bringing a ship back (3.9, 17.7).
+     *
+     * Two rules answer this and they answer it differently. 3.9 is a patch of
+     * open space: *"ships will always re-enter play from the same side of the
+     * playing area as they left"*, after the turns its die bought. 17.7 is an
+     * orbital table, where leaving is a lap of the planet: the ship comes back
+     * *"on the opposite edge, at the same velocity and course, and within 6 MU
+     * of the same distance from the diagonally opposite corner edge"*.
+     *
+     * Both are placements made *"before orders"*, which is phase 1.
+     */
+    case 'return-to-table': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'orders') return refuse('A ship is placed back before orders (3.9, 17.7)')
+      if (ship.destroyed) return refuse('Ship is out of the battle')
+      if (!ship.offTable) return refuse(`${ship.name} is already on the table`)
+      if (ship.landed) return refuse(`${ship.name} is on the surface`)
+      if (ship.reentryTurn === null) return refuse(`${ship.name} is not coming back`)
+      if (state.turn < ship.reentryTurn) {
+        return refuse(`${ship.name} may not return until turn ${ship.reentryTurn}`)
+      }
+
+      const bounds = tableBounds(state)
+      const position = action.position
+      if (isOffTable(position, bounds)) return refuse('That is off the table')
+
+      const departure = ship.departure
+      if (optional(state).orbitalTable && departure) {
+        if (!ship.exitEdge) return refuse('No record of which edge it left by')
+        const edge = oppositeEdge(ship.exitEdge)
+        if (!onEdge(position, edge, bounds)) {
+          return refuse(`${ship.name} comes back on the ${edge} edge (17.7)`)
+        }
+        const corner = oppositeCorner(departure.corner)
+        const measured = distance(position, cornerPoint(corner, bounds))
+        if (!orbitReentryPlacementLegal(departure.cornerDistance, measured)) {
+          return refuse(
+            `${measured.toFixed(1)} MU from the ${corner} corner, against ` +
+              `${departure.cornerDistance.toFixed(1)} at exit — 17.7 allows 6`,
+          )
+        }
+        // "At the same velocity and course": a lap of the planet is not a
+        // chance to re-plot.
+        ship.placement = { position, facing: departure.course }
+        ship.velocity = departure.velocity
+        ship.departure = null
+      } else {
+        if (!ship.exitEdge) return refuse('No record of which edge it left by')
+        if (!onEdge(position, ship.exitEdge, bounds)) {
+          return refuse(`${ship.name} re-enters by the ${ship.exitEdge} edge it left by (3.9)`)
+        }
+        ship.placement = { ...ship.placement, position }
+      }
+
+      ship.offTable = false
+      ship.exitEdge = null
+      ship.reentryTurn = null
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} comes back onto the table at velocity ${ship.velocity}`,
+      })
+      return OK
+    }
     case 'plot-vector-orders': {
       if (optional(state).movementSystem !== 'vector') {
         return refuse('This battle is fought under cinematic movement (3.1)')
@@ -2603,6 +2681,78 @@ function driftDebris(state: GameState): void {
 }
 
 // ---------------------------------------------------------------------------
+// Leaving and re-entering the table (3.9, 17.7)
+// ---------------------------------------------------------------------------
+
+type TableCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+
+type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
+
+function cornerPoint(corner: TableCorner, bounds: Bounds): Point {
+  const x = corner === 'top-left' || corner === 'bottom-left' ? bounds.minX : bounds.maxX
+  const y = corner === 'top-left' || corner === 'top-right' ? bounds.minY : bounds.maxY
+  return { x, y }
+}
+
+const CORNERS: readonly TableCorner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+
+/** 17.7 measures from *"the nearest table corner at the point of exit"*. */
+function nearestCorner(position: Point, bounds: Bounds): TableCorner {
+  let best: TableCorner = CORNERS[0]
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const corner of CORNERS) {
+    const d = distance(position, cornerPoint(corner, bounds))
+    if (d < bestDistance - 1e-9) {
+      bestDistance = d
+      best = corner
+    }
+  }
+  return best
+}
+
+/** The corner across the table's diagonal, which 17.7 re-enters relative to. */
+function oppositeCorner(corner: TableCorner): TableCorner {
+  switch (corner) {
+    case 'top-left':
+      return 'bottom-right'
+    case 'top-right':
+      return 'bottom-left'
+    case 'bottom-left':
+      return 'top-right'
+    case 'bottom-right':
+      return 'top-left'
+  }
+}
+
+function oppositeEdge(edge: TableEdge): TableEdge {
+  switch (edge) {
+    case 'top':
+      return 'bottom'
+    case 'bottom':
+      return 'top'
+    case 'left':
+      return 'right'
+    case 'right':
+      return 'left'
+  }
+}
+
+/** Whether a point sits on the named edge of the table, within a hair. */
+function onEdge(position: Point, edge: TableEdge, bounds: Bounds): boolean {
+  const slack = 0.5
+  switch (edge) {
+    case 'left':
+      return Math.abs(position.x - bounds.minX) <= slack
+    case 'right':
+      return Math.abs(position.x - bounds.maxX) <= slack
+    case 'top':
+      return Math.abs(position.y - bounds.minY) <= slack
+    case 'bottom':
+      return Math.abs(position.y - bounds.maxY) <= slack
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Orbits and atmosphere (17.8, 17.11)
 // ---------------------------------------------------------------------------
 
@@ -2727,7 +2877,10 @@ function resolveOrbitEntry(state: GameState, ship: ShipState, path: readonly Poi
   if (ship.destroyed || ship.offTable || ship.orbit) return false
   for (const feature of state.terrain) {
     const track = orbitTrackOf(feature)
-    if (!track) continue
+    if (!track) {
+      if (resolveSimpleApproach(state, ship, feature, path)) return true
+      continue
+    }
     if (!pathMeetsOrbitTrack(track, path)) continue
 
     const name = feature.label ?? 'the planet'
@@ -2755,6 +2908,59 @@ function resolveOrbitEntry(state: GameState, ship: ShipState, path: readonly Poi
   }
   return false
 }
+
+/**
+ * 17.10, the whole of it: *"the super simple and totally unrealistic way"*.
+ *
+ * No track and no markers. Pass the objective between 2 and 3 MU at velocity 6
+ * to 8 and the ship is in orbit; go wider and it flies past; go closer and the
+ * gravity well has it. A body opts into this instead of 17.8's track, because
+ * 17.7 offers the two as alternatives and means it.
+ *
+ * A ship "in orbit" here is simply parked: 17.10 gives no orbit speed, no
+ * markers and no way round, so the ship holds its station at the point of
+ * closest approach until its owner accelerates away.
+ */
+function resolveSimpleApproach(
+  state: GameState,
+  ship: ShipState,
+  feature: TerrainFeature,
+  path: readonly Point[],
+): boolean {
+  if (!feature.simpleOrbit) return false
+  const closest = closestApproach(path, feature.position)
+  // Only an approach counts. A ship that stayed well clear has not approached.
+  if (closest > SIMPLE_ORBIT_BAND.outer + EPSILON_MU) return false
+
+  const name = feature.label ?? 'the objective'
+  switch (simpleOrbitApproach(ship.velocity, closest)) {
+    case 'orbit':
+      ship.velocity = 0
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} settles into orbit over ${name} at ${closest.toFixed(1)} MU (17.10)`,
+      })
+      return true
+    case 'destroyed':
+      ship.destroyed = true
+      pushLog(state, {
+        kind: 'destroyed',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} passes inside ${name}'s gravity well and crashes (17.10)`,
+      })
+      return true
+    case 'flies-past':
+      // Not a failure worth a log line of its own every turn: the ship simply
+      // carried on, which is what the plot already shows.
+      return false
+  }
+}
+
+/** A hair, for a measurement the rule states in whole MU. */
+const EPSILON_MU = 1e-6
 
 /**
  * One turn for a ship already in orbit (17.8).
@@ -4023,6 +4229,30 @@ function resolveLeavingTable(state: GameState, ship: ShipState): void {
   ship.offTable = true
   ship.exitEdge = edge
 
+  // 17.7: on an orbital table the edge is not the end of anything. "A ship can
+  // leave the table at any time to make an orbit around the planet", and the
+  // note the rule asks a player to write is kept here.
+  if (rules.orbitalTable) {
+    const corner = nearestCorner(ship.placement.position, bounds)
+    ship.departure = {
+      turn: state.turn,
+      velocity: ship.velocity,
+      course: ship.placement.facing,
+      cornerDistance: distance(ship.placement.position, cornerPoint(corner, bounds)),
+      corner,
+    }
+    ship.reentryTurn = orbitReentryTurn(state.turn, currentThrust(ship))
+    pushLog(state, {
+      kind: 'move',
+      shipId: ship.id,
+      side: ship.side,
+      text:
+        `${ship.name} goes round the planet by the ${edge ?? 'edge'} and may come back on ` +
+        `turn ${ship.reentryTurn} (17.7)`,
+    })
+    return
+  }
+
   if (!rules.tableReentry) {
     pushLog(state, {
       kind: 'move',
@@ -4554,6 +4784,15 @@ export interface OptionalRules {
    * plots, and a table that wants rocks does not necessarily want that.
    */
   solarFlares?: boolean
+  /**
+   * 17.7: the table is *"an area at a given orbit radius above a planet"*, so
+   * running off the edge is a lap round the world rather than a retreat, and
+   * the ship comes back on the far side.
+   *
+   * Beats 3.9's `tableReentry`, which answers the same question for a table
+   * that is a patch of open space.
+   */
+  orbitalTable?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

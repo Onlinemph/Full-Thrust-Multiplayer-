@@ -103,6 +103,17 @@ function distanceToPath(point: Point, path: readonly Point[]): number {
   return best
 }
 
+/**
+ * How close a flown path came to a point.
+ *
+ * The path is a sequence of legs, so the answer is the nearest point on a
+ * segment rather than the nearest waypoint: a ship that passes a rock in the
+ * middle of a 12 MU run passed it, whatever the endpoints say.
+ */
+export function closestApproach(path: readonly Point[], point: Point): number {
+  return distanceToPath(point, path)
+}
+
 /** Normalise any integer onto the twelve-point clock face (3.1). */
 function clockPoint(value: number): Course {
   return ((((value - 1) % 12) + 12) % 12 + 1) as Course

@@ -53,6 +53,12 @@ export interface MapViewProps {
   aimWith?: { shipId: string; weaponId: string; kind: 'missile' | 'plasma-bolt' } | null
   /** Called once the aim point is taken, so the launcher leaves the hand. */
   onAimed?: () => void
+  /**
+   * A ship waiting off the table that a click on bare table puts back
+   * (3.9, 17.7). Both rules place it *"before orders"*, at an edge.
+   */
+  returnWith?: string | null
+  onReturned?: () => void
 }
 
 const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
@@ -72,6 +78,8 @@ export function MapView({
   deployWith = null,
   aimWith = null,
   onAimed,
+  returnWith = null,
+  onReturned,
 }: MapViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 960, height: 640 })
@@ -134,13 +142,20 @@ export function MapView({
     drag.current = null
     if (!start) return
     const placing = deployWith !== null && selectedId !== null
-    if (!(flight || squadron) && !placing && aimWith === null) return
+    if (!(flight || squadron) && !placing && aimWith === null && returnWith === null) return
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
     const box = host.current?.getBoundingClientRect()
     if (!box) return
     const to = {
       x: (event.clientX - box.left - originX) / scale,
       y: (event.clientY - box.top - originY) / scale,
+    }
+    // A ship coming back onto the table wants an edge, and nothing else in
+    // phase 1 wants a bare-table click at all (3.9, 17.7).
+    if (returnWith) {
+      dispatch({ type: 'return-to-table', shipId: returnWith, position: to })
+      onReturned?.()
+      return
     }
     // An aim point is what a launcher wants and nothing else does, so a mount
     // in hand takes the click ahead of everything (6.3, 6.8).

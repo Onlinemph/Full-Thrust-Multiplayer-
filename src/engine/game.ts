@@ -319,6 +319,22 @@ export interface ShipState {
    */
   reentryTurn: number | null
   /**
+   * What 17.7 asks a player to write down when a ship leaves the table to go
+   * round the planet: *"record the ship velocity, course, and distance from the
+   * nearest table corner at the point of exit."*
+   *
+   * Null on a ship that left under 3.9 instead, and on every ship that has not
+   * left at all.
+   */
+  departure: {
+    turn: number
+    velocity: number
+    course: Course
+    /** Distance from `corner` at the moment of exit. */
+    cornerDistance: number
+    corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  } | null
+  /**
    * 17.8's orbit: the body being orbited and the clock marker the ship sits on.
    *
    * A ship in orbit is not flying: *"the ship does not have to have any course
@@ -448,6 +464,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     offTable: false,
     exitEdge: null,
     reentryTurn: null,
+    departure: null,
     orbit: null,
     landed: null,
     weaponsFired: new Map<string, Phase>(),
@@ -602,6 +619,16 @@ export interface TerrainFeature {
    * with the planet will be a fatal collision."*
    */
   orbit?: { velocity: number; speed: number; gravityG?: number; landable?: boolean }
+  /**
+   * 17.10's *"super simple and totally unrealistic way"*, on a body that uses
+   * it instead of a track: pass within 2 to 3 MU at velocity 6 to 8 and the
+   * ship is in orbit, closer and it crashes, wider and it flies past.
+   *
+   * Mutually exclusive with `orbit` in practice — they are two of the three
+   * systems 17.7 offers and it says to *"pick the one that best suits your
+   * scale or scenario"* — and the track wins if a body somehow has both.
+   */
+  simpleOrbit?: boolean
 }
 
 // ---------------------------------------------------------------------------

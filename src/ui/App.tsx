@@ -75,6 +75,9 @@ export function App() {
   /* 6.3 and 6.8 both aim at a point, so a launcher is taken in hand and then
      the table is clicked — the same two steps as moving a fighter group. */
   const [aiming, setAiming] = useState<AimingMount | null>(null)
+  /* 3.9 and 17.7 both place a returning ship "before orders", at an edge, so
+     the ship is picked from a list and then the edge is clicked. */
+  const [returning, setReturning] = useState<string | null>(null)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = game.table
@@ -204,6 +207,8 @@ export function App() {
               viewingSide={viewingSide}
               aiming={aiming}
               onAim={setAiming}
+              returning={returning}
+              onReturn={setReturning}
             />
           )}
 
@@ -488,15 +493,31 @@ function PhaseControls({
   viewingSide,
   aiming,
   onAim,
+  returning,
+  onReturn,
 }: {
   phase: Phase
   game: GameState
   viewingSide: string | null
   aiming: AimingMount | null
   onAim: (mount: AimingMount | null) => void
+  returning: string | null
+  onReturn: (shipId: string | null) => void
 }) {
   switch (phase) {
-    case 'orders':
+    case 'orders': {
+      // 3.9 and 17.7: "ships will always re-enter play from the same side" and
+      // "the ship can enter again by being placed before orders on the opposite
+      // edge". Both happen here, and neither ship is on the plot to be clicked,
+      // so they are listed.
+      const due = game.ships.filter(
+        (ship) =>
+          ship.offTable &&
+          !ship.destroyed &&
+          !ship.landed &&
+          ship.reentryTurn !== null &&
+          game.turn >= ship.reentryTurn,
+      )
       return (
         <div className="panel">
           <h3>Phase 1 · Write orders</h3>
@@ -504,8 +525,21 @@ function PhaseControls({
             Every ship gets a course change and a thrust order, written before anything moves.
             Select a ship on the plot.
           </p>
+          {due.map((ship) => (
+            <div className="panel-row" key={ship.id}>
+              <span>{ship.name}</span>
+              <span className="spacer" />
+              <button
+                className={returning === ship.id ? 'primary' : undefined}
+                onClick={() => onReturn(returning === ship.id ? null : ship.id)}
+              >
+                {returning === ship.id ? 'Click an edge…' : 'Bring back'}
+              </button>
+            </div>
+          ))}
         </div>
       )
+    }
     case 'initiative':
       return (
         <div className="panel">

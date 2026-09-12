@@ -68,6 +68,11 @@ export interface GameSetup {
   knockedOffCourse?: boolean
   /** 17.3 — a bad-tempered star burns FireCons out of every ship in reach. */
   solarFlares?: boolean
+  /**
+   * 17.7 — the table is an orbit radius above a planet, so a ship that runs
+   * off the edge is going round the world and comes back on the far side.
+   */
+  orbitalTable?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -183,6 +188,7 @@ export function buildGame(setup: GameSetup): GameState {
     tableReentry: setup.tableReentry,
     knockedOffCourse: setup.knockedOffCourse,
     solarFlares: setup.solarFlares,
+    orbitalTable: setup.orbitalTable,
   })
   return game
 }
