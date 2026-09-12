@@ -30,10 +30,90 @@ WEAPONS = {
     'graser': {1: {3: (1, 3), 6: (2, 6)}, 2: {3: (4, 12), 6: (6, 18)}},
     'fusion-array': {1: {1: (3, 9), 2: (4, 12), 3: (5, 15)}},
     'pulser': {1: {1: (2, 10), 3: (3, 15), 6: (4, 20)}},
+
+    # --- 14.4, the families the engine could resolve but nobody could buy ---
+    # Every figure below is table 14.4 or 14.6, mass first and the section's
+    # own points multiplier applied. Where the table gives "N/1 arc, +M mass
+    # per additional arc" the arc counts are expanded here so the catalogue
+    # stays a plain lookup.
+    'emp': {1: {6: (1, 3)},
+            2: {3: (2, 6), 6: (3, 9)},
+            3: {1: (4, 12), 2: (5, 15), 3: (6, 18), 4: (7, 21), 5: (8, 24), 6: (9, 27)},
+            4: {1: (8, 24), 2: (10, 30), 3: (12, 36), 4: (14, 42), 5: (16, 48), 6: (18, 54)}},
+    # Heavy Grasers: "x3 OR x4 for High Intensity Grasers" — the standard rate.
+    'heavy-graser': {1: {1: (2, 6), 3: (3, 9), 6: (4, 12)},
+                     2: {1: (9, 27), 2: (12, 36), 3: (15, 45), 6: (24, 72)},
+                     3: {1: (24, 72), 2: (30, 90), 3: (36, 108), 6: (54, 162)}},
+    # Phasers: "x3+2 OR x6 if ship also mounts Advanced fire control".
+    # [reading] the +2 is read as a flat surcharge on the mount, so a mount of
+    # mass m costs 3m + 2. The alternative is that it means five per mass,
+    # which for a 16-mass Phaser-4 is 80 rather than 50 — a real difference,
+    # and the text will not settle it. The lower reading is taken because the
+    # printed alternative (x6) is meant to be the expensive option.
+    'phaser': {1: {3: (1, 5), 6: (2, 8)},
+               2: {3: (4, 14), 6: (6, 20)},
+               3: {1: (8, 26), 2: (10, 32), 3: (12, 38)},
+               4: {1: (16, 50), 2: (20, 62), 3: (24, 74)}},
+    'transporter': {1: {6: (1, 3)},
+                    2: {3: (2, 6), 6: (3, 9)},
+                    3: {1: (4, 12), 2: (5, 15), 3: (6, 18), 4: (7, 21), 5: (8, 24), 6: (9, 27)},
+                    4: {1: (8, 24), 2: (10, 30), 3: (12, 36), 4: (14, 42), 5: (16, 48), 6: (18, 54)}},
+    'twin-particle-array': {1: {1: (2, 8), 3: (3, 12), 6: (4, 16)}},
+    'meson-projector': {1: {1: (2, 8), 3: (3, 12), 6: (4, 16)}},
+    'gravitic-gun': {1: {6: (1, 3)},
+                     2: {3: (2, 6), 6: (3, 9)},
+                     3: {1: (4, 12), 2: (5, 15), 3: (6, 18), 4: (7, 21), 5: (8, 24), 6: (9, 27)}},
+    # 14.4 lists K5 and K6, and the short and long ranged guns of every class.
+    'k-gun-5': {5: {1: (11, 44)}},
+    'k-gun-6': {6: {1: (14, 56)}},
+    'k-gun-short': {1: {6: (1, 4)}, 2: {2: (2, 8)}, 3: {1: (3, 12)},
+                    4: {1: (4, 16)}, 5: {1: (6, 24)}, 6: {1: (7, 28)}},
+    'k-gun-long': {1: {6: (4, 16)}, 2: {1: (6, 24), 2: (8, 32)}, 3: {1: (10, 40)},
+                   4: {1: (16, 64)}, 5: {1: (22, 88)}, 6: {1: (28, 112)}},
+    'needle-beam-2': {2: {1: (4, 12), 2: (6, 18), 3: (8, 24)}},
+    'needle-beam-3': {3: {1: (8, 24), 2: (12, 36), 3: (16, 48)}},
+    'needle-beam-4': {4: {1: (16, 48), 2: (24, 72), 3: (32, 96)}},
+    'graser-3': {3: {1: (8, 24), 2: (10, 30), 3: (12, 36)}},
+    'graser-4': {4: {1: (16, 48), 2: (20, 60), 3: (24, 72)}},
+    'plasma-cannon-3': {3: {1: (8, 24), 2: (10, 30), 3: (12, 36)}},
+    'plasma-cannon-4': {4: {1: (16, 48), 2: (20, 60), 3: (24, 72)}},
+    'boarding-torpedo': {1: {3: (2, 6)}},
+    'mkp': {1: {3: (1, 4)}},
+    'antimatter-missile': {1: {3: (2, 10)}},
+    'rocket-pod': {1: {3: (1, 3)}},
+    'mine-rack': {1: {3: (2, 6)}},
+    # 6.8: a Plasma Bolt Launcher is mass 3 per class for one arc, +class per
+    # additional arc, three arcs at most (14.4).
+    'plasma-bolt-launcher': {1: {1: (3, 9), 2: (4, 12), 3: (5, 15)},
+                             2: {1: (6, 18), 2: (8, 24), 3: (10, 30)},
+                             3: {1: (9, 27), 2: (12, 36), 3: (15, 45)},
+                             4: {1: (12, 36), 2: (16, 48), 3: (20, 60)},
+                             5: {1: (15, 45), 2: (20, 60), 3: (25, 75)},
+                             6: {1: (18, 54), 2: (24, 72), 3: (30, 90)}},
+    # 14.5 spinal mounts: 8, 16 or 32 mass reaching 24, 32 or 48 MU. Beam and
+    # plasma at x4, the Point Singularity Projector at x5. A spinal mount fires
+    # on the centre line, so it is a one-arc fit.
+    'spinal-beam': {1: {1: (8, 32)}, 2: {1: (16, 64)}, 3: {1: (32, 128)}},
+    'spinal-plasma': {1: {1: (8, 32)}, 2: {1: (16, 64)}, 3: {1: (32, 128)}},
+    'spinal-psp': {1: {1: (8, 40)}, 2: {1: (16, 80)}, 3: {1: (32, 160)}},
+    # 7.23, 7.24: the two superweapons are flat, and fire on the centre line.
+    'nova-cannon': {1: {1: (20, 60)}},
+    'wave-gun': {1: {1: (12, 36)}},
 }
 VARIANT = {'pulse-torpedo-short': ('pulse-torpedo', 'short'),
            'pulse-torpedo-long': ('pulse-torpedo', 'long'),
-           'heavy-missile-extended': ('heavy-missile', 'extended')}
+           'heavy-missile-extended': ('heavy-missile', 'extended'),
+           'k-gun-short': ('k-gun', 'short'),
+           'k-gun-long': ('k-gun', 'long'),
+           'k-gun-5': ('k-gun', 'standard'),
+           'k-gun-6': ('k-gun', 'standard'),
+           'needle-beam-2': ('needle-beam', 'standard'),
+           'needle-beam-3': ('needle-beam', 'standard'),
+           'needle-beam-4': ('needle-beam', 'standard'),
+           'graser-3': ('graser', 'standard'),
+           'graser-4': ('graser', 'standard'),
+           'plasma-cannon-3': ('plasma-cannon', 'standard'),
+           'plasma-cannon-4': ('plasma-cannon', 'standard')}
 
 # Flat-cost systems -> (mass, points)
 SYSTEMS = {
@@ -92,6 +172,18 @@ WEAPON_LABEL = {
     'salvo-missile-launcher': 'SML', 'submunition-pack': 'Submunition', 'gatling': 'Gatling',
     'needle-beam': 'Needle-{r}', 'plasma-cannon': 'Plasma-{r}', 'graser': 'Graser-{r}',
     'fusion-array': 'Fusion Array', 'pulser': 'Pulser',
+    'emp': 'EMP-{r}', 'heavy-graser': 'Hvy Graser-{r}', 'phaser': 'Phaser-{r}',
+    'transporter': 'Transporter-{r}', 'twin-particle-array': 'Twin Particle Array',
+    'meson-projector': 'Meson Projector', 'gravitic-gun': 'Grav-{r}',
+    'k-gun-5': 'K-{r}', 'k-gun-6': 'K-{r}', 'k-gun-short': 'SRK-{r}', 'k-gun-long': 'LRK-{r}',
+    'needle-beam-2': 'Needle-{r}', 'needle-beam-3': 'Needle-{r}', 'needle-beam-4': 'Needle-{r}',
+    'graser-3': 'Graser-{r}', 'graser-4': 'Graser-{r}',
+    'plasma-cannon-3': 'Plasma-{r}', 'plasma-cannon-4': 'Plasma-{r}',
+    'boarding-torpedo': 'Boarding Torp', 'mkp': 'MKP', 'antimatter-missile': 'AM Missile',
+    'rocket-pod': 'Rocket Pod', 'mine-rack': 'Mine Rack',
+    'plasma-bolt-launcher': 'PBL-{r}',
+    'spinal-beam': 'Spinal Beam-{r}', 'spinal-plasma': 'Spinal Plasma-{r}',
+    'spinal-psp': 'Spinal PSP-{r}', 'nova-cannon': 'Nova Cannon', 'wave-gun': 'Wave Gun',
 }
 F3, A3, ALL6, P3, S3 = ['FP','F','FS'], ['AP','A','AS'], ['F','FS','AS','A','AP','FP'], ['FP','AP','A'], ['FS','AS','A']
 
