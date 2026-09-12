@@ -147,19 +147,29 @@ import {
   type BoardingPlan,
 } from './boarding'
 import {
+  aceDuel,
   adfcLockedOut,
   applyFighterLosses,
   canDeclareAttack,
+  combatLanding,
+  deployFtlFighters,
+  fighterMoraleCheck,
+  fighterProfile,
+  launchFighterMkps,
+  launchPulseTorpedoes,
   evadeShipFire,
   interceptMissiles,
   isEngaged,
   launchFighterGroup,
   moveFighterGroup,
+  reconfigureMultiRole,
   recoverFighterGroup,
+  refuseDogfight,
   resolveAttackRun,
   resolveDogfight,
   secondaryMoveFighterGroup,
   shipFireAtFighters,
+  takesSecondaryMoveInPhaseFour,
   type CarrierFlightState,
   type FighterGroup,
   type RearmResult,
@@ -368,10 +378,45 @@ export type GameAction =
       facing?: Course
     }
   | { type: 'flight-strike'; flightId: string; targetId: string }
-  | { type: 'flight-dogfight'; flightId: string; targetFlightId: string }
+  | {
+      type: 'flight-dogfight'
+      flightId: string
+      targetFlightId: string
+      /**
+       * 8.18: the Ace singles out the opposing Ace instead of adding his die
+       * to the group's attack. The player's choice, so it rides in the action.
+       */
+      aceDuel?: boolean
+    }
   | { type: 'flight-intercept'; flightId: string; ordnanceId: string }
   | { type: 'flight-evade'; flightId: string }
   | { type: 'recover-flight'; flightId: string; carrierId: string }
+  /** 8.4 — everyone down at once, and the deck is fouled for the game. */
+  | { type: 'combat-landing'; carrierId: string }
+  /** 8.10 — a faster group declines the dogfight and runs for it. */
+  | {
+      type: 'refuse-dogfight'
+      flightId: string
+      attackerFlightId: string
+      to: { x: number; y: number }
+      facing?: Course
+    }
+  /** 8.15 — a Torpedo or MKP group throws its one-shot load at a ship. */
+  | { type: 'flight-launch-payload'; flightId: string; targetId: string }
+  /** 8.15 — FTL fighters start the battle already in the air, near the carrier. */
+  | {
+      type: 'deploy-ftl-flight'
+      flightId: string
+      position: { x: number; y: number }
+      facing?: Course
+    }
+  /** 8.15 — a Multi-Role group re-arms for another mission in the bay. */
+  | {
+      type: 'reconfigure-flight'
+      flightId: string
+      loadout: 'standard' | 'interceptor' | 'attack'
+      armament: 'beam' | 'cannon'
+    }
 
   // Gunboats (9) — a squadron of six, flown like fighters, shot at like ships
   | { type: 'launch-gunboats'; carrierId: string; squadronId: string }
@@ -1964,11 +2009,22 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     }
 
     case 'secondary-move-flight': {
-      if (state.phase !== 'secondary-fighter-moves') {
-        return refuse('Secondary fighter moves are phase 6')
-      }
       const flight = flightById(state, action.flightId)
       if (!flight) return refuse('No such flight')
+      // 8.15's Robot option takes its second move "at the end of phase 4 after
+      // all fighters and missiles have made their moves. This means that Robot
+      // Fighters cannot react to ship movement" — the whole cost of being
+      // unmanned, and the reason it is a different phase rather than a DRM.
+      if (takesSecondaryMoveInPhaseFour(flight)) {
+        if (state.phase !== 'move-fighters') {
+          return refuse('A Robot group takes its second move at the end of phase 4 (8.15)')
+        }
+        if (!flight.movedThisTurn) {
+          return refuse(`${flight.label} has not made its first move yet (8.15)`)
+        }
+      } else if (state.phase !== 'secondary-fighter-moves') {
+        return refuse('Secondary fighter moves are phase 6')
+      }
       if (flight.secondaryMovedThisTurn) return refuse(`${flight.label} has already moved again`)
 
       const result = secondaryMoveFighterGroup(
@@ -1986,6 +2042,203 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 8.10: a group declines the dogfight and runs.
+     *
+     * *"A fighter group may refuse a dogfight, provided it has not already
+     * moved that turn."* Getting away clean needs to be faster than the
+     * attacker; anything slower takes a free round of fire on the way out.
+     */
+    case 'refuse-dogfight': {
+      if (state.phase !== 'fighter-vs-fighter') return refuse('Dogfights are phase 8')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const attacker = flightById(state, action.attackerFlightId)
+      if (!attacker) return refuse('No such attacking group')
+      if (attacker.side === flight.side) return refuse('That group is on your own side')
+
+      const result = refuseDogfight(attacker, flight, state.rng, state.turn)
+      if (!result.withdrew) return refuse(`${flight.label}: ${result.reason}`)
+
+      // Where it runs to is the player's choice, held to the group's own move.
+      const away = moveFighterGroup(result.defender, action.to, state.turn, action.facing)
+      if (!away.moved) return refuse(`${flight.label}: ${away.reason}`)
+      writeFlight(flight, away.group)
+      writeFlight(attacker, result.attacker)
+      pushLog(state, {
+        kind: 'move',
+        side: flight.side,
+        dice: result.freeRound?.dice,
+        text: result.freeRound
+          ? `${flight.label} breaks off from ${attacker.label} and takes a parting round: ` +
+            `${result.freeRound.kills} lost (8.10)`
+          : `${flight.label} outruns ${attacker.label} and refuses the dogfight (8.10)`,
+      })
+      return OK
+    }
+
+    /**
+     * A Torpedo or MKP group throws its one load (8.15).
+     *
+     * One action for both, because the module dispatches on the group's own
+     * payload and a `kind` in the payload would be state the action re-derived
+     * anyway. Both cost a point of endurance, both may be fired once, and
+     * neither may be fired in the same turn the group uses its beams.
+     */
+    case 'flight-launch-payload': {
+      if (state.phase !== 'ordnance-vs-ships' && state.phase !== 'ship-fire') {
+        return refuse('Fighter attacks are resolved after point defence (8.7)')
+      }
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.attackedThisTurn) return refuse(`${flight.label} has already attacked this turn`)
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (target.side === flight.side) return refuse('A group does not strafe its own fleet')
+
+      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
+      if (!fighterMoraleHolds(state, flight)) return OK
+
+      // The group carries its own resolved modifiers (8.15), so the profile
+      // comes off the counter rather than back off the design.
+      const payload = fighterProfile(flight.typeId, flight.modifiers).payload
+      const result =
+        payload === 'pulse-torpedo'
+          ? launchPulseTorpedoes(flight, state.rng)
+          : payload === 'mkp'
+            ? launchFighterMkps(flight, state.rng)
+            : null
+      if (!result) return refuse(`${flight.label} carries no one-shot load (8.15)`)
+      if (!result.fired) return refuse(`${flight.label}: ${result.reason}`)
+
+      writeFlight(flight, result.group)
+      flight.targetId = target.id
+      pushLog(state, {
+        kind: 'fire',
+        side: flight.side,
+        shipId: target.id,
+        dice: result.rolls,
+        text:
+          `${flight.label} looses its ${payload === 'mkp' ? 'MKPs' : 'Pulse Torpedoes'} at ` +
+          `${target.name}: ${result.hits} hit for ${result.damage}`,
+      })
+      applyFighterDamage(state, target, {
+        normalDamage: result.damage,
+        penetratingDamage: 0,
+        mode: result.mode,
+        dice: result.rolls,
+        detail: `${result.hits} hit`,
+      })
+      return OK
+    }
+
+    /**
+     * 8.15's FTL fighters, which do not need launching.
+     *
+     * *"FTL Fighters may begin the game deployed within 6 MU of their carrier
+     * instead of having to be launched if the player wishes. However, 1 point
+     * of endurance will be checked off to represent the fuel used in getting
+     * to the battle area."*
+     */
+    case 'deploy-ftl-flight': {
+      if (state.turn !== 1 || state.phase !== 'orders') {
+        return refuse('FTL fighters deploy before the first orders are written (8.15)')
+      }
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      if (flight.status !== 'aboard') return refuse(`${flight.label} is already in the air`)
+      const carrier = flight.carrierId ? shipById(state, flight.carrierId) : undefined
+      if (!carrier) return refuse('No such carrier')
+      if (state.deployment && !state.deployment.placed.includes(carrier.id)) {
+        return refuse(`${carrier.name} has not been deployed yet (18.1)`)
+      }
+
+      const result = deployFtlFighters(
+        flight,
+        carrier.placement.position,
+        action.position,
+        action.facing ?? carrier.placement.facing,
+      )
+      if (!result.launched) return refuse(`${flight.label}: ${result.reason}`)
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'note',
+        side: flight.side,
+        text: `${flight.label} arrives under its own FTL, already in the air (8.15)`,
+      })
+      return OK
+    }
+
+    /**
+     * 8.4: *"a carrier may simply recover all of its fighters in one turn.
+     * However, these are not normal organized landings but a frantic recovery
+     * that 'fouls' the deck. The carrier may not launch any recovered fighters
+     * for the rest of the game."*
+     *
+     * No re-arm die anywhere: this is the one recovery that skips 8.16
+     * entirely, because nothing that comes down this way is going up again.
+     */
+    case 'combat-landing': {
+      const secondary = state.phase === 'secondary-fighter-moves'
+      if (state.phase !== 'move-fighters' && !secondary) {
+        return refuse('A combat landing is made on a fighter move, phase 4 or 6 (8.4)')
+      }
+      const carrier = shipById(state, action.carrierId)
+      if (!carrier) return refuse('No such carrier')
+      if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+
+      const own = state.fighterGroups.filter((group) => group.carrierId === carrier.id)
+      const result = combatLanding(own, {
+        carrierUsedThrust: carrierUnderThrust(carrier),
+        hangarCriticalHits: carrier.design.systems.filter(
+          (system) => system.kind === 'hangar-bay' && carrier.destroyedSystems.has(system.id),
+        ).length,
+      })
+      if (!result.allowed) return refuse(`${carrier.name}: ${result.reason}`)
+      if (result.landed === 0) return refuse(`${carrier.name} has nothing in the air`)
+
+      for (const group of result.groups) {
+        const live = flightById(state, group.id)
+        if (!live) continue
+        writeFlight(live, group)
+        // 8.1 puts a recovered group where its carrier is; nothing in 8.4
+        // changes that, and a counter left at its last waypoint would launch
+        // from empty space if the deck were ever cleared.
+        live.position = carrier.placement.position
+        live.facing = carrier.placement.facing
+        live.recoveredTurn = state.turn
+      }
+      pushLog(state, {
+        kind: 'note',
+        shipId: carrier.id,
+        side: carrier.side,
+        text:
+          `${carrier.name} takes ${result.landed} group(s) aboard in a combat landing — the deck ` +
+          `is fouled and none of them fly again (8.4)`,
+      })
+      return OK
+    }
+
+    /**
+     * 8.15: *"When Multi-Role Fighters are being refueled and rearmed in a
+     * hangar bay, they may be reconfigured for another mission."*
+     */
+    case 'reconfigure-flight': {
+      if (state.phase !== 'orders') return refuse('A group is re-configured in the bay, phase 1 (8.15)')
+      const flight = flightById(state, action.flightId)
+      if (!flight) return refuse('No such flight')
+      const result = reconfigureMultiRole(flight, action.loadout, action.armament)
+      if (!result.changed) return refuse(`${flight.label}: ${result.reason}`)
+      writeFlight(flight, result.group)
+      pushLog(state, {
+        kind: 'note',
+        side: flight.side,
+        text: `${flight.label} re-arms as ${action.loadout} with ${action.armament}s (8.15)`,
+      })
+      return OK
+    }
     case 'recover-flight': {
       // 8.1 lands a group on its fighter move; phase 6 works too and is where
       // a group that spent phase 4 elsewhere gets home, at the cost of the
@@ -2046,6 +2299,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
       const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
+      // 8.17, if the table is playing it. An aborted attack is not a refused
+      // action: the group flew the approach and lost its nerve, which is a
+      // thing that happened and belongs in the journal.
+      if (!fighterMoraleHolds(state, flight)) return OK
 
       const result = resolveAttackRun(
         flight,
@@ -2093,6 +2350,31 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const allowed = canDeclareAttack(flight, enemy.position, { kind: 'fighter' })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
 
+      if (!fighterMoraleHolds(state, flight)) return OK
+
+      // 8.18: "an Ace may either add an extra die to the group's overall
+      // attack, OR may choose to specifically target an opposing Ace if there
+      // is one present in the other group — in this case he rolls just one die
+      // as normal." The only way an Ace dies before the rest of his group.
+      if (action.aceDuel) {
+        if (!optional(state).fighterQuality) {
+          return refuse('Aces and Turkeys are not in play in this battle (8.18)')
+        }
+        const duel = aceDuel(flight, enemy, state.rng)
+        if (!duel.fired) return refuse(`${flight.label}: ${duel.reason}`)
+        writeFlight(enemy, duel.defender)
+        flight.attackedThisTurn = true
+        pushLog(state, {
+          kind: 'fire',
+          side: flight.side,
+          dice: [duel.roll],
+          text: duel.aceKilled
+            ? `${flight.label}'s Ace picks out ${enemy.label}'s and shoots him down (8.18)`
+            : `${flight.label}'s Ace duels ${enemy.label}'s and misses (8.18)`,
+        })
+        return OK
+      }
+
       // 8.10: "All fire between fighter groups in a dogfight is considered
       // simultaneous", so both groups are written back from one resolution.
       const result = resolveDogfight(flight, enemy, state.rng)
@@ -2126,6 +2408,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const allowed = canDeclareAttack(flight, marker.position, { kind: 'missile' })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
 
+      if (!fighterMoraleHolds(state, flight)) return OK
       const result = interceptMissiles(
         flight,
         { kind: marker.kind === 'heavy' ? 'heavy' : 'salvo', count: marker.missiles },
@@ -2732,6 +3015,57 @@ function driftDebris(state: GameState): void {
     clouds.map(moveDebrisCloud).filter((cloud) => !debrisCloudExpired(cloud, state.turn)),
   )
   projectDebris(state)
+}
+
+/**
+ * Groups that have already aborted this turn, so morale is rolled once.
+ * Per-turn scratch, rebuilt by replay and never serialised.
+ */
+const MORALE_ABORTED = new WeakMap<GameState, Set<string>>()
+
+/**
+ * 8.17's morale check, made before the group attacks.
+ *
+ * *"Any fighter group that has lost one or more members must roll a D6 before
+ * making an attack. If the roll is less than or equal to the number of
+ * fighters remaining in the group, the attack is carried out; if greater than
+ * the number of remaining fighters, they abort this attack and do not fire.
+ * Any group that fails an attack roll is not considered to have expended
+ * combat endurance for that turn."*
+ *
+ * **[reading]** *"an attack"* covers all three ways a group attacks: an attack
+ * run on a ship, a dogfight, and an intercept. 8.17 names none of them
+ * specifically and the reason it gives — a mauled group losing its nerve —
+ * does not distinguish between them. Read the other way, a half-dead group
+ * would press a dogfight it would refuse against a hull.
+ *
+ * Returns true when the attack goes in. A refusal spends no endurance, which
+ * is why this reports rather than the caller assuming.
+ */
+function fighterMoraleHolds(state: GameState, flight: FighterGroupState): boolean {
+  if (!optional(state).fighterMorale) return true
+  // A group that has already lost its nerve this turn does not get asked
+  // again: "they abort this attack and do not fire". Without this the player
+  // could re-dispatch the same attack until the die went their way, which is
+  // not a morale rule, it is a re-roll.
+  let aborted = MORALE_ABORTED.get(state)
+  if (!aborted) {
+    aborted = new Set()
+    MORALE_ABORTED.set(state, aborted)
+  }
+  const key = `${flight.id}:${state.turn}`
+  if (aborted.has(key)) return false
+
+  const result = fighterMoraleCheck(flight, state.rng)
+  if (!result.applies || result.attacks) return true
+  aborted.add(key)
+  pushLog(state, {
+    kind: 'fire',
+    side: flight.side,
+    dice: result.roll === null ? undefined : [result.roll],
+    text: `${flight.label} will not press the attack — ${result.reason}`,
+  })
+  return false
 }
 
 // ---------------------------------------------------------------------------
@@ -5235,6 +5569,18 @@ export interface OptionalRules {
    * one — and the engine still checks that both fleets really are one navy.
    */
   civilWar?: boolean
+  /**
+   * 8.17: *"Any fighter group that has lost one or more members must roll a D6
+   * before making an attack."* The section opens by saying the rule is not
+   * used, so it is off unless the table asks for it.
+   */
+  fighterMorale?: boolean
+  /**
+   * 8.18: Aces and Turkeys. The roll happens at the start of the game in
+   * `startScenario`, off its own generator; this is here so the rest of the
+   * engine can say whether the rule is in play.
+   */
+  fighterQuality?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

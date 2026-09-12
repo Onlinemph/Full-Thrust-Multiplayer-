@@ -103,15 +103,18 @@ export const OPTIONAL_RULES: Toggle[] = [
     key: 'fighterMorale',
     label: 'Fighter morale',
     rule: '8.17',
-    detail: 'Fighter groups may break off rather than press a hopeless attack.',
-    notYet: 'the roll is written, but nothing in the fighter phases asks for it yet',
+    detail:
+      'A group that has lost anyone rolls before it attacks, and aborts if the die beats the ' +
+      'number of fighters left. An aborted attack spends no endurance. Robot fighters are immune.',
   },
   {
     key: 'fighterQuality',
     label: 'Aces and turkeys',
     rule: '8.18',
-    detail: 'Pilot quality varies: some groups are far better than average, some far worse.',
-    notYet: 'groups are rolled for at creation nowhere, so every pilot is average',
+    detail:
+      'Every group rolls at the start of the game: a 6 puts an Ace in it, a 1 makes it a Turkey. ' +
+      'An Ace is an extra attack die and the last pilot to die; a Turkey is −1 in dogfights and ' +
+      'on intercepts.',
   },
   {
     key: 'multiStageMissiles',

@@ -18,8 +18,10 @@ import {
   type TerrainFeature,
   type SideId,
 } from '../engine/game'
+import { Rng } from '../engine/dice'
 import {
   createFighterGroup,
+  rollPilotQuality,
   FIGHTER_TYPES,
   type FighterTypeId,
 } from '../engine/fighters'
@@ -527,7 +529,10 @@ export function scenarioById(id: string): Scenario | undefined {
  * a decision made in play, not at deployment, because a wing on the table on
  * turn one is a wing that has already spent the carrier's launch capacity.
  */
-function embarkedFlights(ship: ShipState): FighterGroupState[] {
+function embarkedFlights(
+  ship: ShipState,
+  quality?: { rng: Rng },
+): FighterGroupState[] {
   return ship.design.fighterBays.map((bay, index) => ({
     // The catalogue's fighter types and their strengths, moves and endurance
     // are `fighters.ts`'s (8.15), so the group is built by its constructor
@@ -538,6 +543,10 @@ function embarkedFlights(ship: ShipState): FighterGroupState[] {
       side: ship.side,
       typeId: fighterTypeOf(bay.typeId),
       modifiers: fighterMods(bay.modifiers),
+      // 8.18, when the table is playing it: a 6 puts an Ace in the group and a
+      // 1 makes it a Turkey. Everything downstream already reads `pilots`; for
+      // its whole life nothing had ever written anything but 'average' to it.
+      pilots: quality ? rollPilotQuality(quality.rng).quality : 'average',
       carrierId: ship.id,
       position: ship.placement.position,
       facing: ship.placement.facing,
@@ -637,6 +646,13 @@ export interface StartOptions {
    * line outward from the last one.
    */
   forceIds?: Partial<Record<SideId, string[]>>
+  /**
+   * 8.18: *"a random roll is made for each fighter group in a fleet at the
+   * start of the game or campaign"*. It has to be settled here rather than by
+   * `setOptionalRules`, because the groups exist before the rules are stamped
+   * on and 8.18 rolls at the start of the game, not at the first attack.
+   */
+  fighterQuality?: boolean
 }
 
 /**
@@ -667,6 +683,11 @@ function deploy(stations: readonly ForceEntry[], designIds: readonly string[]): 
 export function startScenario(scenarioId: string, opts: StartOptions): GameState {
   const scenario = scenarioById(scenarioId)
   if (!scenario) throw new Error(`Unknown scenario: ${scenarioId}`)
+
+  // 8.18's rolls come off their own generator rather than the battle's, so
+  // turning pilot quality on does not shift every die of the fight that
+  // follows and invalidate a saved battle that was fought without it.
+  const quality = opts.fighterQuality ? { rng: new Rng(opts.seed ^ 0x818) } : undefined
 
   const ships = scenario.sides.flatMap((side) => {
     const picked = opts.forceIds?.[side.id]
@@ -700,7 +721,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
     table: { ...scenario.table },
     deployment: deploymentFor(scenario, opts),
     terrain: scenario.terrain ? scenario.terrain.map((f) => ({ ...f })) : undefined,
-    fighterGroups: ships.flatMap(embarkedFlights),
+    fighterGroups: ships.flatMap((ship) => embarkedFlights(ship, quality)),
     gunboatSquadrons: ships.flatMap(embarkedSquadrons),
     scenario: scenario.id,
     // The introductory scenario plays phases 1, 2, 5, 11 and 13 only (2.6).

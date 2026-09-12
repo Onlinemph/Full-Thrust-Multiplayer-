@@ -153,6 +153,7 @@ export function buildGame(setup: GameSetup): GameState {
     seed: setup.seed,
     forceIds: setup.forces,
     battleType: setup.battleType,
+    fighterQuality: setup.fighterQuality,
   })
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay
@@ -195,6 +196,8 @@ export function buildGame(setup: GameSetup): GameState {
     orbitalTable: setup.orbitalTable,
     strikeColors: setup.strikeColors,
     civilWar: setup.civilWar,
+    fighterMorale: setup.fighterMorale,
+    fighterQuality: setup.fighterQuality,
   })
   return game
 }
