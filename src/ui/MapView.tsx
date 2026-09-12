@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { applyOrder, driveFromDef, type MovementState } from '../engine/movement'
 import { stationaryCollisionRisk } from '../engine/terrain'
-import { shipsAwaitingDeployment } from '../engine/game'
+import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
+import { moveVector } from '../engine/vectormovement'
 import { optional } from '../engine/actions'
 import type { GameState, ShipState } from '../engine/game'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
@@ -200,10 +201,36 @@ export function MapView({
    * The work is a few applyOrder calls over the ships on the table, which is
    * far cheaper than the bug that memoising it caused.
    */
+  const vector = optional(game).movementSystem === 'vector'
+
   const tracks = game.ships
-    .filter((ship) => !ship.destroyed && !ship.offTable && ship.order)
+    .filter((ship) => !ship.destroyed && !ship.offTable && (vector ? ship.vectorOrders : ship.order))
     .filter((ship) => visible(ship, viewingSide))
     .map((ship) => {
+      if (vector) {
+        // 12.12: the flown sequence is bookkeeping — a model "does NOT indicate
+        // that the ship actually occupies that point at any time" — so the
+        // sequence is drawn faint and the chord, which is the line a collision
+        // is tested against, is drawn as the track.
+        const flown = moveVector(vectorStateOf(ship), ship.vectorOrders ?? [], {
+          rating: ship.design.drive.thrust,
+          hits: ship.driveHits,
+        })
+        return {
+          ship,
+          legs: [{ to: flown.chord.to }],
+          steps: flown.steps.map((step) => step.position),
+          hazard:
+            optional(game).terrainHazards === true &&
+            game.terrain.some((feature) =>
+              stationaryCollisionRisk([flown.chord.from, flown.chord.to], {
+                id: feature.id,
+                position: feature.position,
+                radius: feature.radius,
+              }),
+            ),
+        }
+      }
       const movement: MovementState = {
         placement: ship.placement,
         velocity: ship.velocity,
@@ -221,7 +248,7 @@ export function MapView({
             { id: feature.id, position: feature.position, radius: feature.radius },
           ),
         )
-      return { ship, legs: result.legs, hazard }
+      return { ship, legs: result.legs, steps: null, hazard }
     })
 
   return (
@@ -328,8 +355,17 @@ export function MapView({
             </g>
           ) : null}
 
-          {tracks.map(({ ship, legs, hazard }) => (
+          {tracks.map(({ ship, legs, steps, hazard }) => (
             <g key={`track-${ship.id}`}>
+              {steps ? (
+                <polyline
+                  className="track-sequence"
+                  points={[
+                    `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
+                    ...steps.map((p) => `${p.x * scale},${p.y * scale}`),
+                  ].join(' ')}
+                />
+              ) : null}
               <polyline
                 className={hazard ? 'track is-hazard' : 'track'}
                 points={[
@@ -380,6 +416,33 @@ export function MapView({
               />
             ),
           )}
+
+          {/* 12.12's course marker: "an arrow marker placed next to the model,
+              indicating the direction of the ship's current COURSE". Without
+              it a vector board cannot be read at all, because the counter is
+              pointing somewhere else. */}
+          {vector
+            ? game.ships
+                .filter((ship) => !ship.destroyed && !ship.offTable)
+                .filter((ship) => visible(ship, viewingSide))
+                .map((ship) => {
+                  const state = vectorStateOf(ship)
+                  const length = Math.max(3, state.velocity) * scale
+                  return (
+                    <g
+                      key={`course-${ship.id}`}
+                      className={`course-marker side-${SIDE_CLASS[ship.side] ?? 'c'}`}
+                      transform={
+                        `translate(${ship.placement.position.x * scale} ` +
+                        `${ship.placement.position.y * scale}) rotate(${state.course})`
+                      }
+                    >
+                      <line x1={0} y1={0} x2={0} y2={-length} />
+                      <path d={`M 0 ${-length} l -3 6 l 3 -2 l 3 2 Z`} />
+                    </g>
+                  )
+                })
+            : null}
 
           {game.ships
             .filter((ship) => visible(ship, viewingSide))

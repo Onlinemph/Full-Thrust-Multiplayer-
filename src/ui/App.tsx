@@ -10,7 +10,7 @@ import {
   type GameState,
   type ShipState,
 } from '../engine/game'
-import { deployingSide } from '../engine/actions'
+import { deployingSide, optional } from '../engine/actions'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
@@ -25,6 +25,7 @@ import { ShipLibrary } from './ShipLibrary'
 import { Shipyard } from './Shipyard'
 import { KEY_HELP, useKeyboard } from './useKeyboard'
 import { OrderPanel } from './OrderPanel'
+import { VectorOrderPanel } from './VectorOrderPanel'
 import { Ssd } from './Ssd'
 import {
   canUndo,
@@ -232,14 +233,23 @@ export function App() {
                 />
               </div>
 
-              <OrderPanel
-                game={game}
-                ship={selected}
-                editable={
-                  game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
-                }
-                emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
-              />
+              {optional(game).movementSystem === 'vector' ? (
+                <VectorOrderPanel
+                  ship={selected}
+                  editable={
+                    game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                  }
+                />
+              ) : (
+                <OrderPanel
+                  game={game}
+                  ship={selected}
+                  editable={
+                    game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                  }
+                  emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
+                />
+              )}
             </>
           ) : (
             <div className="panel">

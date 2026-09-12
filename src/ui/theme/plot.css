@@ -160,6 +160,41 @@
   opacity: 1;
 }
 
+/* 12.12: the flown sequence, which is bookkeeping — "does NOT indicate that
+   the ship actually occupies that point at any time". Faint, because the line
+   that matters is the chord drawn over it. */
+.track-sequence {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.7;
+}
+
+/* 12.12's course marker: "an arrow marker placed next to the model, indicating
+   the direction of the ship's current COURSE". Under vector movement the
+   counter's bow is not where the ship is going, and this is where it is going. */
+.course-marker line {
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-opacity: 0.7;
+}
+
+.course-marker path {
+  fill: currentColor;
+  fill-opacity: 0.8;
+}
+
+.course-marker.side-a {
+  color: var(--side-a);
+}
+.course-marker.side-b {
+  color: var(--side-b);
+}
+.course-marker.side-c {
+  color: var(--side-c);
+}
+
 .track-end {
   fill: none;
   stroke: var(--thrust);

@@ -174,6 +174,39 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>Movement</h3>
+          <p>
+            12.12 is a second movement system, not a variant of the first. Under it a ship&rsquo;s
+            course and its facing come apart: you write a sheet like <code>TP3, MD6</code> and the
+            ship flies a chord that has nothing to do with where its bow is pointing, which is what
+            lets it shoot over its shoulder at the thing it is running from.
+          </p>
+          <label className="code-field">
+            System
+            <select
+              aria-label="Movement system"
+              value={draft.movementSystem ?? 'cinematic'}
+              disabled={(draft.aiSides ?? []).length > 0}
+              onChange={(event) =>
+                setDraft((d) => ({
+                  ...d,
+                  movementSystem: event.target.value as 'cinematic' | 'vector',
+                }))
+              }
+            >
+              <option value="cinematic">Cinematic (3.1) — course is facing</option>
+              <option value="vector">Vector (12.12) — course and facing separate</option>
+            </select>
+          </label>
+          {(draft.aiSides ?? []).length > 0 ? (
+            <p style={{ color: 'var(--warn)' }}>
+              Two players only for now. The computer writes cinematic orders and would sit still
+              under 12.12, which is worse than not offering it.
+            </p>
+          ) : null}
+        </section>
+
+        <section>
           <h3>Deployment</h3>
           <p>
             18.1 gives three battles, and each of them puts the fleets on the table differently.
@@ -269,7 +302,14 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
                       const sides = new Set(d.aiSides ?? [])
                       if (sides.has(side.id)) sides.delete(side.id)
                       else sides.add(side.id)
-                      return { ...d, aiSides: [...sides] }
+                      // The computer cannot fly 12.12 yet, so handing it a
+                      // fleet puts the battle back on cinematic movement
+                      // rather than leaving a fleet that never manoeuvres.
+                      return {
+                        ...d,
+                        aiSides: [...sides],
+                        movementSystem: sides.size > 0 ? 'cinematic' : d.movementSystem,
+                      }
                     })
                   }
                 />

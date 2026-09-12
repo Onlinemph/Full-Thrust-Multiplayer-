@@ -35,6 +35,7 @@ import {
   setInitiativeOrder,
   shipById,
   shipsAwaitingDeployment,
+  vectorStateOf,
   type FighterGroupState,
   type TerrainKind,
   type GameState,
@@ -62,6 +63,13 @@ import {
 } from './terrain'
 import { arcsWhenInverted, resolveRam, rollShip } from './specialmoves'
 import { defaultPlacements, validatePlacement } from './battles'
+import {
+  formatVectorOrders,
+  moveVector,
+  validateVectorOrders,
+  VECTOR_ORDER_KINDS,
+  type VectorOrder,
+} from './vectormovement'
 import {
   ftlExitRestrictions,
   ftlExitStage,
@@ -193,6 +201,15 @@ export type GameAction =
    */
   | { type: 'plot-roll'; shipId: string; on: boolean }
   | { type: 'plot-mines'; shipId: string; on: boolean }
+  /**
+   * 12.12's order sheet, replaced whole.
+   *
+   * A list, because the sheet is a sequence: *"Each effect is applied to the
+   * ship strictly IN THE ORDER THEY ARE WRITTEN DOWN BY THE PLAYER."* The
+   * payload is what the player wrote and nothing derived from it — the budget,
+   * the legality and the flown path are all re-computed when the ship moves.
+   */
+  | { type: 'plot-vector-orders'; shipId: string; orders: VectorOrder[] }
   | { type: 'clear-order'; shipId: string }
 
   // Deployment (18.1) — before the first order of turn 1
@@ -409,6 +426,12 @@ function editOrder(
   if (!('id' in found)) return found
   const ship = found
 
+  // 12.12 replaces 3.5's order entirely: a turn, an acceleration and emergency
+  // thrust are all cinematic quantities, and a panel that still offered them
+  // would be offering a manoeuvre the ship cannot make.
+  if (optional(state).movementSystem === 'vector') {
+    return refuse('This battle is fought under vector movement (12.12)')
+  }
   const next = edit(ship.order ?? { ...BLANK_ORDER })
   const check = validateOrder(next, movementStateOf(ship))
   if (!check.legal) return refuse(check.violations[0] ?? 'Illegal order')
@@ -634,10 +657,34 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    case 'plot-vector-orders': {
+      if (optional(state).movementSystem !== 'vector') {
+        return refuse('This battle is fought under cinematic movement (3.1)')
+      }
+      const found = orderable(state, shipById(state, action.shipId))
+      if (!('id' in found)) return found
+      const ship = found
+      for (const order of action.orders) {
+        if (!VECTOR_ORDER_KINDS.includes(order.kind)) return refuse(`${order.kind} is not an order`)
+        if (!Number.isInteger(order.points) || order.points < 0) {
+          return refuse('An order is written in whole points')
+        }
+      }
+      // 12.12 has no penalty clause for an over-budget sheet — `moveVector`
+      // flies it as an empty one — but a player writing the sheet should be
+      // told at the moment they overspend, not next phase when the ship coasts.
+      const drive = { rating: ship.design.drive.thrust, hits: ship.driveHits }
+      const check = validateVectorOrders(action.orders, drive)
+      if (!check.legal) return refuse(check.problems[0] ?? 'That sheet overruns the drive')
+      ship.vectorOrders = action.orders.map((order) => ({ ...order }))
+      return OK
+    }
+
     case 'clear-order': {
       const found = orderable(state, shipById(state, action.shipId))
       if (!('id' in found)) return found
       found.order = null
+      found.vectorOrders = null
       return OK
     }
 
@@ -656,6 +703,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // turn it half-moves and is gone. Both legs ignore whatever was plotted.
       const ftl = ftlStageOf(ship, state.turn)
       if (ftl === 'jumping') return jumpToFtl(state, ship)
+
+      if (optional(state).movementSystem === 'vector') {
+        return moveUnderVector(state, ship, ftl === 'warming-up')
+      }
 
       // A ship with no written order holds its course: velocity is conserved
       // and it must move its full velocity anyway (3.1).
@@ -2507,6 +2558,83 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  * something a shot stops at, and each of those has its own rule instead.
  */
 /**
+ * Fly one ship for one turn under 12.12.
+ *
+ * The cinematic path is not reused and cannot be: `applyOrder` writes
+ * `facing: path.course` because 3.1 says *"the course and facing are always
+ * identical"*, and 12.12 exists precisely to separate them. What is shared is
+ * everything around the move — the cloak brackets, the wing that rides in the
+ * bay, the terrain the track crossed, the ram — so those are duplicated here
+ * deliberately rather than factored out, because a shared helper would have to
+ * take both movement systems' results and the two have different shapes.
+ */
+function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean): ActionOutcome {
+  const before = vectorStateOf(ship)
+  // 11.4 again: a ship spinning up its FTL drive "may not apply any thrust in
+  // that move", which under 12.12 is an empty order sheet.
+  const orders = warmingUp ? [] : (ship.vectorOrders ?? [])
+  const drive = { rating: ship.design.drive.thrust, hits: ship.driveHits }
+
+  if (ship.cloak) {
+    ship.cloak = cloakStartOfMovement(ship.cloak, ship.placement.position)
+    ship.cloaked = cloakMode(ship.cloak) !== 'none'
+  }
+
+  const result = moveVector(before, orders, drive)
+
+  ship.lastKnown = {
+    course: ship.placement.facing,
+    courseDegrees: before.course,
+    velocity: ship.velocity,
+    turn: state.turn,
+    cloaked: ship.cloaked,
+  }
+  ship.placement = { position: result.end.position, facing: result.end.facing }
+  ship.velocity = result.end.velocity
+  ship.courseDegrees = result.end.course
+  // 4.2's optional aft-arc exception asks whether the ship touched its drive,
+  // and under vector that is the whole sheet: burns and thruster points alike.
+  ship.thrustUsed = result.budget.mainDriveUsed + result.budget.thrusterUsed
+
+  for (const group of state.fighterGroups) {
+    if (group.carrierId === ship.id && group.status === 'aboard') {
+      group.position = ship.placement.position
+      group.facing = ship.placement.facing
+    }
+  }
+  if (ship.cloak) {
+    const wasCloaked = ship.cloaked
+    const after = cloakEndOfMovement(ship.cloak, { velocity: ship.velocity })
+    ship.cloak = after
+    ship.cloaked = cloakMode(after) !== 'none'
+    if (ship.cloaked !== wasCloaked) {
+      pushLog(state, {
+        kind: 'note',
+        shipId: ship.id,
+        side: ship.side,
+        text: ship.cloaked ? `${ship.name} cloaks (7.20)` : `${ship.name} decloaks`,
+      })
+    }
+  }
+
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    side: ship.side,
+    text:
+      `${ship.name} ${result.legal && orders.length > 0 ? formatVectorOrders(orders) : 'coasts'}` +
+      ` — ${result.end.velocity} MU on ${result.end.course.toFixed(0)}°` +
+      (result.legal ? '' : ', the sheet overran the drive (12.12)'),
+  })
+
+  // 12.12: "the tape-measure line, start position to finishing position" is
+  // what a collision is tested against, and it is not the flown sequence.
+  resolveTerrainHazards(state, ship, [result.chord.from, result.chord.to])
+  resolveDeclaredRam(state, ship)
+  return OK
+}
+
+/**
  * Whose turn it is to place (18.1), or null when nobody owes a placement.
  *
  * *"Players alternate in placing one ship at a time … (or two to four ships at
@@ -2863,6 +2991,12 @@ export interface OptionalRules {
    * both have to be told which one the table is playing in.
    */
   cpv?: boolean
+  /**
+   * 12.12: *"a completely OPTIONAL alternative movement system, which players
+   * may use instead of the standard FT movement rules"*. Settled before play,
+   * like every other option, and absent means 3.1's cinematic movement.
+   */
+  movementSystem?: 'cinematic' | 'vector'
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

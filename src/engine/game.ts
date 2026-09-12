@@ -27,6 +27,7 @@ import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
 import { movementPriority, UPRIGHT, type RollStatus } from './specialmoves'
 import type { BattleType, DeploymentZone } from './battles'
+import { vectorStateFromCinematic, type VectorOrder, type VectorState } from './vectormovement'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -155,6 +156,28 @@ export interface ShipState {
   velocity: number
   /** This turn's written order (3.5), set in phase 1. */
   order: MovementOrder | null
+  /**
+   * COURSE, in degrees clockwise from up the table, when the battle is fought
+   * under 12.12's vector system — the course-marker arrow that sits beside the
+   * model. Null under cinematic movement, where *"the course and facing are
+   * always identical"* (3.1) and `placement.facing` is both.
+   *
+   * It survives the per-turn reset, because it is a marker on the table rather
+   * than an order: 12.12 says a ship *"ALWAYS starts by moving according to its
+   * starting vector"*, and a course cleared each turn would stop the fleet dead.
+   */
+  courseDegrees: number | null
+  /**
+   * This turn's vector order sheet (12.12), in the order it was written.
+   *
+   * A separate field from `order` and not a union with it, because 12.12's
+   * sheet is a *sequence* — *"Each effect is applied to the ship strictly IN
+   * THE ORDER THEY ARE WRITTEN DOWN BY THE PLAYER … If the player writes TP2,
+   * MD6 … If, on the other hand, the order is written MD6, TP2 … the result
+   * will be VERY different"* — and `MovementOrder` holds one turn, one second
+   * turn and an acceleration, which cannot express that at all.
+   */
+  vectorOrders: VectorOrder[] | null
   /** Thrust actually spent this turn — the optional aft-arc rule (4.2) and
    *  fighter scrambles (8.3) both ask whether the ship used any. */
   thrustUsed: number
@@ -200,8 +223,21 @@ export interface ShipState {
    * too late" — and it costs the ship its own weapons for the turn.
    */
   reflexFieldActive: boolean
-  /** Course and velocity as at the end of a previous phase 5 (2.6). */
-  lastKnown: { course: Course; velocity: number; turn: number; cloaked: boolean } | null
+  /**
+   * Course and velocity as at the end of a previous phase 5 (2.6).
+   *
+   * `course` is the clock point a cinematic ship both faces and travels on;
+   * `courseDegrees` is the vector answer, present only under 12.12, because
+   * there the honest answer to the question 2.6 lets an opponent ask is not a
+   * clock point at all.
+   */
+  lastKnown: {
+    course: Course
+    courseDegrees?: number
+    velocity: number
+    turn: number
+    cloaked: boolean
+  } | null
 
   // --- damage (2.4, 4.8, 4.11) -------------------------------------------
   /** Hull boxes crossed off, from the top left (2.4). */
@@ -289,6 +325,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     placement: { position: { ...opts.placement.position }, facing: opts.placement.facing },
     velocity: opts.velocity ?? 0,
     order: null,
+    courseDegrees: null,
+    vectorOrders: null,
     thrustUsed: 0,
     layingMines: false,
     ftlTransit: 'none',
@@ -978,6 +1016,24 @@ export function shipMovementRank(ship: ShipState): number {
 }
 
 /**
+ * A ship as 12.12's vector state.
+ *
+ * A cinematic ship is the special case where course and facing agree, which is
+ * how 12.12 opens, so this is total: a ship with no course marker reads as one
+ * travelling along its bow.
+ */
+export function vectorStateOf(ship: ShipState): VectorState {
+  return ship.courseDegrees === null
+    ? vectorStateFromCinematic(ship.placement, ship.velocity)
+    : {
+        position: { ...ship.placement.position },
+        facing: ship.placement.facing,
+        course: ship.courseDegrees,
+        velocity: ship.velocity,
+      }
+}
+
+/**
  * Ships this battle's deployment still owes a placement (18.1).
  *
  * A ship that is out of the battle before it has been placed cannot be, so it
@@ -1072,6 +1128,9 @@ function onBeginTurn(state: GameState): void {
 
   for (const ship of state.ships) {
     ship.order = null
+    // 2.6 phase 1 writes a fresh sheet every turn; one that survived would be
+    // flown twice. The course marker is not an order and stays where it is.
+    ship.vectorOrders = null
     ship.thrustUsed = 0
     ship.layingMines = false
     // A transit already under way is not re-declared each turn: 11.4 gives the
@@ -1124,6 +1183,10 @@ function recordLastKnownVectors(state: GameState): void {
   for (const ship of state.ships) {
     ship.lastKnown = {
       course: ship.placement.facing,
+      // Under 12.12 the course is not the facing, and telling an opponent the
+      // bow line when they asked for the course would be a wrong answer to a
+      // question the rules entitle them to ask.
+      ...(ship.courseDegrees === null ? {} : { courseDegrees: ship.courseDegrees }),
       velocity: ship.velocity,
       turn: state.turn,
       cloaked: ship.cloaked,
@@ -1136,9 +1199,17 @@ function recordLastKnownVectors(state: GameState): void {
  * course and velocity as at the end of the last movement phase — unless the
  * ship was under cloak then, which exempts it from the question.
  */
-export function lastKnownVector(ship: ShipState): { course: Course; velocity: number } | null {
+export function lastKnownVector(
+  ship: ShipState,
+): { course: Course; courseDegrees?: number; velocity: number } | null {
   if (!ship.lastKnown || ship.lastKnown.cloaked) return null
-  return { course: ship.lastKnown.course, velocity: ship.lastKnown.velocity }
+  return {
+    course: ship.lastKnown.course,
+    ...(ship.lastKnown.courseDegrees === undefined
+      ? {}
+      : { courseDegrees: ship.lastKnown.courseDegrees }),
+    velocity: ship.lastKnown.velocity,
+  }
 }
 
 // ---------------------------------------------------------------------------
