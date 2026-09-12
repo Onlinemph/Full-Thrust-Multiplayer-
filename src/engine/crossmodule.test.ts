@@ -104,6 +104,43 @@ describe('boarding parties', () => {
     points: 100,
   })
 
+  it('fight the crew when phase 12 comes round', () => {
+    // The other half of the chain: parties land, then 12.7 resolves. Before
+    // the back half of the rulebook could be read this phase was a stub that
+    // only listed who was aboard.
+    const game = createGame({
+      seed: 4,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      ships: [
+        createShipState({
+          id: 'boarder',
+          side: 'a',
+          design: boarder('Boarder'),
+          placement: { position: { x: 0, y: 0 }, facing: 6 },
+        }),
+        createShipState({
+          id: 'prize',
+          side: 'b',
+          design: boarder('Prize'),
+          placement: { position: { x: 0, y: 6 }, facing: 12 },
+        }),
+      ],
+    })
+    const prize = game.ships[1]
+    prize.boarders = [{ side: 'a', parties: 4, landedTurn: 1 }]
+    let guard = 40
+    while (game.phase !== 'boarding' && guard-- > 0) advancePhase(game)
+    const before = prize.boarders[0].parties
+    expect(applyAction(game, { type: 'resolve-boarding' }).refused).toBeUndefined()
+
+    const after = prize.boarders.reduce((sum, p) => sum + p.parties, 0)
+    const hurt = prize.hullMarked > 0
+    // Something has to have happened: the crew killed some, or the survivors
+    // opened up the hull, or both.
+    expect(after < before || hurt, 'phase 12 did nothing at all').toBe(true)
+    expect(game.log.some((entry) => entry.kind === 'boarding')).toBe(true)
+  })
+
   it('land on the ship they were fired at, stamped with the turn', () => {
     // Fire enough torpedoes across enough seeds that at least one connects:
     // 5.18 uses the projectile to-hit table, so a single shot can miss.

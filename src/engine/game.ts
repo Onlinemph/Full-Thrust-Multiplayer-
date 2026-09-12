@@ -216,6 +216,18 @@ export interface ShipState {
   core: CoreSystemsState
   ongoing: OngoingEffect[]
   boarders: BoardingParty[]
+  /**
+   * Marines still alive aboard (13.13, 12.7). Starts at the design's count and
+   * falls as they are spent repelling boarders, which is why it is state and
+   * not read off the SSD.
+   */
+  marinesAboard: number
+  /**
+   * Carried by a boarding action (12.7): *"it is considered captured"*. An
+   * intact hull under someone else's flag, which is not the same as a
+   * destroyed one — 18.3 scores it differently and it can be sailed away.
+   */
+  captured: boolean
 }
 
 export interface ShipStateOptions {
@@ -287,6 +299,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     },
     ongoing: [],
     boarders: [],
+    marinesAboard: opts.design.marineParties,
+    captured: false,
   }
 }
 

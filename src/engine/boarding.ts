@@ -246,7 +246,7 @@ export function validateBoardingPlan(
       problems.push(`no boarding party ${assignment.targetId} is aboard (12.7)`)
     }
     if (seenDcp.has(assignment.targetId)) {
-      problems.push(`${assignment.targetId} is assigned DCPs twice; pool them into one entry (12.7)`)
+      problems.push(`${assignment.targetId} is assigned DCPs twice; pool them into one (12.7)`)
     }
     seenDcp.add(assignment.targetId)
     if (parties < 0) problems.push(`a negative DCP assignment on ${assignment.targetId}`)
@@ -386,7 +386,8 @@ export function resolveBoardingCombat(
   // depending on which entry the caller wrote first.
   const dcpByTarget = pooled(plan.dcps ?? [], (a) => a.parties, ids, MAX_DCPS_PER_TARGET)
   const marinesByTarget = pooled(plan.marines ?? [], (a) => a.marines, ids, Infinity)
-  const dcpBudget = spendInOrder(units, dcpByTarget, Math.max(0, Math.floor(ship.damageControlParties)))
+  const dcpsAboard = Math.max(0, Math.floor(ship.damageControlParties))
+  const dcpBudget = spendInOrder(units, dcpByTarget, dcpsAboard)
   const marineBudget = spendInOrder(units, marinesByTarget, Math.max(0, Math.floor(ship.marines)))
 
   const log: string[] = []
@@ -410,8 +411,9 @@ export function resolveBoardingCombat(
     }
   }
   if (repelRolls.length > 0) {
+    const killed = repelRolls.filter((roll) => roll.killed).length
     log.push(
-      `step 1: ${dcpsCommitted} DCP(s) on ${repelRolls.length} boarder(s), ${repelRolls.filter((r) => r.killed).length} killed (12.7)`,
+      `step 1: ${dcpsCommitted} DCP(s) on ${repelRolls.length} boarder(s), ${killed} killed (12.7)`,
     )
   }
 
@@ -453,7 +455,8 @@ export function resolveBoardingCombat(
   }
   if (marineDefenceRolls.length > 0 || assaultRolls.length > 0) {
     log.push(
-      `step 2: ${killedInStep2.length} boarder(s) and ${defendingMarinesLost} defending Marine(s) killed, simultaneously (12.7)`,
+      `step 2: ${killedInStep2.length} boarder(s) and ${defendingMarinesLost} Marine(s) ` +
+        'killed, simultaneously (12.7)',
     )
   }
 
@@ -466,9 +469,8 @@ export function resolveBoardingCombat(
   const hullRemaining = Math.max(0, Math.floor(ship.hullRemaining))
   const captured = hullDamage > 0 && hullDamage >= hullRemaining
   if (hullDamage > 0) {
-    log.push(
-      `step 3: ${hullDamage} hull box(es) destroyed by boarders${captured ? ' — the ship is captured (12.7)' : ' (12.7)'}`,
-    )
+    const prize = captured ? ' — the ship is captured' : ''
+    log.push(`step 3: ${hullDamage} hull box(es) destroyed by boarders${prize} (12.7)`)
   }
 
   return {
@@ -676,7 +678,8 @@ export function fleetMorale(
 
   const fraction = totalMass > 0 ? lostMass / totalMass : 0
   // "would be enough" (12.8): exactly half is enough.
-  return { totalMass, lostMass, fraction, threshold, withdraw: totalMass > 0 && fraction >= threshold }
+  const withdraw = totalMass > 0 && fraction >= threshold
+  return { totalMass, lostMass, fraction, threshold, withdraw }
 }
 
 // ---------------------------------------------------------------------------

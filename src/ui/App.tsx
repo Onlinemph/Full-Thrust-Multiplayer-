@@ -399,13 +399,14 @@ function PhaseControls({ phase }: { phase: Phase }) {
         <div className="panel">
           <h3>Phase 12 · Boarding</h3>
           <p style={{ color: 'var(--ink-dim)' }}>
-            Transporters, boarding torpedoes and assault shuttles have put their parties aboard.
-            What those parties then do is section 12.7, which is past the end of the rulebook text
-            this engine is built from — so the phase lists who is aboard whom and leaves the fight
-            to the players.
+            The crew fights back. Each party aboard is targeted separately: one damage control
+            party kills it on a 6, two on a 5 or 6, three on a 4 or better, and a Marine on a 4 or
+            better. Everything is simultaneous, so a party killed here still got its blow in.
+            Whatever survives does a point of damage a counter straight to the hull, and a ship
+            whose last box goes this way is captured rather than destroyed.
           </p>
           <button className="primary" onClick={() => dispatch({ type: 'resolve-boarding' })}>
-            List boarders
+            Resolve boarding actions
           </button>
         </div>
       )

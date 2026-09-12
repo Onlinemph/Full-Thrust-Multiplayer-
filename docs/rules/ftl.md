@@ -311,6 +311,11 @@ starbase and rolls a 1 takes one point of damage and still does 2D6 to the starb
 `bypassesScreensAndArmour` is `true` on both reports — the sentence says "entry or exit" and so
 covers 11.4's damage as well.
 
+`resolveFtlEntry` runs the scatter and the danger roll together, which is the ordinary case.
+`resolveFtlEntryDanger` is the danger roll on its own, for a caller that has already placed the
+ship — a scenario putting a hull down by hand, or a gate arrival that wants the check anyway
+despite R11.
+
 ---
 
 ## 11.6 FTL tugs and tenders
@@ -502,8 +507,11 @@ makes the civilian infrastructure of 11.9 unusable.
 A Portal costs ten times the drive of a Jump Gate of the same throughput, which is the whole
 balance of the section. The hull minimum is stated for the Jump Gate; `gateMinimumHullBoxes`
 applies it to both, since "A gate must also have a certain number of hull boxes" is written about
-artificial gates generally and no other figure is given. Natural gates are exempt from all of it —
-`validateGateBuild` returns nothing for them.
+artificial gates generally and no other figure is given, and rounds it *up* — it is a stated
+minimum and hull boxes are counted rather than measured, so 10% of 61 is 7 boxes. Drive mass is
+left exact, because that figure is a mass the construction table records and section 11 states no
+rounding for it. Natural gates are exempt from all of it — `validateGateBuild(gate, driveMass)`
+returns nothing for them.
 
 ### Damage
 

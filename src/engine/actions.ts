@@ -21,6 +21,7 @@ import {
   advancePhase,
   assignDamageControl,
   assignFireCon,
+  availableDamageControlParties,
   availableFireCons,
   canWeaponFire,
   engagedTargets,
@@ -48,6 +49,14 @@ import {
   type MovementState,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
+import {
+  boardingUnits,
+  resolveBoardingCombat,
+  MAX_DCPS_PER_TARGET,
+  type BoardedShip,
+  type BoardingForce,
+  type BoardingPlan,
+} from './boarding'
 import {
   adfcLockedOut,
   canDeclareAttack,
@@ -960,24 +969,60 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     // ── Boarding (phase 12) ───────────────────────────────────────────────
     case 'resolve-boarding': {
       if (state.phase !== 'boarding') return refuse('Boarding is resolved in phase 12')
-      // Getting marines aboard is 5.9, 5.18 and 8.15, all of which are in the
-      // source and all of which are implemented — the parties are on the
-      // target's SSD. What they then *do* is 12.7, which is on page 96 of a
-      // rulebook whose text layer stops at page 80 (docs/rules/SOURCES.md).
-      // Inventing a boarding fight would be inventing a rule, so the phase
-      // reports the parties aboard and leaves the fight to the players.
       for (const ship of state.ships) {
         if (ship.destroyed || ship.offTable) continue
-        const aboard = ship.boarders.reduce((sum, party) => sum + party.parties, 0)
-        if (aboard === 0) continue
-        pushLog(state, {
-          kind: 'boarding',
-          shipId: ship.id,
+        if (!ship.boarders.some((party) => party.side !== ship.side)) continue
+
+        const boarded: BoardedShip = {
           side: ship.side,
-          text:
-            `${ship.name} has ${aboard} enemy boarding part${aboard === 1 ? 'y' : 'ies'} aboard ` +
-            '— the boarding action is 12.7, which is not in the source',
-        })
+          hullRemaining: ship.design.hullBoxes - ship.hullMarked,
+          // 12.7's counter-attack is a damage control action, and the quick
+          // reference sheet's phase 14 is "Damage Control assignments for DC
+          // parties not used to repel boarders" — so what is spent here is
+          // what phase 14 will not see.
+          damageControlParties: availableDamageControlParties(ship),
+          marines: ship.marinesAboard,
+        }
+        const result = resolveBoardingCombat(
+          boarded,
+          ship.boarders,
+          defaultBoardingPlan(boarded, ship.boarders),
+          state.rng,
+        )
+
+        ship.boarders = result.survivors.map((force) => ({
+          side: force.side,
+          parties: force.parties,
+          landedTurn: force.landedTurn,
+        }))
+        ship.marinesAboard = Math.max(0, ship.marinesAboard - result.defendingMarinesLost)
+        if (result.dcpsCommitted > 0) {
+          ship.damageControl.push({ systemId: 'repelling-boarders', parties: result.dcpsCommitted })
+        }
+        for (const line of result.log) {
+          pushLog(state, { kind: 'boarding', shipId: ship.id, side: ship.side, text: line })
+        }
+        if (result.hullDamage > 0) {
+          // Boarders wreck a ship from the inside, so their damage meets no
+          // armour and no screens on the way to the hull (12.7).
+          markHullBoxes(ship, result.hullDamage)
+          pushLog(state, {
+            kind: 'damage',
+            shipId: ship.id,
+            side: ship.side,
+            text: `${ship.name} takes ${result.hullDamage} from boarders inside the hull (12.7)`,
+          })
+        }
+        if (result.captured) {
+          // "it is considered captured" — an intact hull in someone else's
+          // hands, which is not at all the same as a destroyed one.
+          ship.captured = true
+          pushLog(state, {
+            kind: 'boarding',
+            shipId: ship.id,
+            text: `${ship.name} is carried by boarding action (12.7)`,
+          })
+        }
       }
       return OK
     }
@@ -1858,6 +1903,39 @@ function reflexField(
   return {
     result: { ...result, normalDamage: normal, penetratingDamage: penetrating },
     back: roll.toAttacker,
+  }
+}
+
+/**
+ * Who fights whom when nobody has said (12.7 step 1).
+ *
+ * Phase 12 asks both players to allocate before any die is rolled, and there
+ * is no interface for either choice yet, so the engine plays both sides the
+ * obvious way: the attackers put just enough counters against the defending
+ * Marines to match them and send the rest at the hull, and the defenders pile
+ * their parties onto the attackers three at a time — the most 10.4 allows on
+ * one job — with the Marines taking one each. It is the allocation the book's
+ * own worked example makes, and it is replaced the moment there is a panel to
+ * make the choice in.
+ */
+function defaultBoardingPlan(ship: BoardedShip, boarders: readonly BoardingForce[]): BoardingPlan {
+  const units = boardingUnits(boarders, { ownerSide: ship.side })
+  const marineCount = Math.max(0, Math.floor(ship.marines))
+  const engaged = units.slice(0, marineCount)
+
+  const dcps: Array<{ targetId: string; parties: number }> = []
+  let left = Math.max(0, Math.floor(ship.damageControlParties))
+  for (const unit of units) {
+    if (left <= 0) break
+    const parties = Math.min(MAX_DCPS_PER_TARGET, left)
+    dcps.push({ targetId: unit.id, parties })
+    left -= parties
+  }
+
+  return {
+    engageMarines: engaged.map((unit) => unit.id),
+    dcps,
+    marines: engaged.map((unit) => ({ targetId: unit.id, marines: 1 })),
   }
 }
 
