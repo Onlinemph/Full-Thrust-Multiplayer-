@@ -4,6 +4,7 @@ import { scenarioById, SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
 import { BATTLE_TYPE_LABELS, type BattleType } from '../engine/battles'
 import { TECH_BASE_OPTIONS, type TechBaseChoice } from '../data/techBaseCheck'
+import { FACTIONS, factionById, factionTraitCoverage } from '../data/factions'
 import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
 
@@ -265,6 +266,76 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>Factions</h3>
+          <p>
+            The campaign supplement&rsquo;s fourteen navies, each with its own traits and its own
+            list of things it will not build. Separate from the tech base: a hull can be legal
+            under section 15 and barred by the faction flying it.{' '}
+            {(() => {
+              const coverage = factionTraitCoverage()
+              return `${coverage.implemented} of ${coverage.total} traits are enforced so far — the
+                prohibitions and the design limits. The ones that change a roll in a battle are
+                typed and not yet read by anything.`
+            })()}
+          </p>
+          {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => {
+            const chosen = draft.factions?.[side.id] ?? ''
+            const faction = chosen ? factionById(chosen) : undefined
+            return (
+              <div key={side.id} className="panel-row">
+                <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+                  {side.name}
+                  <select
+                    aria-label={`${side.name} faction`}
+                    value={chosen}
+                    onChange={(event) =>
+                      setDraft((d) => ({
+                        ...d,
+                        factions: { ...d.factions, [side.id]: event.target.value },
+                        clans: { ...d.clans, [side.id]: '' },
+                      }))
+                    }
+                  >
+                    <option value="">None</option>
+                    {FACTIONS.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {faction?.clans ? (
+                  <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+                    Clan
+                    <select
+                      aria-label={`${side.name} clan`}
+                      value={draft.clans?.[side.id] ?? ''}
+                      onChange={(event) =>
+                        setDraft((d) => ({
+                          ...d,
+                          clans: { ...d.clans, [side.id]: event.target.value },
+                        }))
+                      }
+                    >
+                      <option value="">None</option>
+                      {faction.clans.map((clan) => (
+                        <option key={clan.id} value={clan.id}>
+                          {clan.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <span className="spacer" />
+                {faction ? (
+                  <span style={{ color: 'var(--ink-dim)' }}>{faction.doctrine}</span>
+                ) : null}
+              </div>
+            )
+          })}
+        </section>
+
+        <section>
           <h3>Tech base</h3>
           <p>
             Section 15 buys an empire a short list of technologies and lets it build nothing else.
@@ -304,6 +375,8 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             forces={draft.forces ?? {}}
             techBases={draft.techBases ?? {}}
             cpv={Boolean(draft.cpv)}
+            factions={draft.factions ?? {}}
+            clans={draft.clans ?? {}}
             onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
           />
         </section>

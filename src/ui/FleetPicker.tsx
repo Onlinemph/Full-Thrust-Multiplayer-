@@ -10,6 +10,7 @@ import {
   type TechBaseChoice,
 } from '../data/techBaseCheck'
 import { designCost, summariseFleet } from '../data/fleetList'
+import { describeFault, validateDesign } from '../data/designPricing'
 import {
   IDEAL_FLEET_POINTS_MAX,
   IDEAL_FLEET_POINTS_MIN,
@@ -38,6 +39,9 @@ export interface FleetPickerProps {
   techBases?: Partial<Record<string, TechBaseChoice>>
   /** 18.3: price the fleet in Combat Points Value rather than printed points. */
   cpv?: boolean
+  /** The campaign faction each side flies under, and its clan where it has one. */
+  factions?: Partial<Record<string, string>>
+  clans?: Partial<Record<string, string>>
   onChange: (forces: Partial<Record<string, string[]>>) => void
 }
 
@@ -57,6 +61,8 @@ export function FleetPicker({
   forces,
   techBases,
   cpv = false,
+  factions,
+  clans,
   onChange,
 }: FleetPickerProps) {
   const scenario = scenarioById(scenarioId)
@@ -85,6 +91,17 @@ export function FleetPicker({
   // 15: what this side's tech base could not have built. Advisory, because the
   // roster predates the tech base and both example factions refuse armour.
   const techBase = techBases?.[side]
+  // The campaign supplement's own refusals, which are a separate question from
+  // section 15's: a hull can be legal under a tech base and barred by the
+  // faction flying it.
+  const factionId = factions?.[side]
+  const clanId = clans?.[side]
+  const factionFaults = (target: ShipDesign) =>
+    factionId
+      ? validateDesign(target, { factionId, clanId }).filter(
+          (fault) => fault.kind === 'faction-prohibition' || fault.kind === 'faction-design',
+        )
+      : []
   const techReport = checkFleetTechBase(
     techBase,
     picked.map((id) => byId(designs, id)).filter((d): d is ShipDesign => Boolean(d)),
@@ -203,7 +220,10 @@ export function FleetPicker({
             <h4>{GROUP_LABEL[group]}</h4>
             <div className="design-list">
               {available.map((design) => {
-                const problems = designProblems(techBase, design)
+                const problems = [
+                  ...designProblems(techBase, design),
+                  ...factionFaults(design).map(describeFault),
+                ]
                 return (
                   <button
                     key={design.id}

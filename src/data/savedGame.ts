@@ -73,8 +73,14 @@ export interface GameSetup {
    */
   bannedSystems?: string[]
 
-  /** Faction traits in play, by faction id. Empty means plain Continuum. */
+  /**
+   * The campaign faction each side flies under (`docs/rules/factions.md`), by
+   * side id. Absent means plain Continuum, which is what every battle fought
+   * before this field was read plays as.
+   */
   factions?: Partial<Record<string, string>>
+  /** The Askvarian clan a side's ships belong to, where its faction has clans. */
+  clans?: Partial<Record<string, string>>
 
   /**
    * The Imperial Tech Base each side plays under (15), by side id. A side with

@@ -220,8 +220,12 @@ def price(d):
         fm = 0.1 * d['mass']; mass += fm; pts += fm * (3 if d.get('advFtl') else 2)
     if d.get('stream'):
         mass += (0.05 if d['stream'] == 'partial' else 0.1) * d['mass']
+    # 7.8: regenerative armour is the same mass and 2 points more a box, which
+    # is what designPricing.armourPoints charges. The two must agree or
+    # ships.test.ts fails, which is the point of it.
+    regen = 2 if d.get('regen') else 0
     for i, layer in enumerate(d.get('armour', [])):
-        mass += layer; pts += layer * ARMOUR_PTS[i]
+        mass += layer; pts += layer * (ARMOUR_PTS[i] + regen)
     if d.get('screens'):
         adv = d.get('advScreens'); per = (0.075 if adv else 0.05) * d['mass']
         sm = per * d['screens']; mass += sm; pts += sm * (4 if adv else 3)
@@ -422,7 +426,7 @@ def design_ts(r):
              f"  drive: {{ thrust: {d['thrust']}, advanced: {str(bool(d.get('advDrive'))).lower()} }},",
              f"  ftl: {ts('standard' if d.get('ftl', True) else 'none')},",
              f"  streamlining: {ts(d.get('stream') or 'none')},",
-             f"  armour: {{ layers: {ts(d.get('armour', []))}, regenerative: false }},",
+             f"  armour: {{ layers: {ts(d.get('armour', []))}, regenerative: {str(bool(d.get('regen'))).lower()} }},",
              f"  screens: {{ level: {d.get('screens', 0)}, generators: {d.get('screens', 0)}, advanced: {str(bool(d.get('advScreens'))).lower()} }},",
              "  weapons: [",
              *[f"    {ts(w)}," for w in r['weapons']],
@@ -430,7 +434,7 @@ def design_ts(r):
              "  systems: [",
              *[f"    {ts(s)}," for s in r['systems']],
              "  ],",
-             f"  fighterBays: {ts([{'typeId': 'standard', 'label': f'Flight {i+1}'} for i in range(d.get('bays', 0))])},",
+             f"  fighterBays: {ts([{'typeId': d.get('fighterType', 'standard'), 'label': f'Flight {i+1}'} for i in range(d.get('bays', 0))])},",
              f"  gunboats: {ts([{'typeId': d.get('gunboatType', 'beam'), 'label': f'Squadron {i+1}'} for i in range(d.get('racks', 0))])},",
              f"  additionalDamageControlParties: {d.get('dcp', 0)},",
              f"  marineParties: {d.get('marines', 0)},",
