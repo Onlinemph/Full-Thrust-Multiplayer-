@@ -70,11 +70,26 @@ export const GUNBOAT_BAY_MASS = 24
  */
 export const FTL_GUNBOAT_DISTORTION_RANGE = 6
 
-/** The five gunboat armaments catalogued in 9.2. */
-export type GunboatTypeId = 'beam' | 'plasma' | 'graser' | 'gatling' | 'needle'
+/** The sixteen gunboat armaments catalogued in 9.2 and priced in 14.8. */
+export type GunboatTypeId =
+  | 'beam'
+  | 'plasma'
+  | 'graser'
+  | 'gatling'
+  | 'needle'
+  | 'pulse-torpedo'
+  | 'submunition'
+  | 'mkp'
+  | 'k-gun'
+  | 'missile'
+  | 'rocket'
+  | 'point-defence'
+  | 'ads'
+  | 'scatterpack'
+  | 'plasma-bomber'
 
-/** The two modifications of 9.2, both priced per squadron. */
-export type GunboatModifierId = 'ftl' | 'heavy'
+/** The three modifications of 9.2 and 14.8, all priced per squadron. */
+export type GunboatModifierId = 'ftl' | 'heavy' | 'ecm'
 
 /** *"All weapons fire against the gunboat has a -1 DRM"* (9.2 Heavy). */
 export const HEAVY_GUNBOAT_DRM = -1
@@ -89,13 +104,33 @@ export interface GunboatType {
    * two entries because 9.2 says *"2 class-1 beams"* — and both fire at the
    * same target, which is the squadron rule anyway.
    */
-  mounts: readonly { weaponClass: WeaponDef['weaponClass']; rating: number }[]
+  mounts: readonly {
+    weaponClass: WeaponDef['weaponClass']
+    rating: number
+    variant?: WeaponDef['variant']
+  }[]
   /** Longest reach of its guns in MU (9.2). */
   range: number
-  /** Whether it can be allocated as point defence (9.2 Gatling). */
+  /** Whether it can be allocated as point defence (9.2 Gatling, PDS, ADS). */
   canPointDefend: boolean
+  /**
+   * 9.2: several types carry *"two 1-shot"* loads instead of a gun, and one
+   * carries a salvo of four missiles. Null for a type that simply shoots.
+   */
+  payload: { kind: GunboatPayloadKind; shots: number } | null
+  /** 9.2: an in-built ADFC, which the PDS, ADS and Scatterpack boats have. */
+  adfc: boolean
   notes: string
 }
+
+/** The one-shot loads of 9.2, each fired in the phase its own section names. */
+export type GunboatPayloadKind =
+  | 'submunition'
+  | 'mkp'
+  | 'salvo-missile'
+  | 'rocket'
+  | 'scatterpack'
+  | 'plasma-bomb'
 
 /**
  * The gunboat catalogue of 9.2, as printed.
@@ -115,6 +150,8 @@ export const GUNBOAT_TYPES: Record<GunboatTypeId, GunboatType> = {
     ],
     range: 12,
     canPointDefend: false,
+    payload: null,
+    adfc: false,
     notes: '2 class-1 beams to 12 MU, both at the same target (9.2)',
   },
   plasma: {
@@ -124,6 +161,8 @@ export const GUNBOAT_TYPES: Record<GunboatTypeId, GunboatType> = {
     mounts: [{ weaponClass: 'plasma-cannon', rating: 1 }],
     range: 12,
     canPointDefend: false,
+    payload: null,
+    adfc: false,
     notes: '1 Plasma-1 to 12 MU (9.2)',
   },
   graser: {
@@ -133,6 +172,8 @@ export const GUNBOAT_TYPES: Record<GunboatTypeId, GunboatType> = {
     mounts: [{ weaponClass: 'graser', rating: 1 }],
     range: 12,
     canPointDefend: false,
+    payload: null,
+    adfc: false,
     notes: '1 Graser-1 to 12 MU (9.2)',
   },
   gatling: {
@@ -144,6 +185,8 @@ export const GUNBOAT_TYPES: Record<GunboatTypeId, GunboatType> = {
     mounts: [],
     range: 12,
     canPointDefend: true,
+    payload: null,
+    adfc: false,
     notes: '6 BD* to 6 MU or 2 BD* to 12 MU, forward 30° only; or once as a PDS (9.2)',
   },
   needle: {
@@ -153,7 +196,130 @@ export const GUNBOAT_TYPES: Record<GunboatTypeId, GunboatType> = {
     mounts: [{ weaponClass: 'needle-beam', rating: 1 }],
     range: 12,
     canPointDefend: false,
+    payload: null,
+    adfc: false,
     notes: '1 Needle Beam to 12 MU (9.2)',
+  },
+
+  // --- the eleven types past the Needle Gunboat -------------------------
+  'pulse-torpedo': {
+    id: 'pulse-torpedo',
+    label: 'Pulse Torpedo Gunboat',
+    pointsEach: 12,
+    mounts: [{ weaponClass: 'pulse-torpedo', rating: 1, variant: 'short' }],
+    range: 12,
+    canPointDefend: false,
+    payload: null,
+    adfc: false,
+    notes:
+      'One short-range Pulse Torpedo Launcher, hitting on 2+ to 4 MU, 3+ to 8 MU and 4+ to 12 MU (9.2)',
+  },
+  submunition: {
+    id: 'submunition',
+    label: 'Submunition Gunboat',
+    pointsEach: 12,
+    mounts: [],
+    range: 12,
+    canPointDefend: false,
+    payload: { kind: 'submunition', shots: 2 },
+    adfc: false,
+    notes:
+      'Two one-shot submunitions, 3 BD* to 6 MU or 2 BD* to 12 MU, ignoring screens; then it is unarmed (9.2)',
+  },
+  mkp: {
+    id: 'mkp',
+    label: 'MKP Gunboat',
+    pointsEach: 15,
+    mounts: [],
+    range: 12,
+    canPointDefend: false,
+    payload: { kind: 'mkp', shots: 2 },
+    adfc: false,
+    notes: 'Two one-shot MKP packs: one hit on 4+, two on a 6, four points of AP a hit (9.2)',
+  },
+  'k-gun': {
+    id: 'k-gun',
+    label: 'K-Gun Gunboat',
+    pointsEach: 12,
+    mounts: [{ weaponClass: 'k-gun', rating: 2, variant: 'short' }],
+    range: 12,
+    canPointDefend: false,
+    payload: null,
+    adfc: false,
+    notes:
+      'One short-range K-2 hitting on 2+ to 4 MU, 3+ to 8 MU and 4+ to 12 MU; damage doubles on a following 1 or 2, armour-piercing (9.2)',
+  },
+  missile: {
+    id: 'missile',
+    label: 'Missile Gunboat',
+    pointsEach: 12,
+    mounts: [],
+    range: 12,
+    canPointDefend: false,
+    payload: { kind: 'salvo-missile', shots: 4 },
+    adfc: false,
+    notes:
+      'A salvo of four missiles, not six, launched inside 12 MU in the Ordnance Launch Phase for one CEF; they need not all go the same way (9.2)',
+  },
+  rocket: {
+    id: 'rocket',
+    label: 'Rocket Gunboat',
+    pointsEach: 12,
+    mounts: [],
+    range: 12,
+    canPointDefend: false,
+    payload: { kind: 'rocket', shots: 4 },
+    adfc: false,
+    notes:
+      'Four rockets hitting on 2+ to 6 MU and 3+ to 12 MU, all at one target, for one CEF (9.2)',
+  },
+  'point-defence': {
+    id: 'point-defence',
+    label: 'Point Defence Gunboat',
+    pointsEach: 9,
+    mounts: [],
+    range: 6,
+    canPointDefend: true,
+    payload: null,
+    adfc: true,
+    notes:
+      'Two PDS out to 6 MU, each able to take its own target, and it counts as carrying an ADFC (9.2)',
+  },
+  ads: {
+    id: 'ads',
+    label: 'Area Defence System Gunboat',
+    pointsEach: 12,
+    mounts: [],
+    range: 12,
+    canPointDefend: true,
+    payload: null,
+    adfc: true,
+    notes:
+      'One Area Defence Array: a die of point defence to 12 MU or two to 6 MU, and it counts as carrying an ADFC (9.2)',
+  },
+  scatterpack: {
+    id: 'scatterpack',
+    label: 'Scatterpack Gunboat',
+    pointsEach: 15,
+    mounts: [],
+    range: 12,
+    canPointDefend: true,
+    payload: { kind: 'scatterpack', shots: 2 },
+    adfc: true,
+    notes:
+      'Two one-shot Scatterpacks, separately targetable because each guides itself, with an in-built ADFC (9.2)',
+  },
+  'plasma-bomber': {
+    id: 'plasma-bomber',
+    label: 'Plasma Bomber Gunboat',
+    pointsEach: 15,
+    mounts: [],
+    range: 0,
+    canPointDefend: false,
+    payload: { kind: 'plasma-bomb', shots: 2 },
+    adfc: false,
+    notes:
+      'Two one-shot class-1 Plasma Bombs, *dropped* where the gunboat stands in the Ordnance Launch Phase rather than launched — it then has to fly clear of its own bomb (9.2)',
   },
 }
 
@@ -178,7 +344,19 @@ export const GUNBOAT_MODIFIERS: Record<GunboatModifierId, GunboatModifier> = {
     pointsPerSquadron: 12,
     notes: 'All weapons fire against the squadron is at −1 DRM (9.2)',
   },
+  ecm: {
+    id: 'ecm',
+    label: 'Electronic Warfare',
+    // 14.8: "+3 points each per level of ECM (3 levels max) for the entire
+    // squadron", so one level over six boats is 18 — priced per level below.
+    pointsPerSquadron: 18,
+    notes: 'Every level of ECM takes 1 MU off the lock-on range of missiles and fighters (9.2)',
+  },
 }
+
+/** 9.2: *"Every level of ECM reduces the lock-on range by 1 MU"*. */
+export const ECM_GUNBOAT_LOCK_ON_PENALTY_MU = 1
+export const MAX_GUNBOAT_ECM_LEVELS = 3
 
 export type GunboatStatus = 'aboard' | 'in-flight' | 'destroyed'
 
@@ -666,7 +844,7 @@ export function resolveGunboatAttack(
         label: profile.label,
         weaponClass: mount.weaponClass,
         rating: mount.rating,
-        variant: 'standard',
+        variant: mount.variant ?? 'standard',
         arcs: [arc],
         mass: 0,
         points: 0,

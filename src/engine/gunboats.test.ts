@@ -284,14 +284,68 @@ describe('building a squadron (9.1, 9.2)', () => {
     expect(squadronPoints(Array(6).fill('beam'), ['heavy'])).toBe(54 + 12)
     expect(squadronPoints(Array(6).fill('beam'), ['ftl'])).toBe(54 + 6)
     expect(squadronPoints(Array(6).fill('beam'), ['ftl', 'heavy'])).toBe(54 + 6 + 12)
+    // 14.8's Electronic Warfare modification is "+3 points each per level of
+    // ECM ... for the entire squadron" — 18 over six boats.
+    expect(squadronPoints(Array(6).fill('beam'), ['ecm'])).toBe(54 + 18)
   })
 
   it('prices every catalogued type as printed', () => {
-    expect(GUNBOAT_TYPES.beam.pointsEach).toBe(9)
-    expect(GUNBOAT_TYPES.plasma.pointsEach).toBe(9)
-    expect(GUNBOAT_TYPES.graser.pointsEach).toBe(9)
-    expect(GUNBOAT_TYPES.gatling.pointsEach).toBe(15)
-    expect(GUNBOAT_TYPES.needle.pointsEach).toBe(9)
+    // 14.8, in the order the table prints them.
+    const printed: Record<string, number> = {
+      beam: 9,
+      plasma: 9,
+      graser: 9,
+      gatling: 15,
+      needle: 9,
+      'pulse-torpedo': 12,
+      submunition: 12,
+      mkp: 15,
+      'k-gun': 12,
+      missile: 12,
+      rocket: 12,
+      'point-defence': 9,
+      ads: 12,
+      scatterpack: 15,
+      'plasma-bomber': 15,
+    }
+    for (const [id, points] of Object.entries(printed)) {
+      expect(GUNBOAT_TYPES[id as GunboatTypeId].pointsEach, id).toBe(points)
+    }
+    // Every type the union names is priced, and nothing is priced twice.
+    expect(Object.keys(GUNBOAT_TYPES).sort()).toEqual(Object.keys(printed).sort())
+  })
+
+  it('gives the one-shot types their loads, and the defensive ones their ADFC', () => {
+    // 9.2 gives four types "two 1-shot" loads, one a salvo of four missiles
+    // and one four rockets; a squadron that has spent them has no guns left.
+    expect(GUNBOAT_TYPES.submunition.payload).toEqual({ kind: 'submunition', shots: 2 })
+    expect(GUNBOAT_TYPES.mkp.payload).toEqual({ kind: 'mkp', shots: 2 })
+    expect(GUNBOAT_TYPES.scatterpack.payload).toEqual({ kind: 'scatterpack', shots: 2 })
+    expect(GUNBOAT_TYPES['plasma-bomber'].payload).toEqual({ kind: 'plasma-bomb', shots: 2 })
+    expect(GUNBOAT_TYPES.missile.payload).toEqual({ kind: 'salvo-missile', shots: 4 })
+    expect(GUNBOAT_TYPES.rocket.payload).toEqual({ kind: 'rocket', shots: 4 })
+
+    // "counts as having ADFC" — the three defensive boats, and no others.
+    const adfc = Object.values(GUNBOAT_TYPES).filter((t) => t.adfc).map((t) => t.id)
+    expect(adfc.sort()).toEqual(['ads', 'point-defence', 'scatterpack'])
+  })
+
+  it('fires a K-Gunboat\u2019s short-range gun, not a ship\u2019s', () => {
+    // 9.2 gives the K-Gunboat "one short-range K-2", which is a different
+    // profile from the K-2 a cruiser mounts.
+    expect(GUNBOAT_TYPES['k-gun'].mounts[0]).toEqual({
+      weaponClass: 'k-gun',
+      rating: 2,
+      variant: 'short',
+    })
+    expect(GUNBOAT_TYPES['pulse-torpedo'].mounts[0]?.variant).toBe('short')
+    const result = resolveGunboatAttack(
+      squadron(['k-gun', 'k-gun', 'pulse-torpedo']),
+      { screens: 0, range: 6 },
+      rng(),
+    )
+    expect(result.fired).toBe(true)
+    expect(result.shots).toHaveLength(3)
   })
 
   it('gives a rack 18 mass and a bay 24', () => {

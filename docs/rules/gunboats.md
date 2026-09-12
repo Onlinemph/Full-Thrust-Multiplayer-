@@ -111,11 +111,26 @@ automatically destroyed."
 | Graser | 1 Graser-1 | 12 MU | 9 |
 | Gatling | 6 BD\* to 6 MU, or 2 BD\* to 12 MU; or once as a PDS to 6 MU. Forward 30° only | 12 MU | 15 |
 | Needle | 1 Needle Beam | 12 MU | 9 |
+| Pulse Torpedo | one short-range launcher: 2+ to 4 MU, 3+ to 8 MU, 4+ to 12 MU | 12 MU | 12 |
+| Submunition | two one-shot submunitions, 3 BD\* to 6 MU or 2 BD\* to 12 MU, ignoring screens | 12 MU | 12 |
+| MKP | two one-shot MKP packs: one hit on 4+, two on a 6, 4 points AP each | 12 MU | 15 |
+| K-Gun | one short-range K-2: 2+/3+/4+ by band, doubling on a following 1 or 2, AP | 12 MU | 12 |
+| Missile | a salvo of **four** missiles, launched inside 12 MU in the Ordnance Launch Phase | 12 MU | 12 |
+| Rocket | four rockets, 2+ to 6 MU and 3+ to 12 MU, all at one target | 12 MU | 12 |
+| Point Defence | two PDS to 6 MU on separate targets; counts as carrying an ADFC | 6 MU | 9 |
+| Area Defence System | one array: a die to 12 MU or two to 6 MU; counts as carrying an ADFC | 12 MU | 12 |
+| Scatterpack | two one-shot Scatterpacks, separately targetable; in-built ADFC | 12 MU | 15 |
+| Plasma Bomber | two one-shot class-1 Plasma Bombs, *dropped* where it stands | — | 15 |
+
+The Plasma Bomber is the odd one: 9.2 says the bombs "are not launched, they are dropped in the
+current location of the gunboat, which then must move away to escape destruction when they
+explode", so it is the only gunboat whose weapon threatens the gunboat.
 
 | Modification | Effect | Points per squadron |
 | --- | --- | --- |
 | FTL (+mod) | Enters and leaves under its own FTL; cannot be carried in racks | +6 |
 | Heavy or Screened (+mod) | "All weapons fire against the gunboat has a -1 DRM" | +12 |
+| Electronic Warfare (+mod) | Each level of ECM takes 1 MU off missile and fighter lock-on, three levels at most | +3 a boat a level (+18 a squadron) |
 
 Every cost is printed twice — "3 per mass (9 points each)" — which fixes a gunboat at mass 3, and
 the arithmetic holds for all five entries.
@@ -131,7 +146,8 @@ own, because 9.2 gives it two range bands where 5.10 gives the ship battery one.
 
 | Rule | Why |
 | --- | --- |
-| Gunboat types past the Needle Gunboat | The extract ends mid-list: the Drive connector that produced it caps PDF text at ~270,000 characters. Whatever 9.2 lists after "Needle Gunboat" is not in it. `SOURCES.md` has the measurements. |
+| Firing the one-shot loads | The submunition, MKP, scatterpack, rocket, plasma-bomb and four-missile payloads are catalogued and priced, and their shot counts are modelled, but each is fired in a phase of its own (the Ordnance Launch Phase for four of them) and none is wired into that phase yet. The squadron's guns resolve; its stores do not. |
+| The Plasma Bomber's own danger | 9.2 has it drop bombs where it stands "which then must move away to escape destruction". Nothing models a gunboat being caught by its own bomb. |
 | Escorting a ship ("They can fly in escort of a ship like fighters") | The squadron carries no mission field: 8.6's screening and pursuit rules are implemented for fighters, and extending them to gunboats needs the same escort plumbing on this side. |
 | Splitting fire between several fighter or ordnance targets | 9.1 allows it "just like fighters"; the engine resolves a squadron's attack against one target at a time. Against ships — the common case — the book forbids splitting anyway. |
 | The Gatling Gunboat's forward 30° arc | 4.2's arcs are 60° wide, so a 30° arc has no representation in the geometry. The engine treats it as the forward arc, which is the narrowest it can express, and this is recorded here rather than silently widened. |
