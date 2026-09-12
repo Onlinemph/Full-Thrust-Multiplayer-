@@ -225,6 +225,15 @@ export interface MissileMarker {
    * **target** the rockets are sitting in.
    */
   attackArc?: Arc
+  /**
+   * 8.15: a Light Missile Fighter *"must mount a light missile instead. The
+   * light missile is more easily destroyed, and so all PDS or fighter attacks
+   * against light missiles are at +1 to the die roll."*
+   *
+   * Only a fighter salvo can be light, and only markers carry it, so it is
+   * optional: an ordinary launcher never sets it.
+   */
+  light?: boolean
 }
 
 /** A mine marker on the table (6.9, 6.10). */

@@ -901,6 +901,9 @@ export function damageControlPhase(
     for (const assignment of ship.damageControl) {
       const attempt = repairSystem(ship, assignment.systemId, assignment.parties, state.rng, {
         ...opts,
+        // 5.13: what a needle beam took out stays out. The set has always been
+        // supported here and was always empty.
+        unrepairable: opts.unrepairable ?? ship.unrepairable,
         turn: state.turn,
       })
       attempts.push(attempt)

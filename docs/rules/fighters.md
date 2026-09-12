@@ -546,6 +546,26 @@ PPTs etc., they modify their attack rolls with a −1 DRM from every die roll th
 
 ---
 
+## Wired
+
+The table below was written as a contract and honoured by nothing: twenty of this module's exports
+had no caller anywhere in the engine. They all have one now, in the phase the table names. What
+that took, beyond the actions themselves:
+
+- `FighterGroupState.lastTargetId`, because 8.6's pursuit is declared by a group that attacked
+  something **last** turn and `targetId` is cleared at the turn boundary.
+- 8.7's declaration is a real action in phase 7 now, which is what lets 8.8's point defence know
+  who is coming. A group may still strike without declaring; the declaration is what buys the
+  defender a shot, not what permits the attack.
+- Point defence against fighters is its own sweep rather than an extension of the missile one, so
+  it cannot draw new dice inside a path every saved battle already runs.
+- `ShipState.unrepairable`, for 5.13: *"Systems destroyed by Needle Beam fire cannot be repaired by
+  Damage Control Parties."* `repairSystem` had taken an `unrepairable` set since it was written and
+  nothing had ever put anything in it — and neither a ship's needle beam nor an Ace could name a
+  system to begin with, because `fire-weapon` had no way to carry the choice.
+
+Tests: `src/engine/flightops.test.ts`.
+
 ## What `game.ts` calls, and in which phase
 
 | Phase (2.6) | Function in `fighters.ts` |

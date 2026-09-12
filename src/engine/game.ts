@@ -290,6 +290,13 @@ export interface ShipState {
   hullRowSizes: number[] | null
   /** System and weapon ids crossed off by threshold checks (4.11). */
   destroyedSystems: Set<string>
+  /**
+   * 5.13: *"Systems destroyed by Needle Beam fire cannot be repaired by Damage
+   * Control Parties."* A subset of `destroyedSystems`, kept apart because
+   * `repairSystem` already takes an `unrepairable` set and had nothing to put
+   * in it.
+   */
+  unrepairable: Set<string>
   /** Threshold hits on the main drive: 1 halves thrust, 2 disables it (4.11). */
   driveHits: number
   /** Hull rows crossed but not yet checked — drained in phase 13 (2.6, 4.11). */
@@ -477,6 +484,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     armourMarked: opts.design.armour.layers.map(() => 0),
     hullRowSizes: opts.hullRowSizes ?? null,
     destroyedSystems: new Set<string>(),
+    unrepairable: new Set<string>(),
     driveHits: 0,
     pendingThresholdRows: 0,
     hullRowsChecked: 0,
@@ -534,6 +542,8 @@ export type FighterRole = FighterMission
  * what the group has declared an attack on.
  */
 export interface FighterGroupState extends FighterGroup {
+  /** What it attacked last turn, which is what 8.6 lets it pursue. */
+  lastTargetId?: string | null
   side: SideId
   label: string
   /**
@@ -1381,6 +1391,10 @@ function onBeginTurn(state: GameState): void {
   // silently fall behind it.
   for (const group of state.fighterGroups) {
     Object.assign(group, beginFighterTurn(group))
+    // 8.6 pursuit is declared by "a fighter group that attacked an enemy ship
+    // or an enemy screening fighter group LAST turn", so what the group went
+    // in on has to survive the reset that clears what it is going in on now.
+    group.lastTargetId = group.targetId
     group.targetId = null
   }
 

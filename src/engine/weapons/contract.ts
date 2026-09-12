@@ -28,6 +28,13 @@ export interface FiringContext {
   rearArc: boolean
   /** Net die roll modifier from ECM, holofields, cloaks and the rest (1.7). */
   drm: number
+  /**
+   * 5.13: the one system a needle beam — or a phaser in needle mode — is aimed
+   * at. Every other resolver ignores it; it is here rather than only on
+   * `BeamFiringContext` because `fireWeapon` dispatches through this type and
+   * the caller cannot know which resolver it is about to reach.
+   */
+  needleTarget?: string
   rng: Rng
 }
 

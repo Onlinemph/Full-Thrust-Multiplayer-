@@ -44,6 +44,7 @@ import {
   shipsAwaitingDeployment,
   type GameState,
   type ShipState,
+  type SideId,
 } from './game'
 import { maxRangeOf, needsFireCon } from './weapons'
 import {
@@ -352,6 +353,25 @@ export function planMovement(
 }
 
 /** Launcher classes that put a marker on the table rather than firing (6.2). */
+/** The closest enemy hull a group could go in on, or null (8.7). */
+function nearestEnemyShipTo(
+  game: GameState,
+  from: Point,
+  side: SideId,
+  within: number,
+): ShipState | null {
+  let best: ShipState | null = null
+  let bestRange = Number.POSITIVE_INFINITY
+  for (const ship of game.ships) {
+    if (ship.side === side || ship.destroyed || ship.offTable || ship.captured) continue
+    const range = distance(from, ship.placement.position)
+    if (range > within || range >= bestRange) continue
+    bestRange = range
+    best = ship
+  }
+  return best
+}
+
 const LAUNCHER_CLASSES = new Set([
   'heavy-missile',
   'salvo-missile-rack',
@@ -499,10 +519,26 @@ export function aiActions(
       if (side === game.sides[0]?.id) actions.push({ type: 'move-ordnance' })
       break
 
+    case 'allocate-attacks':
+      // 8.7: a group names its target here, so the ship it is going in on gets
+      // its point defence in phase 9. Without the declaration the run still
+      // happens; the gunners just never see it coming.
+      for (const flight of game.fighterGroups) {
+        if (flight.side !== side || flight.status !== 'in-flight' || flight.strength <= 0) continue
+        const target = nearestEnemyShipTo(game, flight.position, side, FIGHTER_ATTACK_RANGE)
+        if (!target) continue
+        actions.push({ type: 'flight-declare-target', flightId: flight.id, targetId: target.id })
+      }
+      break
+
     case 'point-defence':
       // Resolved once for the table: every ship shoots at what is coming for
       // it, and a marker killed is killed for everyone (2.6 phase 9).
-      if (side === game.sides[0]?.id) actions.push({ type: 'resolve-point-defence' })
+      if (side === game.sides[0]?.id) {
+        actions.push({ type: 'resolve-point-defence' })
+        // 8.8 is its own sweep, because it draws its own dice.
+        actions.push({ type: 'resolve-point-defence-at-flights' })
+      }
       break
 
     case 'ordnance-vs-ships':
