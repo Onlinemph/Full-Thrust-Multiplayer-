@@ -66,6 +66,8 @@ export interface GameSetup {
   tableReentry?: boolean
   /** 12.11 — a threshold point may also knock the ship a point off course. */
   knockedOffCourse?: boolean
+  /** 17.3 — a bad-tempered star burns FireCons out of every ship in reach. */
+  solarFlares?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -180,6 +182,7 @@ export function buildGame(setup: GameSetup): GameState {
     movingTable: setup.movingTable,
     tableReentry: setup.tableReentry,
     knockedOffCourse: setup.knockedOffCourse,
+    solarFlares: setup.solarFlares,
   })
   return game
 }

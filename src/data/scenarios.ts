@@ -362,11 +362,125 @@ export const GRAVITY_WELL: Scenario = {
   ],
 }
 
+/**
+ * 17.3, close in to a bad-tempered star.
+ *
+ * The flare covers the whole table, which is the rule's own first suggestion —
+ * *"They may be assumed to affect the entire table, or just a specific area as
+ * the player's desire"* — and it goes off on a 5 or a 6 rather than the default
+ * six, because a scenario built around flares should produce more than two of
+ * them in a twelve-turn battle.
+ *
+ * Both divisions are screened, which is the point: 17.3's modifier is +1 per
+ * active screen level, so a screen-1 hull keeps its FireCons on a 3 and a
+ * screen-2 hull on a 2. The side that loses its screens loses its eyes next.
+ */
+export const FLARE_STAR: Scenario = {
+  id: 'flare-star',
+  name: 'Close Orbit, Bad Star',
+  briefing:
+    'A flare star, and a convoy lane that runs too near it because the alternative adds nine days ' +
+    'to every crossing. Both navies have been waiting for the other to be caught with its ' +
+    'FireCons down.',
+  objective: 'Break the enemy division. The star will take a turret off somebody every few turns.',
+  table: { width: 72, height: 48 },
+  terrain: [
+    {
+      id: 'flare',
+      kind: 'solar-flare',
+      position: { x: 36, y: 24 },
+      // Larger than the table's own diagonal, so nothing is out of it: 17.3's
+      // "the entire table".
+      radius: 120,
+      label: 'the star',
+      flare: { onRoll: 5 },
+    },
+  ],
+  turnLimit: 12,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-battlecruiser', position: { x: 12, y: 18 }, facing: 3, velocity: 6 },
+        { designId: 'esu-heavy-cruiser', position: { x: 8, y: 26 }, facing: 3, velocity: 6 },
+        { designId: 'esu-destroyer', position: { x: 6, y: 34 }, facing: 3, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-battlecruiser', position: { x: 60, y: 30 }, facing: 9, velocity: 6 },
+        { designId: 'nac-heavy-cruiser', position: { x: 64, y: 22 }, facing: 9, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 66, y: 14 }, facing: 9, velocity: 8 },
+      ],
+    },
+  ],
+}
+
+/**
+ * 17.8's medium scale: a world with an orbit track, and both fleets wanting it.
+ *
+ * The track is the planet's own edge (radius 10) and holds at velocity 6, one
+ * clock point a turn anticlockwise. Arrive at 6 and you are in orbit; arrive
+ * slower and the orbit decays into 17.11; arrive faster and you go straight
+ * into the atmosphere, which is nearly always fatal. The world is landable and
+ * a light one at 0.6G, so a partially streamlined hull can put down on it —
+ * which is what the ESU marines are for.
+ */
+export const ORBITAL_APPROACH: Scenario = {
+  id: 'orbital-approach',
+  name: 'The Track Above Meridian',
+  briefing:
+    'Meridian has one deep-water port and both navies have promised it protection. Whoever holds ' +
+    'the orbit track holds the argument, and the track only takes so many hulls.',
+  objective:
+    'Take and hold the orbit track. Coming in at the wrong speed does not put you in orbit, it ' +
+    'puts you in the atmosphere.',
+  table: { width: 96, height: 72 },
+  terrain: [
+    {
+      id: 'meridian',
+      kind: 'planet',
+      position: { x: 48, y: 36 },
+      radius: 10,
+      label: 'Meridian',
+      orbit: { velocity: 6, speed: -1, gravityG: 0.6, landable: true },
+    },
+  ],
+  turnLimit: 14,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Eurasian Solar Union',
+      force: [
+        { designId: 'esu-heavy-cruiser', position: { x: 10, y: 30 }, facing: 3, velocity: 6 },
+        { designId: 'esu-light-cruiser', position: { x: 10, y: 42 }, facing: 3, velocity: 6 },
+        { designId: 'esu-destroyer', position: { x: 6, y: 24 }, facing: 3, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-heavy-cruiser', position: { x: 86, y: 42 }, facing: 9, velocity: 6 },
+        { designId: 'nac-light-cruiser', position: { x: 86, y: 30 }, facing: 9, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 90, y: 48 }, facing: 9, velocity: 8 },
+      ],
+    },
+  ],
+}
+
 export const SCENARIOS: Scenario[] = [
   INTRODUCTORY_SCENARIO,
   BORDER_SKIRMISH,
   LINE_OF_BATTLE,
   GRAVITY_WELL,
+  FLARE_STAR,
+  ORBITAL_APPROACH,
 ]
 
 /**

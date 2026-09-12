@@ -1043,6 +1043,21 @@ export function canFireFromOrbit(
   return target.marker === shooterMarker || orbitMarkersAdjacent(shooterMarker, target.marker)
 }
 
+/**
+ * Whether a move meets the orbit track (17.8): *"A ship enters orbit with any
+ * movement that intersects the orbit track."*
+ *
+ * The track is a circle, so the test is whether the closest approach of the
+ * flown path reaches it. A ship that begins the move already inside the track
+ * cannot meet it on the way in — it is under the track, not crossing it — and
+ * a ship already in orbit is not flying a path at all.
+ */
+export function pathMeetsOrbitTrack(track: OrbitTrack, path: readonly Point[]): boolean {
+  if (path.length === 0) return false
+  if (distance(track.center, path[0]) < track.radius - EPSILON) return false
+  return distanceToPath(track.center, path) <= track.radius + EPSILON
+}
+
 /** What happens to a ship whose move meets the orbit track (17.8). */
 export type OrbitArrival = 'in-orbit' | 'decaying' | 'uncontrolled-entry'
 

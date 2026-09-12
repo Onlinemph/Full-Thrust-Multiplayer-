@@ -190,6 +190,12 @@ export interface ShipState {
    *  fighter scrambles (8.3) both ask whether the ship used any. */
   thrustUsed: number
   layingMines: boolean
+  /**
+   * Declared with the orders: this turn's deceleration is meant as a landing
+   * (17.11), not as a mistake. Without it, dropping below orbital velocity is
+   * 17.8's decaying orbit and the atmosphere takes what it likes.
+   */
+  landing: boolean
   ftlTransit: FtlTransit
   /**
    * The turn the FTL drive was first ordered to spin up (11.4), or null when
@@ -312,6 +318,20 @@ export interface ShipState {
    * Null when it is gone for good, and null when the rule is not in play.
    */
   reentryTurn: number | null
+  /**
+   * 17.8's orbit: the body being orbited and the clock marker the ship sits on.
+   *
+   * A ship in orbit is not flying: *"the ship does not have to have any course
+   * change orders written for it. The player simply notes that it is in orbit
+   * and moves the ship by a number of points equal to the orbit speed."* Null
+   * for every ship that is not on a track, which is almost all of them.
+   */
+  orbit: { featureId: string; marker: Course } | null
+  /**
+   * Down on the surface (17.11), by a landing or a crash. Out of the battle
+   * like `offTable` is, and for the same reason: still a hull, no longer in it.
+   */
+  landed: 'landed' | 'crash-landed' | null
 
   // --- what this turn has spent (2.6, 5.2) --------------------------------
   /** Weapon id → the phase it fired in. Cleared at the start of each turn. */
@@ -402,6 +422,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     vectorOrders: null,
     thrustUsed: 0,
     layingMines: false,
+    landing: false,
     ftlTransit: 'none',
     ftlWarmupTurn: null,
     ramTargetId: null,
@@ -427,6 +448,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     offTable: false,
     exitEdge: null,
     reentryTurn: null,
+    orbit: null,
+    landed: null,
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,
@@ -555,6 +578,30 @@ export interface TerrainFeature {
    * Absent means a body with no well, which is every rock the game has shipped.
    */
   gravity?: { sun?: boolean; zoneWidth?: number }
+  /**
+   * 17.3's star, on a `solar-flare` feature: the die score at or above which it
+   * flares this turn.
+   *
+   * 17.3 says only *"perhaps diced for each turn"* and names no frequency, no
+   * target and no area, so the number is the table's to set rather than the
+   * engine's to invent; absent means 6, one turn in six. `radius` is the area
+   * caught, and a radius that covers the table is 17.3's *"the entire table"*.
+   */
+  flare?: { onRoll?: number }
+  /**
+   * 17.8's orbit track, on a body big enough to have one: *"The edge of the
+   * planet is the orbit track and should be marked with 12 clock face points.
+   * The orbit track has an entry velocity and an orbital speed in clock faces
+   * per turn."*
+   *
+   * `radius` is the track. `velocity` is the one number 17.8 calls both the
+   * entry velocity and the orbital velocity (reading 12); `speed` is clock
+   * points per turn, negative for anticlockwise. `gravityG` is what 17.11 asks
+   * a partially streamlined hull to out-push on the way down, and `landable`
+   * is 17.8's *"Decide whether the planet can be landed on or that contact
+   * with the planet will be a fatal collision."*
+   */
+  orbit?: { velocity: number; speed: number; gravityG?: number; landable?: boolean }
 }
 
 // ---------------------------------------------------------------------------
@@ -1249,6 +1296,7 @@ function onBeginTurn(state: GameState): void {
     ship.vectorOrders = null
     ship.thrustUsed = 0
     ship.layingMines = false
+    ship.landing = false
     // A transit already under way is not re-declared each turn: 11.4 gives the
     // drive a warm-up turn and a jump turn, and the order that started it
     // stands until the ship is gone.

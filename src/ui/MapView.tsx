@@ -6,7 +6,7 @@ import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
 import { optional } from '../engine/actions'
 import type { GameState, ShipState } from '../engine/game'
-import { BEAM_RANGE_BAND } from '../engine/geometry'
+import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
@@ -56,6 +56,9 @@ export interface MapViewProps {
 }
 
 const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
+
+/** 17.8: the track is "marked with 12 clock face points". */
+const CLOCK_POINTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
 export function MapView({
   game,
@@ -345,6 +348,27 @@ export function MapView({
               r={feature.radius * scale}
             />
           ))}
+
+          {/* 17.8's orbit track: the planet's own edge, marked with the twelve
+              clock points a ship is placed on. Without the markers the rule is
+              invisible — a player cannot see which point is "immediately in
+              front or behind". */}
+          {game.terrain
+            .filter((feature) => feature.orbit)
+            .flatMap((feature) =>
+              CLOCK_POINTS.map((marker) => {
+                const at = advance(feature.position, marker, feature.radius)
+                return (
+                  <circle
+                    key={`${feature.id}-m${marker}`}
+                    className="orbit-marker"
+                    cx={at.x * scale}
+                    cy={at.y * scale}
+                    r={Math.max(1.5, 0.6 * scale)}
+                  />
+                )
+              }),
+            )}
 
           {/* Range rings on the selected ship, at the beam band boundaries
               (4.3). Drawn under the counters so they never obscure a hull. */}

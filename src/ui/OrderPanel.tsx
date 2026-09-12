@@ -72,12 +72,32 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
 
   const setAccel = (accel: number) => dispatch({ type: 'plot-accel', shipId: ship.id, accel })
 
+  const orbitBody = ship.orbit
+    ? game.terrain.find((feature) => feature.id === ship.orbit?.featureId)
+    : undefined
+
   return (
     <div className="panel order-panel">
       <h3>Orders</h3>
 
+      {/* 17.8: "the ship does not have to have any course change orders written
+          for it." The turn and thrust controls below still work, and the
+          throttle still means something — it is how a ship leaves — but the
+          course is the track's now. */}
+      {orbitBody ? (
+        <div className="panel-row">
+          <span>
+            In orbit round {orbitBody.label ?? 'the planet'}, marker {ship.orbit?.marker}
+          </span>
+          <span className="spacer" />
+          <span style={{ color: 'var(--ink-dim)' }}>
+            {orbitBody.orbit?.speed ?? 0} point{Math.abs(orbitBody.orbit?.speed ?? 0) === 1 ? '' : 's'} a turn
+          </span>
+        </div>
+      ) : null}
+
       <div className="order-notation" aria-live="polite">
-        {formatOrder(order, ship.velocity)}
+        {orbitBody ? 'carried round the track (17.8)' : formatOrder(order, ship.velocity)}
       </div>
 
       {/* One pip per thrust point, filled as it is spent. The heavier edge is
@@ -248,6 +268,31 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           {/* 2.6 phase 5: mine layers move after the fixed paths and before
               everyone else, so declaring it changes when the ship moves. */}
           <span style={{ color: 'var(--ink-dim)' }}>moves early in phase 5</span>
+        </div>
+      ) : null}
+
+      {ship.orbit ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={ship.landing}
+              onChange={(event) =>
+                dispatch({ type: 'plot-landing', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Land
+          </label>
+          <span className="spacer" />
+          {/* 17.11 is 17.8's decaying orbit done on purpose: the ship has to
+              slow below orbital velocity either way, and this is what decides
+              whether that is a landing or the atmosphere. */}
+          <span style={{ color: 'var(--ink-dim)' }}>
+            {ship.design.streamlining === 'none'
+              ? 'not streamlined — this is an uncontrolled entry'
+              : 'slow below orbital velocity to come down'}
+          </span>
         </div>
       ) : null}
 

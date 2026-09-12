@@ -405,6 +405,12 @@ export function aiActions(
         // Holding station for a turn is what the launch costs, and a carrier
         // that never pays it is a carrier that never launches.
         if (hasCraftAboard(game, ship)) continue
+        // 17.8: a ship in orbit is carried round the track and the only order
+        // that reaches it is the throttle — where slowing down means the
+        // atmosphere and speeding up means leaving. The computer holds the
+        // orbit rather than gambling either way; nothing it plots up here is
+        // worth what losing the hull costs.
+        if (ship.orbit) continue
         const best = planMovement(game, ship, settings)[0]
         if (!best) continue
         if (best.order.turn) {

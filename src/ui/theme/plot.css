@@ -428,3 +428,10 @@
   stroke: var(--ink);
   stroke-width: 2;
 }
+
+/* 17.8's orbit track: the twelve clock points a ship in orbit sits on. */
+.orbit-marker {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+}

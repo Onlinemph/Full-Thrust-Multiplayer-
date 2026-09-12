@@ -118,6 +118,15 @@ const OPTIONAL_RULES: Toggle[] = [
       'this the rock on the table is only cover.',
   },
   {
+    key: 'solarFlares',
+    rule: '17.3',
+    label: 'Solar flares',
+    detail:
+      'A star on the table flares now and then and every ship in reach rolls for each FireCon, ' +
+      'plus one per active screen level: below a 4 the box is knocked out. Nothing to fly round ' +
+      'and nothing to plot against — screens are the only answer.',
+  },
+  {
     key: 'cpv',
     label: 'Combat Points Value',
     rule: '18.3',

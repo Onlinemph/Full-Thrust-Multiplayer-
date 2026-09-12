@@ -25,6 +25,7 @@ import {
   availableFireCons,
   canWeaponFire,
   currentThrust,
+  destroySystem,
   engagedTargets,
   hullRowsCompleted,
   markHullBoxes,
@@ -38,6 +39,7 @@ import {
   tableBounds,
   vectorStateOf,
   type FighterGroupState,
+  type TerrainFeature,
   type TerrainKind,
   type GameState,
   type GunboatSquadronState,
@@ -65,14 +67,31 @@ import {
   createGravityWell,
   debrisCloudExpired,
   explosionCheck,
+  flareSystemKind,
   hasLineOfFire,
   moveDebrisCloud,
+  nearestOrbitMarker,
+  orbitDecayCheck,
+  orbitDepartureCourse,
+  orbitFacing,
+  orbitMarkerPosition,
+  orbitTrackArrival,
+  orbitVelocityChange,
+  pathMeetsOrbitTrack,
+  resolveAtmosphericEntry,
   resolveCollision,
   resolveGravityZone,
   resolveKnockedOffCourse,
   resolveMeteorField,
+  resolveSolarFlare,
+  advanceOrbit,
+  canFireFromOrbit,
+  deliberateLanding,
+  ORBIT_SAME_POINT_RANGE,
   stationaryCollisionRisk,
   type DebrisCloud,
+  type FlareSystem,
+  type OrbitTrack,
   type TerrainBody,
 } from './terrain'
 import {
@@ -131,7 +150,7 @@ import {
   type FighterGroup,
   type RearmResult,
 } from './fighters'
-import { arcTo, distance, isRearArcAttack } from './geometry'
+import { advance, arcTo, distance, isRearArcAttack } from './geometry'
 import {
   combinedStealthLevel,
   effectiveScreenLevel as screenLevelOf,
@@ -180,6 +199,8 @@ import {
 import {
   damageControlPhase,
   isOutOfControl,
+  CORE_SYSTEM_IDS,
+  DRIVE_SYSTEM_ID,
   reactorExplosionPhase,
   rollThresholdChecks,
   thresholdPhase,
@@ -245,6 +266,8 @@ export type GameAction =
    */
   | { type: 'plot-roll'; shipId: string; on: boolean }
   | { type: 'plot-mines'; shipId: string; on: boolean }
+  /** 17.11 — this turn's deceleration in orbit is meant as a landing. */
+  | { type: 'plot-landing'; shipId: string; on: boolean }
   /**
    * 12.12's order sheet, replaced whole.
    *
@@ -554,8 +577,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // boundary so that every way of dying reaches it, rather than at the
       // seven separate places a ship can be destroyed.
       sweepDebris(state)
+      const turnBefore = state.turn
       advancePhase(state)
       if (state.phase === 'move-ships') driftDebris(state)
+      // 17.3 dices "for each turn", so the star gets its roll as the turn
+      // opens — before anyone writes an order they might have written
+      // differently with a FireCon still on the board.
+      if (state.turn !== turnBefore) rollSolarFlares(state)
       return OK
     }
 
@@ -751,6 +779,31 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 17.11: *"To make a deliberate safe atmospheric entry, a ship must first
+     * enter orbit as described above and then decelerate to less than orbital
+     * velocity."*
+     *
+     * Declared, because 17.8 makes exactly the same manoeuvre a disaster when
+     * it was not meant: without this the deceleration is a decaying orbit and
+     * the atmosphere rolls for the hull.
+     */
+    case 'plot-landing': {
+      const found = orderable(state, shipById(state, action.shipId))
+      if (!('id' in found)) return found
+      if (action.on && !found.orbit) {
+        return refuse(`${found.name} must be in orbit before it can land (17.11)`)
+      }
+      if (action.on) {
+        const orbit = orbitOf(state, found)
+        if (orbit && orbit.feature.orbit?.landable === false) {
+          return refuse(`${orbit.feature.label ?? 'That world'} cannot be landed on (17.8)`)
+        }
+      }
+      found.landing = action.on
+      return OK
+    }
+
     case 'plot-vector-orders': {
       if (optional(state).movementSystem !== 'vector') {
         return refuse('This battle is fought under cinematic movement (3.1)')
@@ -797,6 +850,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // turn it half-moves and is gone. Both legs ignore whatever was plotted.
       const ftl = ftlStageOf(ship, state.turn)
       if (ftl === 'jumping') return jumpToFtl(state, ship)
+
+      // 17.8: a ship in orbit is not flown. It goes round the track at the
+      // orbit speed and the only order that reaches it is the throttle.
+      if (ship.orbit) return moveInOrbit(state, ship)
 
       // 17.9: a change earned by ending last turn inside a zone lands "at the
       // start of the next turn movement", which is here, before anything else.
@@ -907,9 +964,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       //17.9 turned is a partial orbit and cannot hit the planet it went round.
       const track = [before.placement.position, ...result.legs.map((leg) => leg.to)]
       const swung = resolveGravity(state, ship, track)
-      resolveTerrainHazards(state, ship, track, { shielded: swung })
-      resolveDeclaredRam(state, ship)
-      resolveLeavingTable(state, ship)
+      // 17.8's track is the planet's own edge, so a ship that met it has
+      // already had its answer — orbit, a decaying orbit or the atmosphere —
+      // and there is nothing left for 17.6's collision to say about it.
+      const metTrack = resolveOrbitEntry(state, ship, track)
+      if (!metTrack) {
+        resolveTerrainHazards(state, ship, track, { shielded: swung })
+        resolveDeclaredRam(state, ship)
+        resolveLeavingTable(state, ship)
+      }
       dragDockedShips(state, ship)
       return OK
     }
@@ -982,8 +1045,32 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // a mistaken click — wrong arc, or a rock in the way — quietly cost the
       // ship a target it could have held.
       const rules = optional(state)
-      const range = distance(ship.placement.position, target.placement.position)
-      const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+      // 17.8: "Ships in orbit may fire at any ships outside the orbit track, or
+      // at ships at the point immediately in front or behind." A ship on the
+      // far side of the world is behind the world.
+      if (
+        ship.orbit &&
+        !canFireFromOrbit(ship.orbit.marker, {
+          inOrbit: target.orbit?.featureId === ship.orbit.featureId,
+          marker: target.orbit?.marker,
+        })
+      ) {
+        return refuse(`${target.name} is round the other side of the track (17.8)`)
+      }
+      // Two hulls sharing a marker fight at arm's length: "they may fire at
+      // each other as if at 1 MU range, through any arc the firing ship
+      // chooses" (17.8).
+      // Both on the same track. 17.8 has already said which of these shots are
+      // allowed, and the world they are both standing on is not cover between
+      // them: a neighbour is a neighbour.
+      const alongTrack = ship.orbit !== null && target.orbit?.featureId === ship.orbit.featureId
+      const samePoint = alongTrack && target.orbit?.marker === ship.orbit?.marker
+      const range = samePoint
+        ? ORBIT_SAME_POINT_RANGE
+        : distance(ship.placement.position, target.placement.position)
+      const arc = samePoint
+        ? (bearingArcs(ship, weapon.arcs)[0] ?? 'F')
+        : arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
         return refuse('Target is not in that arc')
       }
@@ -992,7 +1079,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       // 17.1: a planet or planetoid across the line stops the shot. Measured
       // centre to centre, because that is how the models are measured.
-      if (!hasLineOfFire(ship.placement.position, target.placement.position, blockingTerrain(state))) {
+      if (
+        !alongTrack &&
+        !hasLineOfFire(ship.placement.position, target.placement.position, blockingTerrain(state))
+      ) {
         return refuse(`${target.name} is behind cover (17.1)`)
       }
 
@@ -1530,6 +1620,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         dice: result.checks.map((check) => check.roll),
       })
       knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+      orbitAfterThreshold(
+        state,
+        ship,
+        result.rowsLost,
+        result.extraRows,
+        result.checks.filter((check) => check.destroyed).map((check) => check.id),
+      )
       return OK
     }
 
@@ -1537,7 +1634,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'threshold') return refuse('Threshold checks are phase 13')
       for (const result of thresholdPhase(state, { driveDamage: optional(state).driveDamage })) {
         const ship = shipById(state, result.shipId)
-        if (ship) knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+        if (!ship) continue
+        knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+        orbitAfterThreshold(
+          state,
+          ship,
+          result.rowsLost,
+          result.extraRows,
+          result.checks.filter((check) => check.destroyed).map((check) => check.id),
+        )
       }
       return OK
     }
@@ -2498,6 +2603,319 @@ function driftDebris(state: GameState): void {
 }
 
 // ---------------------------------------------------------------------------
+// Orbits and atmosphere (17.8, 17.11)
+// ---------------------------------------------------------------------------
+
+/** The orbit track a body carries, or null for a body that has none (17.8). */
+function orbitTrackOf(feature: TerrainFeature): OrbitTrack | null {
+  if (!feature.orbit) return null
+  return {
+    center: feature.position,
+    radius: feature.radius,
+    orbitalVelocity: feature.orbit.velocity,
+    orbitSpeed: feature.orbit.speed,
+  }
+}
+
+/** The body a ship is in orbit around, with its track. */
+function orbitOf(
+  state: GameState,
+  ship: ShipState,
+): { feature: TerrainFeature; track: OrbitTrack; marker: Course } | null {
+  if (!ship.orbit) return null
+  const feature = state.terrain.find((f) => f.id === ship.orbit?.featureId)
+  if (!feature) return null
+  const track = orbitTrackOf(feature)
+  if (!track) return null
+  return { feature, track, marker: ship.orbit.marker }
+}
+
+/** Put a ship on the track at a marker, facing the way 17.8 says it faces. */
+function placeInOrbit(ship: ShipState, feature: TerrainFeature, track: OrbitTrack, marker: Course): void {
+  ship.orbit = { featureId: feature.id, marker }
+  ship.placement = {
+    position: orbitMarkerPosition(track, marker),
+    // 17.8: "ships in orbit face forward in the closest course facing to the
+    // orbit path at that point", which reading 13 makes the exact tangent.
+    facing: orbitFacing(marker, track.orbitSpeed),
+  }
+  ship.velocity = track.orbitalVelocity
+}
+
+/**
+ * A ship falling into a world's atmosphere (17.11).
+ *
+ * Its three outcomes are a landing, a burn-up the small craft get out of, and
+ * a burn-up nobody gets out of. The middle one is why aboard wings are put
+ * into the air here rather than written off with the hull: *"there is enough
+ * time for any interface craft (shuttles, drop ships, etc.), fighters, or life
+ * pods on board to launch."*
+ */
+function enterAtmosphere(
+  state: GameState,
+  ship: ShipState,
+  feature: TerrainFeature,
+  velocity: number,
+  why: string,
+): void {
+  const result = resolveAtmosphericEntry(
+    {
+      streamlining: ship.design.streamlining,
+      velocity,
+      orbitalVelocity: feature.orbit?.velocity ?? 0,
+      drive: ship.driveHits >= 2 ? 'knocked-out' : ship.driveHits === 1 ? 'damaged' : 'intact',
+    },
+    state.rng,
+  )
+  ship.orbit = null
+  const name = feature.label ?? 'the planet'
+
+  if (result.outcome === 'crash-lands') {
+    ship.landed = 'crash-landed'
+    ship.offTable = true
+    pushLog(state, {
+      kind: 'note',
+      shipId: ship.id,
+      side: ship.side,
+      dice: [result.roll],
+      text:
+        `${ship.name} ${why} and rides the entry down: a ballistic crash-landing on ${name} ` +
+        `(17.11, ${result.modified})`,
+    })
+    return
+  }
+
+  const escaping =
+    result.outcome === 'burns-up-crew-escape'
+      ? state.fighterGroups.filter(
+          (group) => group.carrierId === ship.id && group.status === 'aboard' && group.strength > 0,
+        )
+      : []
+  for (const group of escaping) {
+    group.status = 'in-flight'
+    group.position = ship.placement.position
+    group.facing = ship.placement.facing
+    group.launchedTurn = state.turn
+    group.carrierId = null
+  }
+
+  ship.destroyed = true
+  pushLog(state, {
+    kind: 'destroyed',
+    shipId: ship.id,
+    side: ship.side,
+    dice: [result.roll],
+    text:
+      `${ship.name} ${why} and burns up over ${name} (17.11, ${result.modified})` +
+      (escaping.length > 0
+        ? ` — ${escaping.length} group(s) got clear`
+        : result.outcome === 'burns-up'
+          ? ' with all hands'
+          : ''),
+  })
+}
+
+/**
+ * A move that meets an orbit track (17.8). True when the ship met one at all,
+ * however that turned out.
+ *
+ * A ship that makes orbit has not flown into the planet, and one that goes
+ * into the atmosphere has already had the worst of it, so either way the
+ * collision rules downstream have nothing left to do.
+ */
+function resolveOrbitEntry(state: GameState, ship: ShipState, path: readonly Point[]): boolean {
+  if (ship.destroyed || ship.offTable || ship.orbit) return false
+  for (const feature of state.terrain) {
+    const track = orbitTrackOf(feature)
+    if (!track) continue
+    if (!pathMeetsOrbitTrack(track, path)) continue
+
+    const name = feature.label ?? 'the planet'
+    switch (orbitTrackArrival(ship.velocity, track)) {
+      case 'in-orbit': {
+        const marker = nearestOrbitMarker(track, ship.placement.position)
+        placeInOrbit(ship, feature, track, marker)
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name} makes orbit around ${name} at marker ${marker} (17.8)`,
+        })
+        return true
+      }
+      case 'decaying':
+        // 17.8: below the orbital velocity the orbit decays on arrival, and
+        // 17.11 is where that ends.
+        enterAtmosphere(state, ship, feature, ship.velocity, `arrives at ${name} too slow to hold orbit`)
+        return true
+      case 'uncontrolled-entry':
+        enterAtmosphere(state, ship, feature, ship.velocity, `hits ${name}'s atmosphere at speed`)
+        return true
+    }
+  }
+  return false
+}
+
+/**
+ * One turn for a ship already in orbit (17.8).
+ *
+ * *"The player simply notes that it is in orbit and moves the ship by a number
+ * of points equal to the orbit speed around the track. Any velocity change will
+ * cause the ship to leave orbit, either down or up."* So the only order that
+ * means anything up here is the throttle.
+ */
+function moveInOrbit(state: GameState, ship: ShipState): ActionOutcome {
+  const orbit = orbitOf(state, ship)
+  if (!orbit) {
+    ship.orbit = null
+    return refuse('The body this ship was orbiting is gone')
+  }
+  const { feature, track } = orbit
+  const name = feature.label ?? 'the planet'
+  const order = ship.order ?? BLANK_ORDER
+  const velocity = Math.max(0, ship.velocity + (order.accel ?? 0))
+  ship.lastKnown = {
+    course: ship.placement.facing,
+    velocity: ship.velocity,
+    turn: state.turn,
+    cloaked: ship.cloaked,
+  }
+  ship.thrustUsed = Math.abs(order.accel ?? 0)
+
+  switch (orbitVelocityChange(velocity, track)) {
+    case 'in-orbit': {
+      const marker = advanceOrbit(orbit.marker, track.orbitSpeed)
+      placeInOrbit(ship, feature, track, marker)
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} holds orbit round ${name}, marker ${marker} (17.8)`,
+      })
+      break
+    }
+    case 'leaves-orbit': {
+      // 17.8: "it will leave orbit and move normally, in a straight line at the
+      // clock face heading that is the closest tangent to its orbital path."
+      const course = orbitDepartureCourse(orbit.marker, track.orbitSpeed)
+      ship.orbit = null
+      ship.velocity = velocity
+      ship.placement = {
+        position: advance(orbitMarkerPosition(track, orbit.marker), course, velocity),
+        facing: course,
+      }
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} accelerates out of orbit on the tangent, course ${course} (17.8)`,
+      })
+      break
+    }
+    case 'decaying': {
+      // 17.11's deliberate landing is exactly this manoeuvre done on purpose:
+      // "a ship must first enter orbit as described above and then decelerate
+      // to less than orbital velocity."
+      if (ship.landing) {
+        const landing = deliberateLanding({
+          streamlining: ship.design.streamlining,
+          thrust: currentThrust(ship),
+          gravityG: feature.orbit?.gravityG,
+          belowOrbitalVelocity: true,
+        })
+        if (landing.outcome !== 'uncontrolled-entry') {
+          ship.orbit = null
+          ship.velocity = velocity
+          ship.landed = landing.outcome === 'lands' ? 'landed' : 'crash-landed'
+          ship.offTable = true
+          pushLog(state, {
+            kind: 'note',
+            shipId: ship.id,
+            side: ship.side,
+            text:
+              landing.outcome === 'lands'
+                ? `${ship.name} lands on ${name} (17.11)`
+                : `${ship.name} makes a crash landing on ${name} — ${landing.reason}`,
+          })
+          break
+        }
+      }
+      enterAtmosphere(state, ship, feature, velocity, `slows below orbital velocity over ${name}`)
+      break
+    }
+  }
+
+  for (const group of state.fighterGroups) {
+    if (group.carrierId === ship.id && group.status === 'aboard') {
+      group.position = ship.placement.position
+      group.facing = ship.placement.facing
+    }
+  }
+  return OK
+}
+
+// ---------------------------------------------------------------------------
+// Solar flares (17.3)
+// ---------------------------------------------------------------------------
+
+/** 17.3's default frequency: one turn in six, when the feature does not say. */
+const SOLAR_FLARE_DEFAULT_ROLL = 6
+
+/**
+ * Roll each star for a flare, and burn out what it catches (17.3).
+ *
+ * *"Flares may occur at random, perhaps diced for each turn"* — that is all the
+ * rule says about frequency, so the die is here and the target number is the
+ * feature's, defaulting to a six. A flare takes eyes, not guns: one die per
+ * FireCon and, under 12.2's advanced sensors, one per sensor box, plus one per
+ * active screen level, knocked out below a four.
+ */
+function rollSolarFlares(state: GameState): void {
+  if (!optional(state).solarFlares) return
+  for (const feature of state.terrain) {
+    if (feature.kind !== 'solar-flare') continue
+    const onRoll = feature.flare?.onRoll ?? SOLAR_FLARE_DEFAULT_ROLL
+    const roll = d6(state.rng)
+    if (roll < onRoll) continue
+
+    const name = feature.label ?? 'The star'
+    pushLog(state, {
+      kind: 'note',
+      dice: [roll],
+      text: `${name} flares (17.3)`,
+    })
+
+    for (const ship of state.ships) {
+      if (ship.destroyed || ship.offTable) continue
+      if (distance(ship.placement.position, feature.position) > feature.radius) continue
+      const systems: FlareSystem[] = []
+      for (const system of ship.design.systems) {
+        if (ship.destroyedSystems.has(system.id)) continue
+        const kind = flareSystemKind(system.kind)
+        if (kind) systems.push({ id: system.id, kind })
+      }
+      if (systems.length === 0) continue
+
+      const result = resolveSolarFlare(systems, effectiveScreenLevel(ship), state.rng, {
+        advancedSensorRules: optional(state).sensorRules === true,
+      })
+      // 4.11's outcome, not 4.11's dice: the box is simply crossed off.
+      for (const id of result.knockedOut) destroySystem(ship, id)
+      pushLog(state, {
+        kind: result.knockedOut.length > 0 ? 'damage' : 'note',
+        shipId: ship.id,
+        side: ship.side,
+        dice: result.checks.map((check) => check.roll),
+        text:
+          result.knockedOut.length > 0
+            ? `${ship.name} loses ${result.knockedOut.length} of ${systems.length} to the flare`
+            : `${ship.name} rides out the flare with all ${systems.length} still lit`,
+      })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Blasts (6.6, 6.8)
 // ---------------------------------------------------------------------------
 
@@ -3453,6 +3871,42 @@ function cloudLockOn(
 }
 
 /**
+ * Staying in orbit after a hit (17.8).
+ *
+ * *"Any ship that suffers a drive or bridge threshold failure while in orbit
+ * must make a second threshold check to stay in orbit. If this too fails, the
+ * ship orbit has decayed and it enters the atmosphere."*
+ *
+ * Only the drive and the bridge shake a ship loose. A FireCon lost to the same
+ * threshold row does not: the rule names two systems and means two.
+ */
+function orbitAfterThreshold(
+  state: GameState,
+  ship: ShipState,
+  rowsLost: number,
+  extraRows: number,
+  lost: readonly string[],
+): void {
+  if (!ship.orbit || ship.destroyed || ship.offTable) return
+  const shaken = lost.some((id) => id === DRIVE_SYSTEM_ID || id === CORE_SYSTEM_IDS.bridge)
+  if (!shaken) return
+  const orbit = orbitOf(state, ship)
+  if (!orbit) return
+  const check = orbitDecayCheck(rowsLost, state.rng, { extraRows })
+  if (!check.decayed) {
+    pushLog(state, {
+      kind: 'threshold',
+      shipId: ship.id,
+      side: ship.side,
+      dice: [check.roll],
+      text: `${ship.name} holds its orbit through the damage (17.8, ${check.target}+ to fail)`,
+    })
+    return
+  }
+  enterAtmosphere(state, ship, orbit.feature, ship.velocity, 'is shaken out of orbit')
+}
+
+/**
  * 12.11's further roll, after the systems have been checked.
  *
  * *"After checking for systems failures make one further roll at the same odds
@@ -4091,6 +4545,15 @@ export interface OptionalRules {
    * same odds … to determine if the ship has been knocked off course."*
    */
   knockedOffCourse?: boolean
+  /**
+   * 17.3: *"Flares may occur at random, perhaps diced for each turn, if the
+   * battle is happening fairly close to a very active star."*
+   *
+   * Its own flag rather than part of `terrainHazards`, because a flare is not
+   * something a captain flies into: it happens to a whole area whatever anyone
+   * plots, and a table that wants rocks does not necessarily want that.
+   */
+  solarFlares?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()
