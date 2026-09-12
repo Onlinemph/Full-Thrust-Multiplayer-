@@ -231,6 +231,10 @@ F3, A3, ALL6, P3, S3 = ['FP','F','FS'], ['AP','A','AS'], ['F','FS','AS','A','AP'
 # broadside is the pair of arcs down that side rather than the usual three.
 PB, SB = ['FP','AP'], ['FS','AS']
 
+# 6.6's crossed-off mounts: the missile and its symbol are the same thing, so
+# firing one strikes it through. Everything else reloads between turns.
+ONE_SHOT_MOUNTS = {'heavy-missile', 'salvo-missile-rack', 'antimatter-missile'}
+
 def solve_mass(d):
     """Smallest hull that carries the design.
 
@@ -320,9 +324,16 @@ def price(d):
     for n, (wc, rating, arcs, *rest) in enumerate(d.get('weapons', [])):
         wm, wp = WEAPONS[wc][rating][len(arcs)]
         base, variant = VARIANT.get(wc, (wc, 'standard'))
-        weapons.append({'id': f'w{n+1}', 'label': WEAPON_LABEL[wc].format(r=rating),
-                        'weaponClass': base, 'rating': rating, 'variant': variant,
-                        'arcs': arcs, 'mass': wm, 'points': wp})
+        entry = {'id': f'w{n+1}', 'label': WEAPON_LABEL[wc].format(r=rating),
+                 'weaponClass': base, 'rating': rating, 'variant': variant,
+                 'arcs': arcs, 'mass': wm, 'points': wp}
+        # 6.6: "Heavy Missiles and Salvo Missile Racks (SMR) have individual
+        # symbols on the ship SSD. Once fired, it is crossed off and cannot be
+        # used again." A rack is the missile; there is no magazine behind it.
+        # A Salvo Missile *Launcher* is the other thing and feeds from one.
+        if base in ONE_SHOT_MOUNTS:
+            entry['ammo'] = 1
+        weapons.append(entry)
         mass += wm; pts += wp
     systems = []
     for n, (key, count) in enumerate(d.get('systems', [])):

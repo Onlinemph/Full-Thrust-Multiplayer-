@@ -29,6 +29,7 @@ import {
   pendingThresholdCheck,
   pushLog,
   resolvePendingThreshold,
+  shotsLeft,
   type GameState,
   type OngoingEffect,
   type ShipState,
@@ -236,7 +237,7 @@ export function checkableSystems(ship: ShipState): CheckableSystem[] {
     if (isSystemDestroyed(ship, weapon.id)) continue
     // A magazine-fed or one-shot mount that is out of ammunition has already
     // been struck through (6.6), so it is not rolled for again.
-    if (weapon.ammo !== undefined && weapon.ammo <= 0) continue
+    if (weapon.ammo !== undefined && shotsLeft(ship, weapon.id) <= 0) continue
     out.push({
       id: weapon.id,
       label: weapon.label,

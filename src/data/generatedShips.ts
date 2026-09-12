@@ -96,7 +96,7 @@ export const ESU_DESTROYER: ShipDesign = {
   weapons: [
     {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
     {"id": "w2", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 2, "points": 6},
-    {"id": "w3", "label": "Heavy Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
+    {"id": "w3", "label": "Heavy Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6, "ammo": 1},
   ],
   turrets: [], 
   systems: [
@@ -166,7 +166,7 @@ export const ESU_HEAVY_CRUISER: ShipDesign = {
     {"id": "w3", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
     {"id": "w4", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
-    {"id": "w6", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12},
+    {"id": "w6", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12, "ammo": 1},
   ],
   turrets: [], 
   systems: [
@@ -206,7 +206,7 @@ export const ESU_BATTLECRUISER: ShipDesign = {
     {"id": "w4", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
     {"id": "w6", "label": "K-2", "weaponClass": "k-gun", "rating": 2, "variant": "standard", "arcs": ["F"], "mass": 3, "points": 12},
-    {"id": "w7", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12},
+    {"id": "w7", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12, "ammo": 1},
   ],
   turrets: [], 
   systems: [
@@ -249,7 +249,7 @@ export const ESU_BATTLESHIP: ShipDesign = {
     {"id": "w4", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
     {"id": "w6", "label": "K-3", "weaponClass": "k-gun", "rating": 3, "variant": "standard", "arcs": ["F"], "mass": 5, "points": 20},
-    {"id": "w7", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12},
+    {"id": "w7", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12, "ammo": 1},
   ],
   turrets: [], 
   systems: [
@@ -2788,8 +2788,8 @@ export const TYRANT_CRUISER: ShipDesign = {
   weapons: [
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
     {"id": "w2", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
-    {"id": "w3", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12},
-    {"id": "w4", "label": "ER Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "extended", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
+    {"id": "w3", "label": "SM Rack", "weaponClass": "salvo-missile-rack", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12, "ammo": 1},
+    {"id": "w4", "label": "ER Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "extended", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9, "ammo": 1},
     {"id": "w5", "label": "Submunition", "weaponClass": "submunition-pack", "rating": 1, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 1, "points": 3},
     {"id": "w6", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
     {"id": "w7", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
@@ -2825,8 +2825,8 @@ export const TYRANT_ARSENAL: ShipDesign = {
   armour: { layers: [4], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
-    {"id": "w1", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10},
-    {"id": "w2", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10},
+    {"id": "w1", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10, "ammo": 1},
+    {"id": "w2", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10, "ammo": 1},
     {"id": "w3", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
     {"id": "w4", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
@@ -2866,8 +2866,8 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
     {"id": "w2", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
     {"id": "w3", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 3, "points": 9},
-    {"id": "w4", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10},
-    {"id": "w5", "label": "ER Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "extended", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
+    {"id": "w4", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10, "ammo": 1},
+    {"id": "w5", "label": "ER Missile", "weaponClass": "heavy-missile", "rating": 1, "variant": "extended", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9, "ammo": 1},
     {"id": "w6", "label": "Submunition", "weaponClass": "submunition-pack", "rating": 1, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 1, "points": 3},
     {"id": "w7", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
     {"id": "w8", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},

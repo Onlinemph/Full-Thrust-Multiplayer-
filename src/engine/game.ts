@@ -407,6 +407,14 @@ export interface ShipState {
 
   // --- what this turn has spent (2.6, 5.2) --------------------------------
   /** Weapon id → the phase it fired in. Cleared at the start of each turn. */
+  /**
+   * Shots left on each one-shot or magazine-fed mount, by weapon id (6.6).
+   *
+   * Absent means the mount has not fired yet; `shotsLeft` falls back to what
+   * the design was built with. A Map rather than a design field because a
+   * design is shared by every hull of the class.
+   */
+  ammo: Map<string, number>
   weaponsFired: Map<string, Phase>
   /**
    * The turn a weapon last fired, kept across turns.
@@ -549,6 +557,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     awaitingGate: null,
     damageSink: null,
     ftlEntryTurn: null,
+    ammo: new Map<string, number>(),
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,
@@ -1557,10 +1566,32 @@ export function canWeaponFire(ship: ShipState, weaponId: string): boolean {
   if (ship.ongoing.some((effect) => effect.weaponsOffline?.includes(weaponId))) return false
   const weapon = ship.design.weapons.find((w) => w.id === weaponId)
   if (weapon) {
-    if (weapon.ammo !== undefined && weapon.ammo <= 0) return false
+    if (weapon.ammo !== undefined && shotsLeft(ship, weaponId) <= 0) return false
     return true
   }
   return ship.design.systems.some((system) => system.id === weaponId)
+}
+
+/**
+ * Shots this hull has left on a mount (6.6, 7.14).
+ *
+ * A design's `ammo` is what the mount was built with; this is what is left of
+ * it. Ships of a class share their design, so the count cannot live there —
+ * which is why `WeaponDef.ammo` was read in three places and written in none,
+ * and why every single-shot Salvo Missile Rack in the game fired every turn
+ * for ever.
+ */
+export function shotsLeft(ship: ShipState, weaponId: string): number {
+  const weapon = ship.design.weapons.find((w) => w.id === weaponId)
+  if (!weapon || weapon.ammo === undefined) return Number.POSITIVE_INFINITY
+  return ship.ammo.get(weaponId) ?? weapon.ammo
+}
+
+/** Cross one shot off (6.6). A mount with no `ammo` rating has nothing to spend. */
+export function spendShot(ship: ShipState, weaponId: string): void {
+  const weapon = ship.design.weapons.find((w) => w.id === weaponId)
+  if (!weapon || weapon.ammo === undefined) return
+  ship.ammo.set(weaponId, Math.max(0, shotsLeft(ship, weaponId) - 1))
 }
 
 /**
@@ -1570,6 +1601,10 @@ export function canWeaponFire(ship: ShipState, weaponId: string): boolean {
  */
 export function markWeaponFired(ship: ShipState, weaponId: string, phase: Phase): void {
   ship.weaponsFired.set(weaponId, phase)
+  // 6.6: "Once fired, it is crossed off and cannot be used again." Spending
+  // the shot here rather than at each of the eleven places a weapon fires
+  // means a mount added later cannot forget to.
+  spendShot(ship, weaponId)
 }
 
 /** The phase a weapon spent its fire in, if it has (2.6). */

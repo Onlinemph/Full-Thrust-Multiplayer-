@@ -185,7 +185,15 @@ export interface WeaponDef {
   broadside?: boolean
   /** Mounted in a turret, which widens the arcs it can bear on (5.22). */
   turretId?: string
-  /** Shots remaining, for one-shot and magazine-fed systems (6.6, 7.14). */
+  /**
+   * Shots the mount is built with, for one-shot and magazine-fed systems
+   * (6.6, 7.14).
+   *
+   * A *capacity*, not a counter: a `ShipDesign` is shared by every hull of the
+   * class, so the shots a particular ship has left live on `ShipState.ammo`.
+   * Reading this as the counter is what kept it at its starting value forever
+   * — nothing could decrement it without disarming the whole class.
+   */
   ammo?: number
   /** Mass and points as built, taken from the construction table (14). */
   mass: number
