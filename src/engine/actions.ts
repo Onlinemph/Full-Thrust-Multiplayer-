@@ -67,8 +67,13 @@ import {
 } from './terrain'
 import {
   arcsWhenInverted,
+  canManoeuvre,
   crowdedEdge,
+  dockingApproach,
+  holdApproach,
+  isDocked,
   leavingTableIsRetreat,
+  orderCastOff,
   readyToDisengage,
   resolveDisengagement,
   resolveRam,
@@ -342,6 +347,15 @@ export type GameAction =
    */
   | { type: 'plot-ram'; shipId: string; targetId: string | null }
   /**
+   * 16.6: *"the ship's movement orders must be plotted so that it ends up
+   * within 3 MU of the target ship/starbase at the end of the turn"*. The
+   * intent is written with the order; whether the approach worked is settled
+   * when the ship has finished moving.
+   */
+  | { type: 'plot-dock'; shipId: string; targetId: string | null }
+  /** 16.6: *"one full turn is also required to 'cast off' and undock again"*. */
+  | { type: 'plot-cast-off'; shipId: string }
+  /**
    * 16.4: *"move every ship and object in play a certain agreed distance back
    * towards the opposite table edge … effectively you can think of it as
    * extending the playing area under the ships."* The distance is the players',
@@ -433,6 +447,12 @@ function orderable(state: GameState, ship: ShipState | undefined): ActionOutcome
   if (state.deployment && !state.deployment.placed.includes(ship.id)) {
     return refuse(`${ship.name} has not been deployed yet (18.1)`)
   }
+  // 16.6: only a free ship writes an ordinary movement order. A held approach
+  // is spent holding it, a docked ship is attached, and the cast-off turn is
+  // spent casting off — *"after which the ship may maneuver as normal"*.
+  if (!canManoeuvre(ship.dock)) {
+    return refuse(`${ship.name} is ${ship.dock.phase.replace('-', ' ')} and cannot manoeuvre (16.6)`)
+  }
   return ship
 }
 
@@ -487,6 +507,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const owed = shipsAwaitingDeployment(state)
       if (state.turn === 1 && owed.length > 0) {
         return refuse(`${owed.length} ships are still to be deployed (18.1)`)
+      }
+      // 16.6 tests where a ship "ends up … at the end of the turn", and against
+      // a target that is itself under way that cannot be answered until both
+      // have moved. So the approach is settled as the movement phase closes,
+      // not as each ship arrives.
+      if (state.phase === 'move-ships') {
+        for (const ship of state.ships) resolveDockingApproach(state, ship)
       }
       advancePhase(state)
       return OK
@@ -839,6 +866,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       ])
       resolveDeclaredRam(state, ship)
       resolveLeavingTable(state, ship)
+      dragDockedShips(state, ship)
       return OK
     }
 
@@ -1804,6 +1832,45 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    case 'plot-dock': {
+      if (state.phase !== 'orders') return refuse('A docking approach is plotted in orders (16.6)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.dock.phase !== 'free') return refuse(`${ship.name} is already docking (16.6)`)
+      if (action.targetId === null) {
+        ship.dockTargetId = null
+        return OK
+      }
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.id === ship.id) return refuse('A ship does not dock with itself')
+      if (target.destroyed || target.offTable) return refuse('That target is out of the battle')
+      ship.dockTargetId = target.id
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} will attempt to dock with ${target.name} (16.6)`,
+      })
+      return OK
+    }
+
+    case 'plot-cast-off': {
+      if (state.phase !== 'orders') return refuse('A cast-off is ordered in orders (16.6)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (!isDocked(ship.dock)) return refuse(`${ship.name} is not docked`)
+      ship.dock = orderCastOff(ship.dock, state.turn)
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} casts off — one full turn before it manoeuvres again (16.6)`,
+      })
+      return OK
+    }
+
     case 'shift-table': {
       if (!optional(state).movingTable) {
         return refuse('The table only moves when the table agrees to it (16.4)')
@@ -2661,6 +2728,66 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  * something a shot stops at, and each of those has its own rule instead.
  */
 /**
+ * Whether the approach flown this turn earns a docking (16.6).
+ *
+ * Called at the end of the ship's movement, because the rule is a test on
+ * where the ship *ended up*: *"the ship's movement orders must be plotted so
+ * that it ends up within 3 MU of the target ship/starbase at the end of the
+ * turn."*
+ */
+function resolveDockingApproach(state: GameState, ship: ShipState): void {
+  if (!ship.dockTargetId || ship.destroyed || ship.offTable) return
+  const target = shipById(state, ship.dockTargetId)
+  if (!target || target.destroyed || target.offTable) {
+    ship.dockTargetId = null
+    return
+  }
+  const vector = (s: ShipState) => ({
+    position: s.placement.position,
+    facing: s.placement.facing,
+    velocity: s.velocity,
+  })
+  const approach = dockingApproach(vector(ship), vector(target))
+  if (!approach.met) {
+    pushLog(state, {
+      kind: 'move',
+      shipId: ship.id,
+      side: ship.side,
+      text: `${ship.name} misses the docking: ${approach.reason}`,
+    })
+    return
+  }
+  ship.dock = holdApproach(ship.dock, target.id, state.turn)
+  ship.dockTargetId = null
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name} holds station on ${target.name} — docked next turn (16.6)`,
+  })
+}
+
+/**
+ * Anything docked to this ship goes where it goes (16.6).
+ *
+ * 16.6 never says so because on a table the models are physically attached.
+ * The precedent is the wing still in the bay, dragged for the same reason and
+ * with the same three lines.
+ */
+function dragDockedShips(state: GameState, host: ShipState): void {
+  for (const other of state.ships) {
+    if (other.id === host.id) continue
+    if (other.dock.targetId !== host.id) continue
+    if (other.dock.phase === 'free') continue
+    other.placement = {
+      position: { ...host.placement.position },
+      facing: other.placement.facing,
+    }
+    other.velocity = host.velocity
+  }
+}
+
+/**
  * A ship that has flown off the playing area (3.9).
  *
  * *"This is usually considered a retreat from the battle unless using the
@@ -2784,6 +2911,7 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
   resolveTerrainHazards(state, ship, [result.chord.from, result.chord.to])
   resolveDeclaredRam(state, ship)
   resolveLeavingTable(state, ship)
+  dragDockedShips(state, ship)
   return OK
 }
 

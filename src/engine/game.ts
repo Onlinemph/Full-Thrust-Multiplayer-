@@ -25,7 +25,15 @@ import {
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
-import { movementPriority, UPRIGHT, type RollStatus } from './specialmoves'
+import {
+  completeCastOff,
+  completeDocking,
+  movementPriority,
+  UNDOCKED,
+  UPRIGHT,
+  type DockStatus,
+  type RollStatus,
+} from './specialmoves'
 import type { BattleType, DeploymentZone } from './battles'
 import { vectorStateFromCinematic, type VectorOrder, type VectorState } from './vectormovement'
 import {
@@ -200,6 +208,20 @@ export interface ShipState {
    * batteries bear to, and nothing else about the ship.
    */
   rollStatus: RollStatus
+  /**
+   * Where the ship is in 16.6's docking clock, and what it is docking with.
+   *
+   * A standing condition like the roll, not a per-turn order: an approach flown
+   * on one turn earns docked status on the next, undocking costs *"one full
+   * turn"*, and a docked ship writes no movement order of its own.
+   */
+  dock: DockStatus
+  /**
+   * The ship this one is trying to dock with, written in orders (16.6). Cleared
+   * by the per-turn reset, like the ram it sits beside: an approach is flown
+   * afresh every turn and a missed one is not a standing intention.
+   */
+  dockTargetId: string | null
   /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
   fixedPath: boolean
   /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
@@ -344,6 +366,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ftlWarmupTurn: null,
     ramTargetId: null,
     rollStatus: { ...UPRIGHT },
+    dock: { ...UNDOCKED },
+    dockTargetId: null,
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
     cloak: cloakFitOf(opts.design),
@@ -1172,6 +1196,7 @@ function onBeginTurn(state: GameState): void {
     // stands until the ship is gone.
     if (ship.ftlWarmupTurn === null) ship.ftlTransit = 'none'
     ship.ramTargetId = null
+    ship.dockTargetId = null
     // "In Full Thrust weapons can only be used once per turn" (2.6) — the
     // turn is the unit, so this is the one place the record is wiped.
     ship.weaponsFired.clear()
@@ -1180,6 +1205,11 @@ function onBeginTurn(state: GameState): void {
     // 7.25: the field is declared afresh every turn, along with the movement
     // order it is written beside.
     ship.reflexFieldActive = false
+    // 16.6's clock turns here, because both of its steps are "the following
+    // turn" and "one full turn" — durations measured in whole turns, which is
+    // what a turn boundary is for.
+    const docked = completeDocking(ship.dock, state.turn)
+    ship.dock = completeCastOff(docked, state.turn)
     ship.ongoing = ship.ongoing.filter(
       (effect) => effect.expiresAfterTurn === null || effect.expiresAfterTurn >= state.turn,
     )

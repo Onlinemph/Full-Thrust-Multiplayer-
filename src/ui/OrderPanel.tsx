@@ -61,6 +61,10 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
     (other) => other.side !== ship.side && !other.destroyed && !other.offTable,
   )
   const hasMines = ship.design.weapons.some((weapon) => weapon.weaponClass === 'mine-rack')
+  // 16.6: anything on the table that is not this ship and not a wreck.
+  const dockable = game.ships.filter(
+    (other) => other.id !== ship.id && !other.destroyed && !other.offTable,
+  )
   const hazards = plottedHazards(game, ship, order, movement)
 
   const setTurn = (direction: TurnDirection | null, points: number) =>
@@ -267,6 +271,59 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
               : `spinning up since turn ${ship.ftlWarmupTurn}`}
           </span>
         </div>
+      ) : null}
+
+      {ship.dock.phase !== 'free' ? (
+        <div className="panel-row">
+          <span>Docking</span>
+          <span className="spacer" />
+          <span style={{ color: 'var(--screens)' }}>
+            {ship.dock.phase === 'approach-held'
+              ? 'station held — docked next turn'
+              : ship.dock.phase === 'docked'
+                ? 'docked'
+                : 'casting off'}
+          </span>
+          {ship.dock.phase === 'docked' ? (
+            <button
+              disabled={!editable}
+              onClick={() => dispatch({ type: 'plot-cast-off', shipId: ship.id })}
+            >
+              Cast off
+            </button>
+          ) : null}
+        </div>
+      ) : dockable.length > 0 ? (
+        <div className="panel-row">
+          <span>Dock</span>
+          <span className="spacer" />
+          <select
+            aria-label="Docking target"
+            disabled={!editable}
+            value={ship.dockTargetId ?? ''}
+            onChange={(event) =>
+              dispatch({
+                type: 'plot-dock',
+                shipId: ship.id,
+                targetId: event.target.value || null,
+              })
+            }
+          >
+            <option value="">nobody</option>
+            {dockable.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
+      {ship.dockTargetId ? (
+        <p style={{ color: 'var(--ink-dim)', margin: 0 }}>
+          End the turn within 3 MU and either stopped dead, if the target is, or on exactly its
+          course and velocity if it is not (16.6).
+        </p>
       ) : null}
 
       {rammable.length > 0 ? (
