@@ -316,15 +316,20 @@ export const GRAVITY_WELL: Scenario = {
     'Break the enemy division. The planet will help you or ruin you depending on which side of ' +
     'your bow it passes.',
   table: { width: 96, height: 48 },
-  // A large planet: the zones are widened, so the well reaches 12 MU out and a
-  // ship crossing the middle of the table is inside it whether it meant to be
-  // or not. Solid, so it also blocks fire (17.1) and destroys anything that
-  // flies into it (17.6).
+  // A large planet: the zones are widened, so the well reaches 12 MU out. It
+  // sits off the centre line on purpose. Dead centre, the shortest line
+  // between the fleets goes through it and there is no decision left — 17.9
+  // simply eats the battle, which is what the first draft of this scenario
+  // did. Off to one side there is a way round, and the well becomes what it
+  // should be: a shortcut with a price, or a wall to pin somebody against.
+  //
+  // Solid, so it blocks fire (17.1) and destroys what flies into it (17.6) —
+  // unless 17.9 turned the ship, because a partial orbit goes round.
   terrain: [
     {
       id: 'giant',
       kind: 'planet',
-      position: { x: 48, y: 24 },
+      position: { x: 48, y: 13 },
       radius: 6,
       label: 'the gas giant',
       gravity: { zoneWidth: 2 },
@@ -337,20 +342,20 @@ export const GRAVITY_WELL: Scenario = {
       id: 'a',
       name: 'Eurasian Solar Union',
       force: [
-        { designId: 'esu-heavy-cruiser', position: { x: 8, y: 18 }, facing: 3, velocity: 8 },
-        { designId: 'esu-light-cruiser', position: { x: 8, y: 30 }, facing: 3, velocity: 8 },
-        { designId: 'esu-destroyer', position: { x: 4, y: 12 }, facing: 3, velocity: 10 },
-        { designId: 'esu-destroyer', position: { x: 4, y: 36 }, facing: 3, velocity: 10 },
+        { designId: 'esu-heavy-cruiser', position: { x: 8, y: 28 }, facing: 3, velocity: 8 },
+        { designId: 'esu-light-cruiser', position: { x: 8, y: 36 }, facing: 3, velocity: 8 },
+        { designId: 'esu-destroyer', position: { x: 4, y: 22 }, facing: 3, velocity: 10 },
+        { designId: 'esu-destroyer', position: { x: 4, y: 42 }, facing: 3, velocity: 10 },
       ],
     },
     {
       id: 'b',
       name: 'New Anglian Confederation',
       force: [
-        { designId: 'nac-heavy-cruiser', position: { x: 88, y: 30 }, facing: 9, velocity: 8 },
-        { designId: 'nac-light-cruiser', position: { x: 88, y: 18 }, facing: 9, velocity: 8 },
-        { designId: 'nac-destroyer', position: { x: 92, y: 36 }, facing: 9, velocity: 10 },
-        { designId: 'nac-destroyer', position: { x: 92, y: 12 }, facing: 9, velocity: 10 },
+        { designId: 'nac-heavy-cruiser', position: { x: 88, y: 36 }, facing: 9, velocity: 8 },
+        { designId: 'nac-light-cruiser', position: { x: 88, y: 28 }, facing: 9, velocity: 8 },
+        { designId: 'nac-destroyer', position: { x: 92, y: 42 }, facing: 9, velocity: 10 },
+        { designId: 'nac-destroyer', position: { x: 92, y: 22 }, facing: 9, velocity: 10 },
       ],
     },
   ],

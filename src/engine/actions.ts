@@ -884,15 +884,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // 17.6 tests "its path during the Ship Movement Phase", so the track is
       // the whole two-leg cinematic path (3.4), not the endpoints. Resolved
       // before the ram, because a ship that flew into a planetoid does not go
-      // on to hit anything else.
-      resolveTerrainHazards(state, ship, [
-        before.placement.position,
-        ...result.legs.map((leg) => leg.to),
-      ])
-      resolveGravity(state, ship, [
-        before.placement.position,
-        ...result.legs.map((leg) => leg.to),
-      ])
+      // on to hit anything else — and after the gravity, because a pass that
+      //17.9 turned is a partial orbit and cannot hit the planet it went round.
+      const track = [before.placement.position, ...result.legs.map((leg) => leg.to)]
+      const swung = resolveGravity(state, ship, track)
+      resolveTerrainHazards(state, ship, track, { shielded: swung })
       resolveDeclaredRam(state, ship)
       resolveLeavingTable(state, ship)
       dragDockedShips(state, ship)
@@ -2930,10 +2926,11 @@ function insideWell(well: ReturnType<typeof createGravityWell>, position: Point)
  * sheet left unspent, which is why this runs after the move rather than during
  * it.
  */
-function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[]): void {
-  if (!optional(state).terrainHazards) return
-  if (ship.destroyed || ship.offTable) return
+function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[]): boolean {
+  if (!optional(state).terrainHazards) return false
+  if (ship.destroyed || ship.offTable) return false
 
+  let shielded = false
   for (const { feature, well } of gravityWells(state)) {
     const unusedThrust = Math.max(0, currentThrust(ship) - ship.thrustUsed)
     const effect = resolveGravityZone(
@@ -2949,6 +2946,7 @@ function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[
     if (!effect.zone) continue
 
     ship.thrustUsed += effect.thrustSpent
+    shielded = shielded || effect.shielded
     const name = feature.label ?? 'the well'
     if (effect.timing === 'next-turn') {
       ship.pendingGravity = { velocity: effect.velocity, facing: effect.facing }
@@ -2960,7 +2958,7 @@ function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[
           `${ship.name} is still inside ${name} — strength ${effect.zone.strength} applies at the ` +
           `start of its next move (17.9)`,
       })
-      return
+      return shielded
     }
     ship.velocity = effect.velocity
     ship.placement = { ...ship.placement, facing: effect.facing }
@@ -2978,8 +2976,9 @@ function resolveGravity(state: GameState, ship: ShipState, path: readonly Point[
     })
     // The immunity is to the planet and to the next zone in, so a shielded pass
     // stops here rather than falling on through to a second well.
-    if (effect.shielded) return
+    if (effect.shielded) return true
   }
+  return shielded
 }
 
 /**
@@ -3240,8 +3239,9 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
 
   // 12.12: "the tape-measure line, start position to finishing position" is
   // what a collision is tested against, and it is not the flown sequence.
-  resolveTerrainHazards(state, ship, [result.chord.from, result.chord.to])
-  resolveGravity(state, ship, [result.chord.from, result.chord.to])
+  const track = [result.chord.from, result.chord.to]
+  const swung = resolveGravity(state, ship, track)
+  resolveTerrainHazards(state, ship, track, { shielded: swung })
   resolveDeclaredRam(state, ship)
   resolveLeavingTable(state, ship)
   dragDockedShips(state, ship)
@@ -3361,14 +3361,24 @@ function terrainOfKinds(state: GameState, kinds: ReadonlySet<TerrainKind>): Terr
  * is the RNG stream: solid bodies first (a ship killed by a rock throws nothing
  * else), then clouds, then fields, each in the order the scenario placed them.
  */
-function resolveTerrainHazards(state: GameState, ship: ShipState, path: readonly Point[]): void {
+function resolveTerrainHazards(
+  state: GameState,
+  ship: ShipState,
+  path: readonly Point[],
+  opts: { shielded?: boolean } = {},
+): void {
   if (!optional(state).terrainHazards) return
   if (ship.destroyed || ship.offTable) return
 
   // 17.6: "When any ship, regardless of its class, hits an asteroid, the ship
   // is completely destroyed. Ramming a billion tons of rock at any speed is not
   // recommended, even in a superdreadnought!"
-  for (const body of terrainOfKinds(state, SOLID_TERRAIN)) {
+  //
+  // Unless 17.9's partial orbit got there first: a pass that the gravity zone
+  // actually turned "cannot collide with the planet or enter another zone even
+  // if the straight line path would indicate otherwise", and the straight line
+  // is exactly what this test measures.
+  for (const body of opts.shielded ? [] : terrainOfKinds(state, SOLID_TERRAIN)) {
     if (!stationaryCollisionRisk(path, body)) continue
     const miss = resolveCollision(ship.velocity, currentThrust(ship), state.rng, {
       advancedDrive: ship.design.drive.advanced,

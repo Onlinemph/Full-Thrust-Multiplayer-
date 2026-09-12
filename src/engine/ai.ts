@@ -55,6 +55,8 @@ import {
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import {
   collisionAvoidanceTarget,
+  createGravityWell,
+  gravityZoneAt,
   hasLineOfFire,
   meteorFieldDice,
   stationaryCollisionRisk,
@@ -288,6 +290,18 @@ function terrainPenalty(game: GameState, ship: ShipState, result: MovementResult
       // 3.5 penetrating damage per die on average, and it goes past armour.
       penalty += meteorFieldDice(result.velocity) * 25
     }
+  }
+
+  // 17.9: a gravity zone is not a hazard in itself — it adds speed, takes it
+  // away, or swings the ship round — but the swing is towards the centre, and
+  // a ship that lets a planet turn it is a ship being fed into the planet a
+  // turn or two later. So the computer treats depth in a well as a cost, which
+  // is what keeps it out of the well rather than out of the rock alone.
+  for (const feature of game.terrain) {
+    if (feature.gravity === undefined) continue
+    const well = createGravityWell(feature.position, feature.radius, feature.gravity)
+    const zone = gravityZoneAt(well, result.placement.position)
+    if (zone) penalty += zone.strength * 45
   }
   return penalty
 }

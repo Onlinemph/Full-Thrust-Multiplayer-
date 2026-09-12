@@ -4,6 +4,8 @@ import { applyAction, setOptionalRules } from './actions'
 import { scoreOrder } from './ai'
 import { advancePhase, createGame, createShipState, markHullBoxes, type GameState } from './game'
 import { buildGame } from '../data/savedGame'
+import { aiActions } from './ai'
+import { PHASE_ORDER } from './types'
 import type { MovementOrder, Phase, ShipDesign } from './types'
 
 /**
@@ -582,5 +584,40 @@ describe('a gravity well (17.9)', () => {
   it('is on a scenario, so a player can actually meet one', () => {
     const game = buildGame({ scenarioId: 'gravity-well', seed: 1 })
     expect(game.terrain.some((f) => f.gravity !== undefined)).toBe(true)
+  })
+})
+
+describe('a whole battle round a planet', () => {
+  it('plays out with both fleets under the computer and the well doing its work', () => {
+    // The end-to-end check: the Weight of Worlds scenario, hazards on, both
+    // sides driven by ai.ts, run until the turn limit. It is here rather than
+    // in a browser because what it is checking is the engine — that nothing
+    // throws, that the well actually acts on somebody, and that the computer
+    // does not simply fly its fleet into the planet.
+    const game = buildGame({
+      scenarioId: 'gravity-well',
+      seed: 0x1709,
+      terrainHazards: true,
+      aiSides: ['a', 'b'],
+    })
+    const started = game.ships.length
+
+    let guard = 14 * PHASE_ORDER.length * 4
+    while (game.turn <= 10 && guard-- > 0) {
+      for (const side of game.sides) {
+        for (const action of aiActions(game, side.id)) applyAction(game, action)
+      }
+      applyAction(game, { type: 'advance-phase' })
+    }
+    expect(guard, 'the sequence of play stopped advancing').toBeGreaterThan(0)
+
+    const gravity = game.log.filter(
+      (e) => e.text.includes('swings past') || e.text.includes('carried round'),
+    )
+    expect(gravity.length, 'nobody felt the planet in ten turns').toBeGreaterThan(0)
+
+    const flownInto = game.log.filter((e) => e.text.includes('flies into the rock'))
+    expect(flownInto.length, 'the computer steered its fleet into a gas giant').toBe(0)
+    expect(game.ships.length).toBe(started)
   })
 })
