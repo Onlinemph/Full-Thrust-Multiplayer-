@@ -1,0 +1,2641 @@
+Full Thrust: Project Continuum
+
+9 Flight Operations - Gunboats
+
+9.1 Gunboat Rules Gunboats are an interesting military unit. In design and tactical use, they straddle the line between a very small ship, and a very large fighter. Gunboats are carried on hull mounted racks, and are launched at the same time as other ordnance/fighters. They operate in squadrons of six, like fighters.
+
+Gunboats have a speed of 18 MU, and move like fighters. They can fly in escort of a ship like fighters. Gunboats have six points of combat endurance. This endurance is used to make attacks on enemy ships, fighters or ordnance. It can also be used to make a secondary move of 9 MU during the Fighter Secondary Movement Phase.
+
+The larger size of gunboats means that they are engaged by anti-ship weaponry more easily than fighters. They may be engaged in the Point Defense Phase by any ship weapons or PDS in range. Direct Fire Anti-ship weapons may fire at gunboats normally, with each HIT destroying ONE gunboat. In the case of weapons that do multiple points of damage (Grasers or Pulse Torps for example) do not roll
+
+79
+
+damage. Gunboats are well armored against lighter PDS type weapons. PDS weapons engage gunboats like Plasma Bolts only scoring one hit on a 6.
+
+Scatterguns/Interceptor Pods cause 1 BD\* of hits. To determine which gunboat(s) in a squadron are destroyed the owning player should roll randomly. Gunboats then make their attacks in the Fighter Attack Phase (phase 10). Gunboats may also be attacked in The Ship’s Fire Phase using the same rules as for fighters (See page 69)
+
+Gunboats mount slightly larger and more powerful fire control systems than those on fighters, allowing them to engage targets up to 12 MU away. The entire gunboat squadron must all target the same enemy ship. If the gunboat squadron is engaging enemy fighters or ordnance, it may split its fire among eligible targets within range, just like fighters. Gunboat armaments vary widely. The weapons in use on ships by the building empire may be modified to fit onto gunboat hulls. See the gunboat system description for options and costs.
+
+FTL Gunboats can enter the table using their FTL like ships. This does not consume a point of endurance. Like a ship the FTL Gunboat enters with a speed between 1 and 10, and makes a half-move straight ahead. The FTL Gunboat can then use a point of endurance to make a second move of 9 MU in any direction. FTL Gunboats are very vulnerable to distortion effects on their miniaturized drive systems, if they jump or arrive within 6 MU of a “massive object”, they are automatically destroyed.
+
+Gunboats may only be armed with weapons and other technology your fleet uses. For example if your fleet does not employ Grasers than you may not use Graser gunboats.
+
+Note: You are not required to make all the gunboats in a squadron the same. You may mix and match types and weapons as you wish as long as all the gunboats use technology your fleet or empire possesses. i.e., a UNSC Gunboat could not mount a K-Gun.
+
+Gunboat Racks are 18 mass for a squadron of 6 gunboats. The cost of the rack is included in the
+
+Full Thrust: Project Continuum
+
+gunboat cost.
+
+Gunboats cannot be refueled or rearmed in combat using their carrying rack, which limits the utility of some ordnance-carrying models. Gunboat-carrying ships with a boat bay of sufficient size to recover the whole squadron may use that boat bay to retrieve and rearm gunboats during combat. All gunboats expend 1 combat endurance point to fire their main weapon. All gunboats have 6 points of combat endurance. The cost of the gunboat depends on the type of weapons carried. Bays are 24 mass and cost 0 points
+
+9.2 Gunboat Types
+
+FTL Gunboats (+mod) With advanced miniaturization, a FTL Drive unit can be (just barely) crammed into a gunboat hull. This allows the gunboat to enter and leave FTL like a ship, and make interstellar moves on its own. FTL Gunboats cannot be carried in racks. They count as being mass 4 for purposes of docking in boat bays.
+
+It does not consume an endurance point to enter a battle from hyperspace. Unlike FTL fighters, FTL Gunboats do not need a carrying vessel.
+
+FTL Gunboats can only mount normal FTL drives. More advanced FTL drives cannot be crammed into the tiny hull.
+
+Gunboat FTL drives generate very weak “distortion waves” when the gunboat enters or leaves hyperspace; it is insufficient to damage any nearby units. The gunboats themselves are very vulnerable to distortion, however. If there is a ship, planet, asteroid or other object sufficient to cause distortion where the Gunboat engages its FTL, the gunboat is destroyed.
+
+The maneuverability of gunboats means that they may elect to move in any direction while charging their FTL Drive, up to the normal maximum of 18 MU/turn. The next turn they make a half-move in that direction, and disappear into FTL-space.
+
+80
+
+The FTL Gunboat modification can be applied to any gunboat type, at a cost of +6 points for the squadron.
+
+Heavy or Screened Gunboat (+mod) Some gunboats are equipped with either screens or carry heavily reinforced hulls. All weapons fire against the gunboat has a -1 DRM
+
+Heavy or Screened Gunboats cost +12 points for the squadron.
+
+Beam Gunboat Beam Gunboats carry 2 class-1 beams. These have a range of 12 MU, and both must be fired at the same target due to limited fire control.
+
+Beam Gunboats cost 3 per mass (9 points each). These have a range of 12 MU, and both must be fired at the same target.
+
+Plasma Gun Gunboat Plasma gunboats carry 1 Plasma-1 with a range of 12 MU.
+
+Plasma Gunboats cost 3 per mass (9 points each).
+
+Graser Gunboat Graser Gunboats carry 1 Graser-1 with a range of 12 MU.
+
+Graser Gunboats cost 3 per mass (9 points each).
+
+Gatling Gunboat Gatling Gunboats carry a weapon that can generate 6 BD\* against a single target within 6 MU, or 2BD\* at 12 MU. Alternatively they can be fired once as an PDS at a target within 6 MU. The Gatling battery is fixed forward and may only fire in the forward 30 degree arc.
+
+Gatling Gunboats cost 5 per mass (15 points each)
+
+Needle Gunboat Needle Gunboats carry a single Needle Beam. This weapon has a range of 12 MU.
+
+Needle Gunboats cost 3 per mass (9 points).
+
+Full Thrust: Project Continuum
+
+Pulse Torpedo Gunboat Pulse Torpedo Gunboats carry a single short range Pulse Torpedo Launcher. The fire control of the gunboat limits the engagement range to 12 MU. The Pulse Torpedo will hit on a 2+ out to 4 MU, a 3+ out to 8 MU, and a 4+ out to 12 MU.
+
+Pulse Torpedo Gunboats cost 4 per mass (12 points each).
+
+Submunition Gunboat Submunition Gunboats carry two 1-shot submunitions. These may either be fired singly (one per turn), or both may be fired simultaneously against the same target.
+
+The submunitions each generate 3 BD\* to 6 MU, or 2 BD\* to 12 MU. Fire control limitations prevent them from being used beyond 12 MU. Once the submunitions are used up, the gunboat has no other weapons. Submunition attacks ignore screens.
+
+Submunition Gunboats cost 4 per mass (12 points each).
+
+MKP Gunboat MKP Gunboats carry two 1-shot MKP packs. These may either be fired singly (one per turn), or both may be fired simultaneously against the same target. They each hit once on a 4+, and hit twice on a 6. Each hit delivers four points of AP damage.
+
+MKP Gunboats cost 5 per mass (15 points each).
+
+K-Gun Gunboat The K-Gun Gunboat carries one short-range K-2 gun. The range of the weapon is limited to 12 MU by the fire control of the gunboat. The K-Gun will hit on a 2+ to 4 MU, a 3+ to 8 MU, and a 4+ to 12 MU. Like a normal K-Gun, the damage from a K-2 doubles on a subsequent roll of 1 or 2, and is Armor Piercing.
+
+K-Gun Gunboats cost 4 per mass (12 points each).
+
+Missile Gunboat Missile Gunboats carry a single missile salvo of 4 missiles (not 6). Due to fire control limitations, these missiles can only be launched when an enemy ship has come within 12 MU. The missiles are launched
+
+81
+
+during the Ordnance Launch Phase. It also must not be engaged by other fighters/gunboats at time of launch. The ship may launch none, some or all of its missiles for a single point of combat endurance. Like Missile Fighters, these missiles do not all have to be launched in the same direction. Missile Gunboats cost 4 per mass (12 points each).
+
+Rocket Gunboat Rocket Gunboats carry 4 rockets. Due to fire control limitations, these rockets can only be launched when an enemy ship has come within 12 MU. The rockets are launched during the Ordnance Launch Phase, and their chance of hitting depends on the range at the moment of launch. They hit on a 2+ to 6 MU, and a 3+ to 12 MU. The ship may launch none, some or all of its rockets for a single point of combat endurance. All the rockets must be launched at the same target. It also must not be engaged by other fighters/gunboats at time of launch. Rockets can be used to target other gunboats, with the normal -1 DRM firing modifier.
+
+Rocket Gunboats cost 4 per mass (12 points each).
+
+Point Defense Gunboat The Point Defense Gunboat carries two PDS systems. The range of these weapons is limited to 6 MU. The small built-in fire controls of the PDS do allow them to be fired at different targets. The Point Defense Gunboat counts as having ADFC, and may fire in support of allied ships in units with 6 MU.
+
+PDS Gunboats cost 3 per mass (9 points each).
+
+Full Thrust: Project Continuum
+
+Area Defense System Gunboat (ADS) The Area Defense Gunboat mounts a single Area Defense Array. This can generate 1 die of PDS fire out to 12 MU, or 2 dice of PDS fire out to 6 MU. The Area Defense Gunboat counts as having ADFC and may fire in support of friendly units within 6 MU.
+
+Area Defense Gunboats cost 4 per mass (12 points each)
+
+Electronic Warfare Gunboat (+mod) Some gunboat designs mount very powerful stealth or active jamming technology. Every level of ECM reduces the lock-on range by 1 MU, for missiles and fighters.
+
+ECM Gunboats cost +3 points each per level of ECM (3 levels max) for the entire squadron.
+
+Scatterpack Gunboat Scatterpack Gunboats carry two 1-shot Scatterpacks. These may be fired either individually, or both on the same turn. Because they have their own guidance systems, they can be individually targeted even if fired simultaneously.
+
+Scatterpacks count as having in-built ADFC.
+
+Scatterpack Gunboats cost 5 per mass (15 points each)
+
+Plasma Bomber Gunboat The Plasma Bomber Gunboat carries two 1-shot size 1 Plasma Bombs (PBLSs). These function exactly as ship-mounted Plasma Bolts. However these are dropped during the Ordnance Launch Phase. Note that they are not launched, they are dropped in the current location of the gunboat, which then must move away to escape destruction when they explode. One or both plasma bombs can be dropped in a single turn. If the Gunboat is engaged by other fighters/gunboats it may still drop its bombs but obviously may not move away.
+
+Plasma Bombers cost 5 per mass (15 points each)
+
+82
+
+Full Thrust: Project Continuum
+
+10 Threshold Points
+
+10.1 Damage to systems The first threshold damage inflicted on a main drive halves the thrust rating of any drive rated above 1. Drives with thrust rating 1, or any drive that has already suffered threshold damage, are reduced to zero.
+
+Each screen generator on a ship is considered a separate system when checking for system damage at threshold points, and may be knocked out individually either by threshold damage or Needle Beams. If a ship with screen level-2 has to make a threshold damage check and loses one of its screen systems, it drops to level-1 screen.
+
+Ships carrying fighter groups have their hangar bays rolled for like any other system. When a hangar bay is knocked out any fighters still inside that bay are lost, and the hangar bay can no longer service fighters that are in flight. For example, if a fleet carrier has launched its full fighter complement and then loses two of its six hangar bays in a threshold point check, then if all six groups make it back, two of the groups will not be able to land\! (However, the individual fighters may take spaces in other hangar bays available due to losses in other groups – basically the loss of a hangar bay simply reduces the carrier’s capacity by six individual fighters.)
+
+If the player is using the rules for launch tube/flight deck systems then a damaged launch tube/flight deck will not be able to launch or recover fighters. Hangar bays however can still re-arm or re-fuel fighters. However the ship may not launch, or recover, any fighters unless the ship has an operational launch tube/flight deck.
+
+Weapons carried in a magazine, such as Salvo Missiles and mines, roll only once for the magazine rather than each load. All missiles and mines in a magazine are permanently destroyed when knocked out and cannot be repaired.
+
+Heavy Missiles and Salvo Missile Racks roll once per launcher. If destroyed, this is permanent and cannot
+
+83
+
+be repaired
+
+10.2 Critical hits on hangar bays (optional) When a hangar bay takes a critical hit the fuel and ordnance stored there can explode, causing collateral damage. The situation can become even more dangerous if the hangar bay has loaded fighters present.
+
+Threshold checks for hangar bays should be conducted before any other systems are rolled for. If an empty hangar bay suffers a critical hit due to a threshold check, roll a die. On a roll of 1-2 secondary explosions occur. This roll is modified by +1 for every row of hull boxes destroyed that turn (the same way normal threshold checks work). If an explosion occurs the ship takes an additional 1D3 points of damage. If this causes another row of boxes to be destroyed, adjust the threshold rolls for the remaining systems accordingly, but do not roll for the hangar bays again. If the hangar bay contains fighters that can carry ordnance (missiles and so on) or Pulse Torpedoes damage is doubled (the ready racks with the ordnance explode).
+
+Note: ships using this rule will have the cost of their hangar bays reduced. See section 13.
+
+10.3 Core Systems Core Systems are optional but recommended. While weapons, fire control sensors, and screen emitters are all surface features and thus are very vulnerable to incoming fire, there are certain vital systems that are usually buried deep within the ship’s hull. These are the Core Systems and consist of the Command Bridge (which also includes computer systems, electronics, etc.), the Power Core, and the Life Support system.
+
+These three systems are grouped together on the ship system status display, with a box drawn around them.
+
+Whenever the ship reaches a threshold point, the systems within the core box are each rolled for but subtract 1 from the die roll – thus at the first threshold point, where systems are lost on rolls of 6 only, the Core Systems do not need to be rolled for as the minimum score will be 7. At the second threshold
+
+Full Thrust: Project Continuum
+
+point, where normal systems go down on rolls of 5 or 6, the Core Systems are only hit on rolls of 6, and so on for subsequent threshold points.
+
+The Core Systems do not need to have mass allocated to them during ship design; they are assumed to be part of the essential structure of all ships.
+
+Illustration 5: Bridge, Life Support, and Power Core
+
+If using Needle Beams, the Core Systems may not be targeted by these weapons. Needle Beams may only fire at surface features on the ship such as weapons, sensors, or drives.
+
+If you do not wish to use the Core System rules, simply ignore the systems within the Core box on the ship SSDs.
+
+Command Bridge If the Command Bridge takes a hit, then make a further D6 roll immediately. If the roll is 1 to 5, then the ship is ‘out of control’ for that number of turns, including the remainder of the current one, until command can be restored through backup links and secondary command systems. If the roll is a 6, then the ship is permanently out of control for the duration of the game.
+
+While a ship is out of control it will continue on its present course and velocity, and may not fire weapons, launch fighters, or take any other offensive action. Passive defenses (screens, armor) are still operational, though active defenses (PDS) are not. Once control is regained after the number of turns indicated by the die roll or a successful repair roll, all undamaged systems comes back on line.
+
+Damage Control Parties may be used on any turn to try and restore control, using the rules below.
+
+84
+
+Life Support hit If the Life Support systems take a hit, then a further D6 roll is made immediately. The number rolled indicates that the Life Support will fail after that number of turns.
+
+Damage Control Parties may be allocated to try and repair the Life Support system as for any other system. If Life Support fails before being repaired, then the crew must immediately abandon ship or be killed. A ship without Life Support becomes a drifting hulk, though it may of course be recovered and repaired after the battle if it survives.
+
+Power Core hit If the Power Core takes a hit, it is damaged and may ‘go critical’ and explode. It continues to supply power for the ship, but the safety systems that control it are damaged or destroyed. At the end of each turn the player must roll a D6: on a 5 or 6, the Power Core explodes and destroys the ship.
+
+Reactor Breaches (optional) When a ship is destroyed as a result of a critical hit to its reactor the Power Core overloads in a spectacular fashion. Every ship, fighter/gunboat squadron and ordnance, in a 3 MU radius, will suffer 1D6 damage for every 25 mass of the exploding ship. This damage is considered Semi-Armor Piercing and ignores Standard Screens. Advanced Screens will provide protection as outlined in section 7.
+
+For example: A battleship of 130 mass is destroyed after its Reactor Core breaches. The player rolls
+
+Full Thrust: Project Continuum
+
+5D6 for every ship (friendly or enemy) within 3 MU and applies that damage (the total on each die) to each ship. Half of the damage would be applied to armor; the other half to the hull ignoring screens if any.
+
+Damage Control Parties may be used as normal to try and stabilize the Power Core – such attempts are made before the roll for explosion for that turn, and success will bring the Power Core back under control and negate any further effects (Unless the Power Core is then damaged again, when the process will repeat all over).
+
+Each turn, before rolling the die, the player may make a choice: ‘dump the Power Core’ or abandon ship.
+
+Dumping the Power Core avoids the risk of explosion, but leaves the ship without power for anything but Emergency Life Support. The ship is intact, but unable to do anything further in this battle except continue to drift on its present vector.
+
+If the player chooses to abandon ship, the ship continues to drift while still rolling each turn to see if the Power Core explodes– in this case, however, the die roll needed number for an explosion drops by 1 each turn as the Power Core is running out of control with no one to damp it down, thus it will explode eventually and the ship will be lost. A ship that dumps the Power Core will be of no further use for that battle, but may be salvaged afterwards and its Power Core replaced.
+
+10.4 Damage Control Parties
+
+The number of Damage Control Parties (DCP) a ship has is proportional to its crew size, which is in turn a function of ship mass. This assumes that a certain percentage of the crew is allocated to form Damage Control Parties during combat. Military ships have one crew factor (CF) for every 20 mass or part thereof, and one DCP per crew factor. Thus a mass 1-20 ship has one CF and hence 1 DCP, a mass 21-40 ship 2 CFs and 2 DCPs, a mass 81-100 ship 5 CFs and 5 DCPs, and so on.
+
+For merchant and civilian vessels, which usually have
+
+85
+
+much smaller crews than warships there will be one CF per 50 mass (or part thereof) of ship size. How many crewmen a single CF represents is entirely up to the kind of background you are using, but in the GZG setting assume that one CF represents about 20 personnel.
+
+A single DCP might therefore be four or five crew, and usually includes medical personnel to assist crew casualties as well as engineers to patch up equipment. For ships with multiple DCPs, more than one may be allocated to a single repair job at one time. A system can be brought back online by rolling a D6 result less than or equal to the number of DCPs assigned. The maximum number of DCPs on a single job is three, so the highest chance of repairing a system is 50% (1-3 on a D6) if three DCPs are allocated to it. Note that all DCPs put on one system in a single turn make just the one roll.
+
+Example: A mass 90 ship, with 5 CF and thus 5 DCPs available, is trying to repair systems lost at a threshold point. The player decides to combine 3 DCPs (the maximum allowed on one job) to try and get a FireCon back online, and use the other two to attempt to fix a damaged weapon system.
+
+The FireCon will be fixed if the player can roll 1-3, and the weapon on 1 or 2.
+
+Full Thrust: Project Continuum
+
+10.5 Crew casualties For simplicity, assume that crew casualties are proportional to the amount of hull damage suffered by the ship.
+
+As damage is taken and crew casualties are suffered, CFs are lost, and the available DCPs are reduced accordingly.
+
+To record this on the ship SSD, dots or stars are placed in certain boxes on the damage track to denote the points at which crew factors are lost; a ship’s current CF (and thus its current number of DCPs) is the number of dots still remaining in non-destroyed boxes on the damage track.
+
+All the designs given in the Fleet Books already have the CF marked in their damage tracks, but if you are designing a new ship type from scratch then you will need to distribute the CFs correctly through the damage track. To do this, divide the number of hull boxes the ship has by the number of crew factors. Round the result up if it is not a whole number, then count along the damage track until you reach the number and place the first dot there. Count the same number again and place the second dot, and so on. When you reach the end of the damage track, put the last dot in the last box – assume that the last of the crew will be killed when the ship is finally destroyed, if they haven’t abandoned ship by then.
+
+Example: The mass 90 ship above, with 5 CFs, has an average hull integrity and thus has 27 hull boxes (30% of 90), arranged as 7/7/7/6. Dividing 27 by 5 gives us 5.4, which is rounded up to 6. The first CF dot will be placed in the sixth box of the damage track, the second in the twelfth (i.e. the fifth box of the second row), the third dot in the 18th box, the fourth in the 24th box, the fifth and final dot is placed in the last box on the damage track (the 27th). Each time the ship takes six points of cumulative damage, it will lose another CF and thus another DCP.
+
+10.6 Cargo and passenger space The holds and passenger space are arranged on the ship SSD as a row of boxes, containing an H, P or T identifier as appropriate and a number that represents the actual capacity of the space.
+
+86
+
+Example SSD of a repair ship with a lot of cargo
+
+Holds and passenger areas are lost by threshold checks like any other system. When a hold or passenger space box is crossed off, any cargo stored in it is assumed lost and any non-evacuated passengers in that area are killed.
+
+Note that specialist areas on other ships may be represented in the same way as cargo and passenger space using exactly the same rules – for survey ships devoted to science, staff and lab facilities can be represented by boxes marked S for example. Note, Marine Casualties and additional DC parties, have a slightly different mechanic.
+
+Full Thrust: Project Continuum
+
+11 Faster Than Light (FTL)
+
+11.1 Faster Than Light Drives The forces generated by FTL Drive units are very powerful, and result in spatial distortions that can be highly dangerous in close proximity to any other mass, including other ships. Most transitions to and from FTL are therefore made well out in open space, far from other shipping or planetary bodies. A fleet entering a system by FTL will generally perform normal space re-entry on the fringes of the star system, with the ships of the fleet widely dispersed for safety, and then assemble into formation before entering the inner system on normal drive.
+
+Occasionally, however, it may be either necessary or tactically expedient to run the risk of an FTL transition while actually engaged with the enemy. Such a dangerous maneuver might be a frantic attempt by a threatened ship to escape from the action, or a surprise attack by dropping out of FTL directly into combat.
+
+11.2 Hyper limit In many science fiction settings decent sized planets or the local sun have a ‘hyper limit’ distance within which FTL travel is not possible. As most of the interesting bits of any solar system are on or near such planets, or relatively close to the sun, many battles will take place within the local hyper limit. In such a setting, FTL entry or exit is only permitted by
+
+87
+
+player agreement or scenario design.
+
+11.3 Advanced FTL Drives Certain ships may be able to enter or leave space very precisely without risk of collisions or scattering. These ships have Advanced FTL Drives.
+
+Since these are not very useful in many friendly or competition games, such ships only have to pay the points cost for standard drives. The player may choose to pay extra points for Advanced FTL Drive capabilities for a one-off battle or tournament, and should always pay the extra points in a campaign.
+
+11.4 FTL exit If a ship attempts to engage its FTL Drive while on the table, the owning player must note this in movement orders for that turn. The ship may not apply any thrust in that move, nor may it use any offensive weaponry or ADFC. (PDS and screens may continue to be used.) When the ship is actually moved, the player must announce that the FTL Drive is being ‘warmed up’ – the energy emissions from the ship will be immediately obvious to enemy sensors. On the following turn, the ship moves half its current velocity on its present course, then disappears from the playing area, having gone into FTL space.
+
+Note that ships exiting by FTL are moved after all other ships.
+
+If any other ship-sized or larger object, but not fighter groups or missile salvos, are within 6 MU of the actual point of FTL exit (the point that the ship disappears from the table) then problems may occur.
+
+The ship attempting to enter FTL rolls a D6:
+
+• On a roll of 1, the FTL Drive fails to engage. The ship remains in normal space at its present course and velocity (and completes the current movement).
+
+• On a roll of 2 to 4, the ship immediately suffers 1D6 of damage. Unless the ship is actually destroyed by this damage, it completes its FTL transition safely. (Any threshold point checks would be made ‘off table’.)
+
+• On a roll of 5 or 6, the ship attempting the FTL
+
+Full Thrust: Project Continuum
+
+jump is completely destroyed. All other ships or starbases within 6 MU immediately suffer 2D6 damage, and any fighter group or missile marker within 6 MU is destroyed.
+
+Non-FTL ships being carried by a tug or tender or battleriders carried by a Mothership (see below) also suffer 1D6 damage or are destroyed depending on the FTL entry roll.
+
+Once a ship has left the table under FTL Drive, it may not return to play at any time during that battle.
+
+11.5 FTL entry Any ships that are to enter the game by dropping out of FTL onto the playing area must be noted as such at the start of the game, giving the number of the game turn in which they will enter, plus a specified point of entry on the table; the latter is usually most easily defined as a simple pair of coordinates measured from one corner of the table. The player must also note, at the same time, the starting course and velocity of the ship after its emergence from FTL space.
+
+When the specified game turn arrives, the player must announce at the start of the turn (after writing movement orders) that the ship is making an FTL entry, and place a counter or other marker at the intended entry point.
+
+In the Ship Movement Phase, for any ship without an Advanced FTL Drive (or without paying points for Advanced FTL capability), roll a D12 to give a direction on the course gauge and a D6 for distance. The marker is then moved in the direction rolled to a
+
+88
+
+distance in MU equal to the D6 roll. The resulting final location of the marker is the point at which the actual ship is placed on the table.
+
+The FTL entry is the ship’s movement for that turn, with its current velocity being applied from the start of the next.
+
+Example: The two ships in Figure 21 attempt FTL entry side by side. Each rolls for direction and distance of error in their entry points. Ship A rolls 6 for direction and 4 for distance, and ship B rolls 10 for direction and 5 for distance.
+
+Ships carried by a tug or tender or battleriders carried by a Mothership, or FTL-capable fighters screening a ship move the same distance and direction as their ship.
+
+Optional rule: To add extra confusion and danger, if the distance D6 roll is a 6, then roll a second D6 and multiply the result by the original roll of 6. This gives a potentially massive error (up to 36 MU) and represents the dangerous inaccuracy of FTL exit – if this means a ship appears off table then that ship is deemed unable to enter the table during the battle.
+
+As with ships leaving the table via FTL, those entering battle also risk damage if they appear too close to another object.
+
+Full Thrust: Project Continuum
+
+Again, the danger radius is 6 MU around the actual point of appearance; if any ship or other body (not fighters or missiles) is within this distance when the ship enters normal space, roll a D6 for the ship:
+
+• On a roll of 1 to 5, the ship being rolled for takes damage equal to the dice score.
+
+• On a roll of 6, roll a second D6 and multiply the result by the original 6, giving from 6 to 36 points of damage.
+
+Any other ship within 6 MU takes 2D6 damage, and any fighter group or missile marker is destroyed. Damage from FTL entry or exit cannot be absorbed by screens or armor. If sufficient damage is inflicted to reach a threshold point (and the ship remains on the playing area), roll threshold point checks as usual.
+
+11.6 FTL tugs and tenders There are times when ships are unable to travel in FTL Drive under their own power, but still must be moved between star systems. Obvious examples are System Defense Ships being transferred between duty stations, and starships that have suffered drive damage and loss of FTL capability which can only be repaired at a major naval facility.
+
+For jobs such as these, most forces use FTL tugs or tenders. A tug is normally a ship designed to recover other large vessels, while a tender is more commonly a transport for several smaller ships such as light System Defense Ships. In game terms tugs and tenders operate, and are built, in the same fashion. The terms are used merely as a reference to the ships
+
+89
+
+function within a given fleet.
+
+The main use for tugs and tenders will be in campaign games, for moving System Defense Ships around the map and for recovering crippled starships for repair. It is unlikely that a tug or tender would ever be risked in combat, but of course there is always the possibility of a scenario concerning the attempted recovery of a damaged ship in a hostile star system, or a surprise attack on a recovery mission.
+
+Any ship can be made a tender by having internal bay space allocated to carry other ships (whether the carried craft are FTL-capable or not), at the same rate as for carrying fighters and other small craft: every 1.5 mass used for hangar bay space provides capacity for 1 mass of carried ship(s). Note that this allows for support and launching facilities, and is thus different from plain cargo space. A ship with 30 mass devoted to internal bay space could carry a mass 20 ship, or two mass 10 ships, etc. The points cost of such space is the same as for other hangar facilities, 3 × the total mass used.
+
+Tugs, which are designed to carry other ships by extending their FTL Drive field around them, require massively overpowered FTL Drives. They need a FTL Drive equal to 10% of their mass just to provide their own FTL capability, plus for every 1 additional FTL Drive mass they can tow an additional 5 transfer mass of other ships. Thus to tow a ship of mass 108, the tug would need spare FTL Drive capacity of mass 22. If the tug itself was a mass 60 ship, it would need its own mass 6 FTL Drive plus the additional 22 – so it would have to devote a total of 28 mass to its FTL Drive package.
+
+Illustration 6: Tug FTL drive
+
+FTL tugs use a modified FTL Drive symbol that also displays the transfer mass capacity.
+
+Full Thrust: Project Continuum
+
+Tugs with standard FTL Drives can haul any number of ships, provided that the total mass does not exceed the transfer mass capacity of the drive. Tugs with Advanced FTL Drives can also combine to haul ships larger than any individual ship capacity.
+
+Example: A crippled battleship with mass 120 can be hauled off table by one tug with a standard FTL Drive with a transfer mass of 120 or more, or by two tugs with Advanced FTL Drives of transfer mass 60 each.
+
+11.7 Battleriders and Motherships Some warships are designed as battleriders without an FTL Drive of their own, transported into battle like giant fighters by Motherships.
+
+The battleriders are designed in exactly the same way as other warships, except that they do not pay mass or points cost for an FTL Drive. The Mothership is treated as an FTL tug or tender, paying extra mass and points for internal bays or an oversized FTL Drive.
+
+A fleet with battleriders must deploy the Motherships as well. If the Mothership makes an FTL entry, the battleriders cannot detach and move independently until the next turn.
+
+The battleriders start with the velocity and course of the Mothership. Until they detach, only the Mothership can be fired at and battleriders are protected by the Mothership’s screens (but not armor). Damage received can be applied to either the Mothership or battleriders at the choice of the defending player.
+
+In one-off battles, battleriders are considered destroyed at the end of the battle if there are no surviving Motherships capable of transporting them.
+
+The maximum mass for any battlerider is 60, following the science fiction convention that battleriders are smaller than the FTL-capable Motherships.
+
+11.8 System Defense Ships Although most ships in the game are considered capable of FTL travel between star systems, there are many possible classes of non-FTL capable vessels
+
+90
+
+which operate entirely within a single star system. Typical examples are in-system freighters, System Defense Ships, and monitors (large, low thrust weapon platforms designed for close orbital defense).
+
+Non-FTL ships – other than battleriders with a Mothership – cannot be part of fleets for one-off battles unless specifically permitted by player agreement or scenario design.
+
+11.9 Jump Gates and Portals Jump Gates and Portals are an alternative to standard FTL Drives. Instead of a ship moving itself with an internal FTL Drive, a stationary external object moves the ship to where it is going.
+
+A Jump Gate is any natural ‘wormhole’ or artificial construct that provides entry or exit between hyperspace and normal space at a given point. A ship transfers from normal space to hyperspace through the Jump Gate, travels for some time through hyperspace to another Jump Gate, and there transfers back to normal space.
+
+The two Jump Gates are not linked: once in hyperspace a ship can change destination, or the ship can use its own FTL Drive if it has one instead of a Jump Gate at either end.
+
+A Portal, natural or artificial, creates a fixed connection between two points in normal space, either as a shortcut through hyperspace or some other dimension, by matter to energy to matter conversion and transmission, psionic powers, etc. What
+
+Full Thrust: Project Continuum
+
+distinguishes a Portal from a Jump Gate is that the transfer is instantaneous or nearly so and cannot be changed in flight. Natural Portals usually connect two fixed points in space, while artificial Portals usually can be programmed for a specific destination.
+
+Jump Gates are only found in space, near planets or space stations, as the equivalents of terrestrial railway stations or airports. Warships need to be able to go anywhere so they must have FTL Drives, but civilian cargo or passenger ships often just travel between fixed locations.
+
+With Jump Gates, these ships can avoid the expense and overhead of their own FTL Drive. Even warships may choose to use Jump Gates when available, to reduce wear and tear on their own FTL Drives and to ensure a more accurate arrival point.
+
+Portals can exist anywhere, although some technologies may require Portals to be in space to avoid problems with atmospheric displacement. A big Portal on an enemy world is a great way to invade without all the bother of troop transports, so there are good non-technical reasons to keep the larger Portals in space.
+
+Whether due to technological reasons or simple caution, small Portals are far more common in science fiction than large ones.
+
+Ships that enter or exit normal space through a Jump Gate or Portal never suffer from direction or distance errors, unlike normal FTL Drives.
+
+Where the game rules are identical for both types the term gate will be used to mean ‘Jump Gates and Portals’. In a setting where all FTL travel is through Jump Gates or Portals, artificial or natural, the FTL ‘Drive’ for starships should be considered as representing the mass required for the sensors, computers, navigation records, special construction, mutated psionic pilots, or whatever else is needed to locate and use gates and survive the journey.
+
+Representation In game terms a gate is a stationary object represented by an appropriate model or counter. (This is not to say
+
+91
+
+that they can never be moved, just that it won’t happen within the time frame of a single battle.)
+
+The capacity of natural gates is usually very high to unlimited, and the gate itself cannot be destroyed by normal weapons fire, so no record keeping is necessary.
+
+Artificial gates have a transfer mass, the maximum capacity or mass that it is capable of handling in one turn. A gate must also have a certain number of hull boxes to represent essential control systems and structural elements. Armor, screens, and weaponry are optional, but even in settings where attacking gates is ‘not cricket’ it is sensible to have at least some protection against accidental damage.
+
+An artificial Jump Gate must have an FTL Drive, which has 10 transfer mass points for every 1 point of FTL Drive mass, and does not need to include the mass of the Jump Gate itself. A Jump Gate should also have hull boxes equal to at least 10% of the transfer mass.
+
+An artificial Portal should have the FTL Drive with mass equal to the transfer mass of the Portal, representing the (usually) higher cost and more advanced technology.
+
+A gate takes damage in the same way as other ships. For each 10% of hull boxes marked off the current transfer mass is reduced in proportion: a Jump Gate that begins with a transfer mass of 60 and 6 hull boxes will be reduced to 50 at 5 hull boxes, 40 at 4, and so on as it takes damage.
+
+Whenever a complete row of hull boxes is lost the gate must make threshold checks as usual for the FTL itself and other systems.
+
+Operation Artificial gates must be activated before used. The player writes a “Gate Activate” order at the beginning of the turn and announces the activation when ships are moved. The gate may be used for transfers on the following turn until deactivated again. If the gate is under control of the player, usually the case when the gate is part of the infrastructure for a
+
+Full Thrust: Project Continuum
+
+home system being defended, activation is automatic. If the gate is not under control and an attacker wishes to activate it to transfer forces into the system the defender rolls a D6 in the Ship Movement Phase:
+
+• On a roll of 1, 2, or 3 the activation is delayed that many turns.
+
+• On a roll of 4, 5, or 6 the activation succeeds immediately. (This assumes, as is usually the case that the gate is part of a general purpose transport network open to all so the attackers will eventually be able to override the control system.)
+
+Some gates can be used from any angle, but more commonly they have one entry and exit facing. If this is the case the marker or model should be clearly marked and discussed between the players before the game begins.
+
+At the end of the turn, the transfer takes place. If the transfer mass of the gate exceeds that of the combined ships entering, they all transfer successfully. If the
+
+92
+
+transfer mass was reduced due to damage or the gate FTL failed a threshold check, roll 1D6 die for each ship. On a roll of 1 the ship transferred successfully, on a roll of 2 it manages to back out in time and remains at the location of the gate with a velocity of zero, on a roll of 3 or higher it is destroyed.
+
+To enter through a gate, a ship likewise writes a “Gate Entry” movement order with a velocity up to the maximum rating of its main drive. In the Ship Movement Phase the entering ship is placed on the gate with an initial course that is 180° opposite (3 in the example above) and then moves the distance specified by the velocity order.
+
+If for some reason both ends of the Portal are on the playing area, a ship exiting through one and entering again through the other does so with the same velocity that it entered.
+
+11.10 Natural Jump Gates or Jump Points (optional) Many sci-fi novels make use of naturally formed jump points. Players using these can easily adapt the rules above to the though obviously a ship would not need to activate it. It is recommended that ships be ‘disorientated’ upon exiting a jump point. Ships exiting a jump point function as if they have taken a bridge critical hit until the next turn when they make function normally.
+
+11.11 Battles in hyperspace Full Thrust, like a lot of science fiction, assumes a clear distinction between faster than light travel, which exists because otherwise it would take years for ships to actually get anywhere; and ‘normal’ space
+
+Full Thrust: Project Continuum
+
+where most of the action, including combat, takes place. Modifying the rules given here to match such a setting is not difficult.
+
+If you do decide to allow battles at FTL speeds or in hyperspace, the challenge of designing suitable rules – and answering questions such as ‘what happens when a ship travelling faster than light fires a laser beam?’ – is entirely yours\!
+
+93
+
+Full Thrust: Project Continuum
+
+12 Optional Rules
+
+12.1 Sensors and ECM Sensors and ECM allow a basic form of “limited intelligence” to be brought into the game to make the initial fleet dispositions for a battle more interesting and tactically challenging.
+
+When the opposing forces enter the playing area, the actual ship models are not placed on the table. Instead, each ship is represented by a Bogey Marker (either a simple counter or something like a ‘black globe’ made from a Ping-Pong ball or bead). These bogeys represent long range sensor contacts indicating the presence of a ship, but not revealing its exact type. All that can be deduced about the ship is its general classification (escort, cruiser, capital, or merchant) from its detectable drive emissions, and the course and velocity.
+
+Each Bogey Marker should be identified with a code letter or number, which the owning player must secretly note as representing one actual ship. The bogeys should also be marked in some way to show the classification of ship they are representing. The easiest way to do this is with small adhesive colored stickers on the globe bases, using different colors for escorts, cruisers, etc.
+
+During the opening moves of the game, players write orders and move their Bogey Markers just as if they were moving the actual ships. (They must of course
+
+94
+
+adhere to the maneuvering ability of the ship that each bogey represents.)
+
+Bogeys may be ‘revealed’ (positively identified and replaced by the actual ship model) in one of two ways: either by passive or active sensor scans.
+
+Passive sensors are carried by all vessels, civil and military. When any ship comes within 36 MU of an opposing bogey, its passive sensor array can identify the contact firmly: replace the bogey with the actual ship. (If both ships are represented by Bogey Markers, then they are both revealed simultaneously.) All military vessels also carry basic active sensor arrays as part of their FireCon systems. These are longer-ranged detection systems than the passive sensors, but have the side effect that when they are operated, the emissions from them will reveal the identity of the ship making the sensor scan, as well as the ship being scanned.
+
+The maximum range for active sensor scans is 54 MU. If a player wishes to use active sensors on a ship, note this in the orders for that turn. If the ship is still represented by a Bogey Marker at that time, reveal it and announce that it is making an active scan. A ship may scan one opposing bogey per operational FireCon each turn. The player chooses which of the enemy bogeys to scan (of those within 54 MU range) and these must then be revealed.
+
+12.2 Advanced sensors If not playing an open book game, these optional rules for more advanced sensors can be used for disclosing information about ship capabilities and status to opponents.
+
+Advanced sensor suites are classified as Enhanced or Superior grade.
+
+Basic sensors immediately ‘illuminate’ the ship using them and the scanned ship, so models for both are placed on the table.
+
+If Enhanced or Superior active sensors are used, the scanning player also rolls 1 D6. If the ship is using Enhanced sensors use the die score as rolled; for Superior sensors add 2 to the score. The final adjusted
+
+Full Thrust: Project Continuum
+
+score gives a result from the table below:
+
+• 1-2: No information disclosed
+
+• 3: Mass only of ship disclosed
+
+• 4: Data on mass, drive, and screen systems (original values)
+
+• 5: Data on all onboard systems (original values)
+
+• 6+: As for 5, plus current damage status and systems that are functional, i.e. all data about vessel.
+
+The owner of the scanned vessel must disclose the required information verbally to the scanning player. The information should only be stated once per successful scanning attempt – it is up to the player to remember and/or note down information about the opposing ship.
+
+Obviously a degree of trust is necessary here that true information is being given – if advanced sensors are being used in a competitive game we suggest the umpire should check and relay the information rather than the player.
+
+12.3 Dummy bogeys and weasel boats These are optional rules for adding extra confusion and uncertainty to the game. With the agreement of both players, each side may deploy a number of ‘dummy’ Bogey Markers alongside the real ones, representing drones equipped to output the signature of an actual ship and thereby confuse the enemy as to the actual strength and disposition of the fleet.
+
+Each dummy bogey costs 20 points from the owner’s fleet budget, and emits the drive signature of an escort class ship. It can be moved on the table with the maneuvering ability of any main drive strength the owner chooses.
+
+The dummy is removed from play as soon as it is scanned with active or passive sensors. The maximum number of dummy bogeys that may be employed in any battle is equal to the number of real ships in the player’s forces.
+
+Weasel Boats are an alternative to drone decoys. These are small manned ships that are equipped with systems designed to emit the signature of a much larger vessel.
+
+95
+
+A Weasel Decoy System requires 2 mass to emit the signature of an escort or cruiser class, 4 mass to emit the signature of a capital ship. The points cost is mass × 4.
+
+While the Weasel Boat is represented by a Bogey Marker, that bogey is labelled as if it were the classification that the decoy system is emitting. Once it is scanned, the true nature of the ship is revealed. (The system can only confuse the initial long range sensor information, not close range sensor information.)
+
+The Weasel Boat can of course maneuver as a normal courier, scout, or whatever class it really is, but remember to restrict its moves to those possible for what it is acting as – your opponent may become just a little suspicious if a ‘battleship’ suddenly makes a four point turn\!
+
+12.4 Electronic Counter Measures These additional optional rules allow players to use ECM systems to jam enemy sensors.
+
+Ships may be fitted with individual ECM packages (to protect that ship only). Alternatively, a ship may be fitted with an Area ECM package that can also protect other nearby ships against sensor scans. It should be noted that, in general, Area ECM is only fitted to dedicated electronic warfare ships that would accompany a flotilla of non-ECM equipped vessels.
+
+Individual ECM systems can only jam sensors aimed at the actual ship carrying the system, while Area ECM systems can jam sensor scans against any friendly vessel that is within 12 MU of the Area ECM
+
+Full Thrust: Project Continuum
+
+equipped ship. While an individual or Area ECM system is in active use, the carrying ship (or any ship covered by the area of jamming effect) also suffers the jamming effects if it tries to use its own active sensors to scan an enemy (The jamming produces a blanket effect that inhibits all active sensor use, friendly and enemy). For this reason, it is necessary to note in a ship’s orders for a given turn that the ECM is active for that turn – otherwise it is assumed to be switched off.
+
+When an active ECM system, whether individual or Area ECM, is protecting a ship, the player owning that ship may make a D6 roll whenever an enemy tries to scan the ship with active sensors.
+
+This die roll is then subtracted from the roll the scanning player makes for sensor results, and the final figure applied to the sensor table above. Thus jamming is not always effective – if a player is using Superior Sensors (+2) and rolls a 6 giving a total of 8, while the opposing player only rolls a 1 for ECM, the final result will be 7; still enough to reveal everything about the scanned ship.
+
+If a player is trying to make a sensor scan while being jammed by friendly ECM, simply roll twice, subtracting the second roll from the (modified) first roll.
+
+12.5 Minesweeping Just as certain ships may be equipped to lay mines, so others may be provided with systems to clear enemy mines safely.
+
+To attempt to dispose of a mine marker, the minesweeping ship must have its minesweeper system activated by noting this in its orders for that turn. It must then pass within 3 MU of the mine during the course of its movement, and at that point 1D6 is rolled. On a score of 1, the mine immediately attacks the minesweeper, detonating and causing damage as normal. On a roll of 2, the mine does not attack, but is also not disabled; it remains in position and can attack other ships as normal. On rolls of 3 to 6, the minesweeper system succeeds in disabling the mine safely: the mine marker is removed from play. A minesweeper can attempt to dispose of all the
+
+96
+
+mines it passes within range of in one turn. When a ship is using a minesweeping system in active mode it may not use any offensive weapon systems in that same turn; it may use defensive weaponry and any screens as normal.
+
+12.6 Ortillery This is orbital artillery or a planetary bombardment system used for ground support fire from orbiting starships. It has no function in space combat, and cannot be used as an anti-ship weapon (Unless a ship has landed in the target area). Effects should be determined by players according to the ground combat system rules in use.
+
+12.7 Boarding enemy ships It is possible to deliver Boarding Parties or Marines onto enemy ships, either by use of Boarding Torpedoes, moving along side, by using Transporter Beams (pg 39), or with Assault Shuttles (chapter8) . Once on board, the Boarding Parties try to disable key systems, disrupt the ship's internal communication, kill the crew, and knock out power systems. A ship’s Damage Control Parties may be used in a Boarding Party role. Marines (troops with special shipboard combat training) may be purchased separately. In the following rules the term DCPs and Boarding Parties are used interchangeably.
+
+Marines delivered to a ship via Transporter Beams that are attacking a system icon on the ship’s SSD do not use the combat procedure in this section; they use
+
+Full Thrust: Project Continuum
+
+the Commando Raid procedure in section 5.9 instead.
+
+Boarding Parties (DCPs) Once a ship is boarded, the ship’s crew fights back, trying to kill the invaders. A ship’s crew may attempt to destroy invading Boarding Parties and Marines as a damage control action. Each enemy Boarding Party or Marine must be targeted separately. As with repairing systems, the chance of killing an enemy Boarding Party or Marine depends on how many DCP units are assigned to the action. One DCP will kill an enemy Boarding Party or Marine on a die roll of “6”, two DCPs will kill it on a 5 or 6, and three DCPs will kill it on a 4+. Attacking Boarding Parties or Marines cannot target and kill the ship’s DCPs; they can only kill the crew by destroying hull boxes.
+
+Marines Marines are highly specialized troops equipped and trained specifically for seizing enemy ships and space stations. A ship with embarked Marines may use them to destroy attacking enemy Boarding Parties or Marines. They are much more effective at this role than the ship's own crew, as they have the training and equipment for close combat. One Marine will kill
+
+97
+
+another Boarding Party or Marine unit on a 4+.
+
+Attacking Marines may target defending Marines or attempt to do damage to the ship’s hull boxes. They hit and kill defending Marines on a die roll of 4+. Combat between defending Marine units and attacking Marine/Boarding Parties is simultaneous.
+
+Resolve Boarding Combat during phase 12. Use the following procedure to resolve Boarding Combat:
+
+Step 1: First allocate attacking Boarding Parties and Marines to attack defending Marines or attempt to damage the ship’s hull boxes. Secondly allocate defending DCP and Marines to a particular enemy Boarding Party or Marine.
+
+Defending DCPs now attempt to kill enemy Boarding Parties or Marines as a Damage Control roll. Remove any enemy Boarding Party or Marine casualties. Enemy Boarding Parties or Marines may NOT attack defending crew (DCP) units in this phase.
+
+Step 2: Defending Marines (not DCPs) may fire on enemy Boarding Parties and Marines, inflicting kills on a die roll of 4+. Attacking Boarding Parties and Marines engage defending Marines. Combat and kills inflicted are simultaneous.
+
+Step 3: Any remaining enemy Boarding Parties that did not attack the defending Marines do one point of damage per DCP or Marine to the ship’s hull boxes. This damage may require the ship to take threshold tests if a row of hull boxes is destroyed.
+
+Marines and Boarding Parties cannot be killed in a threshold test caused by boarding combat. Both Marines and Boarding Parties are vulnerable to being killed in threshold tests caused by weapons fire against the ship. In the case of attacking Boarding Parties and Marines, they cannot be lost to threshold checks caused on the turn they boarded the ship.
+
+If a ship is “destroyed” by Boarding Parties or Marines it is considered captured. While the ship cannot be used in that combat (it is too badly shot-up to be of much use), if the boarder's side wins and holds the field they can take the ship home for study,
+
+Full Thrust: Project Continuum
+
+or as a trophy. Captured ships can still be targeted by ships and ordnance, so an empire may fire upon and destroy their own captured ships to prevent them from falling into enemy hands. A single point of damage is sufficient to destroy the captured ship.
+
+If a ship jumps away into FTL with enemy boarders on board, the battle for control of the ship continues. Resolve the boarding action until either all the boarders are killed, or the ship has been captured. If it is captured the player receives the full victory points for it if the scenario being played is using victory points. In a campaign the ship may or may not be returned to the capturing player depending on the nature of the campaign. Most Marine units will have a small cadre of naval personnel accompanying them as advisors and to help crew the prize ship in the event of victory. Some navies will even cross train a few select Marines in basic ship functions so they may get a captured vessel under control, perform basic Damage Control and so on.
+
+Example of Boarding Combat During the turn the IKV Kiang managed to get 4 Marines aboard the United Do Gooder starship Wulkan. The Wulkan has 6 DCPs and 2 Marines. With no damage to repair, the Wulkan player decides to use all of his DCP and the 2 Marines, to repel the IKV troops. The IKV player decides to assign two of his Marines to attacking the defending Marines. The other two will ‘destroy’ two hull boxes if they survive. The Wulkan player decides to assign his 6 DCP to attack (repel) the Marines assigned to damaging hull boxes (three for each Marine) and his 2 Marines to engage the other two enemy Marines. The DCPs
+
+98
+
+need a 4+ to destroy a Marine. The player rolls a 2 and a 5, killing one Marine. The IKV Marines and the Wulkan Marines each need a 4+ to kill one another. The IKV Marines wipe out the Wulkans with only one loss.
+
+Combat is now over for the turn. The IKV Marine assigned to attacking hull boxes has survived, and now destroys one hull box. The other surviving Marine does not eliminate a box since it was engaged against the ships defending Marines.
+
+12.8 Fleet morale The question of morale in naval games, whether science fiction or historical, is always a bit of a problem. Will a fleet fight to the last ship, or will it turn tail and run (or even surrender) after relatively few losses?
+
+The answer to this really depends on the kind of scenario being played, as the reactions of the fleet and its overall commander will be heavily influenced by what is at stake.
+
+If a force is defending a colony world against an invading fleet, it may well fight ‘to the death’ in a desperate attempt to protect the colony. On the other hand, if it is a meeting engagement in a relatively unimportant star system, then it would be quite likely that the admirals on either side would consider the preservation of their own ships and crew to be quite a high priority.
+
+If playing a simple engagement (or a competitive game), we suggest that the loss of 50% of a player’s overall force (calculated in mass of ships destroyed) would be enough to cause the commander to withdraw from battle.
+
+For other games we recommend that the level of losses to force a withdrawal should be written into the scenario when it is designed, bearing in mind the story-line being used.
+
+12.9 Striking the colors The surrender of an individual ship is a slightly
+
+Full Thrust: Project Continuum
+
+different matter to the withdrawal of the complete fleet. There are many possible circumstances where the captain of a ship may decide that, orders notwithstanding, the survival of the crew is more important than continuing to fight in a hopeless situation.
+
+One possibility is to make an extra roll at the same time as any threshold check, using the normal scores for losing systems at threshold points, i.e. 6 the first time, 5 or 6 the second, etc. If the ship fails this roll then its captain decides to ‘strike the colors’ and surrender to the nearest enemy vessel.
+
+Using this rule can result in the surrender of a vessel that has taken relatively little damage – however naval history is rife with precedents for this where colors were prematurely struck due to damage suffered being grossly overestimated.
+
+Players may prefer to roll as if for a Core System threshold check, in which case ships will never surrender on the first row of damage.
+
+One point must be made here – the use of this rule is strongly dependent on exactly who the two fleets are; for example, if using the GZG background then it is very unlikely that any human ship would even attempt to surrender to a Kra’Vak or vice-versa, simply because they would not expect to survive capture.
+
+99
+
+12.10 Civil wars (Optional) There may be some situations where ‘blue on blue’ battles take place such as civil wars, rebellions etc. If
+
+both fleets are composed of ships built by the same navy then all ships and squadrons roll a +1 on their direct fire weapons. The crews of these ships are well aware of the enemy ships vulnerable areas.
+
+12.11 Knocked off course (by Rich Mcgee) Whenever a ship passes a damage threshold, while using the cinematic movement rules, after checking for systems failures make one further roll at the same odds (so 6+ for first threshold, 5+ for second, etc.) to determine if the ship has been knocked off course. This may be the result of misfiring thrusters, a shaken crewman bobbling the helm controls, or a kinetic reaction to having a significant chunk of the hull turned into expanding plasma. Regardless of the exact cause, if the threshold is failed, then roll 1d6. On a 1- 3, immediately change the ship's facing by 30 degrees to starboard, on a 4-6 change facing 30 degrees to port.
+
+Under the vector movement rules a ship's facing (the direction its prow points toward) may not be the same as its heading (the direction its momentum is moving it in). In this case, make two threshold checks. If failed, the first check will change the facing of the ship as described above. The second check determines whether the ship's heading changes. If failed, roll a further 1d6. On a 1-3 move the vector marker (but not the mini) 30 degrees to starboard. On a 4-6, move the vector marker 30 degrees to port.
+
+12.12 Vector Movement System
+
+Excerpt from Fleet Book 1 This is a completely OPTIONAL alternative movement system, which players may use instead of the standard FT movement rules described in the basic rulebook.
+
+The Vector movement rules give a much more accurate portrayal of how objects really maneuver in space; they are also a little more complicated than standard FT movement, though far less so than certain other rules’ attempts at the same thing\! Whether you choose to use them or not will depend entirely on personal taste and whether they fit the particular background you are using - if you are
+
+Full Thrust: Project Continuum
+
+recreating a film or TV series where the ships clearly do NOT move in a true vector fashion, then you will obviously not want to use these rules.
+
+Using the vector movement rules will become very straightforward once you are used to it, but we suggest taking a short while to read through the rules and examples carefully, and to plot a few movement examples out with a ship model to get the feel of the system before starting your first game. Radical course changes become much more difficult to do under the vector rules, especially at high velocities – remember that the faster you are moving, the less manoeuvrable your ship will be under the vector system. It may also take you a while to get used to the fact that the ship is not always pointing in the direction it is moving\!
+
+If you are using the “official” GZG background, or one of your own devising, then you may feel free to use either system at the agreement of your players, or even to mix the two to reflect older and newer ships in the timeline or differing levels of technology.
+
+Because the Thrust Ratings of ships are used in similar ways in both systems, any given ship design may be used with either movement system without modification - the only thing to be aware of is that ships with low thrust ratings may prove VERY unmanoeuvrable under the vector system.
+
+It is perfectly possible to mix both vector and cinematic movement in the same game, to represent ships with different drive systems or technology levels - each ship simply follows the relevant rules according to its own drive system.
+
+Course and Facing Under the standard Cinematic FT movement, a ship will always be facing in the same direction that it is moving; under the VECTOR system the ship may be moving one way and facing another. The direction in which the ship is actually MOVING is termed its COURSE, while the direction in which the ship model is actually pointing is called its FACING. The current COURSE is indicated by a small arrow marker placed next to the ship’s stand, and this marker is also used as a reference point during the process of moving the model. It should be noted that
+
+100
+
+the FACING of a model should always be one of the 12 “clockface” points, though the mechanics of the vector movement mean that the COURSE will usually NOT correspond exactly to a clockface direction.
+
+Main Drive Thrust The THRUST RATING of any ship is the amount of thrust that can be produced by its MAIN DRIVE - the “big engine” at the back. Each point of thrust applied in a turn will accelerate the ship by 1 inch (or other movement unit) ALONG THE AXIS OF THE SHIP, so if a ship that is facing in its direction of travel (i.e. its “course” and “facing” are the same) and currently moving 6" per turn applies 4 points of thrust from its main drive, it will end up moving at 10" per turn. If the ship’s facing and course are NOT the same (i.e.: the model is pointing one way and moving another) then the application of thrust from the main drive will alter the ship’s course AND velocity. To DECELERATE using the main drive (as opposed to using the forward “retro” thrusters), the ship must be turned so that it is pointing “backwards” relative to its current course. When writing orders for your ship, Main Drive thrust is written as MD followed by the number of thrust points being applied - so MD4 will move the ship 4" in the direction of its present facing. If using existing ship designs (whether from this book, from FT2 or elsewhere) then the thrust level shown in the ship’s drive icon is the rating used for the main drive.
+
+Manuvering Thrusters In addition to the main drive, all ships have THRUSTERS - small drives positioned in clusters around the ship, pointing forward, port, starboard etc. (in reality ships would also of course have “up” and “down” orientated thrusters, but as we are not concerned with 3D movement in FT we can ignore these except for their use in rolling the ship).
+
+The thrusters may be used to “push” the ship to alter its course, or to rotate the ship onto a new facing. The power available to the ship’s thrusters is equal to half the thrust rating of the main drive - so a ship with a main drive TR of 6 would have 3 manoeuvre points available from its thrusters; unlike the Cinematic movement rules, thruster use is allowed in addition to applying full available thrust with the main drive - so
+
+Full Thrust: Project Continuum
+
+that a ship with a Thrust Rating of 4 could apply 2
+
+Thruster Pushes points of thruster use and still use all 4 thrust points
+
+A thruster “push” is firing a combination of maneuver from its main drive.
+
+thrusters to alter the course and/or velocity of the ship, WITHOUT affecting its actual facing (i.e.: the We have not depicted the Thruster systems as separate
+
+ship ends the turn with its model pointing the same icons on the ship diagrams, in order that any design
+
+way it started, although its course may have changed). may be used with either movement system without
+
+Pushes may be made to PORT, STARBOARD or alteration.
+
+REVERSE (using the forward “retro” thrusters to slow the ship down without having to spin it round For the purposes of damage, assume that the thrusters
+
+and use the main drive). It requires ONE maneuver are driven by the same power systems as the main
+
+point of thrust applied to displace the ship by one drives - when the main drive takes damage, thruster
+
+movement unit; a push of 3 with the port-side power is halved or lost accordingly.
+
+thrusters will shift the ship 3" to starboard (for
+
+Rotation Rotation of a ship around its axis requires much less power than actually changing its vector. When the thrusters are used to rotate a ship onto a new heading, ONE maneuver point from the thrusters allows the ship to be rotated by any desired number of facing points. Thus, for the expenditure of one point of thruster power a ship can be rotated to face in any of the 12 possible facing directions, regardless of the thrust rating of its drives (the only difference between rotating 30 degrees and rotating 180 degrees is simply that, once the thrusters have started the ship spinning, the ship is allowed to rotate for longer before the thrusters burn again to cancel the spin). Note that a
+
+simplicity of play, this is referred to as a STARBOARD PUSH - to avoid confusing of orders we always use the direction of the EFFECT rather than the location of the thrusters being used). Note that a PUSH changes the ship’s COURSE (and/or VELOCITY) only, and never its FACING. PUSH orders should be written as PP (Push to Port), PS (Push to Starboard) or PR (Push in Reverse), again followed by the number of thrust points applied - so PR3 would be using 3 maneuver points from the retros to push the ship 3 units “backwards” relative to its current heading. Pushes may only be applied directly to port, starboard or rearward relative to the ship’s facing at that moment.
+
+ROTATION changes the ship’s FACING only, and
+
+Combining Maneuvers never its COURSE.
+
+If desired, a ship may combine both ROTATION and PUSH uses of its maneuvering thrusters in a single Note: when thrusters are used to rotate the ship onto a
+
+game turn, but no more than ONE of each, provided new facing, it is assumed that several of the ship’s
+
+the TOTAL of maneuver points expended does not thrusters are fired in unison to achieve the desired
+
+exceed the total available. It is quite acceptable for a effect – for example, to rotate the ship to starboard it
+
+ship with (say) 3 maneuver points of thruster power would fire the PORT FORWARD thrusters and the
+
+available to make a rotation (using up 1 thruster STARBOARD REAR ones simultaneously to spin the
+
+point), then apply a main drive burn, then use the ship around its centre of mass. It is assumed that, in
+
+remaining 2 maneuver points for a 2" thruster push to the same turn, a compensating burst is applied as the
+
+port, starboard or aft as desired. The final position, desired new facing is reached in order to stop the
+
+course and velocity would be measured after ALL ship’s rotation - the combined effect of these
+
+maneuvers are completed. operations constitutes one “rotation” action. ROTATION orders should be written down as TP (Turn Port) or TS (Turn Starboard), followed by the number of points of heading change - thus TP2 indicates a rotation to port of 2 clock face points (ie: 60 degrees).
+
+Order Sequence The actual sequence in which thruster and main drive burns are applied in a single turn will make a difference to the final course and velocity of the ship, so it is necessary to rule on what order things are done in. Each effect is applied to the ship strictly IN THE ORDER THEY ARE WRITTEN DOWN BY THE
+
+101
+
+Full Thrust: Project Continuum
+
+PLAYER. If the player writes TP2, MD6 then the ship will first be moved according to its starting vector (as always), then turned 2 points to port (TP2) and then moved 6" along its new facing (MD6). If, on the other hand, the order is written MD6, TP2 (thus applying the main drive burn BEFORE rotating the ship to its new facing) then the result will be VERY different in terms of the ship’s final vector and position - plot each one out and you’ll see what we mean\!
+
+Collisions If there are any objects on the board that are deemed big enough to pose a collision risk, such as asteroids or very large space installations, such a risk will only occur if the line between the ship’s STARTING and FINAL positions intersects with the object. In effect, it is this line (as shown by the tape or rule when measuring the final velocity of the ship) that most nearly approximates the “true” path followed by the ship during the turn - the position of the ship model at any other time during the movement sequence is merely for calculation purposes and does NOT indicate that the ship actually occupies that point at any time. Of course, even doing it this way is an oversimplification of the true mechanics - but we feel it is close enough for game purposes\!
+
+Moving Ships Under The Vector System Once the orders are written by all players, all ships are moved simultaneously in accordance with their starting vectors and any relevant manoeuvre orders. When moving a particular ship, ALWAYS start by moving it according to its starting vector - i.e. move the model in the direction of its present COURSE (as indicated by its course marker arrow) a distance equal to its current VELOCITY, being very careful to keep the FACING of the model exactly the same as at the start of the turn; at this stage, LEAVE THE COURSE MARKER IN ITS STARTING POSITION. Now apply any thrust (main drive and/or thrusters) indicated in the ship’s orders, making sure to apply each effect in the sequence it is written down. Where the model ends up after all thrust has been applied is its finishing position for that turn; now place the tape measure or rule between the course marker and the ship’s final position, and read off the distance - this (rounded to the nearest whole inch or other movement unit) is the ship’s final VELOCITY for the turn, and
+
+102
+
+should be written in the “V” box on the order sheet ready for the next turn.
+
+Finally, move the course marker up to the stand of the model again, with its arrow pointing in the direction of the ship’s new COURSE - i.e.: parallel to the tape- measure.
+
+The ship’s VECTOR at the start of the next turn will now be in the direction of the course marker arrow, at the new velocity written down.
+
+Vector Movement Examples: The ship in Figure 1, below, is facing in the same direction it is moving (ie: its COURSE and FACING are currently the same), and its current velocity is 10. The ship starts the turn at position A. The player writes movement orders of TP3, MD6. Firstly, the ship is moved along its present course by 10", to position B - it is then rotated 3 points (90 degrees) to PORT, to position C. Now, it is moved along its new facing by the amount of its Main Drive burn, ie: 6", to its final position D. Finally, the distance between starting and finishing positions (A and D) is measured - rounded to the nearest whole number it will be 12", and this is recorded as the starting velocity for the next turn - and the course marker is moved up to the model again parallel to the line between positions A and D.
+
+Full Thrust: Project Continuum
+
+The ship in Figure 2 is facing in the same direction it is moving, and its current velocity is 6. The ship starts the turn at position A. The player writes movement orders of PS2. Firstly, the ship is moved along its present course by 6", to position B. Now, the ship’s side thrusters fire to push it 2" to starboard, to the final position C, without changing its facing. The distance between starting and finishing positions is measured- rounded to the nearest whole number it will be 6", and this is recorded as the starting velocity for the next turn - and the course marker is moved up to the model again parallel to the line between positions A and C.
+
+103
+
+Full Thrust: Project Continuum
+
+13 Ship design and construction
+
+The ship design rules detailed in this section are constructed so that every ship has to be a compromise between the three basic factors. Although a near- perfect superfast, ultra-heavily armed, and heavily protected ship is theoretically possible, it will turn out to be so incredibly expensive in points cost that just one will take most of your fleet budget\! Remember that, especially in a campaign, a ship can only be in one place at one time – for most purposes a balanced fleet of lighter craft will be more cost effective than just a few super-ships.
+
+Designing a ship involves two main considerations: the ship’s mass, which is a measure of its overall size, and its point cost.
+
+The mass of the ship determines its class and how much in the way of systems (weapons, screens, fighter bays, etc.) can be fitted into the hull.
+
+The cost of the ship is the total of the mass cost, the hull cost, the drives cost, and the individual costs of all the systems that you decide to install.
+
+13.2 Scale Full Thrust is deliberately vague about scales: There is no exact definition of how many tons a mass unit represents, or how many kilometers per MU. Ships are defined by their role, and the relative value of 13.1 Overview Most players will probably run their first few games using just the basic ship types. Sooner or later, however, many of you will want to start modifying the designs provided or else design your own ships
+
+their weaponry and protection is in abstract mass units rather than a specific tonnage number. These are a fairly generic set of rules that you can adapt to your own setting, so these abstractions – or fudge factors if you prefer – are necessary. from scratch. Experimenting with different weapons fits, hull sizes, and so on can be fun.
+
+For example, consider fighters. In most science fiction TV and films these resemble space going Ship design since the Age of Sail has always been about achieving a balance between three essential factors: mobility, firepower, and protection.
+
+versions of current jet fighters, with a pilot and sometimes one or two other crew. This does not mean that your fighters cannot be much bigger and with sizeable crews. What matters in Full Thrust is how Mobility is represented by the thrust rating available to the ship, firepower by the amount and types of weapons carried, and protection by the screens, armor, and other systems, plus the overall damage points.
+
+they behave: if they are launched in swarms from carriers, zip about at speed, are very difficult to hit with normal ship weapons but easily destroyed, and attack enemy ships or fighters at very short range; then in Full Thrust terms they are fighters.
+
+Scaling also applies to numbers. Nominally each
+
+104
+
+Full Thrust: Project Continuum
+
+fighter group in Full Thrust has six fighters, but you are free to declare that each ‘fighter’ represents 2 or more actual vessels.
+
+It is standard in Sci-fi for a single Heroic Good Guy (of any gender or species) to be worth several of the, low quality, cannon fodder troops used by the Evil Bad Guys. In such a setting fighter groups belonging to the Good Guys would be just six fighters each, while fighter groups belonging to the Bad Guys would represent three dozen unfortunates whose destiny is to be shot down six at a time\!
+
+Going the other way, Full Thrust takes a large scale ‘bang you’re dead’ approach to fighter combat. But you could easily design various types of fighters as small corvette or frigate sized ships, each with their own unique combination of thrust, weaponry, and protection. Shorten the game turn to 5 seconds, add in one or two giant warship models to fight around, and you have a dramatic dogfight.
+
+Really big ships are also found in science fiction, such as the superdreadnoughts in the Honor Harrington books or the Super Star Destroyer that Darth Vader uses as his flagship.
+
+Project Continuum imposes a theoretical upper mass limit on ships, which would be far too low if mass units represented a fixed number of tons. Instead you can assume a sliding scale from perhaps fifty tons per 1 mass for the smallest escorts, increasing to several hundred or even thousands per 1 mass for the largest superdreadnoughts.
+
+There are three reasons for this. Firstly, the combat
+
+105
+
+effectiveness of larger ships in Full Thrust increases at a faster rate than the mass does, so one ship of mass 200 is (almost always) superior to two ships of mass 100. The mass represents weaponry and protection, not just volume.
+
+Secondly, you can always scale everything else around the really big ships down. The smaller sized combatants in such a fleet would normally be considered dreadnoughts themselves, but in a fleet with such monsters (and presumably equally formidable opposition) would be reduced to the role of escort cruisers.
+
+Lastly and much less seriously, the really big ships are usually constructed by the megalomaniacal Evil Overlords and they never work as well as expected, often being destroyed by nothing more than a puny fighter\! The Project Continuum suggested mass limit represents the actual performance of the ship, not that promised by the (terrified or over-optimistic) designers.
+
+13.3 Systems When designing ships, there is not necessarily a 1:1 match between Full Thrust system symbols and individual weapon systems. For example, a single Beam-1 symbol represents the ability to deliver a certain amount of firepower in all directions, which on all but very small ships will require more than one actual weapon mount.
+
+Full Thrust: Project Continuum
+
+the rules for starbases and monster ships (see below) Each beam on a ship SSD can represent an individual
+
+with multiple individual sections and SSDs. mount, or a battery consisting of a number of projectors slaved together under a single control
+
+The table below shows the standard basic ship system.
+
+classifications, along with the common designations and a rough guide to the typical mass ratings of each. A beam system that is twice as damaging as another
+
+These figures are very loose, as most navies tend to but no longer ranged would be represented by two
+
+classify ships by function rather than by tonnage: one symbols instead of one. A powerful alien beam that is
+
+fleet’s destroyer may, in reality, be a bigger and more also very accurate against fighters would be
+
+powerful ship than another’s light cruiser. represented by a Graser symbol for fire against ships and a PDS symbol for use against fighters or a Pulsar, for example.
+
+Ship class Scout or Courier Abbreviation SC Mass 4 - 10 A broadside symbol can represent an actual weapon
+
+Corvette CT 8 - 16 battery unable to fire Fore or Aft (as seen on the Sulaco); or two weapons, one on each side, that share a common fire control or ammunition supply; or that
+
+Frigate Destroyer FF 14 - 28 DD 24 - 36 the ship is able to roll quickly enough to combine the fire from two individually weaker weapons in either direction.
+
+Heavy Destroyer Light Cruiser DH 30 - 44 CL 40 - 60 Patrol/Escort Cruiser CE 50 - 70 13.4 Mass rating The total mass of a given hull is a representation of the capacity of that hull for outfitting it with drives,
+
+Heavy Cruiser Battlecruiser CA 60 - 90 BC 80 - 110 weapons, defensive systems, etc. This total mass figure is used to refer to the size of the ship: a size 24 ship could be fitted with a maximum of 24 mass of
+
+Battleship Heavy Battleship BB 100 - 140 BDN 120 - 160 systems.
+
+Dreadnought DN 140 - 180
+
+Note: The mass ratings of systems are abstract figures used to indicate the required volume, power
+
+Superdreadnought Escort Carrier SDN 160 - 300 CVE 60 - 140 requirements, etc., rather than being an exact measure of the bulk or weight of a given system. If you assume that in a given background, one mass is
+
+Light Carrier Heavy Carrier CVL 120 - 180 CVH 160 - 300 equivalent to around 100 tons, then a mass 1 system
+
+Attack Carrier CVA 150 - 300 (such as a point defense installation) will not necessarily weigh in at 100 tons; it will, however,
+
+Names require 100 tons of hull capacity to mount the system
+
+Historically the term ‘battlecruiser’ has been used and its infrastructure, control and power
+
+both for fast, heavily armed, but lightly protected requirements, sensors, crew, etc.
+
+British and American ships; and for lighter armed but better protected French and German ships. This is true Escorts have a maximum mass of 44; cruisers have a
+
+in many sci-fi genres as well. The TV series Babylon maximum mass of 90. Anything over mass 90 is a
+
+5 is a good example: The Earth Omega class capital ship.
+
+‘destroyers’ were much larger than cruisers. In Full Thrust it is used for ships bigger than heavy cruisers The maximum suggested mass for a ship is 300. If
+
+but smaller than most capitals. you do decide to design larger ships, consider using
+
+106
+
+Full Thrust: Project Continuum
+
+‘Escort cruisers’ and ‘escort carriers’ are cruisers or carriers, not escorts. The designation simply indicates that its primary function is that of supporting (escorting) other ships rather than independent action.
+
+These names are used in the GZG setting but are not at all compulsory. Other navies have different ship classifications, for example Escorteur d’Escadre or Raketny Kreyser; or you could adapt aircraft terminology. This is an area where a little research and imagination can go a long way. (As a matter of courtesy, you should always be willing to inform your opponents whether a ship is an escort, cruiser, capital, or carrier.)
+
+Note that if you are using commercial model ships, just because a manufacturer happens to classify a particular model in the range as a ‘Destroyer’ in no way prevents you calling it a cruiser, or anything else that fits in with your fleet structure.
+
+13.5 System mass The total mass includes the Core Systems (section 11) and passive sensor arrays (section 12). No extra points are paid for these systems.
+
+Some systems, e.g. weaponry, are a fixed mass per system, regardless of the size of the ship on which they are mounted. Other systems including drives and screens are a percentage of the total mass, and thus become more expensive as the mass of the ship goes up (As of course does the cost of the hull itself).
+
+Because they are calculated as percentages of the overall ship mass, choosing a hull size that is not an exact multiple of 10 will mean that some system masses may not be whole numbers. Some of these will be rounded up and some down: in general terms, decimals of .49 and less should be rounded down, while those of .5 or higher should be rounded up.
+
+For example, if you are building a mass 64 ship then the 10% required for the FTL drive will be 6.4, which will round down to 6. If the same ship’s main drive is thrust-4, however, this will take 20% = 12.8 which will round up to 13 mass. In general, most designs will come out about even in the rounding; occasionally a ship may end up fractionally better or
+
+107
+
+worse off than another of broadly similar design, but that shouldn’t be a serious problem. Besides, if we don’t give the maximizers and number crunchers something to work at they’ll all get bored\!
+
+Important: No single system can ever be rounded down to mass 0. A very tiny ship of (say) mass 4 will still have to pay 1 mass for an FTL Drive, even though 10% for it is only 0.4. Thus the smallest possible FTL-capable ship is actually a mass 3 scout or courier boat, that will use 1 mass for hull integrity, 1 mass for FTL Drive (the smallest unit available) and 1 mass for main drive (for which it could get thrust- 6). The boat would be unarmed, and have just 1 damage box.
+
+The smallest usable combat ship will be around 5 or 6 mass which will get you a tiny armed scout or light corvette with only a single fire control and probably only a single small weapon system, crewed by a handful of very brave spacers.
+
+13.6 Primary ship systems Primary ship systems represent the heart of a ship: The engines, frame work, etc.
+
+13.7 Hull strengths The hull integrity represents the amount of the ship’s structure that is devoted to reinforcing the basic hull envelope, including bulkheads, compartmentalization, internal strengthening, etc. It is entirely separate from the armor used (if any), which is external protection. It is perfectly possible to have a ship with a fragile hull structure but lots of armor and screens: such a ship will be fine until some damage manages to get through, at which point the hull integrity will fail very quickly\!
+
+There are no fixed percentage limits on hull integrity. Ship designs may have as many or as few hull boxes as the designer wishes, subject only to a lower limit of a minimum of 10% of the total ship mass. The actual number of hull boxes chosen does not have to exactly equal any given percentage of the ship’s total mass, but the following terms may be used to describe the kind of structure a ship has:
+
+Full Thrust: Project Continuum
+
+before – but still only the same amount of total Fragile hull 10% of total mass
+
+damage to destroy. Weak hull 20% of total mass Average hull 30% of total mass
+
+The points cost of an Advanced Hull is mass × 3 Strong hull 40% of total mass
+
+instead. Ships with less than four hull boxes are Super hull 50% of total mass
+
+always considered standard hulls, not Advanced Hulls. The mass used for hull integrity is the number of hull boxes that the ship has to absorb damage points. For standard ships, the hull boxes are arranged in four, five or six rows to form the damage track for the ship.
+
+Four rows are what the typical warship would have. Five rows would be fairly typical of civilian ships or old warships. Six rows would be for large open framed type bulk carriers, very antiquated starships or large bases. The more rows a ship has the more vulnerable it will be to critical damage.
+
+Example: For a mass 60 ship with hull strengths chosen to be exact multiples of 10%, a weak hull, for a four row ship, would be 12 hull boxes arranged in rows 3/3/3/3; while a strong hull would be 24 hull boxes in rows 6/6/6/6.
+
+13.9 Drives The FTL Drive for interstellar capability requires 10% of the total mass. Non-FTL ships may only be
+
+Each row should be of equal length, but if the number of hull boxes does not exactly divide by the number of rows the extra boxes are placed in the upper rows.
+
+used in certain scenarios: see section 11. Tugs, tenders, and Motherships use more than the standard mass for their FTL Drives
+
+For a standard four row design, a ship with just 2 hull boxes has one box in each of the first two rows and nothing in the last two, and a ship with 15 boxes has three rows of 4 boxes and one of 3.
+
+A standard FTL Drive has a cost of mass × 2. For ships that choose to pay the extra cost of Advanced FTL capability the cost increases to mass × 3.
+
+The points cost of a standard four row hull is mass x 2. The points cost of a five row hull is mass x 1.5.
+
+The ship’s main drive requires 5% of total ship mass per thrust rating. Add the percentages together and then determine the mass required.
+
+The points cost of a six row hull is mass x 1.
+
+Example: A cruiser has total mass 64. A main drive
+
+13.8 Advanced Hulls Some ships have superior construction technology or internal protection and are therefore much more
+
+rating of 4 would be 20% of 64 = 12.8, rounded up to 13. Main drive rating 6 would be 30% of 64 = 19.2, rounded down to 19.
+
+resistant to the initial effects of damage. Such ships have Advanced Hulls with the boxes arranged in three rows, not four.
+
+The points cost of the main drive is mass × 2 for standard, mass × 3 for advanced. Ships with Advanced Drives never have the choice to ‘turn off’
+
+In the example above a strong hull would still have 24
+
+advanced capability to reduce points cost.
+
+hull boxes but arranged in three rows 8/8/8, requiring more damage to inflict a threshold point check than
+
+108
+
+Illustration 7: Strength 24 standard and Advanced Hulls
+
+Full Thrust: Project Continuum
+
+13.11 Atmospheric streamlining Streamlining allows ships to safely enter a planet’s atmosphere as described in section 13. Partial streamlining requires 5% of the ship’s total mass, while full streamlining requires 10% of the total mass. The points cost of streamlining is 2 points per mass used for the aerodynamics.
+
+Example: To give a mass 50 ship partial streamlining will use 3 mass. Full streamlining will use 5 mass.
+
+13.10 Advanced Drives and FTL Advanced Drives or FTL represent new ‘tech levels’ or different mechanisms, not just that one ship is a bit better than another. All the ships built by a given species, culture, or state are expected to have the same kind of main drives and same kind of FTL. Exceptions can be made when a fleet has acquired ships from a different source, or is undergoing some kind of major technological transformation.
+
+109
+
+Ship drives and FTL
+
+13.12 Additional primary ship systems
+
+Hangar bays
+
+Hangar bays hold fighters when they are not in flight. They contain all the equipment that is necessary to re-arm and refuel fighters but they may not launch or recover them: that is the job of the launch tube. Each hangar bay holds a single squadron (wing) of 6 fighters.
+
+Hangars cost 3 per mass, and are six mass each. If using the optional Critical hits to hangar bay rules then the points cost is reduced to 2 per mass.
+
+Launch tubes / flight deck
+
+Launch tubes are connected to hangar bays and are used to launch and recover fighters. Launch tube technology is available to all species. A single launch tube may serve multiple hangar bays.
+
+Launch tubes cost 3 per mass, and are 3 mass each.
+
+Launch catapults (optional)
+
+Some launch tubes or flight decks are equipped with catapults that propel the fighters
+
+Full Thrust: Project Continuum
+
+away from the ship in a similar fashion to firing a gun. This enables a ship to launch fighters while maneuvering (i.e. applying thrust).
+
+This upgrade is included here to allow players to build ships that operate in a similar way to the Battlestars from the TV series Battlestar Galactica. Players should only apply this upgrade to ships from a genre or background that has them and then only if everyone agrees.
+
+Cost per launch tube or flight deck is 1 point, 0 mass and if one launch tube/flight deck is upgraded they all must be.
+
+Combined Bays and Launch Tubes (optional) The original Full Thrust rules combined fighter launching requirements and their support equipment together into a single system (i.e. hangars). If players prefer, they may still use the original system. There is certainly a precedent in some sci-fi shows for this. For example, in Star Wars, many ships have fighter hangars simply open to space with no clear launching mechanisms required. You will not upset game balance if you use these and your opponent does not. However we do not recommend combining both of these approaches in the same fleet.
+
+Ships using combined hangars may launch all their available fighter groups in one turn but may only recover fighters equal to half of their available hangar bays.
+
+A combined hangar bay is 9 mass Point cost is 3 per mass
+
+Fighter racks
+
+Fighter racks allow robot fighters to be carried on the hull of a ship. This provides the advantage of rapid launch (no limitation of the number of launch tubes), and is a very cheap way for a warship to carry some fighters into combat.
+
+Any type of robot fighter can be rack-mounted. Robot fighters cannot be refueled or rearmed in the carrying rack. A launch tube and hangar bay equipped ship with the proper type of hangar bay for the fighter type being used is required for combat
+
+110
+
+reloads.
+
+Fighter racks cost 1 per mass. Fighter rack mass 6 can carry 1 wing of robot fighters
+
+Gunboat rack
+
+Gunboat racks are 18 mass and will carry a squadron of 6 gunboats. The cost of the rack is 0 points Boat bay Boat bays are for housing non-combat shuttles, drop ships, small survey craft etc. They will have little combat value but may be used to refuel and re-arm gunboats if they are large enough. Most gunboat carriers will have one or at most, two bays.
+
+Boat bays 1.5 mass per mass of the craft to be carried and cost 0 points.
+
+13.13 Secondary systems Secondary systems are those systems that enhance a ships capability but are not necessarily endemic to its primary mission.
+
+Cargo and passengers
+
+Mass devoted to cargo or passenger space costs no additional points during the ship costing procedure, though of course the actual hull that encloses them is paid for in the normal way. Each mass factor used provides one factor of hold space (H) passenger space (P), or Marines (T).
+
+Troop berthing
+
+In some cases a ship may wish to routinely carry additional Marines beyond that which the vessels own life support capacity will allow. In those cases, ships will be equipped with extra troop compartments. Such compartments are very common on troop ships. These areas will contain extra sleeping and messing facilities as well as specialized training area for weapons practice, tactics familiarization, mission briefings and so on.
+
+1 mass of troop berthing will allow a ship to carry up 3 additional Marines and cost 0 points per mass. The Marines must be purchased separately.
+
+Full Thrust: Project Continuum
+
+Passenger berthing
+
+damage. Damaged (killed) DCPs cannot be repaired In some cases a ship may wish to routinely
+
+during a battle as killed and injured personnel take carry additional personnel or crewmen beyond
+
+longer to repair than damaged machinery. that which the vessels own life support capacity will allow. In those cases ships will be equipped with
+
+A ship may not mount more Damage Control Parties extra berthing compartments. These areas will
+
+(and or additional Marines) than the number of crew contain extra sleeping and messing facilities as well
+
+it was initially designed with. For example if a heavy as specialized laboratories, emergency supplies,
+
+cruiser has four crew ‘units’, the player may purchase mission briefings and so on. Such additional
+
+up to four additional Marines or Damage Control personnel are often utilized as extra Damage Control
+
+Parties or any combination of the two. Parties in emergencies.
+
+DCPs may not be targeted by Needle Beams but they 1 mass of passenger berthing will allow a ship to
+
+could be the target of Commando Raids by Marines carry up 4 additional Damage Control Parties or
+
+using Transporters. passengers, and costs 0 points per mass. The Damage Control Parties must be purchased separately.
+
+Shipyard facilities
+
+Shipyard facilities provide the Marine Boarding Parties
+
+ability to build and modify Ships can be fitted to carry embarked
+
+ships in the frontiers of an Marines. Marines cost 5 points each, and
+
+empire. In the campaign are 0 mass
+
+system, the only shipyards are present at start are in the home system, so all newly Marines appear on the SSD as a ‘system’ of their
+
+built ships must start there. Shipyards also allow an own, and can be lost to threshold damage. Damaged
+
+empire that has lost its capital to continue ship (killed) Marines cannot be ‘repaired’ during a battle
+
+construction and provide vital supplies from the as killed and injured personnel take longer to repair
+
+frontier. than damaged machinery.
+
+Shipyards can only built into space stations, not into A ship may not mount more Marines (and additional
+
+ships or System Defense Boats. Shipyards are a single Damage Control Parties) than the number of crew it
+
+system of any mass desired. The size of the shipyard was initially designed with. For example, if a heavy
+
+determines the maximum size and the total mass of cruiser has four crew ‘units’, the player may purchase
+
+ships that can be built in a single strategic turn. A up to four additional Marines or Damage Control
+
+shipyard can build a ship that is up to double the mass Parties or any combination of the two. Marines may
+
+of the shipyard. So the 50-mass shipyard mentioned not be targeted by Needle Beams but they may be the
+
+could build one 100-mass BC, or two 50-mass CLs, target of a Commando Raid by Transporters
+
+or three 33-mass DDs.
+
+Additional Damage Control Parties
+
+Ships can be fitted to carry additional crew. Most commonly these are used as extra
+
+Shipyards size. cost 2 points per mass. They can be of any
+
+Damage Control Parties, increasing the
+
+Enhanced Sensors number of available crew units to try and repair
+
+Enhanced Sensors are more sensitive the systems lost to threshold tests. The DCPs can also act
+
+normal detection packages found on ships as Boarding Parties for repelling enemy boarding
+
+with standard sensor equipment. They are also parties or can be used offensively to board an enemy
+
+fairly fragile and easily damaged. ship to capture it.
+
+They can be used to augment a ship’s normal fire DCPs cost 5 points each, and are 0 mass. DCPs
+
+control sensors or to reveal tactical information (if appear on the SSD, and can be lost to threshold
+
+111
+
+Full Thrust: Project Continuum
+
+you are using the double blind rules) but not both on the same turn.
+
+Augmenting the ships fire control system allows the ship to fire into its Aft arc, to some degree, if it applied thrust that turn.
+
+Any weapons fired through the Aft arc are limited to a range of 24 MU and will only cause a hit on a die roll of 6. Weapons that are penetrating will re-roll their hits but will only inflict one point of damage on a 5 and two points on a 6 (with another re-roll).
+
+If you using the double blind rules, Enhanced Sensors can be used to gather enemy intelligence and may reveal the following: At 24 to 36 MU they provide the same information as basic sensors. Inside of 24 MU they provide the following additional information:
+
+\- The exact number, size and arc of enemy weapon mounts. - The exact type of all missiles and fighters - The drive power of a ship (total thrust and presence of Advanced Drives.
+
+Enhanced Sensors are very fragile and easily damaged. Anytime the ship must take a threshold check the sensors are damaged at +1 on the die roll. If a natural 6 is rolled the sensors are destroyed and cannot be repaired during the game. For example, if the ship must make a threshold check for its first row of hull boxes the sensors would be damaged on a die roll of 5 and destroyed on a 6.
+
+Enhanced Sensors are mass 2 and cost 8 points
+
+Superior Sensors
+
+Superior Sensors are more sensitive than the normal detection packages found on ships with standard sensor equipment. They are also fairly fragile and easily damaged.
+
+They can be used to augment a ship’s normal fire control sensors or to reveal tactical information (if you are using the double blind rules) but not both on the same turn.
+
+112
+
+Augmenting the ships fire control system allows the ship to fire into its Aft arc, to some degree, if it applied thrust that turn.
+
+Any weapons fried through the Aft arc are limited to a range of 36 MU and are at -1 to hit. Weapons that are penetrating will re-roll their hits as normal.
+
+If you using the double blind rules Enhanced Sensors can be used to gather enemy intelligence and may reveal the following:
+
+These sensors have a range of 48 MU. At 36 to 48 MU they provide the information available to basic sensors. From 24 to 36 MU they provide the following information:
+
+\- You may see the opponents SSD at any time. You know the exact status of the ship, including how much ammunition remains in magazines, how many Marines are embarked, and what the captain had for breakfast.
+
+\- You can detect Biotech power allocation. This is revealed after all orders are written, but before movement and fire.
+
+Superior Sensors are very fragile and easily damaged. Anytime the ship must take a threshold check the sensors are damaged at +1 on the die roll. If a natural 6 is rolled the sensors are destroyed and cannot be repaired during the game. For example, if the ship must make a threshold check for its first row of hull boxes the sensors would be damaged on a die roll of 5 and destroyed on a 6.
+
+Superior Sensors are mass 4 and cost 16 points
+
+Minesweeper system
+
+See the rules for sweeping mines (section 6)
+
+Minesweeping systems require 5 mass and cost 15 points
+
+Full Thrust: Project Continuum
+
+Ortillery systems
+
+mass rating. Ortillery, or Orbital Artillery, is a specially designed system for directly supporting ground
+
+Example: We are building a heavy cruiser, and decide troops with precision strikes against opposing
+
+on a total mass of 86. The basic points cost will be the ground targets.
+
+same, 86 points.
+
+Ortillery is 3 mass and costs 9 points.
+
+2\. Choose the hull integrity for the ship.
+
+Flawed design (Optional)
+
+Some ships are so badly designed, ill-conceived or just plain unlucky, that the slightest damage will make them explode. There are many historical precedents for
+
+Example: We decide to give our heavy cruiser a standard hull of average strength. This will use up 30% of the total 86 mass, or 26 mass (actually 25.8, rounded up). The points cost of the hull will be 26 × 2 = 52. The chosen hull integrity gives the ship 26 hull boxes that will be arranged in rows of 7/7/6/6.
+
+such ships: HMS Hood for example.
+
+3\. Choose and fit drives to the ship.
+
+Flawed design is a special icon or ‘system’, on the SSD itself. If the ship is a capital ship (any ship over
+
+An FTL Drive to give the ship interstellar capability will require 10% of the total mass.
+
+90 mass) than the system is considered to be protected. If it is on a cruiser of mass 60 or more, it is not a protected system. Cruisers under 60 mass, ships with Advanced Hulls, and all escort ships
+
+Decide on the required thrust factor for the ship’s main drive which requires 5% of total ship mass per thrust factor.
+
+cannot be built as a flawed design.
+
+Example: Our heavy cruiser needs an FTL Drive (8.6,
+
+Whenever a ship is required to take a threshold check roll for the flawed design system the same as you would any other system. If it takes a critical hit the ship is completely destroyed.
+
+rounded up to 9); we also decide on thrust-4 for the main drive, which takes 4 × 5% = 20% of ship mass (17.2, rounded down to 17). Total mass of the drive package is thus 26, and points cost for the drives is 26 × 2 = 52. We now have a hull with drive systems
+
+Any ship built as a flawed design is discounted by 20%
+
+installed. The total mass used so far is 26 + 26 = 52, leaving 86 - 52 = 34 for other systems. The points cost so far is 86 + 52 + 52 = 190.
+
+13.14 Ship design procedure The easiest way to begin your career as a warship designer is by taking an existing ship design (the SSD) and modifying it in some way. Ships can be tailored for particular missions by changing the weapons while keeping the original hull and drives, for instance replacing beams with missiles.
+
+4\. Select the desired mix of offensive and defensive systems to fit to the ship, according to its intended role. See section 5, 6 and 7. Example: Our heavy cruiser is intended as a multi- role ship, so we decide on a balanced mix of offensive and defensive systems to cope with a wide variety of possible threats.
+
+Or you could try reducing the mass spent on weapons and defenses to increase the drive rating and hence agility.
+
+Two standard FireCon systems use 1 mass each and cost 4 points each. This leaves us 32 mass. The main offensive punch of the ship will be a mix of beam
+
+For this example, though, we will dive in and demonstrate the entire process from beginning to end.
+
+batteries and Salvo Missiles. We decide on two Beam-3 batteries each bearing through 3 arcs (Fore arc and two side arcs, Port and Starboard respectively,
+
+1\. Decide on the overall size of your ship, the total
+
+to give an overlapping coverage), at 6 mass each; one Beam-2 with all around fire (3 mass), plus a backup
+
+113
+
+Full Thrust: Project Continuum
+
+armament of 2 Beam-1 at 1 mass each.
+
+A single Salvo Missile Launcher is mounted forward, covering the front 3 arcs or 180° zone at 3 mass, with a magazine holding 3 standard salvoes (3 x 2 = 6 mass). Total offensive systems mass is 6 + 6 + 3 + 1 + 1 + 3 + 6 = 26, with all offensive systems costing mass × 3 = 78 points.
+
+We have 6 mass left for defensive systems to protect the ship: we decide on an active defense capability of two point defense systems (PDS) at 1 mass each, leaving 4 mass to use up. We decide to fit a level-1 screen generator for 4 mass. (5% of 86 = 4.3, rounded down to 4); alternatively, we could spend this on 4 boxes of hull armor which would be slightly cheaper. Total defensive systems mass is 6, costing mass × 3 = 18 points.
+
+Heavy cruiser SSD
+
+So, the total systems fit for the ship is: Basic hull 86 mass 86 points Hull integrity 26 mass 52 points FTL Drive 9 mass 18 points Main drive thrust-4 17 mass 34 points
+
+114
+
+Sub-totals 52 mass 190 points 2 × Beam-3 (3 arc) 12 mass 36 points 1 × Beam-2 (6 arc) 3 mass 9 points 2 × Beam-1 2 mass 6 points 2 × FireCon 2 mass 8 points SML 3 mass 9 points Magazine (3 loads) 6 mass 18 points Level-1 screen 4 mass 12 points 2 × PDS 2 mass 6 points Sub-totals 34 mass 104 points
+
+Totals mass 86 294 points
+
+Monster ships and bases For players wishing to build truly massive ships or large space stations this section will give you a few options .
+
+Full Thrust: Project Continuum
+
+Starbase and SSDs Each section has at a minimum, icons for Core 13.15 Starbases
+
+Systems and a hull damage track, plus weapons or A starbase is any space station, habitat, drift, orbital,
+
+defenses as appropriate. asteroid base, or other artificial construct large enough to be treated as terrain rather than a ship. A
+
+Non-military starbases should have many small starbase is always thrust 0 for movement.
+
+sections to represent their less robust construction.
+
+A starbase has one or more sections, each with its
+
+Like asteroids, weapons may not be fired, nor own SSD.
+
+missiles launched by ships through the space occupied by a starbase. Each section of the model should have a central ‘point’ that attacking ships may attack. See the
+
+Individual sections may fire or be fired at if they have illustration below.
+
+a direct point to point line of sight, or through sections that have already been destroyed. ‘Interior’ sections are therefore immune to attack until at least one outer section has been lost.
+
+In Figure 33, the ship and sections 2 and 4 can fire at each other, but sections 1 and 3 cannot. Sections either have no drive or a comparatively much smaller drive than a ship, so are not affected by Aft arc firing limitations or vulnerability.
+
+If a section of a starbase is destroyed by a reactor core explosion, all immediately adjacent sections take 3D6 of penetrating damage. If this also destroys those sections, repeat the process again: This can create the chain reaction of explosions so often seen in sci-fi television and film.
+
+115
+
+I
+
+Full Thrust: Project Continuum
+
+Movement and starbases The mass of a starbase represents only that used for ship equivalent systems. The true mass would be many times higher: you cannot use a tow ship or FTL tug to steal a starbase or sections thereof\!
+
+While a ship is docked to a starbase the ship may be fired on as normal unless it is actually docked internally. (Some very large stations will have bays large enough to take smaller vessels.) An externally docked ship is, however, protected by any screen systems that the starbase has while docked. Whether a ship docked externally to a starbase can fire any of its own weaponry is up to the players or scenario designer.
+
+Should a starbase happen to have an FTL Drive, the symbol should be in the innermost or best protected section. Assume that it has enough excess capacity to carry along any docked ships with it.
+
+A starbase is the same collision risk as an asteroid. If a collision occurs the ship is destroyed and the nearest starbase section takes D6 × ship hull boxes damage as if it had been rammed.
+
+Monster ships Very large ships can be built in sections the same manner as starbases. The biggest difference is one section, typically the aft section, will have all drive systems installed in it. Be sure to remember that the FTL Drive and main drive masses must be calculated for the entire ship, not just the section containing the drive.
+
+If a section is destroyed, the remaining sections can still fight until they themselves are destroyed. In effect each section is treated as a separate ship.
+
+116
+
+Example of a Monster ship SSD
+
+Full Thrust: Project Continuum
+
+Extreme example of a monster ship. Note: this particular SSD is very old and dates back to the original second edition of Full Thrust. We wanted to include it here for its sheer ‘awesomeness’\!
+
+117
+
+Full Thrust: Project Continuum
+
+14 Ship construction summary
+
+14.1 Primary ship systems
+
+System Mass Points Basic hull total mass of ship x1 Advanced Hull Integrity % of total mass
+
+118 3 rows X3
+
+Standard Hull Integrity % of total mass
+
+4 rows 5 rows 6 rows
+
+X2 x1.5 x1
+
+Stealth Hull -Level 1 None 2 per Hull/Armour Box Stealth Hull -Level 2 None 4 per Hull/Armour Box
+
+Standard drive 5% total per factor x2 Advanced drive 5% total per factor x3 FTL drive 10% Total mass x2 Advanced FTL drive 10% total mass x3 Partial Streamlining 5% of total mass 0 Full Streamlining 10% of total mass 0 Fire Control 1 4 Advanced Fire Control 1 5
+
+Cargo/Passenger 1 per Space None
+
+Hangar Bay 6
+
+Note: if not using Launch Tubes/Flight decks, mass is 9
+
+x3 (x2 if using optional Critical hits to Hangar Bays rule)
+
+Launch Tube/Flight Deck 3 x3
+
+Add Catapult +1 (per Tube/Flight Deck) Robot Fighter Rack 6 x3
+
+Gunboat Rack 18 None
+
+Full Thrust: Project Continuum
+
+14.2 Defense Systems
+
+System Mass Points Hull Armour, per box 1 2 Shell Armour – each Layer 1 Inner layer-2 per mass First shell-4 per mass Second shell-6 per mass Third shell-8 per mass Fourth shell-10 per mass
+
+Regenerative Armour 1 Inner layer-4 per mass First shell-6 per mass Second shell-8 per mass Third shell-10 per mass Fourth shell-12 per mass
+
+Screen Generator 5% total mass x3 Advanced Screen 7.5% total mass x4 Area Screens-Standard Screen 20% total mass x3.5 Area Screens-Advanced Screen 30% total mass x3.5
+
+Anti-Matter Suicide Charge 1 5 ADFC 2 (OR 0) 8 Advanced ADFC 2 10
+
+PDS 1 3 ADS 2 for 3 arcs
+
+\+1 mass for 6 arcs
+
+119
+
+x3
+
+Scattergun 1 5 Grapeshot 1 4 Stealth Fields 5% total mass
+
+per level (max 2)
+
+x6
+
+Holofield 10% total mass x5
+
+ECM 1 per level 3 each Area ECM 2 per level 6 each Cloaking Device 1 Ship’s mass /2 Cloaking Field 1 Ship’s mass
+
+Full Thrust: Project Continuum
+
+14.3 Secondary ship systems
+
+System Mass Points Mine Sweeper 5 15 Damage Control Party 0 5 Marine Boarding Party 0 5 Passenger Berthing 1 Mass per 4 DC parties 0 Troop Berthing 1 Mass per 3 MBPs 0 Enhanced Sensors 2 8
+
+Superior Sensors 4 16 Weasel Cruiser Emitter 2 8 Weasel Capital Emitter 4 16
+
+Ortillery System 3 9
+
+14.4 Direct fire weapons.
+
+Weapon Class Mass Points Beam 1 2 3 4
+
+120
+
+1 2 for 3 arcs 3 for 6 arcs Broadside (2 arc weapon) 1 mass
+
+4 for one arc +1 each additional arc
+
+8 for one arc +2 each additional arc
+
+x3
+
+EMP projectors (Ion Cannons)
+
+EMP 1 EMP 2 EMP 3 EMP 4
+
+1/6 arcs. 2/3 arcs. +1 for 3 additional arcs. 4/1 arc. +1 mass per additional arc. 8/1 arc. +2 mass per additional arc.
+
+x3
+
+Plasma Cannon
+
+Plasma 1 Plasma 1 Plasma 2 Plasma 3 Plasma 4
+
+1/3 arcs. 2/6 arcs. 4/3 arcs. +2 for 3 additional arcs. 8/1 arc. +2 mass per additional arc. 16/1 arc. +4 mass per additional arc.
+
+x3
+
+Standard Grasers (SAP)
+
+Graser 1 Graser 1 Graser 2 Graser 3 Graser 4
+
+1/3 arcs. 2/6 arcs. 4/3 arcs. +2 for 3 additional arcs. 8/1 arc. +2 mass per additional arc. 16/1 arc. +4 mass per additional arc.
+
+x3
+
+Heavy Grasers (SAP)
+
+Graser 1 Graser 1 Graser 1 Graser 2 Graser 3
+
+2/1 arc. 3/3 arcs. 4/6 arcs. 9/1 arc, +3 mass per additional arc. 24/1 arc, +6 mass per additional arc.
+
+x3 OR x4 for High Intensity Grasers
+
+Phasers (SAP)
+
+Phaser 1 Phaser 1 Phaser 2 Phaser 3
+
+1/3 arcs. 2/6 arcs. 4/3 arcs, +2 for 3 additional arcs. 8/1 arc, +2 mass per additional arc.
+
+x3+2 OR x6 if ship also mounts Advanced fire control
+
+Full Thrust: Project Continuum
+
+Phaser 4 16/1 arc, +4 mass per additional arc. Transporter Beams
+
+121
+
+x3
+
+Gatling Battery (P)
+
+TB 1 TB 2 TB 3 TB 4
+
+1/6 arcs. 2/3 arcs, +1 for 3 additional arcs. 4/1 arc, +1 mass per additional arc. 8/1 arc, +2 mass per additional arc.
+
+x4
+
+Twin Particle Array (P)
+
+Gatling Battery
+
+2/1 arc. Gatling Battery
+
+3/3 arcs. Gatling Battery
+
+4/6 arcs. Broadside (2 arc weapon) 2.5mass
+
+x4
+
+Meson Projector (P)
+
+Twin Particle Array
+
+2/1 arc. Twin Particle Array
+
+3/3 arcs. Twin Particle Array
+
+4/6 arcs. Broadside (2 arc weapon) 2.5mass Meson Projectors
+
+2/1 arc.
+
+x4 Meson Projectors
+
+3/3 arcs. Meson Projectors
+
+4/6 arcs. Needle Beams NB 1 NB 2
+
+x3
+
+NB 3 NB 4 Pulse Torpedos (SAP)
+
+2/2 arcs, +1 mass per additional arc, 3 arcs max 4/1 arc, +2 mass per additional arc, 3 arcs max 8/1 arc, +4 mass per additional arc, 3 arcs max 16/1 arc, +8 mass per additional arc, 3 arcs max
+
+X3 +1 per mass if using Over-loadable torpedo rules
+
+Turreted Submunition Pack (P)
+
+Pulse Torpedo
+
+4/1 arc, +1 Mass per additional arc, 3 arcs max Pulse Torpedo SR
+
+2/1 arc, +1 mass per 2 additional arcs, 3 arcs max Pulse Torpedo LR
+
+8/1 arc, +2 mass per additional arc, 3 arcs max
+
+Submunitions 1/3 arcs 3
+
+K-Guns (AP)
+
+Normal
+
+Short Range (Half Mass)
+
+Long Range (Double Mass)
+
+Arm with Flak Ammunition
+
+x4
+
+\+2 points per gun (all guns except K1 must be armed)
+
+Boarding Torpedoes
+
+K1 2/6 arcs K2 3/1 arc, +1 mass for an additional arc, 2 arcs max K3 5/1 arc K4 8/1 arc K5 11/1 arc K6
+
+14/1 arc
+
+SRK 1
+
+1/6 arcs SRK 2
+
+2/2 arcs SRK 3
+
+3/1 arc SRK 4
+
+4/1 arc SRK 5
+
+6/1 arc SRK 6
+
+7/1 arc
+
+LRK 1
+
+4/6 arcs LRK 2
+
+6/1 arc, +2 mass for an additional arc, 2 arcs max LRK 3
+
+10/1 arc LRK 4
+
+16/1 arc LRK 5
+
+22/1 arc LRK 6
+
+28/1 arc
+
+Available for all types of K-Gun
+
+Boarding Torp
+
+2/3 arcs 6 Launcher Boarding Torpedo
+
+1 Each
+
+3
+
+Full Thrust: Project Continuum
+
+Fusion Array Fusion Array 3/1 arc, +1 mass per additional arc, 3 arcs max x3 Gravitic Guns Grav 1 Grav 2 Grav 3
+
+122 1/6 arcs 2/3 arcs, +1 mass for 3 additional arcs 4/1 arc, +1 mass per additional arc
+
+x3
+
+Plasma Bolt launcher
+
+Class 1 PBL Mass 3, one arc + 1 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+Class 2 PBL Mass 6, one arc + 2 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+Class 3 PBL Mass 9, one arc + 3 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+Class 4 PBL Mass 12, one arc + 4 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+Class 5 PBL Mass 15, one arc + 5 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+Class 6 PBL Mass 18, one arc + 6 for each additional arc
+
+(max of 3 arcs)
+
+x3
+
+14.5 Spinal Mount Weapons.
+
+Spinal Mount Mass Range Points
+
+Beam 8 16 32
+
+24mu 32mu 48mu
+
+x4
+
+Plasma 8 16 32
+
+24mu 32mu 48mu
+
+x4
+
+Point Singularity Projector
+
+8 16 32
+
+24mu 32mu 48mu
+
+x5
+
+14.6 Ordnance weapons
+
+Weapon Mass Points Multiple Kinetic Penetrators 1 x4
+
+Anti-Matter Missile 2 ea 10ea
+
+Heavy Missile- Standard
+
+Heavy Missile- extended range
+
+Heavy Missile- two stage
+
+2 3 +2
+
+x3
+
+Salvo Missile Launcher-one shot
+
+Salvo Missile Launcher ER -one shot
+
+Salvo Missile Launcher
+
+Magazine- per missile salvo
+
+Magazine- per ER missile salvo
+
+4 5 3 2 3
+
+x3
+
+Full Thrust: Project Continuum
+
+Rocket Pod 1 x3 Mine Layer 2 x3 Mines (min of 2)
+
+1ea
+
+2ea
+
+Turrets: 3 points per mass.
+
+6 arc turret 1 mass of turret holds 2 mass of weapons 5 arc turret 1 mass of turret holds 3 mass of weapons 4 arc turret 1 mass of turret holds 4 mass of weapons 3 arc turret 1 mass of turret holds 5 mass of weapons 2 arc turret 1 mass of turret holds 6 mass of weapons
+
+14.7 Fighter Types Standard 3 points each, 18 per wing. Heavy Modification (+mod) 3 per fighter (+18 Per wing). Fast (+mod) 24 per wing. (may be added to other fighter
+
+types at a cost of +1 per fighter (+6 per wing). Long Range (+mod) 24 per wing. (may be added to other fighter
+
+types at a cost of +1 per fighter, +6 per wing). Interceptor 3 per fighter, or 18 per wing. Attack Fighter 4 points each, or 24 per wing. Torpedo Fighter 6 points each, 36 per wing. Graser Fighter 7 points each, 42 per wing. Plasma Fighter 7 points each, 42 per wing. MKP Fighter 6 points each, 36 per wing. Missile Fighters 4 points each, 24 per wing. Multi Role Fighters 5 each, 30 per wing. Light Fighter 4 each, 18 for standard wing, 24 for attack. FTL fighters (+mod) Costs an additional +1 per fighter. Assault Shuttles 1 point each, 6 per wing
+
+14.8 Gunboat Types FTL Gunboats (+mod) +6 points for the squadron. Beam Gunboat 9 points each Plasma Gunboat 9 points each Graser Gunboat 9 points each Gatling Gunboat 15 points each Needle Gunboat 9 points Pulse Torpedo Gunboat 12 points each Submunition Gunboat 12 points each MKP Gunboat 15 points each K-Gunboat 12 points each Missile Gunboat 12 points each Rocket Gunboat 12 points each
+
+123
+
+Full Thrust: Project Continuum
+
+Point Defence Gunboat 9 points each Area Defence System Gunboat (ADS) 12 points each Electronic Warfare Gunboat (+mod) +3 points each per level of ECM (3 levels max)
+
+for the entire squadron. Scatterpack Gunboat 15 points each Plasma Bomber Gunboat 15 points each Heavy or Screened Gunboat (+mod) +12 points for the squadron.
+
+124
+
+Full Thrust: Project Continuum
+
+15 The Imperial Tech Base
+
+The technology and various systems outlined in the rules are designed to give players the flexibility to design their ships to match whatever genre they wish to play in. Whether it be giant steel space carriers with big flak throwing turreted guns, to sleek high tech starships whose weapons can slice bits off a ship or destroy it out right. Players are naturally limited in what tech systems they can put on their ships by the genre, movie, TV show, etc., they are emulating and thus (probably) cannot “uber-build” a game winner. In other words the player has a preset framework in which to create his ship designs.
+
+But what if a player has a collection of generic models that doesn’t already go with a ‘known universe’? By the rules he/she can build whatever they want, opening up the door to abusive play. For example - who wants to play against an opponent that uses spinal mounts, cloaking devices, fighters, gunboats, scatter packs and advanced drives all on the same ship? The best way to limit players is to generate a Tech Base for the player’s empire using the following lists. Players may choose whatever systems they wish but are limited to a number of choices as determined by their player group. We recommend no more than ten but it’s up to the players.
+
+125
+
+Some systems come for free and are marked with a ‘0’ cost. Every empire has those systems and they do not count as one of their tech choice choices. Some systems also have prerequisites meaning you must purchase one system in order to be able to have another. For example, Pulse Batteries require the empire to have beam weapons as well since Pulse Weapons are an advanced version of standard beam weaponry.
+
+15.1 Master Tech Base Reference
+
+Primary ship systems 1. Standard 4, 5 and 6 row Hull (0 technology choices) 2. Advanced 3 row Hull (1 technology choice) 3. Hangar bay and launch tube/flight deck
+
+(0 technology choices) 4. Launch tube catapult (1 technology choice) 5. Standard drive system (0 technology choices) 6. Advanced gravity drive (3 technology choices) 7. FTL Drive (0 technology choices) 8. Advanced FTL Drives (1 technology choice)
+
+Defensive systems 1. Armor (1 technology choice) 2. Layered or Shell Armor (1 technology choice, prerequisite is Armor) 3. Regenerative Armor (2 technology choices) 4. Stealth Hull (1 technology choice) 5. ADFC (0 technology choice) 6. Advanced ADFC (1 technology choice) 7. PDS (1 technology choice) 8. ADS (1 technology choice, PDS is prerequisite) 9. Scattergun (1 technology choice, prerequisite is Grape Shot) 10. Grapeshot (1 technology choice) 11 Screens (1 technology choice) 12. Advanced Screens (2 technology choices prerequisite is Screens) 13. Area Screens (3 technology choices, Advanced Screens is prerequisite) 14. Holofield (1 technology choice) 15. Stealth Fields (1 technology choice) 16. ECM (2 technology choices) 17. Area ECM (comes with ECM technology) 18. Cloaking Device (1 technology choice, Stealth Field is prerequisite) 19. Cloaking Field (1 technology choice, Stealth Field is prerequisite) 20. Tuffley Cloak Device (1 technology choice, Stealth Field is prerequisite) 21. Antimatter Suicide Charge (1 technology choice)
+
+Full Thrust: Project Continuum
+
+Targeting systems 1. Fire Control (0 technology choices)
+
+Ordnance weapons 2. Advanced fire Control (1 technology choice)
+
+1\. Antimatter Missile (1 technology choice)
+
+Direct fire weapons
+
+2\. Salvo Missile Launcher (1 technology choice) 3. Salvo Missile Rack (comes with Salvo Missile 1. Beams, Class 1, 2 and 3 (1 technology choice)
+
+Launcher) 2. Beams, Class 4, 5 and 6 (1 technology choice,
+
+4\. Extended Range Salvo Missiles (1 technology choice) prerequisite is Beams Class 1, 2 and 3)
+
+5\. Rocket pods (1 technology choice) 3. EMP Projectors (1 technology choice)
+
+6\. Heavy missiles (1 technology choice) 4. Plasma Cannon (1 technology choice)
+
+7\. Mine Layer Rack (1 technology choice) 5. Standard Grasers (1 technology choice, Beams is
+
+8\. Standard Mines (0 technology choices) prerequisite) 6. Heavy Grasers (1 technology choice, prerequisite is Standard Grasers) 7. Phasers (1 technology choice, prerequisites are
+
+9\. Multiple Kinetic Penetrators (1 technology choice, prerequisite is K-Guns) 10. Plasma Bolt Launcher (1 technology choice)
+
+Beams, and Grasers) 8. Transporter Beams (1 technology choice) 9. Gatling Battery (1 technology choice, Beams is prerequisite) 10. Twin Particle Array (1 technology choice, Beams is prerequisite) 11. Meson Projector (comes free with either Twin Particle Array or Gatling Batteries) 12. Needle Beams (1 technology choice) 13. Pulse Torpedoes - Standard and Short Range (1 technology choice) 14. Overloaded Pulse Torpedo (1 technology choice, prerequisite is Pulse Torpedo) 15. Long Range Pulse Torpedo (1 technology choice, prerequisite is Pulse Torpedo) 16. Variable Strength Pulse Torpedo (1 technology choice, prerequisite is Pulse Torpedo) 17. Fusion Array (1 technology choice) 18. Submunition Pack (1 technology choice) 19. K-Guns Standard and Short Range (1 technology choice) 20. Long Range K-Gun (1 technology choice, prerequisite is K-Gun) 21. Flak Ammo (1 technology choice) 22. Gravitic Guns (1 technology choice) 23. Boarding Torpedoes (1 technology choice) 24. Pulsers (2 technology choices, prerequisite is Beams) 25. Turrets (1 technology choice)
+
+Fighters 1. Standard Beam fighter (1 technology choice, prerequisite is Beams) 2. Standard Gun fighter (1 technology choice, prerequisite is K-Guns) 3. Heavy (+mod) (1 technology choice) 4. Fast (+mod) (1 technology choice) 5. Long Range (+ mod) (1 technology choice) 6. Interceptor (comes with standard fighter technology) 7. Attack Fighter (1 technology choice) 8. Torpedo Fighter (1 technology choice, prerequisite is Pulse Torpedoes) 9. EMP Fighter (1 technology choice, prerequisite is EMP Projectors) 10. Graser Fighter (1 technology choice, prerequisite is Spinal Mounts 1. Point Singularity Projector (2 technology choices, Gravitic Gun is prerequisite) 2. Beam (1 technology choice, Beams is prerequisite) 3. Plasma (1 technology choice, Plasma Cannon is prerequisite)
+
+Standard Grasers) 11. Plasma Fighter (1 technology choice, prerequisite is Plasma Cannon) 12. MKP Fighter (1 technology choice, prerequisite is MKP Packs) 13. Needle Fighter (1 technology choice, prerequisite is Needle Beams) 14. Missile Fighters (1 technology choice, prerequisite is Salvo Missiles) 15. Rocket Fighter (1 technology choice, prerequisite is Rocket Pods) 16. Multi-Role Fighters (3 technology choices, prerequisite is Standard and Attack Fighters) 17. Robot Fighters (1 technology choice)
+
+126
+
+Full Thrust: Project Continuum
+
+18\. Fighter Racks (come with Robot Fighter technology) 19. FTL Fighters (1 technology choice) 20. Assault Shuttles (1 technology choice) 21. Fighter Package Deal
+
+This technology 3 choice package “fighter
+
+15.2 Example Factions Note: the examples presented here are not strictly the same as any of the published Fleet Books. They are merely presented here as examples. specialists” allows the user to pick 6 choices of fighter technology.
+
+New Anglian Confederation
+
+15.8 Gunboats
+
+(Optional - Gunboats may not be purchased if the Empire is using fighters) 1. Gunboats (1 technology choice) 2. Gunboat Rack (comes with Gunboats) 3. FTL Gunboats (1 technology choice, prerequisite is Gunboats) 4. Beams (comes with Beam technology) 5. EMP (comes with EMP Projector technology) 6. Plasma (comes with Plasma Cannon technology) 7. Graser (comes with Graser technology) 8. Gatling/Pulser (comes with either Gatling battery or Pulser technology) 9. Needle (comes with Needle Beam technology)
+
+TECH CHOICES Tech type \#CHOICES BEAM WEAPONS CLASS 1, 2 AND 3 1 BEAM WEAPONS CLASS 4, 5, AND 6 1 STANDARD GRASERS 1 PDS 1 STANDARD SCREENS 1 ADVANCED SCREENS 2 SALVO MISSILE LAUNCHER 1 PULSE TORPEDO 1 SUBMUNITION PACKS 1 STANDARD FIGHTER 1 TORPEDO FIGHTER 1
+
+TOTAL 12 10. Pulse Torpedo (comes with Pulse Torpedo technology) 11. Submunition (comes with Submunition Pack technology)
+
+Eurasian Solar Union 12. MKP (comes with MKP technology) 13. K-Gun (comes with K-Gun technology)
+
+TECH CHOICES 14. Gravitic Gun (come with Gravitic Gun technology)
+
+Tech type \#CHOICES 15. Missile (comes with standard missile technology)
+
+BEAM WEAPONS CLASS 1, 2 AND 3 1 16. Rocket (comes with Rocket Pod technology)
+
+BEAM WEAPONS CLASS 4 AND 5 1 17. Boarding Torpedo (comes with boarding torpedo
+
+PDS 1 technology)
+
+STANDARD SCREENS 1 18. Area Defense (comes with ADS technology)
+
+SPINAL MOUNT BEAMS 1 19. ECM (comes with ECM or Area ECM technology)
+
+ATTACK FIGHTER 1 20. Scatterpack (comes with Scatterpack technology)
+
+STANDARD FIGHTER 1 21. Plasma Bomber (comes with Plasma Bolt Launcher
+
+INTERCEPTOR FIGHTER 1 technology)
+
+LONG RANGE FIGHTER 1 22. Heavy or Screened Gunboat (+mod) (1 Technology
+
+FAST FIGHTER 1 choice)
+
+ASSAULT SHUTTLES 1
+
+TOTAL 11
+
+Secondary ship systems 1. Enhanced Sensors (0 technology choice) 2. Superior Sensors (1 technology choice) 3. Minesweeper (1 technology choice) 4. Boat bay (0 technology choices) 5. Cargo holds (0 technology choices) 6. Troop and passenger berthing (0 technology choices) 7. Shipyard facilities (0 technology choices) 8. Marine Boarding Parties (0 technology choices) 9. Damage Control Parties (0 technology choices) 10. Ortillery (0 technology choices) 11. Weasel Emitters (0 technology choices)
+
+127
+
+Full Thrust: Project Continuum
+
+16 Special moves
+
+16.3 Towing ships In normal space ships can tow other ships. 16.1 Thrust 0 drives Ships with thrust 0 drives, and any asteroids or similar object that have significant movement relative to ships, never write orders. The controlling player, or scenario designer, determines the initial position,
+
+First the towing ship must match courses. The two ships must be within 3 MU of each other and either both halted, or both moving at the same velocity and course facing. course, and velocity before the game begins. Each turn, the ship or asteroid moves along this predetermined course before all other ships.
+
+At the start of a turn (before the Ship Movement Phase) where the two ships have matched courses, the towing ship can begin establishing a link. 16.2 Rolling ships
+
+Although Full Thrust makes no attempt to
+
+• A ship equipped for towing as part of its normal duties requires one complete turn for each ship. simulate 3-dimensional movement or combat, there is one simple rule addition that we are including here: the ability to roll
+
+• Any other ship requires two complete turns and can only tow a single ship. a ship 180° on its central axis, thus effectively swapping the port and starboard sides (i.e. the ship is ‘upside down’ relative to the other ships on the table). This maneuver can be very useful when ships start to lose systems due to damage, as it can allow undamaged weaponry to bear on targets that would otherwise be on the wrong side of the ship.
+
+If either ship changes velocity or facing during this time without an exact match by the other ship, or if the target ship fires any weapon against the other and inflicts at least one hull box of damage, the link is broken and the procedure must be restarted from the beginning.
+
+To perform a roll, the player simply writes “Roll” in the movement orders for that turn; the roll expends 1 thrust factor which comes off the turning allowance. For example, a thrust-4 ship, normally capable of 2
+
+Once linked, the two ships move as if they were in a line-ahead squadron formation. Multiply the mass of the towing ship by its main drive rating: this is the available thrust. points of turn, could only turn 1 point if it also rolled that move; but would still be able to use its other two thrust factors to accelerate or decelerate as normal. The roll then occurs at the start of the ship’s movement, and a marker is placed by the model to indicate its inverted condition. Rolling has no effect on combat (except that the port batteries now bear to starboard and vice versa). An inverted ship may roll
+
+Divide the available thrust by the combined mass of the linked ships and round down to the nearest whole number. This is the thrust rating of the linked ships. (If the thrust rating of the linked ships rounds down to zero, the tow can still succeed, but the time required will be many hours or days, outside the time frame of a Full Thrust battle.) back ‘upright’ in any subsequent turn, or may remain inverted as long as the player wishes.
+
+Example: A salvage ship with mass 80 and thrust 4 attempts to tow a dreadnought of mass 160 that has For simplicity of play, rolled ships still have their movement orders written in relation to the actual
+
+no operational main drive. It is currently drifting at velocity 3, course 9. miniature rather than their theoretical inverted condition – thus an order written for a port turn will still turn the model to the left, even though to the inverted ship this would actually be a starboard turn. Keeping to this convention should avoid a lot of confusion and arguments.
+
+The salvage ship first matches velocity and course within 3 MU, then spends one turn establishing a link. The salvage ship has mass 80 × thrust 4 = 320 available thrust. Dividing this by the combined mass of 80 + 160 = 240 gives 320 ÷ 240 = 1.5, thrust rating 1 for the linked ships.
+
+128
+
+Full Thrust: Project Continuum
+
+If one player decides to disengage, it is possible to actually play out the full pursuit stage as described above. If, however, this is felt to be too time consuming, there is an alternative abstract method that may be used.
+
+The disengaging player’s ships must all move off the table via the same table edge; until the last ship has left the table, the battle will continue as normal. When all the ships are off the table edge, each player rolls a D6. If one player has any ship that has a higher thrust than all opposing ships, then add 2 to the die roll.
+
+Example: if the disengaging player has some thrust-8 escorts while the opposing fleet has nothing with a 16.4 Moving table
+
+thrust above 6, the former adds 2 to the roll. Earlier we mentioned that ships that leave the edge of the table or playing area are leaving the battle. However, as space does not actually have edges, it really should be possible for the entire battle to ‘move’ off the edge of the playing area and still continue – this may happen if both sides are moving in the same general direction, e.g. in a pursuit scenario. If you find that all ships in the action are starting to get very close to one end or side of the table, it is a simple matter to move every ship and
+
+If the final total of the player who is trying to disengage is equal to or higher than their opponent’s roll, they have successfully disengaged and are safe from pursuit. If, on the other hand, the opponent’s roll is higher, then the pursuing player may elect to continue pursuit; in which case the game continues with a new set-up as a stern chase. The fleeing player may then attempt the disengagement again by leaving the opposite edge of the new playing area. object in play a certain agreed distance back towards the opposite table edge; effectively you can think of it as extending the playing area under the ships. (All things are relative, as someone once said.)
+
+16.6 Docking Ships may attempt to dock with other ships or with starbases although this is unlikely during combat.
+
+16.5 Disengaging from battle If you use the moving table in a game, it will become possible to continue pursuit of a fleeing enemy. Under the normal rules a retreating force simply has to leave the table in order to break off combat, but with the moving table the pursuit may go on until one side either catches or outruns the other.
+
+To accomplish a docking, the ship’s movement orders must be plotted so that it ends up within 3 MU of the target ship/starbase at the end of the turn. If the target is stationary, the ship must also come to a dead stop, otherwise it must exactly match both course and velocity with the target ship or starbase at the end of the turn. On the following turn, the ship may be considered docked. One full turn is also required to Particularly when playing campaign games, which for obvious reasons are very seldom fought ‘to the death’,
+
+“cast off” and undock again, after which the ship may maneuver as normal. it is advantageous to be able to disengage from battle if things are going badly for you – saving your remaining ships for the next engagement can be much more important than going out in a heroic blaze of glory.
+
+16.7 Ramming Deliberate attempts to ram another ship are possible in some circumstances, but such suicide attacks should be rarely attempted – crews would not be very keen on officers who ordered such tactics as a matter
+
+129
+
+Full Thrust: Project Continuum
+
+of routine\! Ramming is therefore an optional rule. (Very small ships that ram, such as Autonomous Kill Vehicles with AI pilots, are represented in Full Thrust by missiles or torpedo fighter groups.)
+
+A player who wishes to attempt a ramming attack writes as part of movement orders that the ship is going to attempt to ram, and then rolls a D6 at the end of the Ship Movement Phase. Only on a roll of 6 may the ramming attempt proceed.
+
+In order to attempt the ram, the ship must end the movement within 2 MU of the intended target ship (or models touching in the case of large ship models). Only if you succeed in anticipating the enemy move, and then succeed in rolling a 6 as explained above, may the actual ram be attempted.
+
+Both players (attacker and target) roll a D6 each, and add the score to their respective ship’s thrust ratings. If the attacker ends up with the highest total, the ram is successful.
+
+130
+
+If the target’s total is equal or higher, it has evaded the ramming attempt.
+
+When a ram succeeds in making contact, each player rolls another D6 and multiplies the result by the current (remaining) hull boxes that the ship has. The final result of this is the number of damage points inflicted on the other ship as a result of ramming.
+
+Example: A corvette with 2 of its original 3 damage points left actually succeeds in ramming an undamaged heavy cruiser with all 16 of its damage points. The corvette player rolls a 4, which inflicts 8 points of damage on the cruiser.
+
+The cruiser owner rolls a 3, thus doing 48 points to the corvette. The result is one vaporized corvette, and a badly damaged cruiser.
+
+It will be clear from this example that ramming can be very deadly when it succeeds, small ships are almost certain to be destroyed, and even the largest can be crippled. Players who insist on using this tactic in unrealistic circumstances should be penalized in the most effective way possible: don’t let them play again.
+
+Ramming ability Players may agree that certain game scenarios and/or certain races tactics may make ramming attacks more likely, and hence reduce this required die roll for them.
+
+Full Thrust: Project Continuum
+
+Any ship that can automatically attempt to ram should have an extra cost of at least +1 per mass of the ship, which represents the difficulty of indoctrinating crews willing to sacrifice their own lives, the cost of a fully automated ship with remote controls or AI pilot, or the remote hive mind/queen intelligence controlling expendable beings.
+
+131
+
+Full Thrust: Project Continuum
+
+17 Terrain effects
+
+It may sound a bit odd to talk of “terrain”’ in a space battle, but if you think about it there are a number of possible ideas you can use to render certain parts of the table more difficult, dangerous, or just plain different.
+
+The following suggestions are mostly pure space opera and anyone who has seen a few episodes of the typical science fiction television show will doubtless be able to think of lots more\!
+
+17.1 Planetoids and dense asteroid fields Planetoid is used in this section for all large asteroids, small moons, comets, starbases, orbitals, and all other Really Big Things.
+
+Asteroids can either be stationary, or be thrust 0 objects with a predetermined course and velocity. Ships cannot block line of sight or line of fire, but bodies such as asteroids do have a significant size in relation to the playing area and therefore are able to block lines of fire or sensor detection and pose a collision risk. If you are using round or spherical objects to represent the asteroids then it is simple: any line between two ships that crosses any part of the asteroid is blocked. (Between center points of models, remember.)
+
+132
+
+If, however, you are using irregularly shaped asteroid models, such as foam chunks, then it is necessary to mount them on bases, perhaps 1 to 6 MU across, depending on the asteroid size. A line between two ships is then blocked if it crosses any part of the asteroid’s base, which solves any disputes that could be caused by the irregular shape of the asteroid model itself.
+
+If the line of sight between opposing ships is blocked by an asteroid, those ships may not fire at each other with any weapons, or place missiles along that line. Fighters may still fly around the asteroid to attack as normal.
+
+Example: In Figure 29, ship C has a clear line of fire to ship A, but cannot engage ship B due to the intervening asteroid.
+
+Sensor scans are also blocked by asteroids. At the start of the game, some ships may be hidden behind bodies in an asteroid field; they are represented by Bogey Markers in the usual way for unconfirmed contacts, but do not have to be revealed until an enemy ship comes within scan range and can get a clear line of sight onto the bogey. (Note that this blocking applies equally to active scan attempts as to passive.)
+
+Full Thrust: Project Continuum
+
+Damage to asteroids
+
+of its FireCon and sensor systems (if the advanced The normal rules assume that asteroids cannot be
+
+sensor rules are being used), adding 1 to the score per destroyed by weapons fire or by ships impacting with
+
+active screen level. On a score of 4+ the system is them. However, if the players wish, they may give
+
+undamaged; otherwise it is knocked out as if by a each asteroid a large damage point value (perhaps 50
+
+threshold check. for a very small chunk, 100 for a larger one, etc.) and then allow players to fire at them.
+
+17.4 Asteroid Fields, Meteor swarms
+
+When an asteroid is reduced to zero damage, it disintegrates into 1D6 smaller chunks, which all move at random courses and speeds out from the point of destruction. Try to avoid that lot. . .
+
+and debris These may cover areas of between 6 MU and 12 MU diameter (or other shapes/sizes at players discretion) and may be stationary on the table or moving in a similar way to the moving asteroid rules.
+
+17.2 Dust or Nebulae clouds These have the following effects:
+
+Any ship that enters or is hit by such an asteroid field, meteor swarm, or debris field has 1 D6 rolled for
+
+1\. Travel through a cloud is restricted to a maximum safe velocity of 12; any ship attempting to exceed this
+
+every full 6 MU of velocity, with the actual score rolled equaling the (penetrating) damage sustained.
+
+in a cloud will suffer potential damage – roll 1 D6 and apply damage as for beam weapons fire. Standard Screens offer no protection, but armor and Advanced
+
+Up to velocity 5 = no damage, 6-11 = 1 D6, 12-17 = 2 D6, etc.
+
+Screens do.
+
+This rule may also cover the effects of the debris in
+
+2\. Clouds inhibit beam weapons and fire control lock on: when attempting to fire at a ship in a dust cloud, or if the firing ship is itself in a cloud, roll a D6 after
+
+the rings of a planet such as Saturn, in which case a large arc of it could be depicted on the table to cause all sorts of problems\!
+
+nominating the target. On a roll of 1-3 the dust has prevented a successful target lock-on and the ship may not be fired at. On a 4-6 the shot may be fired as normal, but if using beams or Grasers treat the target as having one screen level higher than normal due to beam attenuation caused by the dust. (Screen levels
+
+17.5 Battle debris When a ship is destroyed by enemy fire, i.e. reduced to zero damage points or less, it may simply become a drifting hulk, or it may actually explode into a cloud of debris.
+
+above 2 remain at 2.)
+
+To determine if this happens, note the amount of
+
+3\. Fighters always lock on, but treat the target as having one screen level higher as for beam weapons.
+
+excess damage inflicted (over that required to reduce the ship to zero points) and roll a D6. If the score is less than or equal to the excess damage then the
+
+Note that this rule may, if desired, also be used to simulate the effects of ships operating in the fringes of planetary atmospheres, such as when skimming gas giants.
+
+remains of the ship explode. For example, if a ship has 2 hull boxes left and suffers a further 5 points of damage, a die roll of 5 - 2 = 3 or less will cause it to explode.
+
+17.3 Solar flares Flares may occur at random, perhaps diced for each turn, if the battle is happening fairly close to a very active star. They may be assumed to affect the entire table, or just a specific area as the player’s desire. Any ship that is caught in a flare rolls a D6 for each
+
+An exploding ship creates a cloud of debris 2 MU in diameter for an escort, 4 MU for a cruiser, or 6 MU for a capital ship. The debris cloud exists for only 1 turn after the explosion, during which it moves on the same course and velocity as the ship was travelling at the point of destruction.
+
+133
+
+Full Thrust: Project Continuum
+
+In this turn any ship encountering the cloud treats it exactly as for the meteor and debris rules given in the section above. After the one turn the debris is assumed to have spread out sufficiently to present little risk to other ships, and is removed from play.
+
+Depicting spatial phenomena The various effects suggested above may be represented on the table by means of pieces of card, cloth, or acetate cut to the relevant sizes for the affected areas. Meteors and debris clouds can be depicted by small cork-bark chips or even gravel spread over the required area. Explosion templates may be made if desired for destroyed ships, which if suitably graphic (lots of red and orange explosion effects\!) can be very effective.
+
+17.6 Collisions Collisions can occur between ships and asteroids. If the asteroid is stationary – i.e. never changes position on the playing area – then a ship risks collision with the asteroid if its path during the Ship Movement Phase crosses any edge of the asteroid.
+
+If the asteroid is itself moving, a collision risk can occur under either of these circumstances:
+
+134
+
+• The movement path of the asteroid brings it into contact with a ship at any point. (This is before the ship itself has moved, at the beginning of the Ship Movement Phase.)
+
+• The final position of a ship after making its move is inside the asteroid.
+
+Collisions do not occur if the movement paths of the asteroid and ship merely cross. Use the base or model edges of the asteroid and the center point of the ship model to determine collisions, not the edges of the ship model.
+
+These collision rules are simple rather than physically accurate, but do ensure that as the movement of both asteroids and ships is completely predictable, you have only yourself to blame if you run into one\!
+
+To determine if the ship manages to avoid a fatal collision, subtract the ship’s total available thrust rating from its current velocity. This number must be equaled or exceeded by the roll of 1D6 in order for the ship to have avoided the collision. Ships with Advanced Drives double their engine rating. Example: If a cruiser with a thrust rating of 4 is
+
+Full Thrust: Project Continuum
+
+travelling at velocity 9 and its movement intersects with an asteroid body, subtract the thrust (4) from the velocity (9) to give 5. Thus a 5 or 6 must be rolled for the cruiser to evade the asteroid – on a roll of 4 or less, exit one cruiser\!
+
+If the needed number for avoidance is 1 or less, then the ship is automatically able to avoid a collision; if the number is greater than 6, then a crash is inevitable. When any ship, regardless of its class, hits an asteroid, the ship is completely destroyed. Ramming a billion tons of rock at any speed is not recommended, even in a superdreadnought\!
+
+17.7 Planets For Full Thrust purposes a planet includes not just planets but also major moons and even suns at the larger scales: any stellar body with a significant gravitational effect on spaceships.
+
+In this section we present three different possible systems for representing planets at varying scales. Pick the one that best suits your scale or scenario.
+
+Orbital table At this scale the table represents an area at a given orbit radius above a planet (plus or minus some distance – higher velocities are ‘lower’), with the equatorial orbit path running between the centers of the short edges and a polar orbit across. The planet itself would be underneath the table.
+
+A ship can leave the table at any time to make an orbit around the planet. When it does so, record the ship velocity, course, and distance from the nearest table corner at the point of exit. A number of turns later, the ship can enter again by being placed before orders on the opposite edge, at the same velocity and course, and within 6 MU of the same distance from the diagonally opposite corner edge.
+
+Thrust 0 or 1 ships cannot enter until the 5th turn after exiting, thrust 2 to 4 until the 4th, and thrust 5 or greater the 3rd (This assumes that the ship is making a powered atmosphere skimming circumnavigation rather than a genuine orbit, plus a bit of dramatic license). Whether fighter groups can orbit is optional but not recommended: making the orbit would
+
+135
+
+consume too much fuel for such small craft.
+
+17.8 Medium scale At medium scale a planet should be represented on the table by a half sphere, although a plate or disk will suffice.
+
+Decide whether the planet can be landed on or that contact with the planet will be a fatal collision.
+
+The edge of the planet is the orbit track and should be marked with 12 clock face points. The orbit track has an entry velocity and an orbital speed in clock faces per turn.
+
+A planet may have satellites or starbases in orbit. These move at the orbit speed of points per turn around the orbital track, and always face ‘away’ from the center of the planet.
+
+A ship enters orbit with any movement that intersects the orbit track at the entry velocity and is placed at the nearest marker point. While in orbit, the ship does not
+
+Full Thrust: Project Continuum
+
+have to have any course change orders written for it. The player simply notes that it is in orbit and moves the ship by a number of points equal to the orbit speed around the track. Any velocity change will cause the ship to leave orbit, either down or up.
+
+If using cinematic movement, ships in orbit face forward in the closest course facing to the orbit path at that point. In vector movement, ships may change facing as usual.
+
+Ships in orbit may fire at any ships outside the orbit track, or at ships at the point immediately in front or behind.
+
+For simplicity we recommend only one ship or starbase may occupy each marker point, or only ships from the same side. If you do allow hostile ships within the same point, they may fire at each other as if at 1 MU range, through any arc the firing ship chooses. Missiles home in on a target chosen by random die roll.
+
+Entering and leaving orbit If the ship hits the orbital distance at less than the orbital velocity, it will enter an automatically
+
+136
+
+decaying orbit and start to enter the atmosphere (section 13.9). If it arrives with greater than the correct velocity it will ram straight into the atmosphere in an uncontrolled entry – you have been warned\!
+
+If the ship decelerates to less than the orbital velocity, its orbit will decay and it will start to enter the atmosphere. If it accelerates to above the orbital velocity it will leave orbit and move normally, in a straight line at the clock face heading that is the closest tangent to its orbital path.
+
+Any ship that suffers a drive or bridge threshold failure while in orbit must make a second threshold check to stay in orbit. If this too fails, the ship orbit has decayed and it enters the atmosphere.
+
+17.9 Large scale These rules are for those who prefer their space battles on a grand scale with the table representing a significant chunk or all of an entire solar system.
+
+Represent planets by small disks up to several MU in diameter, much smaller than for medium scale. A planet is surrounded by three concentric gravity zones, each extending the radius by at least 1 MU. The outer zone is strength 1, the middle strength 2,
+
+Full Thrust: Project Continuum
+
+and the innermost 4. For large planets increase the radius of the zones; treat a sun as a large planet with an extra inner zone of strength 8.
+
+If the movement path of a ship intersects a gravity zone, pause the ship in the innermost zone contacted and adjust the speed and course as follows.
+
+First, determine where the center of the planet is relative to the ship.
+
+• If the center is in the fore arc of the ship, add the zone strength to the ship velocity.
+
+• If the center is in the aft arc, subtract the zone strength from velocity.
+
+• If the center is in a port or starboard arc, add half the zone strength to the velocity, and turn the ship towards the center by a number of points equal to the strength of the zone.
+
+If the ship ends the Ship Movement Phase in a gravity zone, apply the changes in velocity and course to the start of the next turn movement instead.
+
+A ship that has unused thrust points for changing
+
+137
+
+course may use them to change the gravity zone turn. In Figure 37, the ship changes course by 2. If it were a ship with thrust 4 drive and had not changed course, it could increase this up to 4 or decrease it down to none.
+
+The velocity increase may not seem very high, but remember at this scale, the ship must already be moving at considerable speed.
+
+The ship is considered to make a partial orbit within the zone while changing course, so cannot collide with the planet or enter another zone even if the straight line path would indicate otherwise. After leaving it can however intersect the gravity zone of another planet which will change the course and velocity again – clever players may be able to bounce their ships around like billiard balls.
+
+17.10 The super simple and totally unrealistic way A ship may enter planetary orbit (or other large celestial body) by the following rules: Ships desiring to make orbit must be travelling at a thrust no greater than 8 and no less than 6. Their course must also bring them within 3” of the objective but no closer than 2”. That is the 3” gravity well mentioned earlier. If the ship is beyond the 3” it will go past the objective and not make orbit. If it is closer than 2” it will be caught in the gravity well and crash (i.e. it is destroyed). Remember all measurements are taken from the model’s stem.
+
+Full Thrust: Project Continuum
+
+On a final score of 3 to 5, the ship burns up in the upper atmosphere, but there is enough time for any interface craft (shuttles, drop ships, etc.), fighters, or life pods on board to launch.
+
+On a final score of 6 or above, the ship burns up and all crew, passengers, and equipment on board are lost.
+
+17.11 Atmospheric entry A fully or partially streamlined ship may enter atmosphere deliberately in order to land on the world’s surface. Alternatively, a ship of any configuration may be forced to enter atmosphere due to either a decaying orbit or approaching a planet at too high a velocity.
+
+To make a deliberate safe atmospheric entry, a ship must first enter orbit as described above and then decelerate to less than orbital velocity. A fully streamlined (capable of aero braking or gliding) ship can land provided it has some main drive thrust. A partially streamlined ship can land if it has main drive thrust at least equal to the planet gravity in Earth Gs; if it has insufficient thrust it will make a crash landing with the effects being up to the individual scenario.
+
+If any ship without streamlining enters atmosphere, or a streamlined ship makes an uncontrolled entry, roll a D6 and apply the following modifiers:
+
+• If the ship is non-streamlined, add 4.
+
+• If partially streamlined, no modifier.
+
+• If fully streamlined, subtract 2.
+
+• Add 1 for every 1 point of velocity in excess of entry orbital velocity.
+
+• Add 1 if the ship’s drive is damaged (half normal thrust), or add 3 if drive knocked-out.
+
+On a final result of 2 or less, the ship manages to miraculously survive a ballistic entry, and crash-lands on the planetary surface. The chances of survival for crew/passengers and subsequent events are up to the individual scenario.
+
+138
+
+Full Thrust: Project Continuum
+
+18 Battles, Scenarios and CPV
+
+Space battles may be fought in a vacuum, but the commanders will still have some purpose or objective in mind.
+
+18.2 Tournament fleets Ship designs for competitive tournaments need to be controlled, for instance by restricting players to only designs given in the Full Thrust Fleet Books, with no modifications, changes in weapons, etc. (Players can
+
+Once you are familiar with the rules, we strongly recommend the use of terrain and planets to make the games more interesting, and scenarios with objectives other than a simple ‘beat up the enemy’.
+
+of course use their own ship models even if they don’t resemble the ‘official’ designs.) This should give a game where the tactics of play decide the victor, rather than who can stretch the design rules to the furthest limit\!
+
+18.1 Deployment A conventional if uninspiring way to begin the battle is with fleets at opposite short ends of the table in a ‘meeting engagement’.
+
+An even more limiting but quite useful idea is to actually give each player a fixed, identical force – that way you are really finding out who is the better tactician (or just luckiest with the dice). This method
+
+Players alternate in placing one ship at a time within 6 MU of their table edge (or two to four ships at a time for large battles) with any desired course and an initial velocity.
+
+can be effectively used for ‘enter on the day’ competitions where players do not have to bring their own fleets along, but use one provided by the organizers.
+
+Space does provide much more freedom of movement than a planetary surface, so there is no reason not to use other deployments. One likely scenario is two fleets heading for the same objective on converging courses.
+
+Fleets should be kept fairly small to allow games to be played to completion in a reasonable time. The ideal size is probably between 1000 and 1500 points in total, though fleets as small as 500 points can still be interesting. Forces of over 3000 points will probably be too large unless plenty of time is
+
+Players deploy their ships along the opposing long
+
+available.
+
+edges of the table up to the half way mark, within 6 MU of the edge and initial course limited to 11, 12, or 1. To finish games faster, use the optional Striking the Colors rules (section 12) and/or disallow repairs to systems (section 10).
+
+For a battle between offensive and defensive fleets,
+
+Fleet composition the defending fleet deploys all its ships first anywhere
+
+Battles can be made more interesting by restricting within their own half of the table. The defender can
+
+the proportions of different ship classes as well as the also place a planet or similar terrain feature anywhere
+
+overall point total. they desire.
+
+For ‘patrol’ battles, restrict fleets to having no capital The attacking ships can either enter under main drive
+
+ships at all and no more than 50% of the points spent at the opposite table edge, or (if permitted) some or
+
+on cruisers. all may make an FTL entry.
+
+Allowing small carriers is optional but not A variety of scenarios are available on
+
+recommended. For larger battles, you can restrict http://emeraldcoastskunkworks.wordpress.com/2014/
+
+fleets to no more than 50% of points spent on capitals, 09/08/72/
+
+including their fighters; or require that each capital class ship must have one or two corresponding cruisers and escorts. Or you could decide that large ‘fleet actions’ can be fought entirely by capital class
+
+139
+
+Full Thrust: Project Continuum
+
+ships with no requirement to have smaller ships present. Either can be argued based on historical precedent or different science fiction settings, so feel free to experiment.
+
+18.3 Combat Points Value (CPV) Experience has shown that the Full Thrust points system does not fully reflect the advantages of increasing ship size: One larger ship will usually defeat two ships each costing half as much, even though the combined points of the two sides are equal. The Combat Points Value, CPV, is a more complex method of calculating the point value for each ship that gives more equally matched battles when ships of different classes are mixed together.
+
+CPV will tend to shift the ‘balance of power’ to small ships however and make big capital ships even rarer on the field. The classic ‘Corvette Swarm’ becomes even more dangerous when using CPV.
+
+The simple CPV calculation changes only the basic hull cost calculation (section 11.2). Instead of being equal to mass, the points cost for the hull becomes
+
+Round off to the nearest integer.
+
+(If the ship has mass 7 or less the CPV calculation would give zero as the hull cost, but in Full Thrust
+
+140
+
+everything must cost at least 1 point.)
+
+The effect of the simple CPV is that ships with mass below 100 become cheaper, over 100 more expensive.
+
+The change to the point value can be calculated by subtracting the actual ship mass from the CPV hull value.
+
+For example, the Suffren class light cruiser from Fleet Book 1 has mass 54 and a points cost of 181. Using the CPV calculation, the hull cost is
+
+a reduction of 25 points for a new total points cost of 156. On the other hand, an Excalibur class dreadnought has a mass of 140 and points cost of 472. Using the CPV, the hull cost is
+
+An increase of 56 for a new total points cost of 528.
+
+The simple CPV given here is still unbalanced for some cases. A more elaborate method of CPV calculation is online at http://fullthrust.star- ranger.com
+
+Full Thrust: Project Continuum
+
+19 Timeline Continuation
+
+Anglian Confederation (NAC), present day Britain, Canada, and United States; and the Eurasian Solar The GZG Universe and Background The ultimate source of interesting battles is a campaign. This can be anything from a series of linked battles with only the survivors from previous actions able to keep fighting, up to a full-fledged
+
+Union (ESU), present day China, India, and most of Russia. The other two major powers are the Federated States of Europe (FSE) and New Swabian League (NSL) which between them include almost all of present day Europe. ‘space opera’ where each player represents a major power and must worry about politics and economics as well as simple combat. What all campaigns do need though is some sort of setting so the players know who is who and what resources are available. The GZG setting, or ‘GZGverse’, is the background
+
+The fleets used by these four major powers are described in Fleet Book 1. For ships built toward the end of the Third Solar War and during the Kra’Vak conflict see the Fleet Books on the Emerald Skunkworks site and on Starship Combat News. and reference for Full Thrust and companion GZG products such as the Stargrunt and Dirtside ground combat rules.
+
+Twenty second century warfare can be so destructive that the major powers, reluctantly, have allowed the United Nations sufficient authority to maintain an It has been developed and expanded for well over two decades, so there is only space for a very brief introduction here. For more information, read the relevant sections in the Full Thrust 2nd edition rulebook and the two Fleet Books.
+
+uneasy peace on Earth and the inner colonies. Diplomatic and military struggles for power and influence have largely shifted to the outer worlds. The United Nations Space Command (UNSC) and some of these outer world fleets have not yet been published in book form, but can be found online. Please treat this background just like any of the rules: if you like it, by all means use it – if you don’t, then write your own and ignore anyone who tries to say you’re doing it wrong\!
+
+Beginning in 2183 humanity met three different alien races in quick succession. The Sa’Vasku are ancient and enigmatic, relying on living biological technologies. The Phalons are similar enough to The GZGverse future history begins (or began) in the 1990s, but the period covered by the rules is roughly 2160 CE (AD) to, so far, 2194.
+
+humans to be allies, enemies, or trade partners – but by human standards are exasperatingly changeable and can be all three on different days.
+
+The major technological advances are efficient space travel and the development of a faster than light drive, widespread use of compact and powerful energy sources, and the early stages of artificial gravity. The GZGverse is neither trans-human nor approaching a singularity. Human biology has remained almost the same, while ethnic, religious, and national rivalries continue unabated or even intensified.
+
+The third are the Kra’Vak, who are much more consistent in their approach to humanity: consistently hostile. 2185 is the official date for the start of the Xeno War between humanity and the Kra’Vak. The war has seen the United Nations become a major power in and of itself and they have introduced a new generation of advanced weapons and systems for human warships. The older ships designs remain in service, especially among second or third-rate Earth remains the central planet of humanity.
+
+powers. Surrounding it are the inner colonies, long settled worlds divided among the major powers. The outer worlds beyond are home to a staggering variety of colonies, factions, and settlements.
+
+The Sa’Vasku, Phalon, and Kra’Vak fleets are described in Fleet Book 2. The current GZGverse history stops at 2194, with Earth itself under threat from a massive Kra’Vak attack. The two superpowers of the GZGverse are the New
+
+141
+
+Full Thrust: Project Continuum
+
+vessels on the Kra'Vak front. Screen generators are The main timeline in Full Thrust 2nd Edition brought
+
+removed (most to be replaced by salvo missile racks the "official" background history up to 2183, just
+
+and/or submunitions packs) and many naval vessels before the first contact with the Kra'Vak. This
+
+have their point defense systems replaced by class-1 continuation shows how things develop from
+
+dual-purpose batteries and new vessels are no longer there......
+
+constructed with armor plating. PAU shipyards are pressed to the limit refitting the fleet wholesale and 2183: The Third Solar War had degenerated largely
+
+the decision is made to purchase an additional six into a series of border wars by this time. Pan African
+
+Novgorods from the ESU to assist in general search Union representatives appeared before the United
+
+and exploration missions to locate Kra'Vak systems Nations to request their assistance in investigating
+
+and patrol Union space. attacks on PAU space. This was largely a political move intended to incline foreign powers to look
+
+2185: The first co-operative action between the ESU favorably upon the Union when it retaliated against
+
+and NAC against the Kra'Vak occurs at the Battle of the Islamic Federation, which the Union considered to
+
+Sulaxar. Although tensions still run high (especially in be the source of the attacks. UNSC sends Survey
+
+diplomatic circles), the militaries of all the major Cruisers McCaffrey and Niven into the outer rim of
+
+powers - plus several smaller nations - are coming PAU space to investigate with their powerful long-
+
+inexorably together in the face of a much greater range scanners. Contact with both ships was lost
+
+threat. On 28.07.2185, the UN Assembly declares that when they were off Lagos IV in a largely un-surveyed
+
+a state of war now officially exists between all the region of PAU-controlled space; the Niven is
+
+nations of Humanity and the race known as the completely destroyed, and the McCaffrey disappears
+
+Kra'Vak; the First Inter-Sentient War (rapidly without trace. When contact with the two ships was
+
+christened the Xeno War by the popular media) has lost, the PAU Universal Navy dispatched a Heavy
+
+truly begun; the PAU pursues aggressive shipbuilding Wing to investigate, led by the aging and now re-
+
+of new vessels of an innovative design. The PAU classed battlecruiser UNS Kinshasa. Kinshasa's last
+
+signs an agreement with the UNSC, giving the UNSC transmissions of an alien enemy finally confirmed the
+
+a hundred year lease on refueling and resupply bases existence of the force raiding PAU space. A single
+
+in its territory in exchange for technical data. As part Universal Navy destroyer was the only member of the
+
+of the agreement, an officer exchange program wing to return, with news of the loss of both UN
+
+between the Universal Navy and the UNSC is signed, survey ships as well as the Kinshasa and the rest of
+
+allowing UNSC observers aboard Universal Navy the wing.
+
+craft on the Kra'Vak frontier and vice versa. The PAU begins a major diplomatic effort towards ending the 2184: Unexplained attacks and incidents increase in
+
+fighting of the Third Solar War and starts this frequency, affecting not only PAU space but other
+
+initiative by sharing a portion of its intelligence on the nations as well; with the ongoing state of war between
+
+Kra'Vak with the NAC, NSL, ESU and FSE in the the NAC and ESU, much blame is placed by each
+
+hopes that Humanity can come together against the power on the other. Both blocs, however, begin to
+
+alien menace. realize that something far more important is happening. Late in 2184, NAC Fleet Intelligence
+
+2186: Early in the year, the advances towards a joint recovers the first identifiable alien debris following an
+
+ESU/NAC response to the Kra'Vak aggression falters encounter near Angel II in which a Confederation
+
+when a Eurasian naval unit fails to assist a squadron managed to destroy two ships from an
+
+Confederation squadron under attack by alien forces attacking alien group. For the first time, Humanity
+
+off Caleb. Finally escaping with barely twenty-five has positive proof that the attackers are another
+
+percent of his force and men, Commodore Farris sentient life-form. As the PAU develops more and
+
+accuses the ESU of standing off from the action in more intelligence regarding the nature of the Kra'Vak
+
+order to gain control of the Caleb system. The threat, the Universal Navy begins a refitting of its
+
+diplomatic repercussions gradually settle, but
+
+142
+
+Full Thrust: Project Continuum
+
+illustrate the deep distrust that still exists between the major powers. The Universal Navy lays down the first Yambi class Superdreadnought. The Kra'Vak offensive gathers momentum, and very late in the year reports begins to come in of the first surface assaults by Kra'Vak forces. The Kra'Vak begin to strike at key richly laden Pan-African mining colonies on the rim in a bold gambit to rob the Union of the resources which fuel its industrial might while coveting those same resources for Kra'Vak military expansion.
+
+2187: The first major success against Kra'Vak ground forces is reported on the NSL outworld of Rheinhold, where a combined force of NSL and NAC Marines supporting local militia units manage to beat off an attempted planetary landing by the alien invaders. Rheinhold then survives five months of protracted siege and repeated landing attempts before the Kra'Vak are driven out system by the arrival of a large joint task force of NAC, NSL, Dutch and Free Cal- Tex ships. Elsewhere, Humanity does not fare so well, and the aliens continue to make inroads toward the Core Systems. Virtually no information is released to the public concerning what is happening on worlds taken by the Kra'Vak, which causes widespread panic as rumors of massacre and genocide spread. Public opinion on Earth, Centaurus and Barnard swings in favor of pulling all forces back from the out worlds to defend the Core. Such a defensive concept does not find favor with the military, nor (naturally) with the colonial population.
+
+2188: Contact is made with a second xenosentient species; the Sa'Vasku send a message to Humanity by returning a survivor of the crew of the UNS McCaffrey, and arranging a rendezvous that is attended by a joint NAC/ESU task force accompanied by a UN ambassador and xenospecialist team. After a very strange and inconclusive (to the humans) meeting between the UN delegation and the Sa'Vasku contact constructs, Humanity is still not sure if it has found new friends, or new enemies. Over the following years of the war, Sa'Vasku ships and fleets turn up apparently at random throughout human space, sometimes hostile, sometimes friendly and sometimes just observing; contact with them proves impossible unless they wish to initiate it, and
+
+143
+
+Humanity is still no nearer understanding their motives or agenda. The Yambi class Superdreadnought Shaka is laid down by the PAU.
+
+2189: The Kra’Vak push towards the Core continues unabated, with Humanity scoring only minor successes in space and planet side against the onslaught. Late in the year, a rapid thrust by Kra’Vak forces deep into Human space is only narrowly defeated when they attack Centaurus, a battle which causes heavy losses to the allied human fleets and great damage to the orbital colonies of the Centaurus system. The Universal Navy cooperates with the UNSC and the navies of all the other major powers to repulse the Kra'Vak offensive. On the positive side, all human nations now fully realize the Kra'Vak threat and pledge themselves to cooperate against it.
+
+2190: The Kra'Vak offensive into human space falters after the Battle of Centaurus. There is a brief pause during which the Kra'Vak opt to change their tactics and they begin to consolidate their hold on the captured human territories they have taken so far. The pattern of Kra'Vak attacks changes in nature as well, from raids and deep, slashing attacks to a concerted, organized march into human space. Instead of striking all over human space, the Kra'Vak begin an organized offensive that advances slowly into human territory systematically taking world after world and fortifying their holdings as they advance. The human forces give ground slowly as the Kra'Vak waves strike at system after system. The PAU's third and final Yambi class Superdreadnought Nthanda is laid down.
+
+2191: First contact between Humanity and the Phalon race, when a Phalon ship is fired on and destroyed by an FSE force in the Rhone system. Other encounters with the Phalons follow, including several retaliatory attacks, until proper communication is finally established and the two races begin to understand something of the other. In the event, diplomatic relations with the Phalons appear almost as unpredictable as with the Sa'Vasku, with different factions within the Conglomerate siding with either Humanity or the Kra'Vak seemingly at a whim.
+
+2192: First Battle of Mars, July 2192. The Kra'Vak
+
+Full Thrust: Project Continuum
+
+manage to slip a veteran task force through Sol's battered outer ring of defenses and launch a strike against the orbital stations and colonies of Mars, focusing on the shipyards there. At stake are the under-construction ships of the UNSC's new Heavy Graser armed battle line. Ships and crews from all human nations, including the PAU, make the ultimate sacrifice to defend the shipyards and their contents and the Kra'Vak force is annihilated down to the last ship. Despite the victorious nature of the battle, civilian morale takes a heavy blow as people begin to give way to their fears of alien domination.
+
+2193: It becomes obvious that a major Kra'Vak push into the Core, and probably to Sol itself, is very near. In desperation, the UNSC (coordinating the defense of the Core systems) orders all human forces to withdraw their ships from the colonies to interdict the Core worlds. While many units comply, others refuse to abandon their colonial home-systems which are still under attack from Kra’Vak forces. As the New Year approaches, the remnants of the UNSC's fleets begin to gather for a last-ditch defense of the Core. While the PAU is prepared to commit the bulk of its forces to the defense of Earth and the Core Worlds, behind the scenes, Universal Navy officials argue vehemently with their UNSC counterparts over the PAU's proposed Operation Damocles, the launch of an expeditionary fleet to take the battle to the Kra'Vak. The UNSC insists now is the time to insure the defense of the home worlds and that a counteroffensive can only take place after that. The PAU believes that the only way to lift the siege is to threaten the Kra'Vak's own home colonies. The UNSC rightly points out the risk in this plan in that no one yet knows where the Kra'Vak home systems even are. Tensions are increased when the PAU takes its plan to the other major powers directly and informs the UNSC that, if necessary, the Universal Navy will launch a counteroffensive alone. Opinion is widely divided over what is the correct course of action but in the end, the ESU, FSE, NSL, IJSF and NAC all decide to support the notion of an expeditionary fleet and contribute forces. Comprised of vessels from all major powers, the main military might of the expeditionary force consists of ships from the PAU, IJSF, FSE and NAC, with the UNSC's major contribution being the elite of its survey command,
+
+144
+
+under Commodore Kaitlin Chavez, which will be tasked with the difficult mission of searching for the Kra'Vak's home worlds while under fire. Despite the Universal Navy's contributing the largest naval contingent of the expeditionary force, UNSC Fleet Admiral Alonso Landry is chosen to lead the combined fleet which slips out of Sol system late in the year, jumping out to the rim and further still into the outer dark towards Kra'Vak space.
+
+Operation Damocles The combined expeditionary fleet is under the command of UNSC Fleet Admiral Alonso Landry aboard the Sol class Superdreadnought Hyperion. His second-in-command is PAU Admiral Gunju Yakuba aboard the Yambi class Superdreadnought Nthanda. The fleet's survey ships, including the Visionary class Explorer Pioneer, are led by UNSC Commodore Kaitlin Chavez. The Japanese have assigned the Scanner Pickets Fubuki and Yukikaze to back up the stretched thin UNSC survey ships assigned to the mission. Carrier operations are coordinated by the IJSF's Commodore Yosima Fujima, flying his flag from the Akagi class Supercarrier Hosho, which has a full contingent of multi-mode fighters. Fujima's second in command is the NAC's Captain Andreas Bennett of the Inflexible class carrier RNS Invincible. Invincible's torpedo bomber squadrons are renowned as the NAC's best. The fleet's ground forces are organized around its two largest contingents: NSL Panzer Grenadiers led by Brigadier Rudolf Drescher and ESU Naval Infantry led by Colonel Zhanna Tereshkova.
+
+2194: While other battles still rage in many of the colonial systems, the Kra'Vak main force arrives at the Core. Barnard and the already badly hurt Centaurus are attacked repeatedly by powerful Kra'Vak fleets.
+
+May 2194: the first of the Kra'Vak attacks on the Earth's outer defenses begin. The Siege of Sol has started. Bejing, New York, Moscow and Geneva are nuked.
+
+October 2194: Contact between UNSC command in the Sol system and Operation Damocles is temporarily cut.
+
+Full Thrust: Project Continuum
+
+‘grown’ humans by the ESU is discovered by an FSE December 2194: With the Kra'Vak pressing in from
+
+task force. Creating artificial humans through cloning all sides and contact lost with Operation Damocles, a
+
+has been banned by treaty for centuries and the FSE small faction within the UNSC comes to the
+
+delivers a formal protest which severely strains conclusion that Humanity's chances for survival are
+
+relations. To make things worse the news of the unacceptably slim under the current civilian
+
+practice leaks out and quickly spreads though out governments and seeks to launch a coup. UNSC
+
+human controlled space. All the major powers deliver Colonel Victor Streed led an unsuccessful coup
+
+formal protests with the NAC formally cutting off all attempt against his superiors in an attempt to form a
+
+ties with the ESU government until all of its artificial military government. Acting on information provided
+
+gestation facilities are destroyed. by UNSC intelligence that Streed was with his primary benefactor and ally, Rear Admiral Stanislaw
+
+February 2195: an emergency session of the UN Frankowski, aboard the battleship UNS Tethys, the
+
+Security council is held. UNSC surrounded Tethys with a loyal UNSC squadron and forced a premature confrontation (believing all their bad apples to be bottled up in one place) that led to the destruction of the Tethys (which was publicly blamed on a ‘tragic accident’). However, Streed and several key co-conspirators were not aboard UNS Tethys at the time and managed to commandeer the UNSC heavy cruiser UNS El Dorado from dry dock. To escape from an encirclement of UNSC forces, Streed and El Dorado performed an emergency jump inside the gravity well and were believed to be destroyed, which for the UN was the end of the matter. The general public was never informed of the Streed/Frankowski coup attempt.
+
+The El Dorado Incident: While the UNSC believed El Dorado destroyed, the ship eventually re-materialized into normal space between the PAU, Oceanic Union and the Scandinavian Federation where her jump exit was detected by all three surrounding powers. Investigating probes discovered the drifting wreckage of the Graser-equipped heavy cruiser floating in open space and all three governments sent out retrieval forces to recover the derelict and its Graser technology. A tragic three-way battle ensued and in the fighting El Dorado was destroyed with all three powers agreeing to share equal access to the debris. All historical records of the incident were sealed and the UNSC was never informed the incident ever occurred. While political tensions remained high, ironically, contact with Operation Damocles was restored shortly after El Dorado's disappearance.
+
+January 2195: The use of artificially gestated or
+
+145
+
+Full Thrust: Project Continuum
+
+20 Final Thoughts
+
+What’s new and what’s changed One of the biggest changes in this version of the rules from Cross Dimensions and Full Thrust Second Edition is how weapons work individually. Not every weapon is Semi-Armor Piercing now.
+
+Secondly, all fire in the Ship Fire Phase is simultaneous with threshold checks being conducted at the end of the turn. Hopefully you will find, as we have, it speeds the game up considerably.
+
+What does ‘Official’ mean? In my own opinion, it doesn’t mean much of anything at all. After all this is your game. What you do with it is up to your local game group.
+
+That said I am frequently asked where a player should go to get the ‘official’ rules and SSDs. My first reaction is to ask what does official mean. If the person asking thinks official means anything Jon Tuffley of GZG has written OR endorsed than what you are holding in your hands is ‘official’. The same can certainly be said of the material on Star Ranger’s site or the original Cross Dimensions rules. But does our imagination or our involvement with Mr. Tuffley somehow make the players imagination any less worthy? The answer is of course it certainly does not. Full Thrust is all about engaging a player’s creativity and imagination. Why should you be restricted to what some game designer or miniature sculptor thought of? Here at Emerald Skunkworks, we have created many SSDs and additional rules for the game. Some, we have borrowed from other sources, some we wholly created on our own. It is our hope that you enjoy them all, but don’t feel constrained by them in any way. If you or your group, don’t like something we’ve done, change it with our blessing\!
+
+A few notes from Hugh Fisher Full Thrust makes it possible for fleets from different systems, galaxies, or universes to do battle with each other. As every TV sci-fi viewer knows, space is cluttered with tachyon bursts, negative polarity fields, and quantum singularities that routinely push ships back and forth in time, into parallel universes, or even other dimensions. If ships, why not whole fleets or
+
+146
+
+solar systems? Full Thrust: Project Continuum is particularly well suited to bringing different settings together, as the wide range of weapons and systems can model almost anything. Unlike previous editions it should be much easier to translate specific genre systems directly into Full Thrust.
+
+The first step in converting from another setting to Full Thrust is to determine the role of each ship, whether escort, cruiser, or capital. This will give an initial mass range for the design. Do not judge by size alone. For example, the Defiant from Deep Space Nine is a relatively small warship, but is stuffed full of advanced weapons and defenses. In terms of its capabilities, it is more like a very compact super- dreadnought and would have a much higher mass rating and points cost than other Federation ships of similar size.
+
+If feints and rapid strikes are important in battle then the drive ratings should be higher than in settings in which the opponents charge straight into each other like herds of dinosaurs. If ships grind away at each other in drawn-out firefights, the designs should allocate more mass to defensive systems and hull and less to weapons. In other settings ships frequently explode with the first good shot, so should be designed with plenty of weapons and little or no protection.
+
+Most science fiction ships use beams of some sort, but there may also be torpedo like weapons, or missiles. It often isn't possible to match every single system and weapon one for one, but you will find that Full Thrust: Project Continuum is flexible enough to recreate the distinctive fighting styles of different fleets. This is after all what it is designed for\! If you do run into problems make up your own rules and please send them to Emerald Coast Skunkworks.
+
+Full Thrust: Project Continuum
+
+Suggestion for creating your own SSDs Despite the almost endless supply of SSDs out there, sooner or later (probably sooner) you will want to create your own. Here are some ideas that might make that easier.
+
+First, you could make them like we did in the late 1990s. Simply take a pencil and piece of graph paper and draw them out. Not very ‘high tech’ by todays standards (or even then) but it works.
+
+Second, you can visit the great guys at http://www.mechworld.de/. They have an SSD builder that is terrific. While it does not fully support this edition of the rules it will allow you to build SSDs with the basic systems.
+
+Lastly you can use either Microsoft Paint or Corell Draw to create your SSDs. This is how we have created our fleet books and the SSDs in this book. There is a file with all the SSD icons on our site available for your use. https://emeraldcoastskunkworks.wordpress.com/2014 /09/12/ssd-icons-for-full-thrust/ If you have never used these programs the ‘learning curve’ is actually pretty simple.
+
+We plan on having a section on our site devoted to player created fleet books and would love to see your designs\!
+
+147
+
+SSD designed by: Luis Nunez using Excel
+
+Be sure to visit our sponsors\!
+
+The Game Space http://www.gamespacepensacola.com/ https://www.facebook.com/groups/gamespacebaseca mp/
+
+http://ravenstarstudios.blogspot.com/ https://www.ravenstarstudio.com/
+
+http://shop.groundzerogames.co.uk/
+
+Bobe’s Hobby House
+
+http://bobeshobbyhouse.com/
+
+http://corseceng.com/
+
+Full Thrust: Project Continuum
+
+21 Various companies that make miniatures
+
+This list is by no means exhaustive and includes just a few of the great companies out there
+
+http://shop.groundzerogames.co.uk/ http://www.eurekamin.com.au
+
+http://timeslipcreations.com/Catalog\_Model\_Kits.html
+
+https://sites.google.com/site/behrlewhubbuchiiisculptor/home
+
+http://federationmodels.com/
+
+http://www.ninjamagic.com/cgi-bin/gt/tpl.h,content=13&
+
+http://fantastic-plastic.com/
+
+http://jt-graphics.com/MK\_BA.html
+
+http://ravenstarstudios.blogspot.com/2006\_04\_01\_archive.html
+
+http://ironwindmetals.com/store/index.php?cPath=273
+
+http://www.studiobergstrom.com/
+
+http://starfightershipyards.com/
+
+http://www.brigademodels.co.uk/Spaceships/index.html
+
+http://www.starshipmodeler.biz/shop/index.cfm
+
+http://desktopwargames.com/
+
+http://www.shapeways.com/shops/omnijackal
+
+http://scrappingfacility.pl/
+
+http://combatwombatminiatures.com/wombats-discount-space-ships.html
+
+Decal companies
+
+http://jupiterivdecals.com/2014/09/16/hello-world/
+
+http://www.tenneshington.com/about-us.html
+
+148
+
+Full Thrust: Project Continuum
+
+22 Introductory Scenario player fleet
+
+149
+
+Full Thrust: Project Continuum
+
+Introductory Scenario counters for Eurasian Solar Union
+
+150
+
+Full Thrust: Project Continuum
+
+Introductory Scenario counters New Anglian Confederation
+
+151
+
+Full Thrust: Project Continuum
+
+152
+
+Full Thrust: Project Continuum QUICK REFERENCE SHEET Turn Sequence 1. Write Orders 2. Roll for Initiative 3. Launch Missiles/Fighters/Gunboats.
+
+Side that lost Initiative launches first, then alternates between players. Half distance for fighters. 4. Move fighters/gunboats launched on a previous turn. The player that lost initiative moves first. 5. Move ships according to movement plots.
+
+Move fixed movement objects. FTL entry or exit. 6. Secondary fighter moves. 7. Allocate fighter and missile attacks. 8. Fighter combats vs fighters or enemy
+
+missiles. 9. Point Defense fire. 10. Missiles and fighters vs ships. Conduct
+
+threshold checks. 11. Ships fire. Side with Initiative fires first,
+
+alternating sides. Gunboats also fire now. 12. Resolve Boarding Actions and resulting
+
+damage 13. Threshold checks 14. Damage Control assignments for DC parties
+
+not used to repel boarders. 15. Roll for reactor explosion. Apply damage if
+
+necessary and roll threshold checks again.
+
+Beam Hit Probability Table Beam Dice 1 to 3 4 5 6 BD miss 1 hit 1 hit 2 hits BD\* miss 1 hit 1 hit 2 hits vs Screen 1 miss miss 1 hit 2 hits vs Screen 2 miss miss 1 hit 1 hit
+
+Note: Most beam weapons will re-roll results of 6. See individual weapon descriptions
+
+153
+
+Beam Hit Ranges
+
+Beam Class
+
+Beam- 3
+
+Beam- 4 Normal Target 12” 24” 36” 48”
+
+Vs Stealth-1 10” 20” 30” 40”
+
+Vs Stealth-2 8” 16” 24” 32”
+
+Heavy Graser Hit Ranges
+
+Beam Class Graser1 Graser2 Graser3 Normal Target 18” 36” 54”
+
+Vs Stealth-1 15” 30” 45”
+
+Vs Stealth-2 12” 24” 36”
+
+Projectile Weapon Hit Probability
+
+Standard Weapon
+
+Beam- 1
+
+Beam- 2
+
+Hit on 6+ Normal
+
+Target 6 12 18 24 30 Vs Stealth 1 5 10 15 20 25 Vs Stealth 2 4 8 12 16 20
+
+Long Range Weapon
+
+Hit on
+
+Hit on
+
+Hit on
+
+Hit on 2+
+
+3+
+
+4+
+
+5+
+
+Hit on 6+
+
+Normal
+
+Target 9 18 27 36 45 Vs Stealth 1 7.5 15 22.5 30 37.5 Vs Stealth 2 6 12 18 24 30
+
+Short Rng Weapon
+
+Hit on
+
+Hit on
+
+Hit on
+
+Hit on 2+
+
+3+
+
+4+
+
+5+
+
+Hit on
+
+Hit on
+
+Hit on
+
+Hit on
+
+Hit on 2+
+
+3+
+
+4+
+
+5+
+
+6+
+
+Normal
+
+Target 4 8 12 16 20 Vs Stealth 1 3.33 6.66 10 13.33 16.6 Vs Stealth 2 2.66 5.3 8 10.6 13.3
+
+Ships Reactor breaches Reactor explodes on a 5+ if not repaired during step 14. Ships within 3mu take damage equal to mass/25 of the exploding ship
+
+Full Thrust: Project Continuum
+
+Critical hits to hangar bays 1D6 1-2 Secondary explosions occur. +1 to roll for each row of hull boxes destroyed this turn. +1D3 damage (x2 if hanger contained any fighters)
+
+Re-Arming fighters 1D6 1 The group may not be re-launched in this
+
+game 2-5 May re-launch in the second turn after
+
+recovery 6 May re-launch on the turn immediately
+
+following that of recovery.
+
+Scrambling fighters 1D6 1 The hasty launch attempt causes a mishap in the launch tube – one complete fighter bay (and its occupying fighters) is out of action for the rest of the game, unless a Damage Control Party can repair it
+
+2-3 No groups may be launched this turn;
+
+4 One group gets away but too late to intercept the attackers – the enemy group(s) may fire on the carrier BEFORE the scrambled group may attack them;
+
+5 One group scrambles in time to intercept – it may engage an attacking group in a dogfight to prevent them firing on the carrier;
+
+6 TWO groups manage to scramble in time to
+
+intercept the attackers.
+
+BOARDING COMBAT Marines hit other marines on a 4+. Combat is simultaneous.
+
+Friendly DC parties not making repair rolls may repel boarders on a roll of 6 on a 1D6. +1 to the roll for each DC party assigned, max of three.
+
+154
+
+Assault shuttles may land boarding parties on a 3+
+
+Surviving Marines and Boarders inflict 1 point of damage on the boarded ship.
+
+TRANSPORTER RAIDS 1D6 1 Nothing happens. The transporter technician is unable to lock onto the target system.
+
+2-3 The Marines transport onto the ship but are unable to reach the target system and are killed.
+
+4 The Marines transport onto the ship but are unable to reach the target system and return to the ship.
+
+5 The Marines transport aboard and destroy the target system but are killed in the process.
+
+6 The Marines transport aboard and destroy the target system and return safely to the ship. Note: Marines may not be sent to attack any Core or otherwise protected systems,
+
+http://emeraldcoastskunkworks.wordpress.com
+
+Full Thrust: Project Continuum
+
+155
+
+<http://emeraldcoastskunkworks.wordpress.com/2014/09/08/72/>   
+<http://emeraldcoastskunkworks.wordpress.com/2014/09/08/72/>   
+<http://www.mechworld.de/>   
+<https://emeraldcoastskunkworks.wordpress.com/2014/09/12/ssd-icons-for-full-thrust/>   
+<https://emeraldcoastskunkworks.wordpress.com/2014/09/12/ssd-icons-for-full-thrust/>   
+<http://shop.groundzerogames.co.uk/>   
+<http://corseceng.com/>   
+<http://ravenstarstudios.blogspot.com/>   
+<http://bobeshobbyhouse.com/>   
+<http://www.gamespacepensacola.com/>   
+<https://www.facebook.com/groups/gamespacebasecamp/>   
+<https://www.facebook.com/groups/gamespacebasecamp/>   
+<http://shop.groundzerogames.co.uk/>   
+<http://www.eurekamin.com.au/>   
+<http://timeslipcreations.com/Catalog_Model_Kits.html>   
+<https://sites.google.com/site/behrlewhubbuchiiisculptor/home>   
+<http://federationmodels.com/>   
+<http://www.ninjamagic.com/cgi-bin/gt/tpl.h,content=13&>   
+<http://fantastic-plastic.com/>   
+<http://jt-graphics.com/MK_BA.html>   
+<http://ravenstarstudios.blogspot.com/2006_04_01_archive.html>   
+<http://ironwindmetals.com/store/index.php?cPath=273>   
+<http://www.studiobergstrom.com/>   
+<http://starfightershipyards.com/>   
+<http://www.brigademodels.co.uk/Spaceships/index.html>   
+<http://www.starshipmodeler.biz/shop/index.cfm>   
+<http://desktopwargames.com/>   
+<http://www.shapeways.com/shops/omnijackal>   
+<http://scrappingfacility.pl/>   
+<http://combatwombatminiatures.com/wombats-discount-space-ships.html>   
+<http://jupiterivdecals.com/2014/09/16/hello-world/>   
+<http://www.tenneshington.com/about-us.html>   
+<http://emeraldcoastskunkworks.wordpress.com/>   

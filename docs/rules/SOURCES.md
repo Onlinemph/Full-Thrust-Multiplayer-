@@ -9,41 +9,31 @@ The engine is built from these, and every rule reference in the code points at o
 | Full Thrust XD Quick Reference | Core Systems effects (bridge, life support, power core) and damage control, cross-checked against the rulebook | `threshold.md`, marked `[XD]` |
 | Stellar Imperium campaign rules | The strategic layer: economy, research, espionage, production | `campaign.md` |
 
-## A known gap
+## The source, in two halves
 
-`continuum-rulebook-extract.txt` stops part-way through section 9.2 — page 81 of 151 — and
-everything from section 10 on is therefore **not** quoted prose.
+The rulebook reaches this repository as two text extracts, and it takes two because the Google
+Drive connector that produced them caps its PDF text extraction at roughly 270,000 characters:
 
-**The rulebook is not the problem.** The extract stops because the Google Drive connector that
-produced it caps its PDF text extraction at roughly 270,000 characters, and this book is about
-twice that. Measured, not guessed:
+| File | Pages | Covers |
+| --- | --- | --- |
+| `continuum-rulebook-extract.txt` | 1–81 | Sections 1–9.2, up to the Needle Gunboat |
+| `continuum-rulebook-part2.txt` | 79–155 | Sections 9–22, complete to the credits |
 
-| Document in the same Drive | File size | Characters returned | Ends |
-| --- | --- | --- | --- |
-| *Project Continuum* | 13.5 MB | 276,641 | mid-list, page 81 |
-| *Squadron Strike 2e* | 21 MB | 268,299 | mid-sentence |
-| *Interceptor 2e* | 15.6 MB | 183,077 | at its own copyright notice — complete |
+They overlap at pages 79–81, which is how they were checked to meet without a gap.
 
-Two long books stop within 3% of each other and a shorter one comes through whole, so the ceiling
-is the connector's, not any document's. The connector returns the same capped text however it is
-asked: `read_file_content` and a `fullText` search snippet return byte-identical output, so a
-targeted search cannot reach past it either. Direct download is refused above 10 MB (this file is
-13.5 MB) and `drive.google.com` is blocked by the environment's network egress policy, so there is
-no way round it from inside a session.
+The cap is worth recording because it cost this project half its source for a while, and because
+the obvious fix does not work. Measured on three PDFs in the same Drive: the full *Project
+Continuum* (13.5 MB) returns 276,641 characters and stops mid-list; *Squadron Strike 2e* (21 MB)
+returns 268,299 and stops mid-sentence; *Interceptor 2e* (15.6 MB), a shorter book, returns 183,077
+and ends at its own copyright notice. Two long books stopping within 3% of each other and a short
+one coming through whole is a ceiling in the tool, not a defect in any document. It counts
+extracted characters rather than megabytes, so shrinking a file changes nothing — the book has to
+be **split**, which is exactly what `part2.pdf` is.
 
-**What would close the gap**, in order of reliability:
-
-1. **Split the PDF** — pages 1–80 and 81–151 as two files in Drive. Each half is under the
-   character ceiling and extracts in full. Shrinking the file on its own does *not* help: the cap
-   counts extracted characters, not megabytes, so a "text only" re-save of the same 151 pages
-   truncates in exactly the same place.
-2. **Paste sections 10–22 into a Google Doc** (or two). A document under the ceiling reads whole.
-3. **Drop a text file into `docs/rules/`** — the engine is written against the spec documents in
-   this directory, not against the PDF, so a `continuum-81-151.txt` committed to the repository is
-   all the engine ever needed.
-
-Roughly 70 of 151 pages are behind that ceiling. Until they are through, what they contain is
-recorded below as not implemented rather than guessed at.
+Nothing else reaches past it from inside a session: the connector returns the same capped text
+however it is asked (`read_file_content` and a `fullText` search snippet come back byte-identical),
+direct download is refused above 10 MB, and `drive.google.com` is blocked by the environment's
+network egress policy for both curl and WebFetch.
 
 Section 9 is covered as far as the text goes: 9.1 in full and five gunboat types from 9.2 (Beam,
 Plasma, Graser, Gatling, Needle), plus the FTL and Heavy modifications. The list is cut off after
