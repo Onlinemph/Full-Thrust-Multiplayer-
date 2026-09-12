@@ -75,6 +75,11 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
   const waveGun = ship.design.weapons.find(
     (weapon) => weapon.weaponClass === 'wave-gun' && !ship.destroyedSystems.has(weapon.id),
   )
+  // 7.9: charges still aboard and unexploded. A ship with none has nothing to
+  // write a detonate order about.
+  const charges = ship.design.systems.filter(
+    (system) => system.kind === 'antimatter-charge' && !ship.destroyedSystems.has(system.id),
+  )
   // 16.6: anything on the table that is not this ship and not a wreck.
   const dockable = game.ships.filter(
     (other) => other.id !== ship.id && !other.destroyed && !other.offTable,
@@ -362,6 +367,29 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
             {waveGunCharge(game, ship, waveGun.id) >= WAVE_GUN_CHARGE_TARGET
               ? 'ready — and a knocked-out capacitor takes the hull with it (7.24)'
               : 'one die a turn, and the charge is what the hull takes if it is shot out (7.24)'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* 7.9: "A ship may write 'detonate' orders during phase 1. At the
+          beginning of phase 13 just before threshold checks are rolled, the
+          ship explodes." A last resort, and the panel says what it costs. */}
+      {charges.length > 0 ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={ship.detonateOrderedTurn === game.turn}
+              onChange={(event) =>
+                dispatch({ type: 'plot-detonate', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Detonate {charges.length > 1 ? `${charges.length} charges` : 'the charge'}
+          </label>
+          <span className="spacer" />
+          <span style={{ color: 'var(--warn)' }}>
+            {3 * charges.length}D6 within 1 MU, {2 * charges.length} within 2, {charges.length}{' '}
+            within 3 — and the ship goes with it (7.9)
           </span>
         </div>
       ) : null}

@@ -195,6 +195,12 @@ export interface ShipState {
   thrustUsed: number
   layingMines: boolean
   /**
+   * 7.9: the turn a *"detonate"* order was written in, or null. The order is
+   * good for that turn only — *"at the beginning of phase 13 ... the ship
+   * explodes"* — so a turn stamp says both whether it stands and when.
+   */
+  detonateOrderedTurn: number | null
+  /**
    * Declared with the orders: this turn's deceleration is meant as a landing
    * (17.11), not as a mistake. Without it, dropping below orbital velocity is
    * 17.8's decaying orbit and the atmosphere takes what it likes.
@@ -289,6 +295,12 @@ export interface ShipState {
   hullMarked: number
   /** Armour boxes crossed off, inner layer first, parallel to `design.armour.layers`. */
   armourMarked: number[]
+  /**
+   * 7.8: boxes of Regenerative Armour that rolled a 1 and *"cannot regenerate
+   * further this battle"*. Counted per layer beside `armourMarked`, inner
+   * first, because they are still damaged — they simply stop being rolled for.
+   */
+  armourBurntOut: number[]
   /** Row lengths of the hull track, if the SSD does not split them evenly. */
   hullRowSizes: number[] | null
   /** System and weapon ids crossed off by threshold checks (4.11). */
@@ -542,6 +554,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     vectorOrders: null,
     thrustUsed: 0,
     layingMines: false,
+    detonateOrderedTurn: null,
     landing: false,
     ftlTransit: 'none',
     ftlWarmupTurn: null,
@@ -558,6 +571,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     lastKnown: null,
     hullMarked: 0,
     armourMarked: opts.design.armour.layers.map(() => 0),
+    armourBurntOut: opts.design.armour.layers.map(() => 0),
     hullRowSizes: opts.hullRowSizes ?? null,
     destroyedSystems: new Set<string>(),
     unrepairable: new Set<string>(),

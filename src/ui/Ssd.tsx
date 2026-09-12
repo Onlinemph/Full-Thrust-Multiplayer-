@@ -20,6 +20,13 @@ export interface SsdDamage {
   hullMarked: number
   /** Armour boxes crossed off, per layer, inner layer first (4.8, 7.7). */
   armourMarked: number[]
+  /**
+   * 7.8: boxes of Regenerative Armour that rolled a 1 and *"cannot regenerate
+   * further this battle"*. Marked apart from the rest, because the difference
+   * between a box that will come back and one that will not is the whole
+   * reason a player watches the armour row at all.
+   */
+  armourBurntOut?: number[]
   /** Ids of weapons and systems knocked out by threshold checks (4.11). */
   destroyed: ReadonlySet<string>
   /** Weapons already fired this turn — in Full Thrust, once is all (2.6). */
@@ -123,14 +130,27 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
             .map(({ boxes, layer }) => (
               <div className="hull-row" key={layer}>
                 <span className="row-label">{layer === 0 ? 'ARM' : `L${layer + 1}`}</span>
-                {Array.from({ length: boxes }, (_, i) => (
-                  <span
-                    key={i}
-                    className={`box is-armour${design.armour.regenerative ? ' is-regen' : ''}${
-                      i < (damage.armourMarked[layer] ?? 0) ? ' is-marked' : ''
-                    }`}
-                  />
-                ))}
+                {Array.from({ length: boxes }, (_, i) => {
+                  const marked = i < (damage.armourMarked[layer] ?? 0)
+                  // The burnt-out ones are counted from the outside of the
+                  // damaged run inwards, so the boxes that will knit back are
+                  // the ones nearest the undamaged armour.
+                  const burnt =
+                    marked && i < (damage.armourBurntOut?.[layer] ?? 0)
+                  return (
+                    <span
+                      key={i}
+                      title={
+                        burnt
+                          ? 'Burnt out — this box cannot regenerate again this battle (7.8)'
+                          : undefined
+                      }
+                      className={`box is-armour${design.armour.regenerative ? ' is-regen' : ''}${
+                        marked ? ' is-marked' : ''
+                      }${burnt ? ' is-burnt' : ''}`}
+                    />
+                  )
+                })}
               </div>
             ))}
         </div>

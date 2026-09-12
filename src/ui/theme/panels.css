@@ -157,6 +157,15 @@
   border-style: dashed;
 }
 
+/* 7.8: a regenerative box that rolled a 1 "cannot regenerate further this
+   battle". Drawn solid, because it has stopped being regenerative armour and
+   is now just a hole. */
+.box.is-regen.is-burnt {
+  border-style: solid;
+  border-color: var(--warn);
+  opacity: 0.55;
+}
+
 /* ── Systems ──────────────────────────────────────────────────────────────── */
 
 .ssd-systems {

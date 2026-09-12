@@ -301,6 +301,7 @@ export function App() {
                   damage={{
                     hullMarked: selected.hullMarked,
                     armourMarked: selected.armourMarked,
+                    armourBurntOut: selected.armourBurntOut,
                     destroyed: selected.destroyedSystems,
                     fired: new Set(selected.weaponsFired.keys()),
                     // `currentThrust` and not a copy of its arithmetic: the

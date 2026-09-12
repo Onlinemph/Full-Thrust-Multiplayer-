@@ -55,6 +55,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
+import { ANTIMATTER_CHARGE_BLAST_RADIUS } from './defences'
 import { NOVA_SWEEPS, WAVE_GUN_BANDS, WAVE_GUN_CHARGE_TARGET, templateContacts } from './ew'
 import {
   canMountFlak,
@@ -485,6 +486,15 @@ export function aiActions(
         const nova = novaWorthArming(game, ship)
         if (nova) {
           actions.push({ type: 'arm-nova-cannon', shipId: ship.id, weaponId: nova.id, on: true })
+          continue
+        }
+        // 7.9: a hull that is not getting home is worth more as a bomb. The
+        // charge goes off at the top of phase 13, so the question is whether
+        // there will still be something inside 3 MU by then — and the answer
+        // has to be yes now, because the order cannot be taken back after
+        // phase 1.
+        if (worthDetonating(game, ship)) {
+          actions.push({ type: 'plot-detonate', shipId: ship.id, on: true })
           continue
         }
         // 7.24: charging costs nothing but the order — the ship may still
@@ -1221,4 +1231,35 @@ function waveWorthFiring(game: GameState, ship: ShipState): WeaponDef | null {
       touches(other),
   )
   return ownInPath ? null : gun
+}
+
+/**
+ * Whether this hull is worth more as a bomb than as a ship (7.9).
+ *
+ * The charge is a last resort and the computer treats it as one: the ship has
+ * to be past saving — more than two thirds of its hull gone, which on any
+ * layout is inside the last threshold row — and there has to be an enemy hull
+ * close enough to be worth the 3d6 a charge throws at 1 MU. Ordering it early
+ * wastes the ship; ordering it with nothing alongside wastes the charge.
+ *
+ * The prediction is where both ships will be after the move, since the blast
+ * happens in phase 13 and the order is written in phase 1.
+ */
+function worthDetonating(game: GameState, ship: ShipState): boolean {
+  if (ship.detonateOrderedTurn !== null) return false
+  const charges = ship.design.systems.filter(
+    (system) => system.kind === 'antimatter-charge' && !ship.destroyedSystems.has(system.id),
+  )
+  if (charges.length === 0) return false
+  const gone = ship.hullMarked / Math.max(1, ship.design.hullBoxes)
+  if (gone < 2 / 3) return false
+  const here = predict(ship, 1)
+  return game.ships.some(
+    (enemy) =>
+      enemy.side !== ship.side &&
+      !enemy.destroyed &&
+      !enemy.offTable &&
+      enemy.carriedBy === null &&
+      distance(here, predict(enemy, 1)) <= ANTIMATTER_CHARGE_BLAST_RADIUS,
+  )
 }

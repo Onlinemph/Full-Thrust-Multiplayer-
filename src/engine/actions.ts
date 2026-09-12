@@ -215,6 +215,11 @@ import {
   combinedStealthLevel,
   effectiveScreenLevel as screenLevelOf,
   pointDefenceOptions,
+  regenerateArmour,
+  rollAntimatterChargeBlast,
+  rollAntimatterChargeSelfDamage,
+  rollUnrepairedChargeDetonation,
+  ANTIMATTER_CHARGE_BLAST_RADIUS,
   stealthHullLevel,
   STEALTH_BAND_SCALE,
   resolvePointDefence,
@@ -374,6 +379,12 @@ export type GameAction =
    */
   | { type: 'plot-roll'; shipId: string; on: boolean }
   | { type: 'plot-mines'; shipId: string; on: boolean }
+  /**
+   * 7.9 — *"A ship may write 'detonate' orders during phase 1. At the
+   * beginning of phase 13 just before threshold checks are rolled, the ship
+   * explodes."* The order stands for the turn it was written in and no longer.
+   */
+  | { type: 'plot-detonate'; shipId: string; on: boolean }
   /** 17.11 — this turn's deceleration in orbit is meant as a landing. */
   | { type: 'plot-landing'; shipId: string; on: boolean }
   /**
@@ -915,6 +926,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // fly straight through the shrapnel on the second leg. Ships have
       // finished moving by here, so their endpoint is settled either way.
       if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
+      // 7.9: a wreck with charges still aboard "explodes at the end of the
+      // phase in which it was destroyed, at full strength" — whichever phase
+      // that was, which is what a boundary sweep means.
+      sweepWreckedCharges(state)
       // 7.24: a Wave Gun knocked out with its capacitors up puts the charge
       // through its own hull. Swept at the boundary for the same reason the
       // debris is: the rule names a threshold roll and a needle beam, and
@@ -929,13 +944,25 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // so it is swept as the turn ends and not as the firing phase closes — a
       // hull whose screens came back on in phase 12 would have paid for
       // nothing.
-      if (state.phase === state.phases[state.phases.length - 1]) closeNovaArming(state)
+      if (state.phase === state.phases[state.phases.length - 1]) {
+        closeNovaArming(state)
+        // 7.9: "if the Antimatter Suicide Charge is not repaired by the end of
+        // the turn roll a die." Phase 14's damage control has already had its
+        // chance by here.
+        rollDamagedCharges(state)
+        // 7.8: "during the End Phase roll a d6 for each point of Regenerative
+        // Armor that has been damaged." 2.6 has no End Phase, so this is it.
+        regenerateArmourAcrossFleet(state)
+      }
       const turnBefore = state.turn
       advancePhase(state)
       // 7.23: "On the next turn, at the start of the firing phase, the 2 MU
       // template is replaced by a 4 MU one." The sweep left standing last turn
       // moves before anybody shoots.
       if (state.phase === 'ship-fire') openNovaSweeps(state)
+      // 7.9: "at the beginning of phase 13 just before threshold checks are
+      // rolled, the ship explodes."
+      if (state.phase === 'threshold') openOrderedDetonations(state)
       if (state.phase === 'move-ships') driftDebris(state)
       // 17.3 dices "for each turn", so the star gets its roll as the turn
       // opens — before anyone writes an order they might have written
@@ -1789,6 +1816,37 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
      * fired through `fire-weapon` at a single named ship, in the full 60-degree
      * forward arc, every turn, with no consequence afterwards.
      */
+    /**
+     * 7.9's *"detonate"* order.
+     *
+     * Written in phase 1 like the mines, and good for that turn only: the ship
+     * blows itself up at the top of phase 13, or the order lapses.
+     */
+    case 'plot-detonate': {
+      if (state.phase !== 'orders') {
+        return refuse('A detonate order is written in phase 1 (7.9)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (liveAntimatterCharges(state, ship).length === 0) {
+        return refuse(`${ship.name} has no antimatter charge left to set off (7.9)`)
+      }
+      ship.detonateOrderedTurn = action.on ? state.turn : null
+      pushLog(state, {
+        kind: 'note',
+        shipId: ship.id,
+        side: ship.side,
+        // A captain who means to blow up their own ship is not hiding it from
+        // the crew, and 7.9 gives no secrecy — the wreck is the announcement.
+        text: action.on
+          ? `${ship.name} writes detonate orders (7.9)`
+          : `${ship.name} takes back its detonate orders (7.9)`,
+      })
+      return OK
+    }
+
     /**
      * 7.24's charging order.
      *
@@ -5635,6 +5693,247 @@ function resolveFlak(state: GameState): void {
   // "All 'Blast Markers' are removed at the end of the turn."
   FLAK.set(state, [])
   origins.clear()
+}
+
+// ---------------------------------------------------------------------------
+// Regenerative armour (7.8) and the antimatter suicide charge (7.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Regenerative armour knitting itself back together (7.8).
+ *
+ * *"During the End Phase roll a d6 for each point of Regenerative Armor that
+ * has been damaged. On a 5 or 6 the armor box is repaired. On a 1 the armor has
+ * sustained too much damage and it cannot regenerate further this battle."*
+ *
+ * 2.6 has no phase called the End Phase — its last is 15, reactor explosions —
+ * so this runs as the turn ends, which is where `defences.ts` argues it
+ * belongs: a box that comes back now soaks damage from the *next* turn, not
+ * from the one just fought.
+ */
+function regenerateArmourAcrossFleet(state: GameState): void {
+  for (const ship of state.ships) {
+    if (!ship.design.armour.regenerative) continue
+    if (ship.destroyed) continue
+    const layers = ship.design.armour.layers
+    const remaining = layers.map((boxes, layer) => boxes - (ship.armourMarked[layer] ?? 0))
+    const result = regenerateArmour(ship.design.armour, remaining, ship.armourBurntOut, state.rng)
+    if (result.rolls.length === 0) continue
+    ship.armourMarked = layers.map((boxes, layer) => boxes - (result.remaining[layer] ?? boxes))
+    ship.armourBurntOut = [...result.burntOut]
+    const burnt = result.rolls.filter((roll) => roll.burntOut).length
+    pushLog(state, {
+      kind: 'note',
+      shipId: ship.id,
+      side: ship.side,
+      dice: result.rolls.map((roll) => roll.roll),
+      text:
+        `${ship.name}'s armour knits back ${result.repaired} box${result.repaired === 1 ? '' : 'es'}` +
+        (burnt > 0 ? `, and ${burnt} will not come back at all (7.8)` : ' (7.8)'),
+    })
+  }
+}
+
+/**
+ * Charges that have already gone off (7.9).
+ *
+ * A spent charge is crossed off the SSD, which makes it look exactly like one
+ * a needle beam shot out — and a shot-out charge is the one thing that rolls
+ * every turn to explode. Without this the first detonation would set the ship
+ * rolling for a charge that is no longer there, for ever.
+ */
+const CHARGES_SPENT = new WeakMap<GameState, Set<string>>()
+
+function spentCharges(state: GameState): Set<string> {
+  let spent = CHARGES_SPENT.get(state)
+  if (!spent) {
+    spent = new Set()
+    CHARGES_SPENT.set(state, spent)
+  }
+  return spent
+}
+
+/** Charges still aboard and intact (7.9). */
+function liveAntimatterCharges(state: GameState, ship: ShipState): string[] {
+  const spent = spentCharges(state)
+  return ship.design.systems
+    .filter(
+      (system) =>
+        system.kind === 'antimatter-charge' &&
+        !ship.destroyedSystems.has(system.id) &&
+        !spent.has(novaKey(ship.id, system.id)),
+    )
+    .map((system) => system.id)
+}
+
+/** Charges the ship carries that have been shot out and not yet repaired (7.9). */
+function damagedAntimatterCharges(state: GameState, ship: ShipState): string[] {
+  const spent = spentCharges(state)
+  return ship.design.systems
+    .filter(
+      (system) =>
+        system.kind === 'antimatter-charge' &&
+        ship.destroyedSystems.has(system.id) &&
+        !spent.has(novaKey(ship.id, system.id)),
+    )
+    .map((system) => system.id)
+}
+
+/**
+ * Set the charges off (7.9).
+ *
+ * *"3d6 explosion like a full strength Antimatter Missile"* at 1 MU, falling to
+ * 2d6 at 2 and 1d6 at 3, and multiple charges are additive in dice rather than
+ * in radius: *"a ship with 3 charges would do 9d6 damage to 1 MU, 6d6 to 2 MU
+ * and 3d6 to 3 MU"*.
+ *
+ * The carrier is a separate case, because 7.9 says so: *"the detonation causes
+ * damage directly to the hull of the carrying ship, it is not reduced by armor
+ * or screens (the explosion starts within)"*. A `deliberate` detonation takes
+ * the ship with it — that is what the order is for — while an accidental one
+ * is rolled, since *"a large ship might survive the accidental detonation of a
+ * single Antimatter Suicide Charge"*.
+ */
+function detonateAntimatterCharges(
+  state: GameState,
+  ship: ShipState,
+  opts: { deliberate: boolean; reason: string },
+): void {
+  const live = liveAntimatterCharges(state, ship)
+  const charges = live.length + (opts.deliberate ? 0 : damagedAntimatterCharges(state, ship).length)
+  if (charges <= 0) return
+  // Spent first, so nothing can set the same charges off twice — a wreck swept
+  // again at the next boundary finds none left, and the end-of-turn roll for a
+  // damaged charge does not go on rolling for one that has already gone.
+  const spent = spentCharges(state)
+  for (const system of ship.design.systems) {
+    if (system.kind !== 'antimatter-charge') continue
+    ship.destroyedSystems.add(system.id)
+    spent.add(novaKey(ship.id, system.id))
+  }
+
+  pushLog(state, {
+    kind: 'note',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name}: ${charges} antimatter charge${charges === 1 ? '' : 's'} — ${opts.reason} (7.9)`,
+  })
+
+  // Everything else within 3 MU, on both sides: 7.9 says "any unit within 3
+  // MU" and a fleet that carries these accepts what that means.
+  const centre = ship.placement.position
+  const targets = blastTargetsNear(state, centre, ANTIMATTER_CHARGE_BLAST_RADIUS).filter(
+    (target) => target.id !== ship.id,
+  )
+  const effects: BlastEffect[] = []
+  for (const target of targets) {
+    const range = distance(centre, target.position)
+    const blast = rollAntimatterChargeBlast(charges, range, target.screens.level, state.rng)
+    if (blast.dice.length === 0) continue
+    effects.push({
+      targetId: target.id,
+      range,
+      dice: blast.dice,
+      damage: blast.damage,
+      destroyed: target.kind === 'ordnance' || target.kind === 'gunboat',
+    })
+  }
+  applyBlastEffects(state, effects, {
+    side: ship.side,
+    source: `${ship.name}'s antimatter charges`,
+    // The same mode 6.6's antimatter warhead uses: armour answers it on the
+    // ordinary ladder, and the screens were already taken off each die.
+    mode: 'standard',
+  })
+
+  // The carrier last, so a ship that goes up takes its neighbours with it
+  // rather than being crossed off before the blast is worked out.
+  if (opts.deliberate) {
+    markHullBoxes(ship, ship.design.hullBoxes)
+    pushLog(state, {
+      kind: 'destroyed',
+      shipId: ship.id,
+      text: `${ship.name} goes up with its charges (7.9)`,
+    })
+    return
+  }
+  const self = rollAntimatterChargeSelfDamage(charges, state.rng)
+  markHullBoxes(ship, self.damage)
+  pushLog(state, {
+    kind: 'damage',
+    shipId: ship.id,
+    side: ship.side,
+    dice: self.dice,
+    text: `${ship.name} takes ${self.damage} straight to the hull — no armour, no screens (7.9)`,
+  })
+  if (ship.destroyed) {
+    pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
+  }
+}
+
+/**
+ * The ordered detonation (7.9), at the top of phase 13.
+ *
+ * *"At the beginning of phase 13 just before threshold checks are rolled, the
+ * ship explodes."*
+ */
+function openOrderedDetonations(state: GameState): void {
+  for (const ship of state.ships) {
+    if (ship.destroyed || ship.offTable) continue
+    if (ship.detonateOrderedTurn !== state.turn) continue
+    ship.detonateOrderedTurn = null
+    detonateAntimatterCharges(state, ship, { deliberate: true, reason: 'detonate ordered' })
+  }
+}
+
+/**
+ * A wreck with charges still aboard (7.9).
+ *
+ * *"If the ship was destroyed before phase 12 it explodes at the end of the
+ * phase in which it was destroyed, at full strength."* Swept at the phase
+ * boundary, which is the end of the phase whichever phase killed it, and
+ * harmless afterwards because the first sweep crosses the charges off.
+ */
+function sweepWreckedCharges(state: GameState): void {
+  for (const ship of state.ships) {
+    if (!ship.destroyed) continue
+    if (liveAntimatterCharges(state, ship).length === 0) continue
+    detonateAntimatterCharges(state, ship, {
+      deliberate: false,
+      reason: 'the wreck goes up',
+    })
+  }
+}
+
+/**
+ * The end-of-turn roll for a charge that was shot out and not repaired (7.9).
+ *
+ * *"If the Antimatter Suicide Charge is not repaired by the end of the turn
+ * roll a die. On a 5 or 6 the Antimatter Suicide Charge explodes ... Roll every
+ * turn until the damage is repaired or an explosion occurs."* One die per
+ * damaged charge, and any 5 or 6 sets the whole complement off.
+ */
+function rollDamagedCharges(state: GameState): void {
+  for (const ship of state.ships) {
+    if (ship.destroyed || ship.offTable) continue
+    const damaged = damagedAntimatterCharges(state, ship)
+    if (damaged.length === 0) continue
+    const roll = rollUnrepairedChargeDetonation(damaged.length, state.rng)
+    pushLog(state, {
+      kind: 'note',
+      shipId: ship.id,
+      side: ship.side,
+      dice: roll.rolls,
+      text: roll.detonates
+        ? `${ship.name}'s damaged antimatter charge lets go (7.9)`
+        : `${ship.name}'s damaged antimatter charge holds another turn (7.9)`,
+    })
+    if (!roll.detonates) continue
+    detonateAntimatterCharges(state, ship, {
+      deliberate: false,
+      reason: 'a damaged charge goes off',
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
