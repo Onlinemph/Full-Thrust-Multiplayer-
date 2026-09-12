@@ -495,6 +495,108 @@ DESIGNS = [
        weapons=[('needle-beam-3',3,F3), ('needle-beam',1,A3)],
        systems=[('firecon',3),('pds',3),('ecm',1),('superior-sensors',1),
                 ('tuffley-cloak',1)], marines=2),
+
+  # ── Izotrope Technocracy ─────────────────────────────────────────────────
+  # A mobile power plant wrapped around a weapon: no projectile of any kind,
+  # plasma and fusion out to knife range, and advanced screens where another
+  # navy puts armour. Slow hulls, big for their guns, content to stand in the
+  # fire while the batteries work.
+  # System defence, so no FTL: thrust 6 and a level-1 advanced screen on a
+  # 26-mass frame. The bow fusion array hits on 1+ inside 6 MU and ignores
+  # standard screens (5.19); the six-arc Plasma-1 is for whatever gets behind
+  # it. It has to close to do anything, and it is cheap enough to lose doing it.
+  dict(id='izotrope-picket', name='Debye-class Picket', faction='Izotrope Technocracy',
+       group='escort', mass=26, hull='average', rows=4, thrust=6, ftl=False,
+       screens=1, advScreens=True,
+       weapons=[('plasma-cannon',1,ALL6), ('fusion-array',1,['F'])],
+       systems=[('firecon',1),('pds',2)]),
+  # The screen the line hides behind on the approach. Plasma-2 forward reaches
+  # 24 MU and doubles its dice inside 12; the fusion array is the pass itself.
+  # Two PDS per escort is the fleet's whole answer to fighters and to bolts.
+  dict(id='izotrope-escort', name='Larmor-class Escort', faction='Izotrope Technocracy',
+       group='escort', mass=44, hull='average', rows=4, thrust=4, armour=[1],
+       screens=1, advScreens=True,
+       weapons=[('plasma-cannon',2,F3), ('plasma-cannon',1,ALL6), ('fusion-array',1,['F'])],
+       systems=[('firecon',2),('pds',2)], marines=1),
+  # The bolt cruiser. One PBL-2 fires every other turn, placing a 6 MU blast
+  # anywhere within 30 MU and forward arc (6.8), which is the only reach the
+  # fleet has; the plasma broadside is what it does on the turns the launcher
+  # is down. Two screen levels, and no armour worth the name.
+  dict(id='izotrope-cruiser', name='Corona-class Cruiser', faction='Izotrope Technocracy',
+       group='cruiser', mass=68, hull='average', rows=4, thrust=4,
+       screens=2, advScreens=True,
+       weapons=[('plasma-cannon',2,F3), ('plasma-cannon',1,P3), ('plasma-cannon',1,S3),
+                ('plasma-bolt-launcher',2,['F'])],
+       systems=[('firecon',2),('pds',3)], marines=2),
+  # Thrust 3 and a Plasma-3 in the bow: this one picks a heading and holds it.
+  # Three dice at 12 MU, falling a die a band out to 36, with Plasma-2 on each
+  # beam for whatever is abreast. The ADFC is for the squadron, not the ship —
+  # it is what lets the cruisers cover each other's bolts and fighters.
+  dict(id='izotrope-heavy-cruiser', name='Solenoid-class Heavy Cruiser', faction='Izotrope Technocracy',
+       group='cruiser', mass=90, hull='average', rows=4, thrust=3, armour=[1],
+       screens=2, advScreens=True,
+       weapons=[('plasma-cannon-3',3,['F']), ('plasma-cannon',2,P3), ('plasma-cannon',2,S3),
+                ('plasma-cannon',1,ALL6)],
+       systems=[('firecon',2),('pds',3),('adfc',1)], marines=2),
+  # Three levels of advanced screen, which is what the Technocracy spends a
+  # capital hull on: against a screen-3 ship a plasma cannon scores only on a 6
+  # and a beam die needs the same. Everything else is arcs — Plasma-3 forward,
+  # Plasma-2 on the other three faces — plus one PBL-3 for the turn before
+  # contact. One armour box: this ship is not meant to be hit through.
+  dict(id='izotrope-battleship', name='Tokamak-class Battleship', faction='Izotrope Technocracy',
+       group='capital', mass=202, hull='average', rows=4, thrust=3,
+       screens=3, advScreens=True,
+       weapons=[('plasma-cannon-3',3,F3), ('plasma-cannon',2,A3), ('plasma-cannon',2,P3),
+                ('plasma-cannon',2,S3), ('plasma-cannon',1,ALL6),
+                ('plasma-bolt-launcher',3,['F'])],
+       systems=[('firecon',3),('pds',5),('advanced-adfc',1)], marines=4),
+
+  # ── Void-Corsairs of the Crimson Axis ────────────────────────────────────
+  # EMP to knock the target's systems down, transporters and boarding torpedoes
+  # to put marines aboard it, and nothing heavier than mass 110. No screens on
+  # any hull: the mass goes into grapples and parties, and a prize burned is a
+  # prize lost.
+  # Thrust 6, one FireCon, everything forward: it fires all of it at one
+  # target and then puts a torpedo into the same face.
+  dict(id='void-corsairs-cutter', name='Marlinspike-class Boarding Cutter', faction='Void-Corsairs of the Crimson Axis',
+       group='escort', mass=26, hull='weak', rows=4, thrust=6,
+       weapons=[('emp',2,F3), ('beam',2,F3), ('boarding-torpedo',1,F3), ('transporter',1,ALL6)],
+       systems=[('firecon',1),('pds',2)], marines=2),
+  # EMP-3 forward is the hull's reason to exist; the second FireCon lets the
+  # transporters work a different target from the one the EMP is blinding.
+  dict(id='void-corsairs-raider', name='Gibbet-class Raider', faction='Void-Corsairs of the Crimson Axis',
+       group='escort', mass=40, hull='weak', rows=4, thrust=6,
+       weapons=[('emp',3,F3), ('boarding-torpedo',1,F3), ('transporter',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('scattergun',1)], marines=2),
+  # Transporter-3 forward and boarding torpedoes fore and aft: it grapples
+  # whichever way the prize turns, with a full five parties to spend. The
+  # P3/S3 beams cover all six arcs between them and are for the escorts, not
+  # for the prize. The boat bay carries the crew that sails the capture home.
+  dict(id='void-corsairs-grapple-cruiser', name='Cutlass-class Grapple Cruiser', faction='Void-Corsairs of the Crimson Axis',
+       group='cruiser', mass=82, hull='average', rows=4, thrust=5,
+       weapons=[('emp',3,F3), ('transporter',3,F3), ('boarding-torpedo',1,F3), ('boarding-torpedo',1,A3),
+                ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',3),('scattergun',1),('boat-bay',1)], marines=5),
+  # The fleet's EMP battery: EMP-4 forward, EMP-2 astern for the pass after it
+  # has gone through, and three FireCons so the two mounts and the transporter
+  # can work different hulls. It softens prizes for the Cutlasses rather than
+  # boarding much itself, and trades the fifth party for a repair crew.
+  dict(id='void-corsairs-crippler', name='Hangman-class Crippler', faction='Void-Corsairs of the Crimson Axis',
+       group='cruiser', mass=90, hull='average', rows=4, thrust=5,
+       weapons=[('emp',4,F3), ('emp',2,A3), ('transporter',2,F3), ('boarding-torpedo',1,F3),
+                ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',3),('scattergun',1),('boat-bay',1)], marines=4, dcp=1),
+  # The flagship, sitting exactly on the faction's mass 110 ceiling. Two bays
+  # and two tubes so both shuttle wings go out in the same turn instead of one
+  # a turn — twelve shuttles of parties, which standard screens do not stop.
+  # Transporter-3 forward and Transporter-1 all round hold the prize while
+  # they cross; the four PDS are for the enemy's shuttles doing the same.
+  dict(id='void-corsairs-prize-taker', name='Red Ledger-class Prize-Taker', faction='Void-Corsairs of the Crimson Axis',
+       group='capital', mass=110, hull='average', rows=4, thrust=4,
+       weapons=[('emp',3,F3), ('transporter',3,F3), ('transporter',1,ALL6), ('boarding-torpedo',1,F3),
+                ('beam',2,P3), ('beam',2,S3)],
+       systems=[('firecon',3),('pds',4),('hangar-bay',2),('launch-tube',2)],
+       marines=5, dcp=1, bays=2, fighterType='assault-shuttle'),
 ]
 
 import sys
