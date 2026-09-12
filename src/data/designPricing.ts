@@ -67,7 +67,23 @@ export function screenPoints(mass: number, level: number, advanced: boolean): nu
   return screenMass(mass, level, advanced) * (advanced ? 4 : 3)
 }
 
-/** Hull boxes from mass and integrity class (13.7). One box costs one mass. */
+/**
+ * The fewest boxes a hull may have (13.7): *"a lower limit of a minimum of 10%
+ * of the total ship mass"* — the fragile hull, which is the floor rather than
+ * one option among five.
+ */
+export function minimumHullBoxes(mass: number): number {
+  return Math.floor(mass * HULL_FRACTION.fragile)
+}
+
+/**
+ * Hull boxes at an integrity class (13.7). One box costs one mass.
+ *
+ * The classes are *descriptions* — "the following terms may be used to
+ * describe the kind of structure a ship has" — so this is what a designer gets
+ * by picking a round number, not what the rules require of them. Validation
+ * enforces `minimumHullBoxes` and nothing more.
+ */
 export function hullBoxesFor(mass: number, hullClass: HullClass): number {
   return Math.floor(mass * HULL_FRACTION[hullClass])
 }
@@ -272,7 +288,7 @@ export function solveMass(spec: {
 
 export type DesignFault =
   | { kind: 'overweight'; by: number }
-  | { kind: 'hull-boxes'; expected: number; found: number }
+  | { kind: 'hull-too-light'; minimum: number; found: number }
   | { kind: 'no-firecon' }
   | { kind: 'hangar-without-tube' }
   | { kind: 'turret-overloaded'; turretId: string; capacity: number; fitted: number }
@@ -287,8 +303,8 @@ export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
     case 'overweight':
       return `${fault.by.toFixed(2)} mass over the hull's rating`
-    case 'hull-boxes':
-      return `hull should have ${fault.expected} boxes for this mass and integrity, not ${fault.found}`
+    case 'hull-too-light':
+      return `${fault.found} hull boxes on a hull that must have at least ${fault.minimum} — 10% of its mass (13.7)`
     case 'no-firecon':
       return 'armed, but no FireCon — the guns cannot be aimed at anything (4.4)'
     case 'hangar-without-tube':
@@ -319,9 +335,15 @@ export function validateDesign(
 
   if (cost.spare < -1e-6) faults.push({ kind: 'overweight', by: -cost.spare })
 
-  const expected = hullBoxesFor(design.mass, design.hullClass)
-  if (design.hullBoxes !== expected) {
-    faults.push({ kind: 'hull-boxes', expected, found: design.hullBoxes })
+  // 13.7: "There are no fixed percentage limits on hull integrity. Ship
+  // designs may have as many or as few hull boxes as the designer wishes,
+  // subject only to a lower limit of a minimum of 10% of the total ship mass.
+  // The actual number of hull boxes chosen does not have to exactly equal any
+  // given percentage of the ship's total mass" — the integrity classes are
+  // names for round numbers, not a menu, so the only hard rule is the floor.
+  const minimumBoxes = minimumHullBoxes(design.mass)
+  if (design.hullBoxes < minimumBoxes) {
+    faults.push({ kind: 'hull-too-light', minimum: minimumBoxes, found: design.hullBoxes })
   }
 
   const fireCons = design.systems.filter(
