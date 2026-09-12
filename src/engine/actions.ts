@@ -94,6 +94,7 @@ import {
 } from './ordnance'
 import {
   damageControlPhase,
+  isOutOfControl,
   reactorExplosionPhase,
   rollThresholdChecks,
   thresholdPhase,
@@ -508,9 +509,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.side === target.side) return refuse('That is a friendly ship')
 
       // 7.25: a ship running its Reflex Field "may not use any weaponry of its
-      // own that turn", and 7.20 says the same of a cloaked one.
+      // own that turn", and 7.20 says the same of a cloaked one. 10.3 says it
+      // of a ship whose bridge has gone: "While a ship is out of control it
+      // will continue on its present course and velocity, and may not fire
+      // weapons, launch fighters, or take any other offensive action."
       if (ship.reflexFieldActive) return refuse(`${ship.name} is running its Reflex Field (7.25)`)
       if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot fire (7.20)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
@@ -773,6 +780,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
       for (const ship of state.ships) {
         if (ship.destroyed || ship.offTable) continue
+        // 10.3: "Passive defenses (screens, armor) are still operational,
+        // though active defenses (PDS) are not."
+        if (isOutOfControl(ship, state.turn)) continue
         const mounts = pdMountsOf(ship)
         if (mounts.length === 0) continue
 
@@ -867,7 +877,59 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'reactor-explosions') {
         return refuse('A breached core is rolled for in phase 15')
       }
-      reactorExplosionPhase(state)
+      for (const result of reactorExplosionPhase(state)) {
+        // 10.3's optional Reactor Breach: the blast is reported by the phase
+        // and applied here, because how it meets armour and screens belongs to
+        // the damage pipeline. Semi-armour-piercing, and standard screens are
+        // no help — "Half of the damage would be applied to armor; the other
+        // half to the hull ignoring screens if any."
+        for (const hit of result.blast) {
+          if (hit.kind !== 'ship') {
+            // What a point of blast does to a fighter group or a missile
+            // marker is not stated in section 10, so it is logged rather than
+            // guessed at.
+            pushLog(state, {
+              kind: 'damage',
+              text: `${hit.targetId} is caught in the blast: ${hit.damage} points (10.3)`,
+              dice: hit.dice,
+            })
+            continue
+          }
+          const victim = shipById(state, hit.targetId)
+          if (!victim) continue
+          const applied = applyDamage(
+            targetStateOf(victim),
+            {
+              normalDamage: hit.damage,
+              penetratingDamage: 0,
+              mode: 'SAP',
+              dice: hit.dice,
+              detail: `reactor breach, ${hit.damage} SAP`,
+            },
+            { rearArcRule: false, rearArc: false, source: 'direct-fire' },
+          )
+          writeBackDamage(victim, applied.target)
+          markHullBoxes(victim, applied.hullDamage)
+          pushLog(state, {
+            kind: 'damage',
+            shipId: victim.id,
+            side: victim.side,
+            dice: hit.dice,
+            text: `${victim.name} is caught in the blast: ${hit.damage} semi-AP (10.3)`,
+          })
+          if (victim.destroyed) {
+            pushLog(state, {
+              kind: 'destroyed',
+              shipId: victim.id,
+              text: `${victim.name} is destroyed by the blast`,
+            })
+          }
+        }
+      }
+      // "Apply damage if necessary and roll threshold checks again" — the
+      // quick reference sheet's phase 15, and the reason the sweep runs after
+      // the blast rather than before it.
+      thresholdPhase(state, { driveDamage: optional(state).driveDamage })
       return OK
     }
 
@@ -907,6 +969,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`${flight.label} is not aboard ${carrier.name}`)
       }
       if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+      // 10.3: an out-of-control ship "may not fire weapons, launch fighters,
+      // or take any other offensive action".
+      if (isOutOfControl(carrier, state.turn)) {
+        return refuse(`${carrier.name} is out of control (10.3)`)
+      }
 
       const result = launchFighterGroup(
         flight,
@@ -1162,6 +1229,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // 8.6: "Only groups that are not engaged … may be fired at."
       if (isEngaged(flight)) return refuse(`${flight.label} is engaged; ships may not fire into it (8.6, 8.10)`)
 
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
@@ -1263,6 +1333,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`${squadron.label} is not aboard ${carrier.name}`)
       }
       if (carrier.destroyed || carrier.offTable) return refuse('Carrier is out of the battle')
+      if (isOutOfControl(carrier, state.turn)) {
+        return refuse(`${carrier.name} is out of control (10.3)`)
+      }
 
       const result = launchGunboatSquadron(
         squadron,

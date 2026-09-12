@@ -923,10 +923,33 @@ export function damageControlPhase(
 // ---------------------------------------------------------------------------
 
 /** One ship's end-of-turn power core roll (10.3). */
+/** Damage a reactor breach throws at one neighbour (10.3, optional). */
+export interface ReactorBlastHit {
+  /** Ship, fighter group, gunboat squadron or ordnance marker id. */
+  targetId: string
+  kind: 'ship' | 'flight' | 'gunboats' | 'ordnance'
+  dice: number[]
+  damage: number
+}
+
 export interface ReactorExplosionResult {
   shipId: string
   roll: number
   exploded: boolean
+  /**
+   * Everything inside 3 MU when the core let go, and what the blast rolled at
+   * it. Reported rather than applied: how damage meets armour and screens is
+   * `combat.ts`'s business, exactly as it is for a weapon (4.8, 4.9).
+   */
+  blast: ReactorBlastHit[]
+}
+
+/** *"1D6 damage for every 25 mass of the exploding ship"* (10.3). */
+export const REACTOR_BLAST_RADIUS = 3
+export const REACTOR_BLAST_MASS_PER_DIE = 25
+
+export function reactorBlastDice(mass: number): number {
+  return Math.max(1, Math.ceil(mass / REACTOR_BLAST_MASS_PER_DIE))
 }
 
 /**
@@ -939,11 +962,12 @@ export interface ReactorExplosionResult {
  * damage is repaired or an explosion occurs" — which is why a core repaired in
  * phase 14 is never rolled for here.
  *
- * The blast a reactor explosion does to nearby ships is not stated in any
- * source in this repository, so none is applied: the result says the ship blew
- * up and the combat module decides whether anything was close enough to care.
- * Any ship that *is* damaged then rolls `rollThresholdChecks` immediately, as
- * phase 15 requires.
+ * The blast is 10.3's optional Reactor Breach rule: *"Every ship,
+ * fighter/gunboat squadron and ordnance, in a 3 MU radius, will suffer 1D6
+ * damage for every 25 mass of the exploding ship."* It is reported on the
+ * result rather than applied here, because how it meets armour and screens is
+ * the damage pipeline's business; the caller applies it and then rolls
+ * `rollThresholdChecks` for anything it hurt, as phase 15 requires.
  */
 export function reactorExplosionPhase(state: GameState): ReactorExplosionResult[] {
   const results: ReactorExplosionResult[] = []
@@ -952,13 +976,15 @@ export function reactorExplosionPhase(state: GameState): ReactorExplosionResult[
     if (!ship.core.reactorExplosionPending) continue
     const roll = d6(state.rng)
     const exploded = roll >= 5
-    results.push({ shipId: ship.id, roll, exploded })
+    const blast: ReactorBlastHit[] = []
+    results.push({ shipId: ship.id, roll, exploded, blast })
 
     if (exploded) {
       ship.destroyed = true
       ship.hullMarked = ship.design.hullBoxes
       ship.pendingThresholdRows = 0
       ship.core.reactorExplosionPending = false
+      blast.push(...rollReactorBlast(state, ship, state.rng))
     }
 
     pushLog(state, {
@@ -973,4 +999,63 @@ export function reactorExplosionPhase(state: GameState): ReactorExplosionResult[
   }
 
   return results
+}
+
+/**
+ * What a breaching core throws at its neighbours (10.3, optional).
+ *
+ * *"Every ship, fighter/gunboat squadron and ordnance, in a 3 MU radius, will
+ * suffer 1D6 damage for every 25 mass of the exploding ship. This damage is
+ * considered Semi-Armor Piercing and ignores Standard Screens."* Everything
+ * within the radius is caught, friend included — the book's own example says
+ * "every ship (friendly or enemy) within 3 MU".
+ *
+ * Small craft and ordnance markers are reported with their dice too. What a
+ * point of blast does to a fighter group is not stated anywhere in section 10,
+ * so the count is handed to the caller rather than turned into casualties
+ * here: **[reading]** reporting a number nobody has to interpret is safer than
+ * inventing a conversion the book never gives.
+ */
+function rollReactorBlast(state: GameState, source: ShipState, rng: Rng): ReactorBlastHit[] {
+  const dice = reactorBlastDice(source.design.mass)
+  const at = source.placement.position
+  const hits: ReactorBlastHit[] = []
+
+  const roll = (): { faces: number[]; total: number } => {
+    const faces: number[] = []
+    let total = 0
+    for (let i = 0; i < dice; i++) {
+      const face = d6(rng)
+      faces.push(face)
+      total += face
+    }
+    return { faces, total }
+  }
+
+  const near = (p: { x: number; y: number }): boolean =>
+    Math.hypot(p.x - at.x, p.y - at.y) <= REACTOR_BLAST_RADIUS + 1e-9
+
+  for (const other of state.ships) {
+    if (other.id === source.id || other.destroyed || other.offTable) continue
+    if (!near(other.placement.position)) continue
+    const { faces, total } = roll()
+    hits.push({ targetId: other.id, kind: 'ship', dice: faces, damage: total })
+  }
+  for (const group of state.fighterGroups) {
+    if (group.status !== 'in-flight' || !near(group.position)) continue
+    const { faces, total } = roll()
+    hits.push({ targetId: group.id, kind: 'flight', dice: faces, damage: total })
+  }
+  for (const squadron of state.gunboatSquadrons) {
+    if (squadron.status !== 'in-flight' || !near(squadron.position)) continue
+    const { faces, total } = roll()
+    hits.push({ targetId: squadron.id, kind: 'gunboats', dice: faces, damage: total })
+  }
+  for (const marker of state.ordnance) {
+    if (!near(marker.position)) continue
+    const { faces, total } = roll()
+    hits.push({ targetId: marker.id, kind: 'ordnance', dice: faces, damage: total })
+  }
+
+  return hits
 }
