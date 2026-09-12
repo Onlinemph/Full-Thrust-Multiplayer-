@@ -8,6 +8,7 @@
  */
 
 import { applyAction, setOptionalRules, type GameAction } from '../engine/actions'
+import { validateFleetFtl, type FleetFtlEntry } from '../engine/ftl'
 import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
@@ -114,6 +115,16 @@ export interface GameSetup {
    */
   battleType?: BattleType | 'none'
 
+  /**
+   * 11.8: *"Non-FTL ships – other than battleriders with a Mothership – cannot
+   * be part of fleets for one-off battles unless specifically permitted by
+   * player agreement or scenario design."* This is that permission.
+   *
+   * Recorded rather than enforced either way: with it off the engine says
+   * which hulls 11.8 would exclude, and starts the battle anyway.
+   */
+  allowNonFtl?: boolean
+
   /** Sides the computer commands. */
   aiSides?: string[]
 
@@ -175,6 +186,33 @@ export function buildGame(setup: GameSetup): GameState {
         ? `${side.name} fields a fleet the ${report.baseName} tech base could build (15)`
         : `${side.name} plays the ${report.baseName} tech base, which could not have built ` +
           `${report.designs.length} of its ships (15)`,
+    })
+  }
+
+  // 11.8, reported the same way and for the same reason: a scenario that puts
+  // a picket screen on the table is not a fleet list, and refusing to start
+  // over it would refuse most scenarios. Stations are furniture — 11.8 is
+  // about what a fleet brings to a one-off battle, and nobody hauls a starbase
+  // there.
+  for (const side of game.sides) {
+    const hulls = game.ships.filter(
+      (ship) => ship.side === side.id && ship.design.group !== 'station',
+    )
+    const fleet: FleetFtlEntry[] = hulls.map((ship) => ({
+      id: ship.name,
+      ftl: ship.design.ftl,
+      battlerider: ship.design.battlerider === true,
+      mothershipId:
+        hulls.find((other) => other.design.id === ship.design.mothershipId)?.name ?? null,
+    }))
+    const problems = validateFleetFtl(fleet, { allowNonFtl: setup.allowNonFtl })
+    if (problems.length === 0) continue
+    pushLog(game, {
+      kind: 'note',
+      side: side.id,
+      text:
+        `${side.name}: ${problems.length} ${problems.length === 1 ? 'hull' : 'hulls'} ` +
+        `11.8 would keep out of a one-off battle — ${problems.join('; ')}`,
     })
   }
 

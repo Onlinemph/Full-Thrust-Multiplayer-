@@ -342,6 +342,23 @@ export interface ShipDesign {
    * optional, so every design and every saved custom design parses unchanged.
    */
   ftlTransferMass?: number
+  /**
+   * 11.7: this hull is a battlerider — *"they do not pay mass or points cost
+   * for an FTL Drive"*, they are 60 mass at most, and they ride to the battle
+   * on a Mothership.
+   *
+   * A design fact, not a fleet fact: whether the Mothership is actually in the
+   * fleet is 11.8's business, checked when the fleet is assembled.
+   */
+  battlerider?: boolean
+  /**
+   * The design id of the Mothership class this rider was built for (11.7).
+   *
+   * *"A fleet with battleriders must deploy the Motherships as well"* — a rider
+   * is designed to fit a particular hull, so the class is written on the rider
+   * and the fleet check looks for one.
+   */
+  mothershipId?: string
   streamlining: Streamlining
 
   armour: ArmourDef

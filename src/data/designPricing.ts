@@ -33,7 +33,7 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
-import { tugDriveMass } from '../engine/ftl'
+import { tugDriveMass, validateBattleriderDesign } from '../engine/ftl'
 import {
   factionById,
   traitsFor,
@@ -355,6 +355,8 @@ export type DesignFault =
   | { kind: 'faction-design'; faction: string; trait: string; rule: string }
   /** An 8.15 fighter build or a 9.2 squadron build the rules do not allow. */
   | { kind: 'bad-small-craft'; label: string; problem: string }
+  /** 11.7: a battlerider that is too big, or that paid for a drive it may not have. */
+  | { kind: 'bad-battlerider'; problem: string }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -388,6 +390,8 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.faction} ${fault.trait}: ${fault.rule}`
     case 'bad-small-craft':
       return `${fault.label}: ${fault.problem}`
+    case 'bad-battlerider':
+      return fault.problem
   }
 }
 
@@ -547,6 +551,19 @@ export function validateDesign(
     (s) => s.kind === 'firecon' || s.kind === 'advanced-firecon',
   ).length
   if (design.weapons.length > 0 && fireCons === 0) faults.push({ kind: 'no-firecon' })
+
+  // 11.7's two design clauses. The third — "a fleet with battleriders must
+  // deploy the Motherships as well" — is about the fleet, so `validateFleetFtl`
+  // has it and the shipyard does not.
+  if (design.battlerider === true) {
+    for (const problem of validateBattleriderDesign({
+      id: design.id,
+      mass: design.mass,
+      ftl: design.ftl,
+    })) {
+      faults.push({ kind: 'bad-battlerider', problem })
+    }
+  }
 
   const hangars = countKind(design, 'hangar-bay')
   const tubes = countKind(design, 'launch-tube')

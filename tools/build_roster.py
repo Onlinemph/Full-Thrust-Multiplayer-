@@ -242,11 +242,16 @@ def solve_mass(d):
     frac = HULL_FRACTION[d['hull']] + 0.05 * d['thrust']
     if d.get('ftl', True):
         frac += 0.1
+    # 11.6: a tug's own drive is the usual 10% of the hull; the spare that does
+    # the hauling is 1 mass per 5 of tow, which does not scale with the hull
+    # and so belongs in the flat sum. `flat` is not defined yet, so it is
+    # carried and added below.
+    spare = math.ceil(d.get('tug', 0) / 5) if d.get('tug') else 0
     if d.get('stream'):
         frac += 0.05 if d['stream'] == 'partial' else 0.1
     if d.get('screens'):
         frac += (0.075 if d.get('advScreens') else 0.05) * d['screens']
-    flat = sum(d.get('armour', []))
+    flat = sum(d.get('armour', [])) + spare
     for wc, rating, arcs in [(w[0], w[1], w[2]) for w in d.get('weapons', [])]:
         flat += WEAPONS[wc][rating][len(arcs)][0]
     for key, count in d.get('systems', []):
@@ -293,7 +298,13 @@ def price(d):
     mass += boxes; pts += boxes * HULL_PTS[d['rows']]
     dm = 0.05 * d['thrust'] * d['mass']; mass += dm; pts += dm * (3 if d.get('advDrive') else 2)
     if d.get('ftl', True):
-        fm = 0.1 * d['mass']; mass += fm; pts += fm * (3 if d.get('advFtl') else 2)
+        fm = 0.1 * d['mass']
+        # 11.6's tug package: "its own mass 6 FTL Drive plus the additional 22".
+        # 13.10 prices a drive by its own mass, so the spare costs the same
+        # rate as the rest of it — otherwise the tow capacity is free.
+        if d.get('tug'):
+            fm += math.ceil(d['tug'] / 5)
+        mass += fm; pts += fm * (3 if d.get('advFtl') else 2)
     if d.get('stream'):
         mass += (0.05 if d['stream'] == 'partial' else 0.1) * d['mass']
     # 7.8: regenerative armour is the same mass and 2 points more a box, which
@@ -835,6 +846,33 @@ DESIGNS = [
        group='cruiser', mass=60, hull='average', rows=4, thrust=5, armour=[4], screens=1,
        weapons=[('mine-rack',1,A3), ('mine-rack',1,A3), ('mine-rack',1,A3), ('beam',2,F3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',2),('antimatter-charge',1)], marines=2),
+  # 11.7's battleriders, and the hull that hauls them. "The Mothership is
+  # treated as an FTL tug or tender, paying extra mass and points for internal
+  # bays or an oversized FTL Drive" — the oversized drive is the cheaper of the
+  # two by a wide margin (1 mass per 5 of tow against 1.5 mass per 1 carried),
+  # so the Ordu carries a mass-40 FTL package and no bays at all. It is slow,
+  # thinly armed for its tonnage, and the riders are what it is for.
+  dict(id='durani-mothership', name='Ordu-class Mothership', faction='Durani Star-Khanate',
+       group='capital', mass=200, hull='average', rows=4, thrust=3, armour=[6], screens=1,
+       tug=100,
+       weapons=[('salvo-missile-launcher',1,F3), ('beam',2,P3), ('beam',2,S3),
+                ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',4),('adfc',1)], marines=3),
+  # A rider pays for no FTL drive at all (11.7), so 10% of its mass goes into
+  # guns instead — which is why a 50-mass rider outshoots a 50-mass cruiser and
+  # why it cannot come to the battle by itself.
+  dict(id='durani-rider-lance', name='Nokhor-class Battlerider', faction='Durani Star-Khanate',
+       group='cruiser', mass=50, hull='average', rows=4, thrust=6, ftl=False, armour=[3],
+       rider=True, mothership='durani-mothership',
+       weapons=[('pulse-torpedo',1,F3), ('salvo-missile-launcher',1,F3), ('beam',2,F3),
+                ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',1)], marines=1),
+  dict(id='durani-rider-bow', name='Sagaar-class Battlerider', faction='Durani Star-Khanate',
+       group='cruiser', mass=50, hull='average', rows=4, thrust=6, ftl=False, armour=[3],
+       rider=True, mothership='durani-mothership',
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
+                ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',1)], marines=1),
   dict(id='durani-flagship', name='Khagan-class Flagship', faction='Durani Star-Khanate',
        group='capital', mass=148, hull='average', rows=4, thrust=5, armour=[8], screens=1,
        weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
@@ -1074,7 +1112,10 @@ def design_ts(r):
              f"  mass: {d['mass']},", f"  hullClass: {ts(d['hull'])},",
              f"  hullRows: {d['rows']},", f"  hullBoxes: {r['boxes']},",
              f"  drive: {{ thrust: {d['thrust']}, advanced: {str(bool(d.get('advDrive'))).lower()} }},",
-             f"  ftl: {ts(('advanced' if d.get('advFtl') else 'standard') if d.get('ftl', True) else 'none')},",
+             f"  ftl: {ts('tug' if d.get('tug') else (('advanced' if d.get('advFtl') else 'standard') if d.get('ftl', True) else 'none'))},",
+             *([f"  ftlTransferMass: {d['tug']},"] if d.get('tug') else []),
+             *(["  battlerider: true,"] if d.get('rider') else []),
+             *([f"  mothershipId: {ts(d['mothership'])},"] if d.get('mothership') else []),
              f"  streamlining: {ts(d.get('stream') or 'none')},",
              f"  armour: {{ layers: {ts(d.get('armour', []))}, regenerative: {str(bool(d.get('regen'))).lower()} }},",
              f"  screens: {{ level: {d.get('screens', 0)}, generators: {d.get('screens', 0)}, advanced: {str(bool(d.get('advScreens'))).lower()} }},",

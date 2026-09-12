@@ -937,8 +937,15 @@ export interface BattleriderFit {
   mothershipId: string | null
 }
 
-/** Check a battlerider against 11.7. Empty when the build is legal. */
-export function validateBattlerider(fit: BattleriderFit): string[] {
+/**
+ * The half of 11.7 a shipyard can check: mass and drive.
+ *
+ * Whether the Mothership is actually coming is a fact about the fleet, not
+ * about the hull on the drawing board, so it lives in `validateFleetFtl` and
+ * is checked when the fleet is assembled. A rider is a legal design on its
+ * own; it is an illegal *fleet* without its Mothership.
+ */
+export function validateBattleriderDesign(fit: Omit<BattleriderFit, 'mothershipId'>): string[] {
   const problems: string[] = []
   if (fit.mass > MAX_BATTLERIDER_MASS + EPSILON) {
     problems.push(`a battlerider is ${MAX_BATTLERIDER_MASS} mass at most (11.7)`)
@@ -947,6 +954,12 @@ export function validateBattlerider(fit: BattleriderFit): string[] {
   if (fit.ftl !== 'none') {
     problems.push('battleriders do not pay mass or points cost for an FTL Drive (11.7)')
   }
+  return problems
+}
+
+/** Check a battlerider against 11.7, fleet clause included. Empty when legal. */
+export function validateBattlerider(fit: BattleriderFit): string[] {
+  const problems = validateBattleriderDesign(fit)
   if (fit.mothershipId === null) {
     problems.push('a fleet with battleriders must deploy the Motherships as well (11.7)')
   }

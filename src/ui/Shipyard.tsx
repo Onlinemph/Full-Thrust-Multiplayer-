@@ -259,12 +259,72 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
               <input
                 type="checkbox"
                 checked={design.ftl !== 'none'}
-                onChange={(event) => edit({ ftl: event.target.checked ? 'standard' : 'none' })}
+                onChange={(event) =>
+                  edit(
+                    event.target.checked
+                      ? { ftl: 'standard' }
+                      : { ftl: 'none', ftlTransferMass: undefined },
+                  )
+                }
               />
               <span>
                 <b>FTL drive</b> <span className="rule-detail">10% of mass</span>
               </span>
             </label>
+
+            {/* 11.6: a tug's drive is its own 10% plus 1 mass for every 5 of
+                tow, which is what a Mothership pays instead of bays. */}
+            {design.ftl !== 'none' ? (
+              <label className="rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={design.ftl === 'tug'}
+                  onChange={(event) =>
+                    edit(
+                      event.target.checked
+                        ? { ftl: 'tug', ftlTransferMass: design.ftlTransferMass ?? 0 }
+                        : { ftl: 'standard', ftlTransferMass: undefined },
+                    )
+                  }
+                />
+                <span>
+                  <b>Tug or Mothership</b>{' '}
+                  <span className="rule-detail">oversized drive, 1 mass per 5 towed (11.6)</span>
+                </span>
+              </label>
+            ) : null}
+
+            {design.ftl === 'tug' ? (
+              <label className="code-field">
+                Tow <span className="num">{design.ftlTransferMass ?? 0}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={400}
+                  step={10}
+                  value={design.ftlTransferMass ?? 0}
+                  onChange={(event) => edit({ ftlTransferMass: Number(event.target.value) })}
+                />
+              </label>
+            ) : null}
+
+            {/* 11.7: a rider pays nothing for a drive and is 60 mass at most.
+                Whether its Mothership actually turns up is 11.8's business. */}
+            {design.ftl === 'none' ? (
+              <label className="rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={design.battlerider === true}
+                  onChange={(event) =>
+                    edit({ battlerider: event.target.checked ? true : undefined })
+                  }
+                />
+                <span>
+                  <b>Battlerider</b>{' '}
+                  <span className="rule-detail">60 mass at most, and it needs a Mothership (11.7)</span>
+                </span>
+              </label>
+            ) : null}
 
             <label className="code-field">
               Screens <span className="num">{design.screens.level}</span>

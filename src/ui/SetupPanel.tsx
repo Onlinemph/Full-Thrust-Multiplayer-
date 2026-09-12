@@ -421,6 +421,30 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>Non-FTL hulls</h3>
+          <p>
+            11.8 keeps in-system ships &mdash; monitors, freighters, System Defense Ships &mdash;
+            out of a one-off battle &ldquo;unless specifically permitted by player agreement or
+            scenario design&rdquo;. This is that permission. Battleriders that brought their
+            Mothership are exempt either way; everything else is named in the log at the start of
+            the battle rather than refused.
+          </p>
+          <label className="rule-toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.allowNonFtl)}
+              onChange={(event) =>
+                setDraft((d) => ({ ...d, allowNonFtl: event.target.checked || undefined }))
+              }
+            />
+            <span>
+              <b>Permit non-FTL ships</b>{' '}
+              <span className="rule-detail">by player agreement (11.8)</span>
+            </span>
+          </label>
+        </section>
+
+        <section>
           <FleetPicker
             scenarioId={draft.scenarioId}
             forces={draft.forces ?? {}}
