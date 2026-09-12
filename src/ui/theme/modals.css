@@ -206,6 +206,29 @@
   background: var(--panel-3);
 }
 
+/* 15: a hull this side's tech base could not have built. Marked rather than
+   removed, because the roster predates the tech base and the interesting
+   information is which ships are outside it, not a shorter list. */
+.design-chip.is-off-base {
+  border-style: dashed;
+  border-color: var(--warn);
+  color: var(--ink-dim);
+}
+
+.tech-report {
+  margin: var(--gap) 0;
+  padding: var(--gap-2);
+  border-left: 2px solid var(--warn);
+  background: var(--panel-2);
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+.tech-report ul {
+  margin: var(--gap) 0 0;
+  padding-left: 1.1rem;
+}
+
 .design-chip .num,
 .picked .num {
   color: var(--ink-dim);

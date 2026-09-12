@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { scenarioById, SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
+import { TECH_BASE_OPTIONS, type TechBaseChoice } from '../data/techBaseCheck'
 import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
 
@@ -164,9 +165,44 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <section>
+          <h3>Tech base</h3>
+          <p>
+            Section 15 buys an empire a short list of technologies and lets it build nothing else.
+            The roster here was not built to either of the book&rsquo;s example lists, so a side
+            plays unrestricted unless you pick one — and picking one tells you which of the ships
+            you have chosen could not have been built.
+          </p>
+          {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => (
+            <label key={side.id} className="code-field">
+              {side.name}
+              <select
+                aria-label={`${side.name} tech base`}
+                value={draft.techBases?.[side.id] ?? 'unrestricted'}
+                onChange={(event) =>
+                  setDraft((d) => ({
+                    ...d,
+                    techBases: {
+                      ...d.techBases,
+                      [side.id]: event.target.value as TechBaseChoice,
+                    },
+                  }))
+                }
+              >
+                {TECH_BASE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </section>
+
+        <section>
           <FleetPicker
             scenarioId={draft.scenarioId}
             forces={draft.forces ?? {}}
+            techBases={draft.techBases ?? {}}
             onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
           />
         </section>

@@ -1,6 +1,12 @@
 import { useState } from 'react'
 
 import {
+  TECH_BASE_OPTIONS,
+  designProblems,
+  techBaseLabel,
+  type TechBaseChoice,
+} from '../data/techBaseCheck'
+import {
   describeFault,
   hullBoxesFor,
   priceDesign,
@@ -36,8 +42,14 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
   const [design, setDesign] = useState<ShipDesign>(() => startingPoint())
   const [yard, setYard] = useState<ShipDesign[]>(() => [...savedDesigns()])
   const [saved, setSaved] = useState<string | null>(null)
+  /* 15: which empire's technology this is being drawn up under. A designer
+     answers this before the first component, and it is separate from the
+     faults because it is a different kind of no: a fault means the hull cannot
+     fly, a tech-base refusal means this empire cannot build it. */
+  const [techBase, setTechBase] = useState<TechBaseChoice>('unrestricted')
   const cost = priceDesign(design)
   const faults = validateDesign(design)
+  const offBase = designProblems(techBase, design)
 
   /** Any edit that changes mass has to re-derive the hull box count with it. */
   const edit = (patch: Partial<ShipDesign>) =>
@@ -78,6 +90,38 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
         ) : (
           <p style={{ color: 'var(--screens)' }}>A legal design.</p>
         )}
+
+        <div className="panel-row">
+          <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+            Tech base
+            <select
+              aria-label="Tech base"
+              value={techBase}
+              onChange={(event) => setTechBase(event.target.value as TechBaseChoice)}
+            >
+              {TECH_BASE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="spacer" />
+          {techBase !== 'unrestricted' && offBase.length === 0 ? (
+            <span style={{ color: 'var(--screens)' }}>Buildable under section 15.</span>
+          ) : null}
+        </div>
+
+        {offBase.length > 0 ? (
+          <div className="tech-report">
+            {techBaseLabel(techBase)} could not build this:
+            <ul>
+              {offBase.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="library">
           <div className="shipyard-controls">

@@ -3,6 +3,12 @@ import { useMemo, useState } from 'react'
 import type { ShipDesign, ShipGroup } from '../engine/types'
 import { scenarioById, type Scenario } from '../data/scenarios'
 import { allDesigns } from '../data/ships'
+import {
+  checkFleetTechBase,
+  designProblems,
+  techBaseLabel,
+  type TechBaseChoice,
+} from '../data/techBaseCheck'
 
 /**
  * Choosing a force (18.2, 18.3).
@@ -19,6 +25,8 @@ export interface FleetPickerProps {
   scenarioId: string
   /** Current picks per side, by design id. Empty means the scenario's own. */
   forces: Partial<Record<string, string[]>>
+  /** The tech base each side plays under (15). Absent means unrestricted. */
+  techBases?: Partial<Record<string, TechBaseChoice>>
   onChange: (forces: Partial<Record<string, string[]>>) => void
 }
 
@@ -29,7 +37,7 @@ const GROUP_LABEL: Record<string, string> = {
   capital: 'Capitals',
 }
 
-export function FleetPicker({ scenarioId, forces, onChange }: FleetPickerProps) {
+export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPickerProps) {
   const scenario = scenarioById(scenarioId)
   const [side, setSide] = useState(scenario?.sides[0]?.id ?? 'a')
   const designs = useMemo(() => allDesigns(), [])
@@ -43,6 +51,14 @@ export function FleetPicker({ scenarioId, forces, onChange }: FleetPickerProps) 
   const spent = picked.reduce((sum, id) => sum + (byId(designs, id)?.points ?? 0), 0)
 
   const setPicks = (next: string[]) => onChange({ ...forces, [side]: next })
+
+  // 15: what this side's tech base could not have built. Advisory, because the
+  // roster predates the tech base and both example factions refuse armour.
+  const techBase = techBases?.[side]
+  const techReport = checkFleetTechBase(
+    techBase,
+    picked.map((id) => byId(designs, id)).filter((d): d is ShipDesign => Boolean(d)),
+  )
 
   return (
     <section className="fleet-picker">
@@ -65,6 +81,26 @@ export function FleetPicker({ scenarioId, forces, onChange }: FleetPickerProps) 
       </div>
 
       <CompositionBar picked={picked} designs={designs} spent={spent} />
+
+      {techReport.designs.length > 0 || techReport.baseErrors.length > 0 ? (
+        <div className="tech-report">
+          <b>{techBaseLabel(techBase)}</b> could not have built{' '}
+          {techReport.designs.length === 1 ? 'one of these ships' : `${techReport.designs.length} of these ships`}
+          :
+          <ul>
+            {techReport.baseErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+            {techReport.designs.map((entry) => (
+              <li key={entry.designId}>
+                <b>{entry.name}</b> — {entry.problems.length}{' '}
+                {entry.problems.length === 1 ? 'component' : 'components'}, starting with{' '}
+                {shortProblem(entry.problems[0])}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="picked-list">
         {picked.length === 0 ? <p>No ships. This side would have nothing to fight with.</p> : null}
@@ -99,17 +135,24 @@ export function FleetPicker({ scenarioId, forces, onChange }: FleetPickerProps) 
           <div key={group}>
             <h4>{GROUP_LABEL[group]}</h4>
             <div className="design-list">
-              {available.map((design) => (
-                <button
-                  key={design.id}
-                  className="design-chip"
-                  title={`${design.faction} · mass ${design.mass} · thrust ${design.drive.thrust}`}
-                  onClick={() => setPicks([...picked, design.id])}
-                >
-                  {design.name}
-                  <span className="num">{design.points}</span>
-                </button>
-              ))}
+              {available.map((design) => {
+                const problems = designProblems(techBase, design)
+                return (
+                  <button
+                    key={design.id}
+                    className={`design-chip${problems.length > 0 ? ' is-off-base' : ''}`}
+                    title={
+                      problems.length > 0
+                        ? problems.join('\n')
+                        : `${design.faction} · mass ${design.mass} · thrust ${design.drive.thrust}`
+                    }
+                    onClick={() => setPicks([...picked, design.id])}
+                  >
+                    {design.name}
+                    <span className="num">{design.points}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         )
@@ -159,6 +202,12 @@ function CompositionBar({
       })}
     </div>
   )
+}
+
+/** `validateDesignAgainstTechBase` prefixes each line with the ship's name. */
+function shortProblem(problem: string): string {
+  const colon = problem.indexOf(': ')
+  return colon < 0 ? problem : problem.slice(colon + 2)
 }
 
 function byId(designs: readonly ShipDesign[], id: string): ShipDesign | undefined {

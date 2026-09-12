@@ -8,8 +8,9 @@
  */
 
 import { applyAction, setOptionalRules, type GameAction } from '../engine/actions'
-import type { GameState } from '../engine/game'
+import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
+import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
 import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
 import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scenario } from './scenarios'
 
@@ -62,6 +63,13 @@ export interface GameSetup {
   factions?: Partial<Record<string, string>>
 
   /**
+   * The Imperial Tech Base each side plays under (15), by side id. A side with
+   * no entry plays unrestricted, which is every battle fought before this
+   * field existed and how Full Thrust plays when nobody is counting choices.
+   */
+  techBases?: Partial<Record<string, TechBaseChoice>>
+
+  /**
    * A force chosen for a side, replacing the scenario's own (18.2). Stored as
    * design ids in deployment order; `startScenario` places them on the
    * scenario's own stations, so a picked fleet deploys where the scenario says
@@ -108,6 +116,26 @@ export function buildGame(setup: GameSetup): GameState {
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay
   // fight under the rules the battle was actually fought under.
+  // 15: what each side could have built. Recorded in the log rather than
+  // enforced, because the roster predates the tech base and refusing to start
+  // a battle over it would be refusing to start most battles.
+  for (const side of game.sides) {
+    const choice = setup.techBases?.[side.id]
+    if (!choice || choice === 'unrestricted') continue
+    const report = checkFleetTechBase(
+      choice,
+      game.ships.filter((ship) => ship.side === side.id).map((ship) => ship.design),
+    )
+    pushLog(game, {
+      kind: 'note',
+      side: side.id,
+      text: report.legal
+        ? `${side.name} fields a fleet the ${report.baseName} tech base could build (15)`
+        : `${side.name} plays the ${report.baseName} tech base, which could not have built ` +
+          `${report.designs.length} of its ships (15)`,
+    })
+  }
+
   setOptionalRules(game, {
     driveDamage: setup.driveDamage,
     rearArcAttacks: setup.rearArcAttacks,
