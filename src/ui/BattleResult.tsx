@@ -1,4 +1,5 @@
 import type { GameState } from '../engine/game'
+import { optional } from '../engine/actions'
 import { damageLevelOf, scoreBattle } from '../engine/victory'
 import type { Scenario } from '../data/scenarios'
 
@@ -36,7 +37,7 @@ export function battleEnd(game: GameState, scenario: Scenario | undefined): Batt
   }
 
   if (scenario.turnLimit && game.turn > scenario.turnLimit) {
-    return { over: true, reason: 'turn-limit', winner: scoreBattle(game, ladder).winner }
+    return { over: true, reason: 'turn-limit', winner: scoreBattle(game, ladder, { cpv: optional(game).cpv }).winner }
   }
 
   return { over: false }
@@ -53,7 +54,7 @@ export function BattleResult({
   end: Extract<BattleEnd, { over: true }>
   onClose: () => void
 }) {
-  const score = scoreBattle(game, scenario.victory)
+  const score = scoreBattle(game, scenario.victory, { cpv: optional(game).cpv })
   const winner = score.sides.find((s) => s.side === end.winner)
 
   return (

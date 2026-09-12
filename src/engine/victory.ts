@@ -13,6 +13,7 @@
  */
 
 import { hullRowBounds } from './combat'
+import { cpvPoints } from './battles'
 import { currentThrust, hullRowsCompleted, type GameState, type ShipState } from './game'
 import type { VictoryLadder } from '../data/scenarios'
 
@@ -71,11 +72,23 @@ const SHARE: Record<DamageLevel, keyof VictoryLadder | null> = {
   disengaged: 'disengaged',
 }
 
+/**
+ * What a hull is worth before the ladder is applied (4.12, 18.3).
+ *
+ * 18.3's Combat Points Value is a different currency, not a discount: it
+ * reprices a hull by mass, so both what a side committed and what it concedes
+ * move with it. A battle fought in CPV has to be scored in CPV or the
+ * scoreboard is measuring one thing and the fleet picker another.
+ */
+function hullValue(ship: ShipState, cpv: boolean): number {
+  return cpv ? cpvPoints(ship.design.points, ship.design.mass) : ship.design.points
+}
+
 /** Points this hull is worth to the enemy, rounded down (4.12). */
-export function pointsConceded(ship: ShipState, ladder: VictoryLadder): number {
+export function pointsConceded(ship: ShipState, ladder: VictoryLadder, cpv = false): number {
   const key = SHARE[damageLevelOf(ship)]
   if (!key) return 0
-  return Math.floor(ship.design.points * ladder[key])
+  return Math.floor(hullValue(ship, cpv) * ladder[key])
 }
 
 export interface SideScore {
@@ -96,21 +109,26 @@ export interface BattleScore {
   winner: string | null
 }
 
-/** Score the battle as it stands (4.12). */
-export function scoreBattle(game: GameState, ladder: VictoryLadder): BattleScore {
+/** Score the battle as it stands (4.12), in whichever currency it is fought in. */
+export function scoreBattle(
+  game: GameState,
+  ladder: VictoryLadder,
+  opts: { cpv?: boolean } = {},
+): BattleScore {
+  const cpv = opts.cpv === true
   const perSide = game.sides.map((side) => {
     const ships = game.ships.filter((ship) => ship.side === side.id)
     return {
       side: side.id,
       name: side.name,
-      committed: ships.reduce((sum, ship) => sum + ship.design.points, 0),
-      conceded: ships.reduce((sum, ship) => sum + pointsConceded(ship, ladder), 0),
+      committed: ships.reduce((sum, ship) => sum + hullValue(ship, cpv), 0),
+      conceded: ships.reduce((sum, ship) => sum + pointsConceded(ship, ladder, cpv), 0),
       scored: 0,
       ships: ships.map((ship) => ({
         id: ship.id,
         name: ship.name,
         level: damageLevelOf(ship),
-        conceded: pointsConceded(ship, ladder),
+        conceded: pointsConceded(ship, ladder, cpv),
       })),
     }
   })

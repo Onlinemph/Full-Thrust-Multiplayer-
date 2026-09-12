@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import type { ShipDesign, ShipGroup } from '../engine/types'
+import type { ShipDesign } from '../engine/types'
 import { scenarioById, type Scenario } from '../data/scenarios'
 import { allDesigns } from '../data/ships'
 import {
@@ -9,6 +9,15 @@ import {
   techBaseLabel,
   type TechBaseChoice,
 } from '../data/techBaseCheck'
+import { designCost, summariseFleet } from '../data/fleetList'
+import {
+  IDEAL_FLEET_POINTS_MAX,
+  IDEAL_FLEET_POINTS_MIN,
+  SMALLEST_INTERESTING_FLEET_POINTS,
+  type CompositionFormat,
+  type FleetBreakdown,
+  type FleetClass,
+} from '../engine/battles'
 
 /**
  * Choosing a force (18.2, 18.3).
@@ -27,28 +36,49 @@ export interface FleetPickerProps {
   forces: Partial<Record<string, string[]>>
   /** The tech base each side plays under (15). Absent means unrestricted. */
   techBases?: Partial<Record<string, TechBaseChoice>>
+  /** 18.3: price the fleet in Combat Points Value rather than printed points. */
+  cpv?: boolean
   onChange: (forces: Partial<Record<string, string[]>>) => void
 }
 
-const GROUP_ORDER: ShipGroup[] = ['escort', 'cruiser', 'capital']
+/**
+ * 13.4's three classes, which are what 18.2's proportions are taken of. A
+ * `ShipGroup` also has 'station' for a starbase; a starbase is not a fleet.
+ */
+const GROUP_ORDER: FleetClass[] = ['escort', 'cruiser', 'capital']
 const GROUP_LABEL: Record<string, string> = {
   escort: 'Escorts',
   cruiser: 'Cruisers',
   capital: 'Capitals',
 }
 
-export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPickerProps) {
+export function FleetPicker({
+  scenarioId,
+  forces,
+  techBases,
+  cpv = false,
+  onChange,
+}: FleetPickerProps) {
   const scenario = scenarioById(scenarioId)
   const [side, setSide] = useState(scenario?.sides[0]?.id ?? 'a')
+  // 18.2 names five kinds of battle and restricts the list differently for
+  // each; `open` is the one with no restriction, which is what a scenario is.
+  const [format, setFormat] = useState<CompositionFormat>('open')
   const designs = useMemo(() => allDesigns(), [])
 
   if (!scenario) return null
 
   // The budget is what the scenario's own force for this side costs — pick a
-  // fleet worth what the designer intended and the battle stays fair.
-  const budget = budgetFor(scenario, side, designs)
+  // fleet worth what the designer intended and the battle stays fair. Both
+  // sides of the sum are in whichever currency the table is playing in, and
+  // both include what the hulls carry (18.2: "including their fighters").
   const picked = forces[side] ?? defaultPicks(scenario, side)
-  const spent = picked.reduce((sum, id) => sum + (byId(designs, id)?.points ?? 0), 0)
+  const budget = budgetFor(scenario, side, designs, cpv)
+  const pickedDesigns = picked
+    .map((id) => byId(designs, id))
+    .filter((d): d is ShipDesign => Boolean(d))
+  const summary = summariseFleet(pickedDesigns, { format, cpv })
+  const spent = summary.total
 
   const setPicks = (next: string[]) => onChange({ ...forces, [side]: next })
 
@@ -76,11 +106,47 @@ export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPi
         ))}
         <span className="spacer" />
         <span className={`num budget${spent > budget ? ' is-over' : ''}`}>
-          {spent} / {budget} CPV
+          {spent} / {budget} {cpv ? 'CPV' : 'points'}
         </span>
       </div>
 
-      <CompositionBar picked={picked} designs={designs} spent={spent} />
+      <div className="panel-row">
+        <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+          Composition
+          <select
+            aria-label="Composition format"
+            value={format}
+            onChange={(event) => setFormat(event.target.value as CompositionFormat)}
+          >
+            {COMPOSITION_FORMATS.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="spacer" />
+        <span style={{ color: sizeBandColour(summary.report.sizeBand) }}>
+          {SIZE_BAND_LABEL[summary.report.sizeBand]}
+        </span>
+      </div>
+
+      <CompositionBar breakdown={summary.breakdown} />
+
+      {summary.report.violations.length > 0 || summary.report.advisories.length > 0 ? (
+        <ul className="faults">
+          {summary.report.violations.map((finding, i) => (
+            <li key={`v${i}`}>
+              <span className="rule-ref">{finding.rule}</span> {finding.detail}
+            </li>
+          ))}
+          {summary.report.advisories.map((finding, i) => (
+            <li key={`a${i}`} style={{ color: 'var(--ink-dim)' }}>
+              <span className="rule-ref">{finding.rule}</span> {finding.detail}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {techReport.designs.length > 0 || techReport.baseErrors.length > 0 ? (
         <div className="tech-report">
@@ -108,7 +174,8 @@ export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPi
           const design = byId(designs, id)
           return (
             <span key={`${id}-${index}`} className="picked">
-              {design?.name ?? id} <span className="num">{design?.points ?? 0}</span>
+              {design?.name ?? id}{' '}
+              <span className="num">{design ? designCost(design, cpv) : 0}</span>
               <button
                 aria-label={`Remove ${design?.name ?? id}`}
                 onClick={() => setPicks(picked.filter((_, i) => i !== index))}
@@ -149,7 +216,7 @@ export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPi
                     onClick={() => setPicks([...picked, design.id])}
                   >
                     {design.name}
-                    <span className="num">{design.points}</span>
+                    <span className="num">{designCost(design, cpv)}</span>
                   </button>
                 )
               })}
@@ -161,40 +228,50 @@ export function FleetPicker({ scenarioId, forces, techBases, onChange }: FleetPi
   )
 }
 
+const COMPOSITION_FORMATS: readonly { id: CompositionFormat; label: string }[] = [
+  { id: 'open', label: 'Open — no restriction' },
+  { id: 'patrol', label: 'Patrol — no capitals, cruisers under half' },
+  { id: 'large-battle', label: 'Large battle — capitals under half' },
+  { id: 'capital-escorted', label: 'Capitals escorted' },
+  { id: 'fleet-action', label: 'Fleet action' },
+]
+
+const SIZE_BAND_LABEL: Record<string, string> = {
+  'below-minimum': `under ${SMALLEST_INTERESTING_FLEET_POINTS} — thin for a battle`,
+  small: 'small, but playable',
+  ideal: `the ideal ${IDEAL_FLEET_POINTS_MIN}\u2013${IDEAL_FLEET_POINTS_MAX}`,
+  large: 'large',
+  'too-large': 'probably too large',
+}
+
+function sizeBandColour(band: string): string {
+  if (band === 'ideal') return 'var(--screens)'
+  if (band === 'too-large' || band === 'below-minimum') return 'var(--warn)'
+  return 'var(--ink-dim)'
+}
+
 /**
  * How the points are split between hull groups (18.2).
  *
  * Shown as a bar rather than three numbers because the thing a player is
  * checking is a proportion — "am I all battleships?" — and a proportion is
- * read off a bar faster than off arithmetic.
+ * read off a bar faster than off arithmetic. The classes are 13.4's, taken
+ * from mass by `classifyByMass`, not from whatever the design calls itself:
+ * 18.2's limits are about hulls and 13.4 lets a navy label them how it likes.
  */
-function CompositionBar({
-  picked,
-  designs,
-  spent,
-}: {
-  picked: readonly string[]
-  designs: readonly ShipDesign[]
-  spent: number
-}) {
-  if (spent === 0) return null
-  const byGroup = new Map<string, number>()
-  for (const id of picked) {
-    const design = byId(designs, id)
-    if (!design) continue
-    byGroup.set(design.group, (byGroup.get(design.group) ?? 0) + design.points)
-  }
+function CompositionBar({ breakdown }: { breakdown: FleetBreakdown }) {
+  if (breakdown.total === 0) return null
   return (
     <div className="composition" aria-label="Fleet composition by hull group">
       {GROUP_ORDER.map((group) => {
-        const points = byGroup.get(group) ?? 0
+        const points = breakdown.points[group]
         if (points === 0) return null
         return (
           <span
             key={group}
             className={`composition-slice is-${group}`}
             style={{ flexGrow: points }}
-            title={`${GROUP_LABEL[group]}: ${points} CPV, ${Math.round((points / spent) * 100)}%`}
+            title={`${GROUP_LABEL[group]}: ${points}, ${Math.round(breakdown.share[group] * 100)}%`}
           >
             {GROUP_LABEL[group]}
           </span>
@@ -218,6 +295,14 @@ function defaultPicks(scenario: Scenario, side: string): string[] {
   return scenario.sides.find((s) => s.id === side)?.force.map((entry) => entry.designId) ?? []
 }
 
-function budgetFor(scenario: Scenario, side: string, designs: readonly ShipDesign[]): number {
-  return defaultPicks(scenario, side).reduce((sum, id) => sum + (byId(designs, id)?.points ?? 0), 0)
+function budgetFor(
+  scenario: Scenario,
+  side: string,
+  designs: readonly ShipDesign[],
+  cpv: boolean,
+): number {
+  return defaultPicks(scenario, side).reduce((sum, id) => {
+    const design = byId(designs, id)
+    return sum + (design ? designCost(design, cpv) : 0)
+  }, 0)
 }

@@ -53,6 +53,8 @@ export interface GameSetup {
   sensorRules?: boolean
   /** 17 — rock, dust and meteor fields do something when you fly into them. */
   terrainHazards?: boolean
+  /** 18.3 — price and score the battle in Combat Points Value, not printed points. */
+  cpv?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -156,6 +158,7 @@ export function buildGame(setup: GameSetup): GameState {
     emergencyThrust: setup.emergencyThrust,
     sensorRules: setup.sensorRules,
     terrainHazards: setup.terrainHazards,
+    cpv: setup.cpv,
   })
   return game
 }

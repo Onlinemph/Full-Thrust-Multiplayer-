@@ -1,4 +1,5 @@
 import type { GameState } from '../engine/game'
+import { optional } from '../engine/actions'
 import { scoreBattle, type DamageLevel } from '../engine/victory'
 import type { VictoryLadder } from '../data/scenarios'
 
@@ -12,7 +13,7 @@ import type { VictoryLadder } from '../data/scenarios'
  * and a player who cannot see that coming will play the wrong game.
  */
 export function Scoreboard({ game, ladder }: { game: GameState; ladder: VictoryLadder }) {
-  const score = scoreBattle(game, ladder)
+  const score = scoreBattle(game, ladder, { cpv: optional(game).cpv })
 
   return (
     <div className="panel">

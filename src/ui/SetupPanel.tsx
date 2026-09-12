@@ -93,6 +93,14 @@ const OPTIONAL_RULES: Toggle[] = [
       'this the rock on the table is only cover.',
   },
   {
+    key: 'cpv',
+    label: 'Combat Points Value',
+    rule: '18.3',
+    detail:
+      'Reprice every hull by its mass rather than by the printed figure. Small ships get dearer, ' +
+      'big ones cheaper, and the scoreboard counts in the same currency.',
+  },
+  {
     key: 'sensorRules',
     label: 'Sensors and ECM',
     rule: '12.1',
@@ -238,6 +246,7 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             scenarioId={draft.scenarioId}
             forces={draft.forces ?? {}}
             techBases={draft.techBases ?? {}}
+            cpv={Boolean(draft.cpv)}
             onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
           />
         </section>

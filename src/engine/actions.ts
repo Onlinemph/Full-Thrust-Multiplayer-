@@ -2857,6 +2857,12 @@ export interface OptionalRules {
    * table asks for it.
    */
   terrainHazards?: boolean
+  /**
+   * 18.3: *"Combat Points Value"* reprices every hull by mass. A different
+   * currency rather than a discount, so the fleet picker and the scoreboard
+   * both have to be told which one the table is playing in.
+   */
+  cpv?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()
