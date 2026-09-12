@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { applyAction } from './actions'
+import { planFire } from './ai'
 import { advancePhase, createGame, createShipState, type GameState } from './game'
 import { buildGame } from '../data/savedGame'
 import type { Phase, ShipDesign } from './types'
@@ -128,6 +129,63 @@ describe('a rock in the way (17.1)', () => {
       applyAction(offset, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
         .refused,
     ).toBeUndefined()
+  })
+
+  it('refuses without spending the FireCon that shot would have needed', () => {
+    // 4.4 spends a FireCon to engage a target, and a shot that cannot be taken
+    // at all never engaged anything. Red has one FireCon, one gun and two
+    // enemies: a mistaken click at the one behind the rock must leave the gun
+    // free to shoot the one it can see.
+    const game = createGame({
+      seed: 0x1617,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      terrain: [{ id: 'rock', kind: 'planetoid', position: { x: 0, y: 10 }, radius: 4 }],
+      ships: [
+        createShipState({
+          id: 'red',
+          side: 'a',
+          design: design({ id: 'red', name: 'Red' }),
+          placement: { position: { x: 0, y: 0 }, facing: 6 },
+          velocity: 0,
+        }),
+        createShipState({
+          id: 'blue',
+          side: 'b',
+          design: design({ id: 'blue', name: 'Blue' }),
+          placement: { position: { x: 0, y: 20 }, facing: 12 },
+          velocity: 0,
+        }),
+        createShipState({
+          id: 'green',
+          side: 'b',
+          design: design({ id: 'green', name: 'Green' }),
+          placement: { position: { x: 20, y: 20 }, facing: 12 },
+          velocity: 0,
+        }),
+      ],
+    })
+    advanceTo(game, 'ship-fire')
+    expect(
+      applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
+        .refused,
+    ).toContain('cover')
+    expect(
+      applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'green' })
+        .refused,
+    ).toBeUndefined()
+  })
+
+  it('is something the computer knows about too', () => {
+    // The computer allocating fire at a hull it cannot see wastes the FireCon
+    // and the turn. planFire has to do the same geometry the action does.
+    const rock: GameState['terrain'] = [
+      { id: 'rock', kind: 'planetoid', position: { x: 0, y: 10 }, radius: 4 },
+    ]
+    const open = facingPair()
+    expect(planFire(open, open.ships[0]).length).toBeGreaterThan(0)
+
+    const blocked = facingPair(rock)
+    expect(planFire(blocked, blocked.ships[0])).toEqual([])
   })
 
   it('is on the border skirmish table, so a player can actually use it', () => {

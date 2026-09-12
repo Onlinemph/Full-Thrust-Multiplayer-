@@ -45,6 +45,7 @@ import {
   FIGHTER_ATTACK_RANGE,
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
+import { hasLineOfFire } from './terrain'
 import type { GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
@@ -434,9 +435,17 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
   const enemies = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
   if (enemies.length === 0) return actions
 
+  // 17.1: a target behind a planet cannot be shot at, so it is not a target.
+  // Filtering here rather than at the shot keeps the computer from spending
+  // FireCons on hulls it cannot reach.
+  const bodies = game.terrain
+    .filter((feature) => feature.kind === 'planet' || feature.kind === 'planetoid')
+    .map((feature) => ({ id: feature.id, position: feature.position, radius: feature.radius }))
+
   // What each gun would do to each enemy, if anything.
   const shots = new Map<string, Array<{ weapon: (typeof ship.design.weapons)[number]; dice: number }>>()
   for (const enemy of enemies) {
+    if (!hasLineOfFire(ship.placement.position, enemy.placement.position, bodies)) continue
     const range = distance(ship.placement.position, enemy.placement.position)
     const arc = arcTo(ship.placement.position, ship.placement.facing, enemy.placement.position)
     const able = ship.design.weapons

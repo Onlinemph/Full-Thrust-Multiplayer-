@@ -573,14 +573,14 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
       if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
 
-      // 4.4: each FireCon engages one target. A weapon may join a target the
-      // ship is already engaging for free; a new target costs a FireCon.
-      if (needsFireCon(weapon) && !engagedTargets(ship, state.phase).includes(target.id)) {
-        if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
-      }
-
       // Everything the resolver needs is re-derived here rather than carried in
       // the payload, so a stale or edited action cannot make a replay disagree.
+      //
+      // The geometry is checked BEFORE a FireCon is claimed, and the order is
+      // the point: 4.4 spends a FireCon to engage a target, and a shot that
+      // cannot be taken at all never engaged anything. Claiming it first meant
+      // a mistaken click — wrong arc, or a rock in the way — quietly cost the
+      // ship a target it could have held.
       const rules = optional(state)
       const range = distance(ship.placement.position, target.placement.position)
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
@@ -589,6 +589,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // centre to centre, because that is how the models are measured.
       if (!hasLineOfFire(ship.placement.position, target.placement.position, blockingTerrain(state))) {
         return refuse(`${target.name} is behind cover (17.1)`)
+      }
+
+      // 4.4: each FireCon engages one target. A weapon may join a target the
+      // ship is already engaging for free; a new target costs a FireCon.
+      if (needsFireCon(weapon) && !engagedTargets(ship, state.phase).includes(target.id)) {
+        if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
       }
 
       // 7.17 – 7.22: what the target's electronic warfare fit does to this
