@@ -614,6 +614,85 @@ DESIGNS = [
                 ('beam',2,P3), ('beam',2,S3)],
        systems=[('firecon',3),('pds',4),('hangar-bay',2),('launch-tube',2)],
        marines=5, dcp=1, bays=2, fighterType='assault-shuttle'),
+
+  # ── Xxcha Archonate ──────────────────────────────────────────────────────
+  # The shell endures. A cheap hull frame under deep regenerative armour, ADS
+  # batteries where another navy puts guns, and thrust a point below anything
+  # comparable: these ships do not choose the range, they outlast it.
+  dict(id='xxcha-picket', name='Hhrask-class Picket', faction='Xxcha Archonate',
+       group='escort', mass=40, hull='average', rows=4, thrust=4, armour=[8], regen=True,
+       weapons=[('beam',2,F3), ('beam',1,ALL6), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',1),('ads3',1)], marines=1),
+  dict(id='xxcha-cruiser', name='Ochaal-class Cruiser', faction='Xxcha Archonate',
+       group='cruiser', mass=74, hull='average', rows=4, thrust=3, armour=[14], regen=True,
+       weapons=[('beam',3,F3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('ads3',2)], marines=2),
+  dict(id='xxcha-heavy-cruiser', name='Xxekir-class Heavy Cruiser', faction='Xxcha Archonate',
+       group='cruiser', mass=90, hull='average', rows=4, thrust=3, armour=[8,4], regen=True,
+       weapons=[('beam',3,F3), ('beam',3,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('ads6',1),('ads3',1),('adfc',1)], marines=2),
+  # The payoff for Fortress Doctrine: a capital with ADS fires it to 24 MU, so
+  # five batteries turn a 12 MU bubble into a 24 MU exclusion zone that no
+  # fighter wing or salvo crosses intact. Its own guns are an afterthought.
+  dict(id='xxcha-monitor', name='Qanoj-class Bastion Monitor', faction='Xxcha Archonate',
+       group='capital', mass=110, hull='average', rows=4, thrust=2, armour=[18,9], regen=True,
+       weapons=[('beam',2,ALL6), ('beam',2,P3), ('beam',2,S3)],
+       systems=[('firecon',2),('pds',2),('ads6',5),('advanced-adfc',1)], marines=2),
+  dict(id='xxcha-battleship', name='Sadaka-class Battleship', faction='Xxcha Archonate',
+       group='capital', mass=170, hull='average', rows=4, thrust=2, armour=[16,10], regen=True,
+       weapons=[('beam',4,F3), ('beam',4,A3), ('beam',3,P3), ('beam',3,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',4),('ads6',3),('ads3',2),('advanced-adfc',1)], marines=3),
+
+  # ── Sol-Federation Marine Corps ──────────────────────────────────────────
+  # Gunboats where other navies use fighters: racks instead of hangars, and
+  # pulsers that throw six beam dice to 12 MU — the same 12 MU a squadron
+  # attacks from and the same 12 MU this faction's ADFC covers an ally at.
+  # Every hull is built to one range band, and to survive reaching it.
+  # The umbrella picket. Thrust 6 so it can hold station on whatever it is
+  # covering: 7.10 wants the ally inside the ADFC radius, and the faction
+  # trait stretches that radius to the 12 MU the squadrons fight at. The two
+  # pulser mounts are self-defence and two more dice of point defence.
+  dict(id='sol-marines-frigate', name='Basilone-class Frigate', faction='Sol-Federation Marine Corps',
+       group='escort', mass=44, hull='average', rows=4, thrust=6, armour=[4],
+       weapons=[('pulser',1,F3), ('pulser',1,['A'])],
+       systems=[('firecon',1),('pds',1),('adfc',1)], marines=1),
+  # The hull that closes to 12 MU and stays there while the squadrons work.
+  # Strong integrity spends 34 of its 86 mass on the damage track and buys
+  # the fleet something to shoot at. Three pulser mounts cover forward and
+  # both broadsides; the Beam-1 is close-in fire only, because 8.8 will not
+  # let a Beam-1 fire through an ADFC. The marines are for repelling.
+  dict(id='sol-marines-cruiser', name='Guadalcanal-class Strike Cruiser', faction='Sol-Federation Marine Corps',
+       group='cruiser', mass=86, hull='strong', rows=4, thrust=4, armour=[5], screens=1,
+       weapons=[('pulser',1,F3), ('pulser',1,P3), ('pulser',1,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('adfc',1)], marines=3),
+  # Six gunboats without buying a tender. One rack, no bay: 9.1 says a rack
+  # cannot take a squadron back, so this launches once and that is its war.
+  # The rack is 18 mass, but under a 65% fraction load it costs about 51 mass
+  # of hull — which is why a 90-mass cruiser mounts one pulser and a Beam-1.
+  dict(id='sol-marines-gunboat-cruiser', name='Belleau Wood-class Gunboat Cruiser', faction='Sol-Federation Marine Corps',
+       group='cruiser', mass=90, hull='average', rows=4, thrust=4, armour=[3], screens=1,
+       weapons=[('pulser',1,F3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('adfc',1),('gunboat-rack',1)],
+       marines=2, racks=1, gunboatType='beam'),
+  # Area denial, and where the faction trait is actually spent. Two Advanced
+  # ADFC: 7.11 covers every ally with one, and 8.8 spends one per unengaged
+  # fighter group targeted, so the second is not a spare. Two ADS reach 12 MU
+  # by themselves (7.13); four PDS and four pulser mounts feed the same
+  # umbrella. Strong integrity and two screens keep it firing.
+  dict(id='sol-marines-command', name='Chosin-class Command Ship', faction='Sol-Federation Marine Corps',
+       group='capital', mass=176, hull='strong', rows=4, thrust=4, armour=[5], screens=2,
+       weapons=[('pulser',1,F3), ('pulser',1,A3), ('pulser',1,P3), ('pulser',1,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',4),('ads6',2),('advanced-adfc',2)], marines=4),
+  # Eighteen gunboats — the fleet's offensive weight, all of it. Three racks
+  # and a bay is 78 mass of carriage, and under a 65% fraction load that is
+  # what makes the hull 292. The broadside pulsers are for leakers, not for
+  # the line. One bay recovers one squadron a turn (9.1), so the third wave
+  # comes home two turns after the first.
+  dict(id='sol-marines-tender', name='Tarawa-class Gunboat Tender', faction='Sol-Federation Marine Corps',
+       group='capital', mass=292, hull='average', rows=4, thrust=4, armour=[3], screens=1,
+       weapons=[('pulser',1,P3), ('pulser',1,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',4),('ads6',2),('advanced-adfc',1),('gunboat-rack',3),('gunboat-bay',1)],
+       marines=4, racks=3, gunboatType='beam'),
 ]
 
 import sys
