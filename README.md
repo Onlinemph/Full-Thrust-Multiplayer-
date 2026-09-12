@@ -85,7 +85,7 @@ what closes the gap; the short version of what is missing:
 | Section | Status |
 | --- | --- |
 | 10 Threshold points | Covered — 4.11 states the rules in full; Core Systems come from the XD quick reference, marked `[XD]` |
-| 11 Faster Than Light | **Not implemented.** FTL is priced and sits on the SSD; entry and exit are out |
+| 11 Faster Than Light | Exit implemented: the warm-up turn, the half move, the proximity roll and what it does to bystanders. Jump gates, tenders and battleriders are in the module, not yet in a scenario |
 | 12 Optional rules | Boarding combat, fleet morale, striking the colors and civil wars, from the section itself |
 | 13, 14 Ship construction | Covered — the construction tables encode every cost these sections state |
 | 15 Imperial Tech Base | **Not implemented.** No faction availability restrictions |

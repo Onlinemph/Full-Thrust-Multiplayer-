@@ -158,6 +158,13 @@ export interface ShipState {
   thrustUsed: number
   layingMines: boolean
   ftlTransit: FtlTransit
+  /**
+   * The turn the FTL drive was first ordered to spin up (11.4), or null when
+   * it is not. An exit takes two turns — warm up, then jump — and the phase
+   * the ship is on is a function of how long ago it was declared, so the stamp
+   * has to survive the per-turn reset that clears `ftlTransit`.
+   */
+  ftlWarmupTurn: number | null
   /** Asteroids, starbases and anything else on a fixed path (2.6 phase 5). */
   fixedPath: boolean
   /** Under a cloak this turn (7.20 – 7.22); 2.6 exempts it from the course
@@ -273,6 +280,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     thrustUsed: 0,
     layingMines: false,
     ftlTransit: 'none',
+    ftlWarmupTurn: null,
     fixedPath: opts.fixedPath ?? false,
     cloaked: false,
     cloak: cloakFitOf(opts.design),
@@ -990,7 +998,10 @@ function onBeginTurn(state: GameState): void {
     ship.order = null
     ship.thrustUsed = 0
     ship.layingMines = false
-    ship.ftlTransit = 'none'
+    // A transit already under way is not re-declared each turn: 11.4 gives the
+    // drive a warm-up turn and a jump turn, and the order that started it
+    // stands until the ship is gone.
+    if (ship.ftlWarmupTurn === null) ship.ftlTransit = 'none'
     // "In Full Thrust weapons can only be used once per turn" (2.6) — the
     // turn is the unit, so this is the one place the record is wiped.
     ship.weaponsFired.clear()

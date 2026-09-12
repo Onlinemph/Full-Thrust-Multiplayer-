@@ -50,6 +50,12 @@ import {
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import {
+  ftlExitRestrictions,
+  ftlExitStage,
+  resolveFtlExit,
+  type FtlExitStage,
+} from './ftl'
+import {
   boardingUnits,
   resolveBoardingCombat,
   MAX_DCPS_PER_TARGET,
@@ -247,6 +253,12 @@ export type GameAction =
    * the ship, "by which time it may be too late".
    */
   | { type: 'set-reflex-field'; shipId: string; on: boolean }
+  /**
+   * 11.4: an exit is announced in orders and takes two turns — a warm-up turn
+   * with no thrust and no offensive fire, then a half move on the present
+   * course and the ship is gone for good.
+   */
+  | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
 
   /**
    * Answers to questions the rules put to a player mid-resolution — which
@@ -410,9 +422,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // as the has-moved flag and survives replay without extra state.
       if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
 
+      // 11.4: a ship on its way into hyperspace holds course and velocity —
+      // "The ship may not apply any thrust in that move" — and on the second
+      // turn it half-moves and is gone. Both legs ignore whatever was plotted.
+      const ftl = ftlStageOf(ship, state.turn)
+      if (ftl === 'jumping') return jumpToFtl(state, ship)
+
       // A ship with no written order holds its course: velocity is conserved
       // and it must move its full velocity anyway (3.1).
-      const order = ship.order ?? BLANK_ORDER
+      const order = ftl === 'warming-up' ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
       const before = movementStateOf(ship)
 
       // Emergency thrust is checked immediately after orders are written, and
@@ -531,6 +549,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot fire (7.20)`)
       if (isOutOfControl(ship, state.turn)) {
         return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      // 11.4: a ship on its way into hyperspace "may not... use any offensive
+      // weaponry or ADFC" from the moment the drive starts spinning up.
+      if (ftlStageOf(ship, state.turn) !== null) {
+        return refuse(`${ship.name} is entering hyperspace and cannot fire (11.4)`)
       }
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
@@ -814,8 +837,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       for (const ship of state.ships) {
         if (ship.destroyed || ship.offTable) continue
         // 10.3: "Passive defenses (screens, armor) are still operational,
-        // though active defenses (PDS) are not."
+        // though active defenses (PDS) are not." 11.4 lets a warming-up ship
+        // keep its PDS but takes its ADFC, and a jumping one has already gone.
         if (isOutOfControl(ship, state.turn)) continue
+        const ftlStage = ftlStageOf(ship, state.turn)
+        if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
         const mounts = pdMountsOf(ship)
         if (mounts.length === 0) continue
 
@@ -1301,6 +1327,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (isOutOfControl(ship, state.turn)) {
         return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
       }
+      if (ftlStageOf(ship, state.turn) !== null) {
+        return refuse(`${ship.name} is entering hyperspace and cannot fire (11.4)`)
+      }
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
@@ -1386,6 +1415,30 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name} raises its Reflex Field — no weapons this turn (7.25)`,
         })
       }
+      return OK
+    }
+
+    case 'plot-ftl-exit': {
+      if (state.phase !== 'orders') return refuse('An FTL exit is announced in orders (11.4)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (!action.on) {
+        ship.ftlTransit = 'none'
+        ship.ftlWarmupTurn = null
+        return OK
+      }
+      if (ship.design.ftl === 'none') return refuse(`${ship.name} has no FTL drive`)
+      if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot enter hyperspace (7.20)`)
+      if (ship.ftlWarmupTurn !== null) return refuse(`${ship.name} is already spinning up`)
+      ship.ftlTransit = 'exiting'
+      ship.ftlWarmupTurn = state.turn
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} spins up its FTL drive — no thrust and no guns until it is gone (11.4)`,
+      })
       return OK
     }
 
@@ -1904,6 +1957,126 @@ function reflexField(
     result: { ...result, normalDamage: normal, penetratingDamage: penetrating },
     back: roll.toAttacker,
   }
+}
+
+/**
+ * Which turn of an FTL exit this ship is on, or null if it is not leaving.
+ *
+ * The stage is a function of how long ago the drive was ordered up, because
+ * `ftlTransit` is cleared every turn and the order is not re-made (11.4).
+ */
+function ftlStageOf(ship: ShipState, turn: number): FtlExitStage | null {
+  if (ship.ftlTransit !== 'exiting' || ship.ftlWarmupTurn === null) return null
+  const stage = ftlExitStage(ship.ftlWarmupTurn, turn)
+  return stage === 'gone' ? null : stage
+}
+
+/**
+ * The jump itself (11.4): a half move on the present course, and then the roll
+ * for whatever the ship materialised through on the way out.
+ *
+ * *"Once a ship has left the table under FTL Drive, it may not return"*, so
+ * the ship goes off-table rather than being destroyed — unless the roll says
+ * otherwise, in which case it is destroyed where it stood and takes its
+ * neighbours with it.
+ */
+function jumpToFtl(state: GameState, ship: ShipState): ActionOutcome {
+  const before = movementStateOf(ship)
+  const half = applyOrder({ ...before, velocity: Math.floor(before.velocity / 2) }, BLANK_ORDER)
+  ship.lastKnown = {
+    course: ship.placement.facing,
+    velocity: ship.velocity,
+    turn: state.turn,
+    cloaked: ship.cloaked,
+  }
+  ship.placement = half.placement
+
+  const report = resolveFtlExit(
+    {
+      exitPoint: ship.placement.position,
+      advancedDrive: ship.design.ftl === 'advanced',
+      nearby: state.ships
+        .filter((other) => other.id !== ship.id && !other.destroyed && !other.offTable)
+        .map((other) => ({ id: other.id, position: other.placement.position })),
+      lightCraft: [
+        ...state.fighterGroups
+          .filter((g) => g.status === 'in-flight')
+          .map((g) => ({ id: g.id, position: g.position })),
+        ...state.gunboatSquadrons
+          .filter((g) => g.status === 'in-flight')
+          .map((g) => ({ id: g.id, position: g.position })),
+        ...state.ordnance.map((m) => ({ id: m.id, position: m.position })),
+      ],
+    },
+    state.rng,
+  )
+
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    side: ship.side,
+    dice: report.roll === null ? undefined : [report.roll],
+    text: `${ship.name}: ${report.note}`,
+  })
+
+  // 11.5: "Damage from FTL entry or exit cannot be absorbed by screens or
+  // armor", which is what penetrating damage means to the pipeline.
+  const hurt = (target: ShipState, damage: number, dice: number[], why: string): void => {
+    if (damage <= 0) return
+    markHullBoxes(target, damage)
+    pushLog(state, {
+      kind: 'damage',
+      shipId: target.id,
+      side: target.side,
+      dice,
+      text: `${target.name}: ${damage} from ${why}, past screens and armour (11.5)`,
+    })
+    if (target.destroyed) {
+      pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+    }
+  }
+
+  hurt(ship, report.selfDamage, report.selfDice, 'its own FTL transit')
+  for (const hit of report.bystanders) {
+    const other = shipById(state, hit.id)
+    if (other) hurt(other, hit.damage, hit.dice, `${ship.name}'s FTL transit`)
+  }
+  for (const id of report.lightCraftDestroyed) {
+    const group =
+      state.fighterGroups.find((g) => g.id === id) ?? state.gunboatSquadrons.find((g) => g.id === id)
+    if (group) {
+      group.status = 'destroyed'
+      pushLog(state, {
+        kind: 'destroyed',
+        text: `${group.label} is caught in ${ship.name}'s FTL transit (11.4)`,
+      })
+    }
+    setOrdnance(
+      state,
+      ordnanceOf(state).filter((marker) => marker.id !== id),
+    )
+  }
+  projectOrdnance(state)
+
+  if (report.selfDestroyed) {
+    ship.destroyed = true
+  } else if (report.jumped) {
+    ship.offTable = true
+    ship.ftlTransit = 'none'
+    pushLog(state, {
+      kind: 'note',
+      shipId: ship.id,
+      side: ship.side,
+      text: `${ship.name} is gone into hyperspace and will not return (11.4)`,
+    })
+  } else {
+    // A 1: "The ship remains in normal space at its present course and
+    // velocity" — and has to start the whole thing again if it still wants to
+    // leave.
+    ship.ftlTransit = 'none'
+    ship.ftlWarmupTurn = null
+  }
+  return OK
 }
 
 /**

@@ -27,7 +27,7 @@ function design(over: Partial<ShipDesign> = {}): ShipDesign {
     hullRows: 4,
     hullBoxes: 30,
     drive: { thrust: 4, advanced: false },
-    ftl: 'none',
+    ftl: 'standard',
     streamlining: 'none',
     armour: { layers: [], regenerative: false },
     screens: { level: 0, generators: 0, advanced: false },
@@ -198,5 +198,71 @@ describe('a ship with no bridge (10.3)', () => {
       targetId: 'doomed',
     })
     expect(shot.refused).toBeUndefined()
+  })
+})
+
+describe('an FTL exit, through the action layer (11.4)', () => {
+  /** Declare the jump, then run turns until the ship is gone or the drive fails. */
+  function leave(gap: number): { game: GameState; ship: GameState['ships'][number] } {
+    const game = battle(gap)
+    const ship = game.ships[0]
+    expect(applyAction(game, { type: 'plot-ftl-exit', shipId: 'doomed', on: true }).refused)
+      .toBeUndefined()
+    // Turn 1 is the warm-up; the jump is in turn 2's movement phase.
+    for (let turn = 0; turn < 3 && !ship.offTable && !ship.destroyed; turn++) {
+      advanceTo(game, 'move-ships')
+      applyAction(game, { type: 'move-ship', shipId: 'doomed' })
+      advanceTo(game, 'orders')
+    }
+    return { game, ship }
+  }
+
+  it('is announced in orders and nowhere else', () => {
+    const game = battle(20)
+    advanceTo(game, 'ship-fire')
+    expect(
+      applyAction(game, { type: 'plot-ftl-exit', shipId: 'doomed', on: true }).refused,
+    ).toContain('orders')
+  })
+
+  it('takes the ship off the table for good when nothing is close', () => {
+    const { ship } = leave(30)
+    expect(ship.offTable).toBe(true)
+    expect(ship.destroyed).toBe(false)
+  })
+
+  it('silences its guns while the drive spins up', () => {
+    // "The ship may not apply any thrust in that move, nor may it use any
+    // offensive weaponry or ADFC."
+    const game = battle(20)
+    applyAction(game, { type: 'plot-ftl-exit', shipId: 'doomed', on: true })
+    advanceTo(game, 'ship-fire')
+    const shot = applyAction(game, {
+      type: 'fire-weapon',
+      shipId: 'doomed',
+      weaponId: 'b1',
+      targetId: 'neighbour',
+    })
+    expect(shot.refused).toContain('hyperspace')
+  })
+
+  it('is dangerous to jump with a ship alongside', () => {
+    // "any other ship-sized or larger object... within 6 MU of the actual
+    // point of FTL exit" forces the roll, and a 5 or 6 destroys the jumping
+    // ship and throws 2D6 at everything near it.
+    let caught = 0
+    for (let seed = 0; seed < 12; seed++) {
+      const game = battle(1)
+      game.rng = new Rng(seed)
+      const ship = game.ships[0]
+      applyAction(game, { type: 'plot-ftl-exit', shipId: 'doomed', on: true })
+      for (let turn = 0; turn < 3 && !ship.offTable && !ship.destroyed; turn++) {
+        advanceTo(game, 'move-ships')
+        applyAction(game, { type: 'move-ship', shipId: 'doomed' })
+        advanceTo(game, 'orders')
+      }
+      if (ship.destroyed || game.ships[1].hullMarked > 0) caught += 1
+    }
+    expect(caught, 'twelve jumps beside another hull and none went wrong').toBeGreaterThan(0)
   })
 })

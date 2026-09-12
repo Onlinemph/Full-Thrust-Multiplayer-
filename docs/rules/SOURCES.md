@@ -44,7 +44,7 @@ What the rest costs, and what stands in for it:
 | Section | Status |
 | --- | --- |
 | 10 Threshold Points | Covered: 4.11 states the threshold rules in full, and the Core Systems effects come from the XD quick reference. Two consequences the XD sheet gives timings but not effects for — what life support failure and being out of control actually cost — are judgement calls, marked `[reading]` in `threshold.md`. |
-| 11 Faster Than Light | **Not implemented.** FTL fit is priced and carried on the SSD; entry and exit are out. |
+| 11 Faster Than Light | Exit implemented end to end (11.4); entry, jump gates, tugs, battleriders and hyperspace battles are implemented in `ftl.ts` and wait on a scenario to place them. |
 | 12 Optional Rules | Covered from the section itself now: sensors and ECM, boarding combat (12.7), fleet morale, striking the colors and civil wars. |
 | 13 Ship design and construction | Covered by the construction tables, which encode every cost the section states. |
 | 14 Ship construction summary | Covered — the tables *are* section 14. |
