@@ -48,6 +48,7 @@ import {
   type Placement,
   type Point,
   type SequencePosition,
+  type MagazineDef,
   type ShipDesign,
 } from './types'
 
@@ -426,6 +427,14 @@ export interface ShipState {
    * with the orders: the last facing written is the facing it is stuck in.
    */
   turretFacings: Map<string, Arc>
+  /**
+   * 6.6: what is left in each magazine, by magazine id.
+   *
+   * Seeded from the design because a magazine is bought full, and spent as
+   * launchers draw from it. On the ship rather than the design for the same
+   * reason `ammo` is: every hull of a class shares one `ShipDesign`.
+   */
+  magazines: Map<string, MagazineDef['loads']>
   weaponsFired: Map<string, Phase>
   /**
    * The turn a weapon last fired, kept across turns.
@@ -570,6 +579,9 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ftlEntryTurn: null,
     ammo: new Map<string, number>(),
     turretFacings: new Map<string, Arc>(),
+    magazines: new Map(
+      (opts.design.magazines ?? []).map((magazine) => [magazine.id, [...magazine.loads]]),
+    ),
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,

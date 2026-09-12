@@ -2379,10 +2379,10 @@ export const DURANI_CORSAIR: ShipDesign = {
   name: "Orda-class Missile Corsair",
   faction: "Durani Star-Khanate",
   group: "cruiser",
-  mass: 76,
+  mass: 140,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 22,
+  hullBoxes: 42,
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2396,6 +2396,7 @@ export const DURANI_CORSAIR: ShipDesign = {
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 16, points: 48, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1", "w2"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2407,7 +2408,7 @@ export const DURANI_CORSAIR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 181,
+  points: 330,
 }
 
 export const DURANI_MINELAYER: ShipDesign = {
@@ -2458,9 +2459,9 @@ export const DURANI_MOTHERSHIP: ShipDesign = {
   hullBoxes: 60,
   drive: { thrust: 3, advanced: false },
   ftl: "tug",
-  ftlTransferMass: 100,
+  ftlTransferMass: 110,
   streamlining: "none",
-  armour: { layers: [44], regenerative: false },
+  armour: { layers: [34], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
@@ -2469,6 +2470,7 @@ export const DURANI_MOTHERSHIP: ShipDesign = {
     {"id": "w4", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2483,7 +2485,7 @@ export const DURANI_MOTHERSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 445,
+  points: 453,
 }
 
 export const DURANI_RIDER_LANCE: ShipDesign = {
@@ -2491,16 +2493,16 @@ export const DURANI_RIDER_LANCE: ShipDesign = {
   name: "Nokhor-class Battlerider",
   faction: "Durani Star-Khanate",
   group: "cruiser",
-  mass: 50,
+  mass: 56,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 15,
+  hullBoxes: 16,
   drive: { thrust: 6, advanced: false },
   ftl: "none",
   battlerider: true,
   mothershipId: "durani-mothership",
   streamlining: "none",
-  armour: { layers: [5], regenerative: false },
+  armour: { layers: [4], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Pulse Torp", "weaponClass": "pulse-torpedo", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 6, "points": 18},
@@ -2509,6 +2511,7 @@ export const DURANI_RIDER_LANCE: ShipDesign = {
     {"id": "w4", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 4, points: 12, loads: [{ grade: "standard" }, { grade: "standard" }], launcherIds: ["w2"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2518,7 +2521,7 @@ export const DURANI_RIDER_LANCE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 122,
+  points: 138,
 }
 
 export const DURANI_RIDER_BOW: ShipDesign = {
@@ -2535,14 +2538,15 @@ export const DURANI_RIDER_BOW: ShipDesign = {
   battlerider: true,
   mothershipId: "durani-mothership",
   streamlining: "none",
-  armour: { layers: [10], regenerative: false },
+  armour: { layers: [3], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
-    {"id": "w2", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
+    {"id": "w2", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
     {"id": "w3", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2552,7 +2556,7 @@ export const DURANI_RIDER_BOW: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 117,
+  points: 124,
 }
 
 export const DURANI_FLAGSHIP: ShipDesign = {
@@ -2560,10 +2564,10 @@ export const DURANI_FLAGSHIP: ShipDesign = {
   name: "Khagan-class Flagship",
   faction: "Durani Star-Khanate",
   group: "capital",
-  mass: 148,
+  mass: 228,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 44,
+  hullBoxes: 68,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2579,6 +2583,7 @@ export const DURANI_FLAGSHIP: ShipDesign = {
     {"id": "w7", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 24, points: 72, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1", "w2", "w3"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2594,7 +2599,7 @@ export const DURANI_FLAGSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 358,
+  points: 546,
 }
 
 export const SHARD_MOTE: ShipDesign = {
@@ -2742,10 +2747,10 @@ export const TYRANT_PICKET: ShipDesign = {
   name: "Lictor-class Picket",
   faction: "Tyrant Star Hegemony",
   group: "escort",
-  mass: 44,
+  mass: 70,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 13,
+  hullBoxes: 21,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2757,6 +2762,7 @@ export const TYRANT_PICKET: ShipDesign = {
     {"id": "w3", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1"] }],
   systems: [
     {"id": "advanced-firecon-1", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
     {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
@@ -2768,7 +2774,7 @@ export const TYRANT_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 103,
+  points: 166,
 }
 
 export const TYRANT_CRUISER: ShipDesign = {
@@ -2776,10 +2782,10 @@ export const TYRANT_CRUISER: ShipDesign = {
   name: "Praetor-class Missile Cruiser",
   faction: "Tyrant Star Hegemony",
   group: "cruiser",
-  mass: 84,
+  mass: 130,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 25,
+  hullBoxes: 39,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2795,6 +2801,7 @@ export const TYRANT_CRUISER: ShipDesign = {
     {"id": "w7", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 16, points: 48, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1", "w2"] }],
   systems: [
     {"id": "advanced-firecon-1", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
     {"id": "advanced-firecon-2", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
@@ -2807,7 +2814,7 @@ export const TYRANT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 211,
+  points: 322,
 }
 
 export const TYRANT_ARSENAL: ShipDesign = {
@@ -2815,10 +2822,10 @@ export const TYRANT_ARSENAL: ShipDesign = {
   name: "Proscription-class Arsenal Ship",
   faction: "Tyrant Star Hegemony",
   group: "cruiser",
-  mass: 60,
+  mass: 84,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 18,
+  hullBoxes: 25,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2832,6 +2839,7 @@ export const TYRANT_ARSENAL: ShipDesign = {
     {"id": "w5", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w3"] }],
   systems: [
     {"id": "advanced-firecon-1", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
     {"id": "advanced-firecon-2", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
@@ -2845,7 +2853,7 @@ export const TYRANT_ARSENAL: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 164,
+  points: 220,
 }
 
 export const TYRANT_BATTLESHIP: ShipDesign = {
@@ -2853,10 +2861,10 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
   name: "Dominus-class Battleship",
   faction: "Tyrant Star Hegemony",
   group: "capital",
-  mass: 128,
+  mass: 208,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 38,
+  hullBoxes: 62,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2874,6 +2882,7 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
     {"id": "w9", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 24, points: 72, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1", "w2", "w3"] }],
   systems: [
     {"id": "advanced-firecon-1", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
     {"id": "advanced-firecon-2", "kind": "advanced-firecon", "label": "Adv FireCon", "mass": 1, "points": 5},
@@ -2891,7 +2900,7 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 326,
+  points: 518,
 }
 
 export const SAMC_ESCORT: ShipDesign = {
@@ -2932,10 +2941,10 @@ export const SAMC_QSHIP: ShipDesign = {
   name: "Karoo-class Q-Ship",
   faction: "South African Mercantile Confederation",
   group: "cruiser",
-  mass: 78,
+  mass: 100,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 23,
+  hullBoxes: 30,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2949,6 +2958,7 @@ export const SAMC_QSHIP: ShipDesign = {
     {"id": "w5", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -2969,7 +2979,7 @@ export const SAMC_QSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 172,
+  points: 226,
 }
 
 export const SAMC_CONVOY_LEADER: ShipDesign = {
@@ -2977,10 +2987,10 @@ export const SAMC_CONVOY_LEADER: ShipDesign = {
   name: "Drakensberg-class Convoy Leader",
   faction: "South African Mercantile Confederation",
   group: "cruiser",
-  mass: 78,
+  mass: 100,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 23,
+  hullBoxes: 30,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2992,6 +3002,7 @@ export const SAMC_CONVOY_LEADER: ShipDesign = {
     {"id": "w3", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 8, points: 24, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -3010,7 +3021,7 @@ export const SAMC_CONVOY_LEADER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 185,
+  points: 239,
 }
 
 export const SAMC_LINER: ShipDesign = {
@@ -3018,10 +3029,10 @@ export const SAMC_LINER: ShipDesign = {
   name: "Cape Town-class Armed Liner",
   faction: "South African Mercantile Confederation",
   group: "capital",
-  mass: 150,
+  mass: 190,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 45,
+  hullBoxes: 57,
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -3036,6 +3047,7 @@ export const SAMC_LINER: ShipDesign = {
     {"id": "w6", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 2, "points": 6},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 16, points: 48, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w1", "w2"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -3073,7 +3085,7 @@ export const SAMC_LINER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 324,
+  points: 422,
 }
 
 export const ASKVARIAN_SCRAPPER: ShipDesign = {
@@ -3286,10 +3298,10 @@ export const ORBITAL_STARBASE: ShipDesign = {
   name: "Bastion-class Starbase",
   faction: "Continuum",
   group: "station",
-  mass: 206,
+  mass: 238,
   hullClass: "strong",
   hullRows: 4,
-  hullBoxes: 82,
+  hullBoxes: 95,
   drive: { thrust: 0, advanced: false },
   ftl: "none",
   streamlining: "none",
@@ -3304,6 +3316,7 @@ export const ORBITAL_STARBASE: ShipDesign = {
     {"id": "w6", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["AP", "A", "AS"], "mass": 3, "points": 9},
   ],
   turrets: [], 
+  magazines: [{ id: "m1", mass: 16, points: 48, loads: [{ grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }, { grade: "standard" }], launcherIds: ["w5", "w6"] }],
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
@@ -3329,7 +3342,7 @@ export const ORBITAL_STARBASE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 6,
-  points: 563,
+  points: 646,
 }
 
 /** Every design the app ships with. */

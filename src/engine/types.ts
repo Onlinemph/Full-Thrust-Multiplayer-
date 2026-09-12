@@ -204,6 +204,24 @@ export interface WeaponDef {
  * A turret (5.22): a mounting that trades capacity for arc coverage. A 2-arc
  * turret holds 6 mass of weapons, a 6-arc turret only 2.
  */
+/**
+ * A magazine as built (6.6).
+ *
+ * *"Each magazine has a mass rating, which determines the number of Salvo
+ * Missile loads carried: mass 2 for a standard salvo, mass 3 for ER."* The
+ * loads are listed rather than counted, because a mass-8 magazine may hold
+ * four standard salvoes or one standard and two ER, and which it holds is the
+ * designer's choice.
+ */
+export interface MagazineDef {
+  id: string
+  mass: number
+  points: number
+  loads: Array<{ grade: 'standard' | 'extended'; multiStage?: boolean }>
+  /** Weapon ids this magazine feeds. */
+  launcherIds: string[]
+}
+
 export interface TurretDef {
   id: string
   arcs: Arc[]
@@ -373,6 +391,17 @@ export interface ShipDesign {
   screens: ScreenDef
   weapons: WeaponDef[]
   turrets: TurretDef[]
+  /**
+   * 6.6's magazines: the mass set aside for Salvo Missile loads, broken into
+   * separate magazines at the designer's discretion, and which launchers each
+   * one feeds.
+   *
+   * *"Any one launcher system may only be fed from one magazine, though a
+   * single magazine may feed more than one launcher."* Optional, so every
+   * design and every saved custom design parses unchanged — and a Salvo
+   * Missile Launcher with no magazine has nothing to fire.
+   */
+  magazines?: MagazineDef[]
   systems: SystemDef[]
   coreSystems?: CoreSystemsDef
 

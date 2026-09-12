@@ -1641,6 +1641,13 @@ export const MAGAZINE_LOAD_MASS: Record<MissileGrade, number> = {
   extended: 3,
 }
 
+/**
+ * 6.6 prices magazine space at section 6's usual rate — the table gives a
+ * standard salvo load as "2 mass, 3 per mass" — so a magazine costs three
+ * points for every mass of loads it carries.
+ */
+export const MAGAZINE_POINTS_PER_MASS = 3
+
 /** 6.6: an extra stage *"increases the mass by 2 and doubles the points cost"*. */
 export const MULTI_STAGE_EXTRA_MASS = 2
 

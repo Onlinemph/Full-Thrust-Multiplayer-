@@ -34,6 +34,7 @@ import {
   type GunboatTypeId,
 } from '../engine/gunboats'
 import { maxSpinalMountMass } from '../engine/weapons/kinetics'
+import { checkMagazine } from '../engine/ordnance'
 import {
   tenderBayMassFor,
   tenderBayPoints,
@@ -282,6 +283,10 @@ export function priceDesign(design: ShipDesign): DesignCost {
     screenMass(m, design.screens.level, design.screens.advanced) +
     design.weapons.reduce((sum, w) => sum + w.mass, 0) +
     design.turrets.reduce((sum, t) => sum + t.mass, 0) +
+    // 6.6: the mass set aside for Salvo Missile loads, which is what an SML
+    // fires from. A launcher with no magazine behind it is not cheaper, it is
+    // useless.
+    (design.magazines ?? []).reduce((sum, m) => sum + m.mass, 0) +
     design.systems.reduce((sum, s) => sum + s.mass, 0)
 
   const points =
@@ -292,6 +297,7 @@ export function priceDesign(design: ShipDesign): DesignCost {
     screenPoints(m, design.screens.level, design.screens.advanced) +
     design.weapons.reduce((sum, w) => sum + w.points, 0) +
     design.turrets.reduce((sum, t) => sum + t.points, 0) +
+    (design.magazines ?? []).reduce((sum, m) => sum + m.points, 0) +
     design.systems.reduce((sum, s) => sum + s.points, 0) +
     (design.additionalDamageControlParties + design.marineParties) * CREW_PARTY_POINTS
 
@@ -368,6 +374,10 @@ export type DesignFault =
   | { kind: 'mispriced-ship-bay'; carried: number; mass: number; points: number }
   /** 5.23: more Spinal Mount than 16 mass per 50 of hull. */
   | { kind: 'spinal-overmounted'; fitted: number; allowed: number }
+  /** 6.6: a Salvo Missile Launcher with no magazine behind it. */
+  | { kind: 'launcher-unfed'; weaponId: string }
+  /** 6.6: a launcher drawing from more than one magazine, or a magazine overpacked. */
+  | { kind: 'bad-magazine'; magazineId: string; problem: string }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -405,6 +415,10 @@ export function describeFault(fault: DesignFault): string {
       return fault.problem
     case 'mispriced-ship-bay':
       return `ship bay for ${fault.carried} mass of carried hull: 11.6 charges ${fault.mass} mass and ${fault.points} points`
+    case 'launcher-unfed':
+      return `${fault.weaponId} is a Salvo Missile Launcher with no magazine: 6.6 lets it "fire one salvo per turn provided ammunition is left in the magazine", and there is none`
+    case 'bad-magazine':
+      return `magazine ${fault.magazineId}: ${fault.problem}`
     case 'spinal-overmounted':
       return fault.allowed === 0
         ? `${fault.fitted} mass of Spinal Mount on a hull too small to carry one: 5.23 allows 16 mass per 50 of ship, so nothing under mass 50 may mount any`
@@ -593,6 +607,42 @@ export function validateDesign(
     const points = tenderBayPoints(mass)
     if (Math.abs(system.mass - mass) > 1e-6 || Math.abs(system.points - points) > 1e-6) {
       faults.push({ kind: 'mispriced-ship-bay', carried, mass, points })
+    }
+  }
+
+  // 6.6: a launcher is not a missile. A Salvo Missile Rack is crossed off when
+  // it fires because the rack *is* the salvo; an SML is a tube, and a tube
+  // with no magazine behind it fires nothing at all.
+  const magazines = design.magazines ?? []
+  for (const weapon of design.weapons) {
+    if (weapon.weaponClass !== 'salvo-missile-launcher') continue
+    const feeding = magazines.filter((magazine) => magazine.launcherIds.includes(weapon.id))
+    if (feeding.length === 0) faults.push({ kind: 'launcher-unfed', weaponId: weapon.id })
+  }
+  for (const magazine of magazines) {
+    const check = checkMagazine(magazine.mass, magazine.loads)
+    for (const problem of check.faults) {
+      faults.push({
+        kind: 'bad-magazine',
+        magazineId: magazine.id,
+        problem:
+          problem === 'over-capacity'
+            ? `${check.massUsed} mass of loads in ${magazine.mass} mass of magazine (6.6)`
+            : problem === 'mixed-stages'
+              ? 'a magazine carries regular missiles or multi-stage, not a mixture (6.6)'
+              : 'only standard missiles may be multi-stage, not ER (6.6)',
+      })
+    }
+    // "Any one launcher system may only be fed from one magazine."
+    for (const launcherId of magazine.launcherIds) {
+      const feeders = magazines.filter((other) => other.launcherIds.includes(launcherId))
+      if (feeders.length > 1) {
+        faults.push({
+          kind: 'bad-magazine',
+          magazineId: magazine.id,
+          problem: `${launcherId} draws from ${feeders.length} magazines; 6.6 allows one`,
+        })
+      }
     }
   }
 

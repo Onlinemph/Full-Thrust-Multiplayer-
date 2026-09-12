@@ -250,6 +250,7 @@ import {
   moveOrdnanceMarkers,
   nearestCourse,
   plasmaBoltLauncherLimit,
+  drawMagazineLoad,
   resolveAntimatterDetonation,
   rollSalvoLockOn,
   resolveOrdnanceAttack,
@@ -260,6 +261,7 @@ import {
   type BlastEffect,
   type BlastTarget,
   type MineMarker,
+  type MagazineLoad,
   type MissileMarker,
   type PlasmaBolt,
   type PlasmaBoltDefence,
@@ -1647,6 +1649,34 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const kind = missileKindOf(weapon.weaponClass)
       if (!kind) return refuse(`${weapon.label} is not a missile launcher`)
 
+      // 6.6: "A Salvo Missile Launcher (SML) may fire one salvo per turn
+      // provided ammunition is left in the magazine." A launcher is not a
+      // missile — the rack is, which is why a rack is crossed off and a
+      // launcher is not — so an SML with nothing behind it fires nothing.
+      let drawn: MagazineLoad | null = null
+      if (weapon.weaponClass === 'salvo-missile-launcher') {
+        const fed = (ship.design.magazines ?? []).find((magazine) =>
+          magazine.launcherIds.includes(weapon.id),
+        )
+        if (!fed) {
+          return refuse(`${weapon.label} is not fed by any magazine (6.6)`)
+        }
+        const held = ship.magazines.get(fed.id) ?? []
+        const draw = drawMagazineLoad(
+          { id: fed.id, mass: fed.mass, loads: [...held], launcherIds: fed.launcherIds },
+          weapon.id,
+        )
+        if (draw.refusal !== null || !draw.load) {
+          return refuse(
+            draw.refusal === 'not-fed'
+              ? `${weapon.label} does not draw from that magazine (6.6)`
+              : `No missiles left in the magazine feeding ${weapon.label} (6.6)`,
+          )
+        }
+        ship.magazines.set(fed.id, draw.magazine.loads)
+        drawn = draw.load
+      }
+
       const markers = ordnanceOf(state)
       const result = launchMissile({
         id: `ord-${state.turn}-${markers.length + 1}-${ship.id}-${weapon.id}`,
@@ -1654,8 +1684,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         sourceShipId: ship.id,
         sourceWeaponId: weapon.id,
         kind,
-        grade: weapon.variant === 'extended' ? 'extended' : 'standard',
-        stages: weapon.variant === 'two-stage' ? 2 : 1,
+        // The salvo that flies is the load that was drawn, not the launcher's
+        // own variant: 6.6 lets one magazine hold standard and ER together and
+        // one launcher fire either.
+        grade: drawn ? drawn.grade : weapon.variant === 'extended' ? 'extended' : 'standard',
+        stages: (drawn ? drawn.multiStage : weapon.variant === 'two-stage') ? 2 : 1,
         origin: { position: ship.placement.position, facing: ship.placement.facing },
         arcs: weaponArcs(ship, weapon),
         aim: action.aimPoint,

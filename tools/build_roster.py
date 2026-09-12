@@ -235,6 +235,36 @@ PB, SB = ['FP','AP'], ['FS','AS']
 # firing one strikes it through. Everything else reloads between turns.
 ONE_SHOT_MOUNTS = {'heavy-missile', 'salvo-missile-rack', 'antimatter-missile'}
 
+# 6.6's magazine loads: "mass 2 for a standard salvo, mass 3 for ER", at the
+# section's usual 3 points per mass. A Salvo Missile Launcher is a launcher and
+# not a missile — unlike a rack, which is crossed off when it fires — so it
+# fires nothing at all without a magazine behind it.
+MAGAZINE_LOAD_MASS = {'standard': 2, 'extended': 3}
+MAGAZINE_POINTS_PER_MASS = 3
+# Salvoes per launcher where a design does not say otherwise. Four turns of
+# fire is what a missile ship is for, and it is what the book's own worked
+# example buys ("a single mass 8 magazine ... 4 standard salvoes").
+DEFAULT_SALVO_LOADS = 4
+
+
+def sml_ids(d):
+    """Weapon ids of every Salvo Missile Launcher on this design."""
+    return [f'w{n+1}' for n, w in enumerate(d.get('weapons', []))
+            if w[0] == 'salvo-missile-launcher']
+
+
+def magazine_loads(d):
+    """The loads this design's magazine is bought with (6.6)."""
+    launchers = sml_ids(d)
+    if not launchers:
+        return []
+    per = d.get('salvoLoads', DEFAULT_SALVO_LOADS)
+    return ['standard'] * (per * len(launchers))
+
+
+def magazine_mass(d):
+    return sum(MAGAZINE_LOAD_MASS[g] for g in magazine_loads(d))
+
 def solve_mass(d):
     """Smallest hull that carries the design.
 
@@ -255,7 +285,7 @@ def solve_mass(d):
         frac += 0.05 if d['stream'] == 'partial' else 0.1
     if d.get('screens'):
         frac += (0.075 if d.get('advScreens') else 0.05) * d['screens']
-    flat = sum(d.get('armour', [])) + spare
+    flat = sum(d.get('armour', [])) + spare + magazine_mass(d)
     for wc, rating, arcs in [(w[0], w[1], w[2]) for w in d.get('weapons', [])]:
         flat += WEAPONS[wc][rating][len(arcs)][0]
     for key, count in d.get('systems', []):
@@ -320,6 +350,10 @@ def price(d):
     if d.get('screens'):
         adv = d.get('advScreens'); per = (0.075 if adv else 0.05) * d['mass']
         sm = per * d['screens']; mass += sm; pts += sm * (4 if adv else 3)
+    mag_mass = magazine_mass(d)
+    if mag_mass:
+        mass += mag_mass
+        pts += mag_mass * MAGAZINE_POINTS_PER_MASS
     weapons = []
     for n, (wc, rating, arcs, *rest) in enumerate(d.get('weapons', [])):
         wm, wp = WEAPONS[wc][rating][len(arcs)]
@@ -870,24 +904,29 @@ DESIGNS = [
   # thinly armed for its tonnage, and the riders are what it is for.
   dict(id='durani-mothership', name='Ordu-class Mothership', faction='Durani Star-Khanate',
        group='capital', mass=200, hull='average', rows=4, thrust=3, armour=[6], screens=1,
-       tug=100,
+       tug=110,
        weapons=[('salvo-missile-launcher',1,F3), ('beam',2,P3), ('beam',2,S3),
                 ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('adfc',1)], marines=3),
   # A rider pays for no FTL drive at all (11.7), so 10% of its mass goes into
   # guns instead — which is why a 50-mass rider outshoots a 50-mass cruiser and
   # why it cannot come to the battle by itself.
+  # Two salvoes rather than four: 11.7 caps a rider at 60 mass and 6.6's
+  # magazine is 2 mass a salvo, so a rider that wants a launcher pays for its
+  # ammunition out of the same 60 as its guns. That trade is the rule working.
   dict(id='durani-rider-lance', name='Nokhor-class Battlerider', faction='Durani Star-Khanate',
        group='cruiser', mass=50, hull='average', rows=4, thrust=6, ftl=False, armour=[3],
-       rider=True, mothership='durani-mothership',
+       rider=True, mothership='durani-mothership', salvoLoads=2,
        weapons=[('pulse-torpedo',1,F3), ('salvo-missile-launcher',1,F3), ('beam',2,F3),
                 ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',1)], marines=1),
+  # One launcher and a deep magazine rather than two launchers and none: a
+  # 60-mass hull cannot carry two SMLs and enough salvoes to be worth firing
+  # them, which is 6.6 and 11.7 arguing and 11.7 winning.
   dict(id='durani-rider-bow', name='Sagaar-class Battlerider', faction='Durani Star-Khanate',
        group='cruiser', mass=50, hull='average', rows=4, thrust=6, ftl=False, armour=[3],
-       rider=True, mothership='durani-mothership',
-       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
-                ('beam',1,ALL6)],
+       rider=True, mothership='durani-mothership', salvoLoads=4,
+       weapons=[('salvo-missile-launcher',1,F3), ('beam',2,F3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',1)], marines=1),
   dict(id='durani-flagship', name='Khagan-class Flagship', faction='Durani Star-Khanate',
        group='capital', mass=148, hull='average', rows=4, thrust=5, armour=[8], screens=1,
@@ -1121,6 +1160,19 @@ def squadrons(d):
     return out
 
 
+def magazine_ts(d):
+    """6.6's magazine block, or nothing where the design has no launcher."""
+    loads = magazine_loads(d)
+    if not loads:
+        return []
+    mass = magazine_mass(d)
+    body = ", ".join("{ grade: %s }" % ts(g) for g in loads)
+    feeds = ", ".join(ts(i) for i in sml_ids(d))
+    return [f"  magazines: [{{ id: \"m1\", mass: {mass}, "
+            f"points: {mass * MAGAZINE_POINTS_PER_MASS}, "
+            f"loads: [{body}], launcherIds: [{feeds}] }}],"]
+
+
 def design_ts(r):
     d = r['design']
     parts = [f"  id: {ts(d['id'])},", f"  name: {ts(d['name'])},",
@@ -1138,6 +1190,7 @@ def design_ts(r):
              "  weapons: [",
              *[f"    {ts(w)}," for w in r['weapons']],
              "  ],", "  turrets: [], ",
+             *magazine_ts(d),
              "  systems: [",
              *[f"    {ts(s)}," for s in r['systems']],
              "  ],",

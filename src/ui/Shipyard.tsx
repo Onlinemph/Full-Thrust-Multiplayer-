@@ -27,8 +27,32 @@ import {
 import { allDesigns } from '../data/ships'
 import { deleteDesign, saveDesign, savedDesigns } from '../data/shipyard'
 import type { HullClass, HullRows, ShipDesign } from '../engine/types'
+import { MAGAZINE_LOAD_MASS, MAGAZINE_POINTS_PER_MASS } from '../engine/ordnance'
 import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
+
+/**
+ * Add or drop a magazine load, repricing the magazine around it (6.6).
+ *
+ * The magazine's mass *is* its loads: 6.6 sizes it by what it carries, and
+ * leftover mass is wasted rather than free, so a magazine sized to its loads
+ * is the one a designer would draw.
+ */
+function withLoad(
+  design: ShipDesign,
+  magazineId: string,
+  grade: 'standard' | 'extended',
+  delta: 1 | -1,
+): Partial<ShipDesign> {
+  const magazines = (design.magazines ?? []).map((magazine) => {
+    if (magazine.id !== magazineId) return magazine
+    const loads =
+      delta === 1 ? [...magazine.loads, { grade }] : magazine.loads.slice(0, -1)
+    const mass = loads.reduce((sum, load) => sum + MAGAZINE_LOAD_MASS[load.grade], 0)
+    return { ...magazine, loads, mass, points: mass * MAGAZINE_POINTS_PER_MASS }
+  })
+  return { magazines }
+}
 
 /**
  * The shipyard.
@@ -469,6 +493,86 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             ))}
+
+            {/* 6.6: "Each magazine has a mass rating, which determines the
+                number of Salvo Missile loads carried: mass 2 for a standard
+                salvo, mass 3 for ER." A launcher draws from one magazine; a
+                magazine may feed several launchers. */}
+            {design.weapons.some((w) => w.weaponClass === 'salvo-missile-launcher') ? (
+              <>
+                <h4>Magazines</h4>
+                <div className="panel-row">
+                  <span className="rule-detail">
+                    {(design.magazines ?? []).length} fitted — an SML with none fires nothing
+                  </span>
+                  <span className="spacer" />
+                  <button
+                    onClick={() =>
+                      edit({
+                        magazines: [
+                          ...(design.magazines ?? []),
+                          {
+                            id: `m${(design.magazines ?? []).length + 1}`,
+                            mass: 0,
+                            points: 0,
+                            loads: [],
+                            // A new magazine feeds every launcher that is not
+                            // already fed, which is the common case and the
+                            // one 6.6's "one magazine may feed more than one
+                            // launcher" is written for.
+                            launcherIds: design.weapons
+                              .filter(
+                                (w) =>
+                                  w.weaponClass === 'salvo-missile-launcher' &&
+                                  !(design.magazines ?? []).some((m) =>
+                                    m.launcherIds.includes(w.id),
+                                  ),
+                              )
+                              .map((w) => w.id),
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    Add magazine
+                  </button>
+                </div>
+                {(design.magazines ?? []).map((magazine) => (
+                  <div className="panel-row" key={magazine.id}>
+                    <span>
+                      {magazine.id} → {magazine.launcherIds.join(', ') || 'nothing'}
+                    </span>
+                    <span className="spacer" />
+                    <span className="num">{magazine.loads.length} salvoes</span>
+                    <span className="num">{magazine.mass}m</span>
+                    {(['standard', 'extended'] as const).map((grade) => (
+                      <button
+                        key={grade}
+                        title={`${MAGAZINE_LOAD_MASS[grade]} mass a salvo (6.6)`}
+                        onClick={() => edit(withLoad(design, magazine.id, grade, 1))}
+                      >
+                        +{grade === 'standard' ? 'std' : 'ER'}
+                      </button>
+                    ))}
+                    <button
+                      disabled={magazine.loads.length === 0}
+                      onClick={() => edit(withLoad(design, magazine.id, 'standard', -1))}
+                    >
+                      −
+                    </button>
+                    <button
+                      onClick={() =>
+                        edit({
+                          magazines: (design.magazines ?? []).filter((m) => m.id !== magazine.id),
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </>
+            ) : null}
 
             <h4>Fitted</h4>
             <FittedWeapons design={design} edit={edit} />
