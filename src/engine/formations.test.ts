@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction } from './actions'
+import { applyAction, setRulesReading } from './actions'
+import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import {
   createGame,
   createShipState,
   hullRemaining,
+  markHullBoxes,
   type GameState,
   type ShipState,
   type TerrainFeature,
@@ -58,13 +60,17 @@ function ship(
 }
 
 function battle(ships: ShipState[], terrain: TerrainFeature[] = [], seed = 0x37): GameState {
-  return createGame({
+  const game = createGame({
     seed,
     sides: [{ id: 'a' }, { id: 'b' }],
     table: { width: 160, height: 100 },
     ships,
     terrain,
   })
+  // 7.9's rolls are gated, and `createGame` stamps reading 1 where `buildGame`
+  // stamps the current one.
+  setRulesReading(game, CURRENT_RULES_VERSION)
+  return game
 }
 
 const shipOf = (game: GameState, id: string): ShipState => game.ships.find((s) => s.id === id)!
@@ -320,7 +326,11 @@ describe('towing (16.3)', () => {
     applyAction(game, { type: 'plot-accel', shipId: 'tug', accel: 1 })
     advanceTo(game, 'move-ships')
     applyAction(game, { type: 'move-ship', shipId: 'tug' })
-    applyAction(game, { type: 'move-ship', shipId: 'hulk' })
+    // The tug's move drags the hulk and books it — track, mines, terrain, the
+    // table edge — so the hulk's own move-ship finds it has already moved.
+    expect(applyAction(game, { type: 'move-ship', shipId: 'hulk' }).refused).toMatch(
+      /Already moved/,
+    )
     const tug = shipOf(game, 'tug')
     const hulk = shipOf(game, 'hulk')
     expect(hulk.velocity).toBe(tug.velocity)
@@ -479,5 +489,61 @@ describe('destructible asteroids (17.1)', () => {
         terrainId: 'rock-1',
       }).refused,
     ).toMatch(/No such terrain|already gone/)
+  })
+})
+
+describe('the tow is booked where it moves (16.3, 6.9)', () => {
+  it('sets off the mines it was dragged over', () => {
+    // A towed hull is moved by its tug, not by its own order, and the whole
+    // point of doing the bookkeeping there is that being dragged through a
+    // minefield is still flying through it.
+    const game = battle([
+      ship('layer', 'b', 'durani-minelayer', { x: 40, y: 30 }),
+      ship('tug', 'a', 'durani-mothership', { x: 20, y: 50 }, { velocity: 0 }),
+      ship('hulk', 'a', 'goliath-battleship', { x: 18, y: 50 }, { velocity: 0 }),
+    ])
+    advanceTo(game, 'orders')
+    applyAction(game, { type: 'begin-tow', tugId: 'tug', loadId: 'hulk' })
+    nextTurn(game)
+    expect(shipOf(game, 'hulk').tow?.linked).toBe(true)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'tug' })
+    // The hulk's move is logged where the line takes it, not where it is asked.
+    expect(
+      game.log.some((entry) => /under tow and goes where the line takes it/.test(entry.text)),
+    ).toBe(true)
+  })
+
+  it('says so when it is asked to move before its tug', () => {
+    const game = battle([
+      ship('tug', 'a', 'durani-mothership', { x: 40, y: 50 }),
+      ship('hulk', 'a', 'goliath-battleship', { x: 38, y: 50 }),
+    ])
+    advanceTo(game, 'orders')
+    applyAction(game, { type: 'begin-tow', tugId: 'tug', loadId: 'hulk' })
+    nextTurn(game)
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'hulk' })
+    expect(game.log.some((entry) => /waits on the line/.test(entry.text))).toBe(true)
+  })
+})
+
+describe('a wreck with a shot-out charge (7.9)', () => {
+  it('still goes up', () => {
+    // 7.9 marks a damaged charge and has it roll every turn to go off on its
+    // own, so a wreck carrying one is exactly the case the clause is about.
+    // Only a charge that has already detonated is gone.
+    const game = battle([
+      ship('bomb', 'a', 'durani-flagship', { x: 40, y: 50 }),
+      ship('mark', 'b', 'goliath-battleship', { x: 41, y: 50 }, { facing: 9 }),
+    ])
+    const charge = shipOf(game, 'bomb').design.systems.find(
+      (system) => system.kind === 'antimatter-charge',
+    )!
+    advanceTo(game, 'ship-fire')
+    shipOf(game, 'bomb').destroyedSystems.add(charge.id)
+    markHullBoxes(shipOf(game, 'bomb'), shipOf(game, 'bomb').design.hullBoxes)
+    applyAction(game, { type: 'advance-phase' })
+    expect(game.log.some((entry) => /the wreck goes up/.test(entry.text))).toBe(true)
   })
 })

@@ -958,11 +958,20 @@ function towingStateOf(state: GameState, ship: ShipState): MovementState {
   return { ...base, drive: { ...base.drive, rating: linked.thrust, hits: 0 } }
 }
 
-/** Drag every linked tow along behind its tug (16.3). */
+/**
+ * Drag every linked tow along behind its tug (16.3).
+ *
+ * This is where a towed hull actually moves, so it is where its move is
+ * booked: the track 6.9's mines are answered against, the terrain it was
+ * dragged through, the edge it may have been pulled over. Its own `move-ship`
+ * is a no-op — the line decides where it goes — and doing the bookkeeping
+ * there instead would do it before the tug had moved.
+ */
 function dragTowedShips(state: GameState, tug: ShipState): void {
   for (const load of state.ships) {
     if (load.tow?.tugId !== tug.id || !load.tow.linked) continue
     if (load.destroyed || load.offTable) continue
+    const from = load.placement.position
     // "The two ships move as if they were in a line-ahead squadron formation":
     // the load holds its offset behind the tug and turns with it.
     load.placement = {
@@ -970,6 +979,23 @@ function dragTowedShips(state: GameState, tug: ShipState): void {
       facing: tug.placement.facing,
     }
     load.velocity = tug.velocity
+    pushLog(state, {
+      kind: 'move',
+      shipId: load.id,
+      side: load.side,
+      text: `${load.name} is under tow and goes where the line takes it (16.3)`,
+    })
+    load.lastKnown = {
+      course: load.placement.facing,
+      velocity: load.velocity,
+      turn: state.turn,
+      cloaked: load.cloaked,
+    }
+    const track = [from, load.placement.position]
+    tracksOf(state).set(load.id, track)
+    dropMines(state, load, track)
+    resolveTerrainHazards(state, load, track)
+    resolveLeavingTable(state, load)
   }
 }
 
@@ -1474,14 +1500,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name} has its power in the Nova Cannon and holds course (7.23)`,
         })
       }
-      // 16.3: a linked hull is being dragged, not flown. It is put where its
-      // tug puts it, and its own order is worth nothing until the line is cut.
+      // 16.3: a linked hull is being dragged, not flown, and its own order is
+      // worth nothing until the line is cut. Reaching here means the tug has
+      // not moved yet — once it has, `dragTowedShips` has already stamped this
+      // hull's move and the "already moved" guard above catches it.
       if (ship.tow?.linked) {
         pushLog(state, {
           kind: 'move',
           shipId: ship.id,
           side: ship.side,
-          text: `${ship.name} is under tow and goes where the line takes it (16.3)`,
+          text: `${ship.name} waits on the line; it moves when its tug does (16.3)`,
         })
         return OK
       }
@@ -6513,7 +6541,13 @@ function openOrderedDetonations(state: GameState): void {
 function sweepWreckedCharges(state: GameState): void {
   for (const ship of state.ships) {
     if (!ship.destroyed) continue
-    if (liveAntimatterCharges(state, ship).length === 0) continue
+    // A charge a needle beam shot out is still a charge: 7.9 marks it damaged
+    // and has it roll every turn to go off on its own, so a wreck carrying one
+    // is exactly the case the clause is about. Only a charge that has already
+    // detonated is gone, and `spentCharges` is what knows that.
+    const aboard =
+      liveAntimatterCharges(state, ship).length + damagedAntimatterCharges(state, ship).length
+    if (aboard === 0) continue
     detonateAntimatterCharges(state, ship, {
       deliberate: false,
       reason: 'the wreck goes up',
