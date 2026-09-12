@@ -1146,16 +1146,85 @@ export function assignFireCon(ship: ShipState, targetId: string, phase: Phase): 
 // ---------------------------------------------------------------------------
 
 /**
- * Damage control parties aboard (10.4). Where the SSD lists the parties as
- * systems they can be crossed off by a threshold check, so those are counted
- * when present and the design's plain count is used otherwise.
+ * Crew factors (10.4).
+ *
+ * *"Military ships have one crew factor (CF) for every 20 mass or part
+ * thereof, and one DCP per crew factor... For merchant and civilian vessels,
+ * which usually have much smaller crews than warships there will be one CF per
+ * 50 mass (or part thereof)."*
+ *
+ * So a warship's damage control is a function of how big it is, not something
+ * bought on the design sheet — which is the opposite of what this engine
+ * assumed before the rule could be read.
+ */
+export const MASS_PER_CREW_FACTOR = 20
+export const MASS_PER_CIVILIAN_CREW_FACTOR = 50
+
+export function crewFactors(mass: number, civilian = false): number {
+  const per = civilian ? MASS_PER_CIVILIAN_CREW_FACTOR : MASS_PER_CREW_FACTOR
+  return Math.max(1, Math.ceil(mass / per))
+}
+
+/**
+ * Where the crew factor dots fall on the damage track (10.5).
+ *
+ * *"divide the number of hull boxes the ship has by the number of crew
+ * factors. Round the result up if it is not a whole number, then count along
+ * the damage track until you reach the number and place the first dot there...
+ * When you reach the end of the damage track, put the last dot in the last
+ * box."* The book's own worked example is 27 boxes and 5 crew factors, giving
+ * 6, 12, 18, 24 and 27 — the last dot pulled back onto the final box rather
+ * than falling past the end of the track.
+ *
+ * Returned as one-based box numbers, so a dot at 6 is lost when the sixth box
+ * is crossed off.
+ */
+export function crewFactorBoxes(hullBoxes: number, factors: number): number[] {
+  if (hullBoxes <= 0 || factors <= 0) return []
+  const step = Math.ceil(hullBoxes / factors)
+  const dots: number[] = []
+  for (let i = 1; i < factors; i++) {
+    const at = i * step
+    if (at >= hullBoxes) break
+    dots.push(at)
+  }
+  dots.push(hullBoxes)
+  return dots
+}
+
+/**
+ * Crew factors still alive (10.5): *"a ship's current CF (and thus its current
+ * number of DCPs) is the number of dots still remaining in non-destroyed boxes
+ * on the damage track."*
+ */
+export function survivingCrewFactors(ship: ShipState): number {
+  const dots = crewFactorBoxes(
+    ship.design.hullBoxes,
+    crewFactors(ship.design.mass, ship.design.group === 'civilian'),
+  )
+  return dots.filter((box) => box > ship.hullMarked).length
+}
+
+/**
+ * Damage control parties aboard (10.4, 10.5, 13.13).
+ *
+ * Two sources, and the distinction is the whole point: the crew the ship was
+ * built with provides one party per surviving crew factor for nothing, and
+ * 13.13's *"Additional Damage Control Parties"* are the ones actually bought
+ * at 5 points each. A ship that has been shot through half its hull has lost
+ * half its repair capacity with it, which is what makes damage control a race
+ * rather than a constant.
+ *
+ * Bought parties are listed on the SSD as systems where a design spells them
+ * out, so those can be crossed off by a threshold check like anything else.
  */
 export function damageControlParties(ship: ShipState): number {
   const listed = ship.design.systems.filter((s) => s.kind === 'damage-control-party')
-  if (listed.length > 0) {
-    return listed.filter((s) => !ship.destroyedSystems.has(s.id)).length
-  }
-  return ship.design.damageControlParties
+  const bought =
+    listed.length > 0
+      ? listed.filter((s) => !ship.destroyedSystems.has(s.id)).length
+      : ship.design.additionalDamageControlParties
+  return survivingCrewFactors(ship) + bought
 }
 
 /** Parties not yet assigned to a repair this turn (10.4). */

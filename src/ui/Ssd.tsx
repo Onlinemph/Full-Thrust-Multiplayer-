@@ -1,5 +1,6 @@
 import { hullRowBounds } from '../engine/combat'
 import { thresholdTarget } from '../engine/dice'
+import { crewFactors } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 
 /**
@@ -188,8 +189,16 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
                 {system.label}
               </span>
             ))}
-            {design.damageControlParties > 0 ? (
-              <span className="system-chip">DCP ×{design.damageControlParties}</span>
+            {/* Crew parties come from the hull's own crew (10.4), so the SSD
+                shows what the ship actually musters, not what was bought. */}
+            {crewFactors(design.mass, design.group === 'civilian') +
+              design.additionalDamageControlParties >
+            0 ? (
+              <span className="system-chip">
+                DCP ×
+                {crewFactors(design.mass, design.group === 'civilian') +
+                  design.additionalDamageControlParties}
+              </span>
             ) : null}
             {design.marineParties > 0 ? (
               <span className="system-chip">MARINES ×{design.marineParties}</span>

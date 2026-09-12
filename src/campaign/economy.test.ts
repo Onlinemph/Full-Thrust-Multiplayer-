@@ -79,7 +79,7 @@ function design(overrides: Partial<ShipDesign> = {}): ShipDesign {
     systems: [],
     fighterBays: [],
     gunboats: [],
-    damageControlParties: 1,
+    additionalDamageControlParties: 1,
     marineParties: 0,
     points: 214,
     ...overrides,

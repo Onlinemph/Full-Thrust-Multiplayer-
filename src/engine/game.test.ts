@@ -33,7 +33,10 @@ import {
   canWeaponFire,
   createGame,
   createShipState,
+  crewFactorBoxes,
+  crewFactors,
   currentThrust,
+  damageControlParties,
   destroySystem,
   enemiesOf,
   engagedTargets,
@@ -133,7 +136,7 @@ function design(overrides: Partial<ShipDesign> = {}): ShipDesign {
     systems: [],
     fighterBays: [],
     gunboats: [],
-    damageControlParties: 0,
+    additionalDamageControlParties: 0,
     marineParties: 0,
     points: 100,
     ...overrides,
@@ -611,24 +614,73 @@ describe('threshold points (4.11, phase 13)', () => {
 // Damage control (10.4)
 // ---------------------------------------------------------------------------
 
-describe('damage control (10.4)', () => {
+describe('damage control and crew (10.4, 10.5)', () => {
+  it('gives a warship a crew factor per 20 mass, and a civilian one per 50', () => {
+    // "Military ships have one crew factor (CF) for every 20 mass or part
+    // thereof... For merchant and civilian vessels... one CF per 50 mass (or
+    // part thereof)" (10.4). "Part thereof" is the word that decides the
+    // boundaries, so they are what is tested.
+    expect(crewFactors(20)).toBe(1)
+    expect(crewFactors(21)).toBe(2)
+    expect(crewFactors(40)).toBe(2)
+    expect(crewFactors(90)).toBe(5)
+    expect(crewFactors(100)).toBe(5)
+    expect(crewFactors(101)).toBe(6)
+    expect(crewFactors(100, true)).toBe(2)
+    expect(crewFactors(150, true)).toBe(3)
+  })
+
+  it('places the crew dots where the book\u2019s own example places them', () => {
+    // 10.5 works it through: "The mass 90 ship above, with 5 CFs, has an
+    // average hull integrity and thus has 27 hull boxes... Dividing 27 by 5
+    // gives us 5.4, which is rounded up to 6. The first CF dot will be placed
+    // in the sixth box... the fifth and final dot is placed in the last box on
+    // the damage track (the 27th)."
+    expect(crewFactorBoxes(27, 5)).toEqual([6, 12, 18, 24, 27])
+  })
+
+  it('loses a party for every crew dot the damage passes', () => {
+    // This is what makes damage control a race: a ship that has been opened up
+    // cannot repair as fast as one that has not.
+    const cruiser = ship('r1', 'red') // mass 40, 12 boxes, 2 CF, dots at 6 and 12
+    expect(damageControlParties(cruiser)).toBe(2)
+    cruiser.hullMarked = 5
+    expect(damageControlParties(cruiser), 'the sixth box is still there').toBe(2)
+    cruiser.hullMarked = 6
+    expect(damageControlParties(cruiser), 'first dot crossed off').toBe(1)
+    cruiser.hullMarked = 12
+    expect(damageControlParties(cruiser), 'the last crew go with the ship').toBe(0)
+  })
+
+  it('adds the parties a design actually bought on top of the crew', () => {
+    // 13.13's "Additional Damage Control Parties" are the ones that cost 5
+    // points; the rest come with the hull.
+    const cruiser = ship('r1', 'red', { additionalDamageControlParties: 2 })
+    expect(damageControlParties(cruiser)).toBe(4)
+  })
+
   it('puts at most three parties on one system and never more than it has', () => {
-    const cruiser = ship('r1', 'red', { damageControlParties: 4 })
+    // "The maximum number of DCPs on a single job is three" (10.4). A mass-40
+    // hull musters two of its own, so four bought makes six.
+    const cruiser = ship('r1', 'red', { additionalDamageControlParties: 4 })
     expect(assignDamageControl(cruiser, 'fc1', 5)).toBe(3)
-    expect(assignDamageControl(cruiser, 'pds1', 2)).toBe(1)
-    expect(assignDamageControl(cruiser, 'beam-1', 1)).toBe(0)
+    expect(assignDamageControl(cruiser, 'pds1', 2)).toBe(2)
+    expect(assignDamageControl(cruiser, 'beam-1', 3)).toBe(1)
+    expect(assignDamageControl(cruiser, 'beam-2', 1)).toBe(0)
     expect(cruiser.damageControl).toEqual([
       { systemId: 'fc1', parties: 3 },
-      { systemId: 'pds1', parties: 1 },
+      { systemId: 'pds1', parties: 2 },
+      { systemId: 'beam-1', parties: 1 },
     ])
   })
 
-  it('loses a party when its SSD symbol is crossed off', () => {
+  it('loses a bought party when its SSD symbol is crossed off', () => {
     const cruiser = ship('r1', 'red', {
       systems: [system('dcp1', 'damage-control-party'), system('dcp2', 'damage-control-party')],
     })
+    expect(damageControlParties(cruiser), 'two crew parties and two bought').toBe(4)
     destroySystem(cruiser, 'dcp1')
-    expect(assignDamageControl(cruiser, 'fc1', 3)).toBe(1)
+    expect(damageControlParties(cruiser)).toBe(3)
   })
 })
 

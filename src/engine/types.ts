@@ -348,7 +348,17 @@ export interface ShipDesign {
   gunboats: Array<{ typeId: string; label: string }>
 
   /** Damage control parties (10.4) and marine boarding parties (12.7). */
-  damageControlParties: number
+  /**
+   * Parties bought on top of the crew the hull already carries (13.13).
+   *
+   * NOT the ship's total: 10.4 gives a military hull one crew factor per 20
+   * mass and one party per factor for free, and 13.13's *"Additional Damage
+   * Control Parties"* are what 14.3 charges 5 points for. A ship "may not
+   * mount more Damage Control Parties (and/or additional Marines) than the
+   * number of crew it was initially designed with", so this is capped at the
+   * base crew factor count.
+   */
+  additionalDamageControlParties: number
   marineParties: number
 
   /** Combat Points Value as built (18.3). */

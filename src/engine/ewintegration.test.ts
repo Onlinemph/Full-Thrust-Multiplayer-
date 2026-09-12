@@ -58,7 +58,7 @@ function design(name: string, systems: SystemKind[]): ShipDesign {
     ],
     fighterBays: [],
     gunboats: [],
-    damageControlParties: 1,
+    additionalDamageControlParties: 1,
     marineParties: 0,
     points: 100,
   }

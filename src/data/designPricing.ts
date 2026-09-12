@@ -27,6 +27,7 @@ import {
   type ShipDesign,
   type SystemKind,
 } from '../engine/types'
+import { crewFactors } from '../engine/game'
 
 // ---------------------------------------------------------------------------
 // The proportional systems (13.7 – 13.11)
@@ -144,7 +145,14 @@ export function repriceProportional(design: ShipDesign): ShipDesign {
   }
 }
 
-/** A damage control party and a marine party: 5 points, no mass (13.13). */
+/**
+ * An *additional* damage control party, and a marine party: 5 points, no mass
+ * (13.13, 14.3).
+ *
+ * The parties a warship already has are free — 10.4 gives it one per crew
+ * factor and one crew factor per 20 mass — so what is charged for here is only
+ * what is bought on top, which 13.13 caps at the number the hull started with.
+ */
 export const CREW_PARTY_POINTS = 5
 
 // ---------------------------------------------------------------------------
@@ -183,7 +191,7 @@ export function priceDesign(design: ShipDesign): DesignCost {
     design.weapons.reduce((sum, w) => sum + w.points, 0) +
     design.turrets.reduce((sum, t) => sum + t.points, 0) +
     design.systems.reduce((sum, s) => sum + s.points, 0) +
-    (design.damageControlParties + design.marineParties) * CREW_PARTY_POINTS
+    (design.additionalDamageControlParties + design.marineParties) * CREW_PARTY_POINTS
 
   // Flawed Design: 10% more mass to fill, 20% off the points, and a standing
   // penalty on every threshold check (13.13).
@@ -243,6 +251,7 @@ export type DesignFault =
   | { kind: 'banned'; system: string }
   | { kind: 'mispriced-proportional'; system: string; mass: number; points: number }
   | { kind: 'two-cloaks' }
+  | { kind: 'too-many-parties'; bought: number; crew: number }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -266,6 +275,8 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.system} is a share of hull mass: it should be ${fault.mass} mass and ${fault.points} points on this hull (7.17 – 7.25)`
     case 'two-cloaks':
       return 'two cloaks on one hull: a cloak may not be combined with any other field (7.20)'
+    case 'too-many-parties':
+      return `${fault.bought} extra crew parties on a hull crewed for ${fault.crew}: a ship "may not mount more Damage Control Parties (and or additional Marines) than the number of crew it was initially designed with" (13.13)`
   }
 }
 
@@ -333,6 +344,12 @@ export function validateDesign(
       })
     }
   }
+
+  // 13.13: extra parties and marines together may not outnumber the crew the
+  // hull was designed with, which 10.4 makes a function of its mass.
+  const crew = crewFactors(design.mass, design.group === 'civilian')
+  const bought = design.additionalDamageControlParties + design.marineParties
+  if (bought > crew) faults.push({ kind: 'too-many-parties', bought, crew })
 
   // 7.20: a cloak may not be "combined with any fields or screens", and 7.17
   // says the same of a Holofield, so one hull carries at most one of them.

@@ -155,6 +155,10 @@ def price(d):
     for i in range(d.get('screens', 0)):
         systems.append({'id': f'screen-gen-{i+1}', 'kind': 'screen-generator',
                         'label': 'Screen Gen', 'mass': 0, 'points': 0})
+    # 10.4 gives a military hull one crew factor per 20 mass and one damage
+    # control party per factor, free. Only 13.13's *additional* parties and the
+    # marines are bought, at 5 points each (14.3). The `dcp=` on a design is
+    # therefore extras, and no hull in this roster buys any.
     pts += d.get('dcp', 0) * 5 + d.get('marines', 0) * 5
     # floor(x + 0.5), not Python's round(): round() is half-to-even, so a total
     # of 348.5 comes out 348 here and 349 in the TypeScript that checks it. A
@@ -167,38 +171,38 @@ DESIGNS = [
   # content to trade fire: ESU doctrine is to close and stay closed.
   dict(id='esu-corvette', name='Nadezhda-class Corvette', faction='Eurasian Solar Union',
        group='escort', mass=20, hull='weak', rows=4, thrust=6, ftl=False,
-       weapons=[('beam',1,ALL6), ('beam',1,ALL6)], systems=[('firecon',1),('pds',1)], dcp=1),
+       weapons=[('beam',1,ALL6), ('beam',1,ALL6)], systems=[('firecon',1),('pds',1)]),
   dict(id='esu-frigate', name='Storozhevoy-class Frigate', faction='Eurasian Solar Union',
        group='escort', mass=28, hull='average', rows=4, thrust=4, armour=[2],
-       weapons=[('beam',2,F3), ('k-gun',1,ALL6)], systems=[('firecon',1),('pds',1)], dcp=1),
+       weapons=[('beam',2,F3), ('k-gun',1,ALL6)], systems=[('firecon',1),('pds',1)]),
   dict(id='esu-destroyer', name='Bystry-class Destroyer', faction='Eurasian Solar Union',
        group='escort', mass=40, hull='average', rows=4, thrust=4, armour=[2],
        weapons=[('beam',2,F3), ('beam',2,A3), ('heavy-missile',1,F3)],
-       systems=[('firecon',2),('pds',2)], dcp=2, marines=1),
+       systems=[('firecon',2),('pds',2)], marines=1),
   dict(id='esu-light-cruiser', name='Suvorov-class Light Cruiser', faction='Eurasian Solar Union',
        group='cruiser', mass=60, hull='average', rows=4, thrust=4, armour=[3], screens=1,
        weapons=[('beam',3,F3), ('beam',2,P3), ('beam',2,S3)],
-       systems=[('firecon',2),('pds',2)], dcp=2, marines=2),
+       systems=[('firecon',2),('pds',2)], marines=2),
   dict(id='esu-heavy-cruiser', name='Petrograd-class Heavy Cruiser', faction='Eurasian Solar Union',
        group='cruiser', mass=90, hull='average', rows=4, thrust=4, armour=[4], screens=1,
        weapons=[('beam',3,F3), ('beam',3,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6),
                 ('salvo-missile-rack',1,F3)],
-       systems=[('firecon',2),('pds',3),('adfc',1)], dcp=3, marines=2),
+       systems=[('firecon',2),('pds',3),('adfc',1)], marines=2),
   dict(id='esu-battlecruiser', name='Kirov-class Battlecruiser', faction='Eurasian Solar Union',
        group='capital', mass=124, hull='average', rows=4, thrust=4, armour=[5], screens=1,
        weapons=[('beam',4,F3), ('beam',3,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6),
                 ('k-gun',2,['F']), ('salvo-missile-rack',1,F3)],
-       systems=[('firecon',3),('pds',4),('adfc',1),('ecm',1)], dcp=4, marines=3),
+       systems=[('firecon',3),('pds',4),('adfc',1),('ecm',1)], marines=3),
   dict(id='esu-battleship', name='Volga-class Battleship', faction='Eurasian Solar Union',
        group='capital', mass=170, hull='average', rows=4, thrust=3, armour=[6,3], screens=2,
        weapons=[('beam',4,F3), ('beam',4,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6),
                 ('k-gun',3,['F']), ('salvo-missile-rack',1,F3)],
-       systems=[('firecon',3),('pds',5),('advanced-adfc',1),('ecm',1)], dcp=5, marines=4),
+       systems=[('firecon',3),('pds',5),('advanced-adfc',1),('ecm',1)], marines=4),
   dict(id='esu-carrier', name='Gagarin-class Fleet Carrier', faction='Eurasian Solar Union',
        group='capital', mass=160, hull='average', rows=4, thrust=4, armour=[4], screens=1,
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',5),('advanced-adfc',1),('hangar-bay',4),('launch-tube',3)],
-       dcp=4, marines=2, bays=4),
+       marines=2, bays=4),
   # A gunboat tender: racks on the hull, a bay to take the squadrons back, and
   # only enough of its own armament to defend itself. Gunboats reach 12 MU and
   # move 18, so a tender fights at a range its own guns cannot (9.1).
@@ -206,50 +210,50 @@ DESIGNS = [
        group='capital', mass=140, hull='average', rows=4, thrust=4, armour=[3], screens=1,
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('adfc',1),('gunboat-rack',3),('gunboat-bay',1)],
-       dcp=4, marines=2, racks=3, gunboatType='beam'),
+       marines=2, racks=3, gunboatType='beam'),
   # ── New Anglian Confederation ────────────────────────────────────────────
   # Screens and beams, pulse torpedoes for the closing pass. Faster hulls that
   # expect to choose the range and hold it.
   dict(id='nac-corvette', name='Kestrel-class Corvette', faction='New Anglian Confederation',
        group='escort', mass=20, hull='weak', rows=4, thrust=6, ftl=False,
        weapons=[('beam',1,ALL6), ('pulse-torpedo-short',1,['F'])],
-       systems=[('firecon',1),('pds',1)], dcp=1),
+       systems=[('firecon',1),('pds',1)]),
   dict(id='nac-frigate', name='Bellerophon-class Frigate', faction='New Anglian Confederation',
        group='escort', mass=28, hull='weak', rows=4, thrust=6, screens=1,
-       weapons=[('beam',2,F3), ('beam',1,ALL6)], systems=[('firecon',1),('pds',1)], dcp=1),
+       weapons=[('beam',2,F3), ('beam',1,ALL6)], systems=[('firecon',1),('pds',1)]),
   dict(id='nac-destroyer', name='Ranger-class Destroyer', faction='New Anglian Confederation',
        group='escort', mass=42, hull='average', rows=4, thrust=6, screens=1,
        weapons=[('beam',2,F3), ('beam',2,A3), ('pulse-torpedo-short',1,['F'])],
-       systems=[('firecon',2),('pds',2)], dcp=2, marines=1),
+       systems=[('firecon',2),('pds',2)], marines=1),
   dict(id='nac-light-cruiser', name='Huron-class Light Cruiser', faction='New Anglian Confederation',
        group='cruiser', mass=62, hull='average', rows=4, thrust=4, armour=[2], screens=1,
        weapons=[('beam',3,F3), ('beam',2,P3), ('beam',2,S3), ('pulse-torpedo',1,F3)],
-       systems=[('firecon',2),('pds',2),('adfc',1)], dcp=2, marines=2),
+       systems=[('firecon',2),('pds',2),('adfc',1)], marines=2),
   dict(id='nac-heavy-cruiser', name='Victoria-class Heavy Cruiser', faction='New Anglian Confederation',
        group='cruiser', mass=92, hull='average', rows=4, thrust=4, armour=[3], screens=2,
        weapons=[('beam',3,F3), ('beam',3,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6),
                 ('pulse-torpedo',1,F3)],
-       systems=[('firecon',2),('pds',3),('adfc',1)], dcp=3, marines=2),
+       systems=[('firecon',2),('pds',3),('adfc',1)], marines=2),
   dict(id='nac-battlecruiser', name='Valley Forge-class Battlecruiser', faction='New Anglian Confederation',
        group='capital', mass=128, hull='average', rows=4, thrust=4, armour=[4], screens=2,
        weapons=[('beam',4,F3), ('beam',3,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6),
                 ('pulse-torpedo',1,F3)],
-       systems=[('firecon',3),('pds',4),('adfc',1),('ecm',1)], dcp=4, marines=3),
+       systems=[('firecon',3),('pds',4),('adfc',1),('ecm',1)], marines=3),
   dict(id='nac-battleship', name='Excalibur-class Battleship', faction='New Anglian Confederation',
        group='capital', mass=176, hull='average', rows=4, thrust=3, armour=[6,2], screens=2,
        weapons=[('beam',4,F3), ('beam',4,A3), ('beam',3,P3), ('beam',3,S3), ('beam',1,ALL6),
                 ('pulse-torpedo-long',1,F3)],
-       systems=[('firecon',3),('pds',5),('advanced-adfc',1),('ecm',1)], dcp=5, marines=4),
+       systems=[('firecon',3),('pds',5),('advanced-adfc',1),('ecm',1)], marines=4),
   dict(id='nac-carrier', name='Ark Royal-class Fleet Carrier', faction='New Anglian Confederation',
        group='capital', mass=150, hull='average', rows=4, thrust=4, armour=[3], screens=2,
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('advanced-adfc',1),('hangar-bay',3),('launch-tube',3)],
-       dcp=4, marines=2, bays=3),
+       marines=2, bays=3),
   dict(id='nac-tender', name='Cook-class Gunboat Tender', faction='New Anglian Confederation',
        group='capital', mass=132, hull='average', rows=4, thrust=4, armour=[3], screens=2,
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('adfc',1),('gunboat-rack',2),('gunboat-bay',1)],
-       dcp=4, marines=2, racks=2, gunboatType='graser'),
+       marines=2, racks=2, gunboatType='graser'),
 ]
 
 import sys
@@ -329,7 +333,7 @@ def design_ts(r):
              "  ],",
              f"  fighterBays: {ts([{'typeId': 'standard', 'label': f'Flight {i+1}'} for i in range(d.get('bays', 0))])},",
              f"  gunboats: {ts([{'typeId': d.get('gunboatType', 'beam'), 'label': f'Squadron {i+1}'} for i in range(d.get('racks', 0))])},",
-             f"  damageControlParties: {d.get('dcp', 0)},",
+             f"  additionalDamageControlParties: {d.get('dcp', 0)},",
              f"  marineParties: {d.get('marines', 0)},",
              f"  points: {r['points']},"]
     return "{\n" + "\n".join(parts) + "\n}"

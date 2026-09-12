@@ -44,9 +44,9 @@ export const ESU_CORVETTE: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 1,
+  additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 46,
+  points: 41,
 }
 
 export const ESU_FRIGATE: ShipDesign = {
@@ -74,9 +74,9 @@ export const ESU_FRIGATE: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 1,
+  additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 69,
+  points: 64,
 }
 
 export const ESU_DESTROYER: ShipDesign = {
@@ -107,9 +107,9 @@ export const ESU_DESTROYER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 2,
+  additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 107,
+  points: 97,
 }
 
 export const ESU_LIGHT_CRUISER: ShipDesign = {
@@ -141,9 +141,9 @@ export const ESU_LIGHT_CRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 2,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 159,
+  points: 149,
 }
 
 export const ESU_HEAVY_CRUISER: ShipDesign = {
@@ -180,9 +180,9 @@ export const ESU_HEAVY_CRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 3,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 244,
+  points: 229,
 }
 
 export const ESU_BATTLECRUISER: ShipDesign = {
@@ -223,9 +223,9 @@ export const ESU_BATTLECRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 349,
+  points: 329,
 }
 
 export const ESU_BATTLESHIP: ShipDesign = {
@@ -268,9 +268,9 @@ export const ESU_BATTLESHIP: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 5,
+  additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 468,
+  points: 443,
 }
 
 export const ESU_CARRIER: ShipDesign = {
@@ -313,9 +313,9 @@ export const ESU_CARRIER: ShipDesign = {
   ],
   fighterBays: [{"typeId": "standard", "label": "Flight 1"}, {"typeId": "standard", "label": "Flight 2"}, {"typeId": "standard", "label": "Flight 3"}, {"typeId": "standard", "label": "Flight 4"}],
   gunboats: [],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 411,
+  points: 391,
 }
 
 export const ESU_TENDER: ShipDesign = {
@@ -354,9 +354,9 @@ export const ESU_TENDER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 606,
+  points: 586,
 }
 
 export const NAC_CORVETTE: ShipDesign = {
@@ -385,9 +385,9 @@ export const NAC_CORVETTE: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 1,
+  additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 49,
+  points: 44,
 }
 
 export const NAC_FRIGATE: ShipDesign = {
@@ -416,9 +416,9 @@ export const NAC_FRIGATE: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 1,
+  additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 68,
+  points: 63,
 }
 
 export const NAC_DESTROYER: ShipDesign = {
@@ -450,9 +450,9 @@ export const NAC_DESTROYER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 2,
+  additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 113,
+  points: 103,
 }
 
 export const NAC_LIGHT_CRUISER: ShipDesign = {
@@ -486,9 +486,9 @@ export const NAC_LIGHT_CRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 2,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 189,
+  points: 179,
 }
 
 export const NAC_HEAVY_CRUISER: ShipDesign = {
@@ -526,9 +526,9 @@ export const NAC_HEAVY_CRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 3,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 290,
+  points: 275,
 }
 
 export const NAC_BATTLECRUISER: ShipDesign = {
@@ -569,9 +569,9 @@ export const NAC_BATTLECRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 381,
+  points: 361,
 }
 
 export const NAC_BATTLESHIP: ShipDesign = {
@@ -613,9 +613,9 @@ export const NAC_BATTLESHIP: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 5,
+  additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 527,
+  points: 502,
 }
 
 export const NAC_CARRIER: ShipDesign = {
@@ -657,9 +657,9 @@ export const NAC_CARRIER: ShipDesign = {
   ],
   fighterBays: [{"typeId": "standard", "label": "Flight 1"}, {"typeId": "standard", "label": "Flight 2"}, {"typeId": "standard", "label": "Flight 3"}],
   gunboats: [],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 391,
+  points: 371,
 }
 
 export const NAC_TENDER: ShipDesign = {
@@ -698,9 +698,9 @@ export const NAC_TENDER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [{"typeId": "graser", "label": "Squadron 1"}, {"typeId": "graser", "label": "Squadron 2"}],
-  damageControlParties: 4,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 568,
+  points: 548,
 }
 
 /** Every design the app ships with. */

@@ -105,7 +105,7 @@ function design(overrides: Partial<ShipDesign> = {}): ShipDesign {
     systems: [],
     fighterBays: [],
     gunboats: [],
-    damageControlParties: 2,
+    additionalDamageControlParties: 2,
     marineParties: 0,
     points: 100,
     ...overrides,
@@ -738,7 +738,7 @@ describe('damage control (10.4, phase 14)', () => {
 
   it('resolves every assignment in phase 14 and then frees the parties', () => {
     const target = ship({
-      damageControlParties: 3,
+      additionalDamageControlParties: 3,
       systems: [
         { id: 'fc-1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 },
         { id: 'pds-1', kind: 'pds', label: 'PDS', mass: 1, points: 3 },

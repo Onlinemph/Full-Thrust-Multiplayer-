@@ -99,7 +99,7 @@ describe('boarding parties', () => {
     systems: [{ id: 'fc1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 }],
     fighterBays: [],
     gunboats: [],
-    damageControlParties: 1,
+    additionalDamageControlParties: 1,
     marineParties: 4,
     points: 100,
   })

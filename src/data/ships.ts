@@ -97,9 +97,9 @@ export const HEAVY_CRUISER: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 3,
+  additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 230,
+  points: 215,
   provisional: true,
   notes:
     'Built from the prose statement of the introductory cruiser in 4.11. The printed SSD is an ' +
@@ -134,9 +134,9 @@ export const FRIGATE: ShipDesign = {
   ],
   fighterBays: [],
   gunboats: [],
-  damageControlParties: 1,
+  additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 52,
+  points: 49,
   provisional: true,
   notes: 'Reconstructed from the introductory scenario description in 4.12.',
 }
