@@ -141,6 +141,40 @@ SYSTEMS = {
     'tuffley-cloak': (0, 0), 'reflex-field': (0, 0),
 }
 
+# 7.17 - 7.25 and 14.1 - 14.2: systems priced as a share of the hull rather than
+# as a flat fit. The same table as designPricing.PROPORTIONAL_SYSTEMS, and it has
+# to stay the same table: ships.test.ts prices every generated design again in
+# TypeScript and fails the build if the two disagree.
+#
+#   massFraction   share of TOTAL ship mass the fitting weighs
+#   pointsPerMass  points per point of that mass
+#   pointsFraction points as a share of total ship mass, for a flat-mass fitting
+#   pointsPerBox   points per hull-and-armour box, which is how 14.1 prices a
+#                  stealth hull: it charges for what there is to hide
+PROPORTIONAL = {
+    'holofield':       {'massFraction': 0.1,  'pointsPerMass': 5},
+    'tuffley-cloak':   {'massFraction': 0.1,  'pointsPerMass': 10},
+    'reflex-field':    {'massFraction': 0.1,  'pointsPerMass': 6},
+    'cloaking-device': {'mass': 1, 'pointsFraction': 0.5},
+    'cloaking-field':  {'mass': 1, 'pointsFraction': 1.0},
+    'stealth-hull':    {'mass': 0, 'pointsPerBox': 2},
+    'stealth-field':   {'massFraction': 0.05, 'pointsPerMass': 6},
+}
+
+
+def proportional_cost(key, ship_mass, boxes):
+    """Mass and points of one proportional fitting on a hull of this size."""
+    spec = PROPORTIONAL[key]
+    mass = spec['massFraction'] * ship_mass if 'massFraction' in spec else spec['mass']
+    if 'pointsPerBox' in spec:
+        pts = spec['pointsPerBox'] * boxes
+    elif 'pointsFraction' in spec:
+        pts = spec['pointsFraction'] * ship_mass
+    else:
+        pts = mass * spec['pointsPerMass']
+    return round(mass, 2), int(math.floor(pts + 0.5))
+
+
 # 9.2, per gunboat. A rack always carries six, so a rack costs six of these.
 GUNBOAT_POINTS = {
     'beam': 9, 'plasma': 9, 'graser': 9, 'gatling': 15, 'needle': 9,
@@ -206,6 +240,16 @@ def solve_mass(d):
     for wc, rating, arcs in [(w[0], w[1], w[2]) for w in d.get('weapons', [])]:
         flat += WEAPONS[wc][rating][len(arcs)][0]
     for key, count in d.get('systems', []):
+        if key in PROPORTIONAL:
+            spec = PROPORTIONAL[key]
+            # A share of total mass belongs in the fraction, not the flat sum:
+            # it grows with the hull it is fitted to, which is the whole point
+            # of the fixed point this function solves.
+            if 'massFraction' in spec:
+                frac += spec['massFraction'] * count
+            else:
+                flat += spec['mass'] * count
+            continue
         flat += SYSTEMS[key][0] * count
     need = flat / (1 - frac)
     return int(math.ceil(need / 2) * 2)
@@ -240,6 +284,8 @@ def price(d):
     systems = []
     for n, (key, count) in enumerate(d.get('systems', [])):
         sm, sp = SYSTEMS[key]
+        if key in PROPORTIONAL:
+            sm, sp = proportional_cost(key, d['mass'], boxes + sum(d.get('armour', [])))
         # 9.1: "The cost of the rack is included in the gunboat cost." Read the
         # other way round, which is the way that makes a tender cost what it is
         # worth: you buy six gunboats and the rack comes with them. So a rack
@@ -424,7 +470,7 @@ def design_ts(r):
              f"  mass: {d['mass']},", f"  hullClass: {ts(d['hull'])},",
              f"  hullRows: {d['rows']},", f"  hullBoxes: {r['boxes']},",
              f"  drive: {{ thrust: {d['thrust']}, advanced: {str(bool(d.get('advDrive'))).lower()} }},",
-             f"  ftl: {ts('standard' if d.get('ftl', True) else 'none')},",
+             f"  ftl: {ts(('advanced' if d.get('advFtl') else 'standard') if d.get('ftl', True) else 'none')},",
              f"  streamlining: {ts(d.get('stream') or 'none')},",
              f"  armour: {{ layers: {ts(d.get('armour', []))}, regenerative: {str(bool(d.get('regen'))).lower()} }},",
              f"  screens: {{ level: {d.get('screens', 0)}, generators: {d.get('screens', 0)}, advanced: {str(bool(d.get('advScreens'))).lower()} }},",
