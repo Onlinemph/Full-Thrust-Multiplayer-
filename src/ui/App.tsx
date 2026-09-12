@@ -21,6 +21,7 @@ import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
+import { DamageControlPanel } from './DamageControlPanel'
 import { FlightPanel } from './FlightPanel'
 import { GatePanel } from './GatePanel'
 import { MapView } from './MapView'
@@ -637,21 +638,7 @@ function PhaseControls({
         </div>
       )
     case 'damage-control':
-      return (
-        <div className="panel">
-          <h3>Phase 14 · Damage control</h3>
-          <p style={{ color: 'var(--ink-dim)' }}>
-            Up to three parties may work one system, and it is repaired on a die at or below the
-            number assigned.
-          </p>
-          <button
-            className="primary"
-            onClick={() => dispatch({ type: 'resolve-damage-control' })}
-          >
-            Make repair rolls
-          </button>
-        </div>
-      )
+      return <DamageControlPanel game={game} viewingSide={viewingSide} />
     case 'move-fighters':
       return (
         <div className="panel">

@@ -816,6 +816,35 @@ function boxesForId(ship: ShipState, systemId: string): number {
 }
 
 /** Whether there is anything to repair on this id (10.4). */
+/**
+ * Everything on this hull a damage control party could be put on right now
+ * (10.4), with a label a panel can print.
+ *
+ * The list matters because 10.4 is a *choice* — "up to three parties may work
+ * one system" — and a choice needs the options in front of the player.
+ * Anything the repair rules would refuse outright is left out: what a needle
+ * beam took out (5.13), and a bridge that is permanently gone.
+ */
+export function repairTargets(ship: ShipState): Array<{ id: string; label: string }> {
+  if (ship.destroyed || isDerelict(ship)) return []
+  const targets: Array<{ id: string; label: string }> = []
+  const offer = (id: string, label: string): void => {
+    if (ship.unrepairable.has(id)) return
+    if (id === CORE_SYSTEM_IDS.bridge && isPermanentlyOutOfControl(ship)) return
+    if (!isRepairTargetDamaged(ship, id)) return
+    if (targets.some((target) => target.id === id)) return
+    targets.push({ id, label })
+  }
+
+  offer(DRIVE_SYSTEM_ID, `Main drive (${ship.driveHits} hit${ship.driveHits === 1 ? '' : 's'})`)
+  for (const system of ship.design.systems) offer(system.id, system.label)
+  for (const weapon of ship.design.weapons) offer(weapon.id, weapon.label)
+  offer(CORE_SYSTEM_IDS.bridge, 'Bridge')
+  offer(CORE_SYSTEM_IDS.lifeSupport, 'Life support')
+  offer(CORE_SYSTEM_IDS.powerCore, 'Power core')
+  return targets
+}
+
 function isRepairTargetDamaged(ship: ShipState, systemId: string): boolean {
   if (systemId === DRIVE_SYSTEM_ID) return ship.driveHits > 0
   return systemBoxesLost(ship, systemId, boxesForId(ship, systemId)) > 0
