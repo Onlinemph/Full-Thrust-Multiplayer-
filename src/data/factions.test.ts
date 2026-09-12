@@ -9,8 +9,8 @@ import {
   PROJECTILE_CLASSES,
   SPINAL_CLASSES,
 } from './factions'
-import { validateDesign } from './designPricing'
-import { designById } from './ships'
+import { describeFault, validateDesign } from './designPricing'
+import { allDesigns, designById } from './ships'
 import type { ShipDesign } from '../engine/types'
 
 /**
@@ -60,6 +60,26 @@ describe('the supplement', () => {
     expect(coverage.total).toBeGreaterThan(50)
     expect(coverage.byKind.prohibition.implemented).toBe(coverage.byKind.prohibition.total)
     expect(coverage.byKind.tactical.implemented, 'not one tactical trait is wired yet').toBe(0)
+  })
+})
+
+describe('the roster', () => {
+  it('builds every faction ship its own faction could actually build', () => {
+    // The fleets in the roster are named for factions in this file, so they
+    // are the first thing the prohibitions get tried against. A design that
+    // fails here is a design nobody in that navy could have ordered.
+    const byName = new Map(FACTIONS.map((faction) => [faction.name, faction.id]))
+    let checked = 0
+    for (const design of allDesigns()) {
+      const factionId = byName.get(design.faction)
+      if (!factionId) continue
+      checked += 1
+      const faults = validateDesign(design, { factionId }).filter(
+        (fault) => fault.kind === 'faction-prohibition' || fault.kind === 'faction-design',
+      )
+      expect(faults.map(describeFault), design.id).toEqual([])
+    }
+    expect(checked, 'no faction fleet in the roster to check').toBeGreaterThan(0)
   })
 })
 

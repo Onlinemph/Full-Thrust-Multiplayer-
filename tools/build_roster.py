@@ -312,6 +312,16 @@ def price(d):
     # floor(x + 0.5), not Python's round(): round() is half-to-even, so a total
     # of 348.5 comes out 348 here and 349 in the TypeScript that checks it. A
     # screen level is 5% of mass, so halves are common.
+    # An overweight hull is a design mistake, and designPricing reports it a long
+    # way from here — in a TypeScript test, about a file this script generated.
+    # Fail at the point the mistake was made instead. `solve_mass` is not the
+    # test: it over-reserves, because it works off the unfloored hull fraction,
+    # so a design two mass under what it suggests can still fit.
+    if round(mass, 2) > d['mass'] + 1e-6:
+        raise SystemExit(
+            f"{d['id']}: declared mass {d['mass']} but the loadout weighs {round(mass, 2)}; "
+            f"solve_mass suggests {solve_mass(d)}"
+        )
     return boxes, round(mass, 2), int(math.floor(pts + 0.5)), weapons, systems
 
 DESIGNS = [
@@ -403,6 +413,88 @@ DESIGNS = [
        weapons=[('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('adfc',1),('gunboat-rack',2),('gunboat-bay',1)],
        marines=2, racks=2, gunboatType='graser'),
+
+  # ── Cygnan Assembly ──────────────────────────────────────────────────────
+  # Gravity and fields, never projectiles: nothing that leaves a Cygnan hull
+  # has mass, and the gravitic table stops at class 3, so weight of fire is
+  # made of arcs rather than of calibre. Advanced drives and advanced screens
+  # on thin hulls, and no emergency thrust to fall back on (their own
+  # prohibition), so the printed thrust rating is the whole of the manoeuvre.
+  # The holofield is 10% of the hull it hides, which is why only the two ships
+  # big enough to carry one do.
+  dict(id='cygnan-picket', name='Parallax-class Picket', faction='Cygnan Assembly',
+       group='escort', mass=22, hull='weak', rows=4, thrust=8, advDrive=True, ftl=False,
+       screens=1, advScreens=True,
+       weapons=[('gravitic-gun',2,F3), ('gravitic-gun',1,ALL6)],
+       systems=[('firecon',1),('pds',2),('ecm',1)]),
+  dict(id='cygnan-destroyer', name='Penumbra-class Destroyer', faction='Cygnan Assembly',
+       group='escort', mass=32, hull='weak', rows=4, thrust=6, advDrive=True,
+       screens=1, advScreens=True,
+       weapons=[('gravitic-gun',2,F3), ('gravitic-gun',2,A3), ('gravitic-gun',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('ecm',1)], marines=1),
+  dict(id='cygnan-cruiser', name='Libration-class Cruiser', faction='Cygnan Assembly',
+       group='cruiser', mass=76, hull='weak', rows=4, thrust=6, advDrive=True,
+       screens=2, advScreens=True,
+       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',2,P3), ('gravitic-gun',2,S3),
+                ('gravitic-gun',1,ALL6)],
+       systems=[('firecon',2),('pds',3),('ecm',1),('adfc',1)], marines=2),
+  # The first hull with a holofield: 7.19 puts 12 MU on every range measured
+  # against it, which is what "Holographic Superiority" is written around.
+  dict(id='cygnan-command-cruiser', name='Analemma-class Command Cruiser',
+       faction='Cygnan Assembly',
+       group='cruiser', mass=86, hull='weak', rows=4, thrust=6, advDrive=True,
+       screens=1, advScreens=True,
+       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',2,P3), ('gravitic-gun',2,S3)],
+       systems=[('advanced-firecon',2),('pds',3),('area-ecm',1),('advanced-adfc',1),
+                ('holofield',1)], marines=2),
+  dict(id='cygnan-battleship', name='Syzygy-class Battleship', faction='Cygnan Assembly',
+       group='capital', mass=188, hull='weak', rows=4, thrust=6, advDrive=True,
+       screens=2, advScreens=True,
+       weapons=[('gravitic-gun',3,F3), ('gravitic-gun',3,A3), ('gravitic-gun',2,P3),
+                ('gravitic-gun',2,S3), ('gravitic-gun',1,ALL6)],
+       systems=[('advanced-firecon',3),('pds',4),('area-ecm',1),('advanced-adfc',1),
+                ('holofield',1)], marines=3),
+
+  # ── Silent Sisterhood of Veil ────────────────────────────────────────────
+  # Thin, fast hulls carrying needle beams and a Tuffley cloak, and nothing
+  # else. The fleet shoots at FireCons, drives and sensors rather than at hull
+  # boxes, and buys a FireCon for every mount it wants pointed at a different
+  # ship (5.13). No screens anywhere, which is not doctrine but 7.20: a cloak
+  # may not be combined with any fields or screens. Nothing over mass 110 and
+  # nothing but weak hulls, because their own traits forbid both.
+  dict(id='sisterhood-picket', name='Anchorite-class Picket',
+       faction='Silent Sisterhood of Veil',
+       group='escort', mass=26, hull='weak', rows=4, thrust=8, advFtl=True,
+       weapons=[('needle-beam',1,F3)],
+       systems=[('firecon',1),('pds',1),('tuffley-cloak',1)]),
+  dict(id='sisterhood-frigate', name='Novice-class Frigate',
+       faction='Silent Sisterhood of Veil',
+       group='escort', mass=42, hull='weak', rows=4, thrust=8, advFtl=True,
+       weapons=[('needle-beam',1,F3), ('needle-beam',1,A3)],
+       systems=[('firecon',1),('pds',1),('tuffley-cloak',1)]),
+  # Two FireCons, two mounts, two victims: a needle beam takes one system off
+  # a ship and 5.13 makes each mount nominate its own, so the interesting
+  # number on this hull is the FireCon count and not the gun count.
+  dict(id='sisterhood-cruiser', name='Vespers-class Strike Cruiser',
+       faction='Silent Sisterhood of Veil',
+       group='cruiser', mass=60, hull='weak', rows=4, thrust=6, advFtl=True,
+       weapons=[('needle-beam-2',2,F3), ('needle-beam',1,A3)],
+       systems=[('firecon',2),('pds',2),('ecm',1),('enhanced-sensors',1),
+                ('tuffley-cloak',1)], marines=1),
+  dict(id='sisterhood-sensor-cruiser', name='Matins-class Sensor Cruiser',
+       faction='Silent Sisterhood of Veil',
+       group='cruiser', mass=58, hull='weak', rows=4, thrust=6, advFtl=True,
+       weapons=[('needle-beam-2',2,F3)],
+       systems=[('firecon',2),('pds',2),('ecm',1),('superior-sensors',1),
+                ('tuffley-cloak',1)]),
+  # Mass 110 is the ceiling the faction is allowed to build to; this stops
+  # short of it so the cloak fits inside the limit rather than over it.
+  dict(id='sisterhood-flagship', name='Abbess-class Command Ship',
+       faction='Silent Sisterhood of Veil',
+       group='capital', mass=100, hull='weak', rows=4, thrust=6, advFtl=True,
+       weapons=[('needle-beam-3',3,F3), ('needle-beam',1,A3)],
+       systems=[('firecon',3),('pds',3),('ecm',1),('superior-sensors',1),
+                ('tuffley-cloak',1)], marines=2),
 ]
 
 import sys
