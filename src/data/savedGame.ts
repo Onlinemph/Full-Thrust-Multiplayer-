@@ -47,8 +47,13 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             longer resolves as an ordinary shot at a named ship.
  *   8  7.10 — phase 9 reads which hull a marker is actually coming for, so a
  *             ship covering its neighbour needs an ADFC to do it.
+ *   9  7.4, 7.8, 7.9 — three rules that were wired without a gate and should
+ *             have had one: the passive targeting cap refuses a shot an older
+ *             journal already rolled for, and regeneration and the
+ *             unrepaired-charge roll each throw dice at the turn boundary in
+ *             a path every battle walks.
  */
-export const CURRENT_RULES_VERSION = 8
+export const CURRENT_RULES_VERSION = 9
 
 export interface GameSetup {
   scenarioId: string

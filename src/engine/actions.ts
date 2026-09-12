@@ -186,6 +186,7 @@ import {
   type BoardingPlan,
 } from './boarding'
 import {
+  groupProfile,
   aceDuel,
   aceNeedleAttack,
   adfcLockedOut,
@@ -249,6 +250,10 @@ import {
   type PdMountKind,
   pdMayEngageShip,
   rollPointDefenceAtShip,
+  validatePointDefence,
+  ADS_LONG_RANGE,
+  ADS_SHORT_RANGE,
+  ANTIMATTER_MISSILE_HITS_TO_KILL,
   rollPointDefenceDice,
   type PdTargetKind,
   type PdThreat,
@@ -1040,8 +1045,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
       // 7.9: a wreck with charges still aboard "explodes at the end of the
       // phase in which it was destroyed, at full strength" — whichever phase
-      // that was, which is what a boundary sweep means.
-      sweepWreckedCharges(state)
+      // that was, which is what a boundary sweep means. Gated with the rest of
+      // 7.9: the blast rolls dice, and it rolls them at a boundary every
+      // battle walks.
+      if (rulesReading(state) >= 9) sweepWreckedCharges(state)
       // 7.24: a Wave Gun knocked out with its capacitors up puts the charge
       // through its own hull. Swept at the boundary for the same reason the
       // debris is: the rule names a threshold roll and a needle beam, and
@@ -1062,13 +1069,19 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // reads is cleared at the turn boundary — so the link is advanced
         // here, on this side of it.
         closeTowLinks(state)
-        // 7.9: "if the Antimatter Suicide Charge is not repaired by the end of
-        // the turn roll a die." Phase 14's damage control has already had its
-        // chance by here.
-        rollDamagedCharges(state)
-        // 7.8: "during the End Phase roll a d6 for each point of Regenerative
-        // Armor that has been damaged." 2.6 has no End Phase, so this is it.
-        regenerateArmourAcrossFleet(state)
+        // Both of these throw dice at a boundary every battle walks, so both
+        // are gated: nine roster designs carry regenerative armour and two
+        // carry a charge, and an older journal drew neither.
+        if (rulesReading(state) >= 9) {
+          // 7.9: "if the Antimatter Suicide Charge is not repaired by the end
+          // of the turn roll a die." Phase 14's damage control has already had
+          // its chance by here.
+          rollDamagedCharges(state)
+          // 7.8: "during the End Phase roll a d6 for each point of
+          // Regenerative Armor that has been damaged." 2.6 has no End Phase,
+          // so this is it.
+          regenerateArmourAcrossFleet(state)
+        }
       }
       const turnBefore = state.turn
       advancePhase(state)
@@ -1671,7 +1684,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // whole trade — and the trade is only real if the limit is.
       const reach = targetingRangeOf(ship)
       const toTarget = distance(ship.placement.position, target.placement.position)
-      if (toTarget > reach) {
+      // Gated, because a refusal is a change to the dice: a shot an older
+      // journal rolled for and this one turns away takes its whole volley out
+      // of the stream and every roll after it moves up.
+      if (rulesReading(state) >= 9 && toTarget > reach) {
         return refuse(
           `${ship.name} is running passive and cannot target past ${reach} MU — go active (7.4)`,
         )
@@ -2439,6 +2455,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
 
       mount.state = fireNovaCannon(mount.state, ship.placement.position, ship.placement.facing)
+      // The arming is spent, but what it bought is not: 7.23 takes the thrust,
+      // the guns and the screens "for that turn".
+      novaFiredTurns(state).set(ship.id, state.turn)
       markWeaponFired(ship, weapon.id, state.phase)
       markShipFired(ship)
       pushLog(state, {
@@ -2488,10 +2507,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (mount.kind !== 'pds' && mount.kind !== 'ads') {
         return refuse(`Only a PDS or an ADS fires at a ship this way (7.12, 7.13)`)
       }
+      // 7.13: "It can fire once to a range of 12 MU, or twice to a range of 6
+      // MU" — and "ADS can also be used to target enemy ships; like a PDS it
+      // inflicts one hit on a roll of 6". The reach and the dice are the ADS's
+      // own; only the to-hit is the PDS's.
       const range = distance(ship.placement.position, target.placement.position)
-      if (range > PDS_RANGE) {
-        return refuse(`Point defence reaches ${PDS_RANGE} MU, and that is ${range.toFixed(1)} (7.12)`)
+      const reach = mount.kind === 'ads' ? ADS_LONG_RANGE : PDS_RANGE
+      if (range > reach) {
+        return refuse(`That mount reaches ${reach} MU, and that is ${range.toFixed(1)} (7.12, 7.13)`)
       }
+      const dice = mount.kind === 'ads' && range <= ADS_SHORT_RANGE ? 2 : 1
       const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
       if (!mount.arcs.includes(arc)) return refuse(`No point-defence mount bears on ${target.name}`)
       if (!pointDefenceCanEngage(state, ship, target)) {
@@ -2500,7 +2525,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         )
       }
 
-      const shot = rollPointDefenceAtShip(1, state.rng, mount.drm ?? 0)
+      const shot = rollPointDefenceAtShip(dice, state.rng, mount.drm ?? 0)
       markWeaponFired(ship, mount.id, state.phase)
       if (shot.damage <= 0) {
         pushLog(state, {
@@ -3099,14 +3124,18 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`${ship.name} has no point-defence mount that can fire this turn`)
       }
       const orders = pdOrders(state)
+      // Keyed by ship AND mount: `pds-1` is the id every ship of a class gives
+      // its first PDS, so a key of the mount alone had one cruiser's aim
+      // steering its sisters' guns as well.
+      const key = novaKey(ship.id, action.systemId)
       if (action.targetId === '') {
-        orders.delete(action.systemId)
+        orders.delete(key)
         return OK
       }
       const marker = ordnanceOf(state).find((candidate) => candidate.id === action.targetId)
       if (!marker) return refuse('No such marker')
       if (marker.owner === ship.side) return refuse('That is your own ordnance')
-      orders.set(action.systemId, action.targetId)
+      orders.set(key, action.targetId)
       return OK
     }
 
@@ -3204,22 +3233,43 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           })
         }
         for (const option of options) {
-          if (ordered.get(option.mountId) === option.threatId) take(option)
+          if (ordered.get(novaKey(ship.id, option.mountId)) === option.threatId) take(option)
         }
         for (const option of [...options].sort((a, b) => a.range - b.range)) take(option)
         if (allocations.length === 0) continue
 
-        const outcome = resolvePointDefence(defender, threats, allocations, state.rng)
+        // 7.10 spends an ADFC per ally covered and 7.11's advanced one covers
+        // "ANY number"; `adfcBudget` is the difference and `validatePointDefence`
+        // is what counts it. Without this the option builder's "does this ship
+        // have an ADFC at all" was the whole test, and one ADFC covered the
+        // entire fleet. Below reading 9 the allocation is taken as offered,
+        // which is how the older journals were fought.
+        const plan =
+          rulesReading(state) >= 9
+            ? validatePointDefence(defender, threats, allocations, allies)
+            : { allocations, refusals: [] }
+        for (const refusal of plan.refusals) {
+          pushLog(state, {
+            kind: 'note',
+            shipId: ship.id,
+            side: ship.side,
+            visibleTo: [ship.side],
+            text: `${ship.name} cannot allocate that point defence: ${refusal.detail}`,
+          })
+        }
+        if (plan.allocations.length === 0) continue
+
+        const outcome = resolvePointDefence(defender, threats, plan.allocations, state.rng)
 
         const covering = new Map<string, string>()
-        for (const allocation of allocations) {
+        for (const allocation of plan.allocations) {
           if (allocation.coveringShipId) covering.set(allocation.threatId, allocation.coveringShipId)
         }
         for (const result of outcome.results) {
           if (result.kills <= 0) continue
           const marker = markers.find((m) => m.id === result.threatId)
           if (!marker) continue
-          marker.missiles = Math.max(0, marker.missiles - result.kills)
+          bankPointDefenceKills(state, marker, result.kills)
           const coveredId = covering.get(result.threatId)
           const covered = coveredId ? shipById(state, coveredId) : undefined
           pushLog(state, {
@@ -3253,14 +3303,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           }
         }
         // A mount that fires as point defence has fired for the turn (2.6).
-        for (const allocation of allocations) markWeaponFired(ship, allocation.mountId, state.phase)
+        for (const allocation of plan.allocations) {
+          markWeaponFired(ship, allocation.mountId, state.phase)
+        }
       }
 
       // The aim was for this resolution. Clearing it here rather than at the
       // turn boundary means a phase resolved twice does not fire yesterday's
       // orders at today's markers.
       pdOrders(state).clear()
-      setOrdnance(state, markers.filter((marker) => marker.missiles > 0))
+      setOrdnance(state, markers.filter((marker) => !markerSpent(state, marker)))
       projectOrdnance(state)
       return OK
     }
@@ -6139,10 +6191,15 @@ function resolveFlak(state: GameState): void {
     // 5.16: "It is possible to affect multiple targets including your own
     // ordnance or fighters." A barrage is a cloud of shrapnel and does not
     // ask whose side anything is on.
-    for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+    for (const group of state.fighterGroups) {
       if (group.status !== 'in-flight') continue
       if (!caughtOnPath(marker, group.id, group.position)) continue
-      const volley = rollPointDefenceDice(marker.rating, 'pds', state.rng, { drm: FLAK_DRM })
+      // 8.8's tables, not a flat one: a Heavy Fighter is a point-defence die
+      // harder to kill and a Light Fighter a point easier, and a barrage is
+      // point-defence dice like any other.
+      const volley = rollPointDefenceDice(marker.rating, 'pds', state.rng, {
+        drm: FLAK_DRM + groupProfile(group).defenceDrm,
+      })
       if (volley.kills <= 0) {
         pushLog(state, {
           kind: 'point-defence',
@@ -6152,18 +6209,41 @@ function resolveFlak(state: GameState): void {
         })
         continue
       }
-      const killed = Math.min(volley.kills, 'strength' in group ? group.strength : 1)
-      if ('strength' in group) {
-        group.strength = Math.max(0, group.strength - killed)
-        if (group.strength === 0) group.status = 'destroyed'
-      } else {
-        group.status = 'destroyed'
-      }
+      const killed = Math.min(volley.kills, group.strength)
+      group.strength = Math.max(0, group.strength - killed)
+      if (group.strength === 0) group.status = 'destroyed'
       pushLog(state, {
         kind: 'point-defence',
         side: marker.side,
         dice: volley.rolls,
         text: `Flak catches ${group.label}: ${killed} killed (5.16)`,
+      })
+    }
+
+    // 9.1's gunboats are their own list with their own numbers, and shrapnel
+    // does not destroy a whole squadron because one die came up. Each kill is
+    // one boat, the way each kill is one fighter.
+    for (const squadron of state.gunboatSquadrons) {
+      if (squadron.status !== 'in-flight' || squadron.boats.length === 0) continue
+      if (!caughtOnPath(marker, squadron.id, squadron.position)) continue
+      const volley = rollPointDefenceDice(marker.rating, 'pds', state.rng, { drm: FLAK_DRM })
+      if (volley.kills <= 0) {
+        pushLog(state, {
+          kind: 'point-defence',
+          side: marker.side,
+          dice: volley.rolls,
+          text: `Flak bursts around ${squadron.label} and misses (5.16)`,
+        })
+        continue
+      }
+      const killed = Math.min(volley.kills, squadron.boats.length)
+      squadron.boats = squadron.boats.slice(killed)
+      if (squadron.boats.length === 0) squadron.status = 'destroyed'
+      pushLog(state, {
+        kind: 'point-defence',
+        side: marker.side,
+        dice: volley.rolls,
+        text: `Flak catches ${squadron.label}: ${killed} boat${killed === 1 ? '' : 's'} lost (5.16)`,
       })
     }
 
@@ -6532,9 +6612,35 @@ export function novaBursts(state: GameState): NovaBurst[] {
  */
 function novaPoweredDown(state: GameState, ship: ShipState): boolean {
   for (const mount of novaMounts(state).values()) {
-    if (mount.shipId === ship.id && mount.state.armed) return true
+    if (mount.shipId !== ship.id) continue
+    if (mount.state.armed) return true
+    // 7.23 spends the power "for that turn", not until the trigger: a ship
+    // whose screens came back the instant the round left the tube would have
+    // paid for a fraction of a phase. `fireNovaCannon` clears `armed` because
+    // the arming is what the shot consumes, so the turn it was armed IN is
+    // what the rest of the file has to read.
+    if (NOVA_FIRED.get(state)?.get(ship.id) === state.turn) return true
   }
   return false
+}
+
+/**
+ * The turn each ship last fired its Nova Cannon (7.23).
+ *
+ * Kept beside the mount rather than on it because it outlives the arming: the
+ * shot clears `armed` and the power-down has to last to the end of the turn
+ * anyway — no thrust, no other weapons, and no screens against anything that
+ * shoots back afterwards.
+ */
+const NOVA_FIRED = new WeakMap<GameState, Map<string, number>>()
+
+function novaFiredTurns(state: GameState): Map<string, number> {
+  let fired = NOVA_FIRED.get(state)
+  if (!fired) {
+    fired = new Map()
+    NOVA_FIRED.set(state, fired)
+  }
+  return fired
 }
 
 /**
@@ -9561,6 +9667,49 @@ function closeTowLinks(state: GameState): void {
       })
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// What a point-defence kill does to the marker it hit (6.4, 6.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Book a phase-9 kill against the marker (6.4, 6.6).
+ *
+ * Two different meanings of "kill" meet here and the handler used to treat
+ * them as one, subtracting both from `missiles`:
+ *
+ *   - Against a **salvo**, a kill takes a missile off the marker AND has to be
+ *     remembered, because 6.4's lock-on measures its D6 against the salvo *as
+ *     launched*: `rollSalvoLockOn` reads `missiles + hits`. Subtracting
+ *     without banking shrank the salvo the die was measured against, which
+ *     handed the kills straight back — two dead missiles out of six turned a
+ *     roll of 5 into four through instead of three.
+ *   - Against an **antimatter warhead**, a hit is not a kill at all: 6.6 wants
+ *     *"three hits ... to disrupt the warhead sufficiently"*, and
+ *     `resolveAntimatterDetonation` reads `marker.hits` to work out what is
+ *     left of the blast. The marker carries one missile, so subtracting killed
+ *     it outright on the first hit.
+ */
+function bankPointDefenceKills(state: GameState, marker: MissileMarker, kills: number): void {
+  if (rulesReading(state) < 9) {
+    marker.missiles = Math.max(0, marker.missiles - kills)
+    return
+  }
+  marker.hits += kills
+  // A warhead is disrupted rather than shot down; everything else loses
+  // missiles off the marker.
+  if (marker.kind === 'antimatter') return
+  marker.missiles = Math.max(0, marker.missiles - kills)
+}
+
+/** Whether phase 9 finished this marker off (6.4, 6.6). */
+function markerSpent(state: GameState, marker: MissileMarker): boolean {
+  if (rulesReading(state) < 9) return marker.missiles <= 0
+  // 6.6: "Three hits will disrupt the warhead sufficiently to prevent any
+  // meaningful explosion" — and until the third it is still coming.
+  if (marker.kind === 'antimatter') return marker.hits >= ANTIMATTER_MISSILE_HITS_TO_KILL
+  return marker.missiles <= 0
 }
 
 // ---------------------------------------------------------------------------

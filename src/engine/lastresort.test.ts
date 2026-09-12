@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction } from './actions'
+import { applyAction, setRulesReading } from './actions'
+import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import { aiActions } from './ai'
 import {
   createGame,
@@ -82,13 +83,18 @@ function flight(id: string, side: string, at: { x: number; y: number }): Fighter
 }
 
 function battle(opts: { ships?: ShipState[]; flights?: FighterGroupState[]; seed?: number } = {}): GameState {
-  return createGame({
+  const game = createGame({
     seed: opts.seed ?? 0x789,
     sides: [{ id: 'a' }, { id: 'b' }],
     table: { width: 120, height: 80 },
     ships: opts.ships ?? [],
     fighterGroups: opts.flights ?? [],
   })
+  // Both of these throw dice at a boundary every battle walks, so both are
+  // gated — and `createGame` stamps reading 1, where `buildGame` stamps the
+  // current one. A battle fought today is fought at the current reading.
+  setRulesReading(game, CURRENT_RULES_VERSION)
+  return game
 }
 
 const shipOf = (game: GameState, id: string): ShipState => game.ships.find((s) => s.id === id)!

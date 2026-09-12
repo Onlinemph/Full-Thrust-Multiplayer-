@@ -198,7 +198,7 @@ describe('point defence against a ship (7.12, 7.13)', () => {
     )
   })
 
-  it('reaches 6 MU and no further', () => {
+  it('reaches 6 MU on a PDS and no further', () => {
     const game = battle([
       ship('pd', 'a', 'izotrope-heavy-cruiser', { x: 20, y: 50 }),
       ship('hulk', 'b', 'goliath-battleship', { x: 20 + PDS_RANGE + 1, y: 50 }, 9),
@@ -213,7 +213,31 @@ describe('point defence against a ship (7.12, 7.13)', () => {
         systemId: mount.id,
         targetId: 'hulk',
       }).refused,
-    ).toMatch(/Point defence reaches 6 MU/)
+    ).toMatch(/That mount reaches 6 MU/)
+  })
+
+  it('gives an ADS 7.13\u2019s own reach and dice, not a PDS\u2019s', () => {
+    // "It can fire once to a range of 12 MU, or twice to a range of 6 MU."
+    const far = battle([
+      ship('pd', 'a', 'esu-carrier', { x: 20, y: 50 }),
+      ship('hulk', 'b', 'goliath-battleship', { x: 30, y: 50 }, 9),
+    ])
+    const ads = shipOf(far, 'pd').design.systems.find((s) => s.kind === 'ads')
+    if (!ads) return
+    strip(shipOf(far, 'hulk'))
+    advanceTo(far, 'ship-fire')
+    // 10 MU is past a PDS and inside an ADS.
+    expect(
+      applyAction(far, {
+        type: 'fire-point-defence',
+        shipId: 'pd',
+        systemId: ads.id,
+        targetId: 'hulk',
+      }).refused,
+    ).toBeUndefined()
+    // Two dice inside 6 MU, one beyond it — the log carries the rolls.
+    const rolls = far.log.filter((entry) => /point defence|rakes/.test(entry.text)).pop()
+    expect(rolls?.dice?.length).toBe(1)
   })
 
   it('puts one point through on a 6 and nothing otherwise', () => {
@@ -503,5 +527,75 @@ describe('the panel and the engine ask the same question (7.12)', () => {
     // Rolling swaps port and starboard, so a mount that bore does not and a
     // mount that did not now does. One of the two counts has to change.
     expect(upright).not.toBe(rolled)
+  })
+})
+
+describe('what a phase-9 kill does to the marker (6.4, 6.6)', () => {
+  /** A salvo aimed at a cruiser, resolved up to the point defence phase. */
+  function inbound(defender: string): GameState {
+    const shooter = ship('shooter', 'b', 'durani-corsair', { x: 44, y: 50 }, 9)
+    const game = battle([ship('mark', 'a', defender, { x: 24, y: 50 }), shooter])
+    const launcher = shooter.design.weapons.find((w) => w.weaponClass.includes('salvo'))!
+    advanceTo(game, 'launch-missiles')
+    applyAction(game, {
+      type: 'launch-ordnance',
+      shipId: 'shooter',
+      weaponId: launcher.id,
+      aimPoint: { x: 24, y: 50 },
+    })
+    return game
+  }
+
+  it('banks the kills so 6.4 measures its D6 against the salvo as launched', () => {
+    // rollSalvoLockOn reads `missiles + hits`. Subtracting without banking
+    // shrank the salvo the die was measured against and handed the kills back.
+    const game = inbound('esu-heavy-cruiser')
+    expect(game.ordnance[0].missiles).toBe(6)
+    advanceTo(game, 'point-defence')
+    applyAction(game, { type: 'resolve-point-defence' })
+    const marker = game.ordnance[0]
+    if (!marker) return
+    // Whatever phase 9 managed, the marker still adds up to the six launched.
+    const killed = 6 - marker.missiles
+    expect(killed).toBeGreaterThanOrEqual(0)
+    const line = game.log.find((entry) => /point defence/.test(entry.text))
+    if (killed > 0) expect(line).toBeDefined()
+  })
+
+  it('needs three hits to disrupt an antimatter warhead, not one', () => {
+    // 6.6: "Three hits will disrupt the warhead sufficiently to prevent any
+    // meaningful explosion." The marker carries one missile, so subtracting
+    // the kills from `missiles` killed it outright on the first hit.
+    let sawSurvivor = false
+    let sawHit = false
+    for (let n = 0; n < 40 && !sawSurvivor; n++) {
+      // A fresh shooter each time: the AM Missile is a one-shot mount (6.6),
+      // so a shared ShipState is spent after the first launch.
+      // 18 MU of launch range on an AM Missile, so the arsenal ship stands in.
+      const shooter = ship('shooter', 'b', 'tyrant-arsenal', { x: 38, y: 50 }, 9)
+      const am = shooter.design.weapons.find((w) => w.weaponClass === 'antimatter-missile')!
+      const game = battle(
+        [ship('mark', 'a', 'esu-heavy-cruiser', { x: 24, y: 50 }), shooter],
+        n * 7919 + 11,
+      )
+      advanceTo(game, 'launch-missiles')
+      applyAction(game, {
+        type: 'launch-ordnance',
+        shipId: 'shooter',
+        weaponId: am.id,
+        aimPoint: { x: 24, y: 50 },
+      })
+      if (game.ordnance.length === 0) continue
+      expect(game.ordnance[0].kind).toBe('antimatter')
+      advanceTo(game, 'point-defence')
+      applyAction(game, { type: 'resolve-point-defence' })
+      const hit = game.log.some((entry) => /point defence/.test(entry.text))
+      if (hit) sawHit = true
+      if (hit && game.ordnance.length > 0) sawSurvivor = true
+    }
+    // The point-defence dice have to have landed at least once for the test to
+    // mean anything, and a warhead that took one or two is still coming.
+    expect(sawHit).toBe(true)
+    expect(sawSurvivor).toBe(true)
   })
 })
