@@ -34,6 +34,7 @@ import { MapView } from './MapView'
 import { OnlinePanel } from './OnlinePanel'
 import { ReplayBar } from './ReplayBar'
 import { Scoreboard } from './Scoreboard'
+import { SquadronPanel } from './SquadronPanel'
 import { SetupPanel } from './SetupPanel'
 import { ShipLibrary } from './ShipLibrary'
 import { Shipyard } from './Shipyard'
@@ -601,6 +602,10 @@ function PhaseControls({
               </button>
             </div>
           ))}
+
+          {/* 3.7: "Squadrons are formed or broken at the start of the game
+              turn, before writing movement orders." */}
+          <SquadronPanel game={game} side={viewingSide} />
 
           {/* 18.1: "The defender can also place a planet or similar terrain
               feature." One feature, at deployment, and only in an

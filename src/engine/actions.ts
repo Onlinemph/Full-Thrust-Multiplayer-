@@ -55,11 +55,19 @@ import {
   driveFromDef,
   formatOrder,
   isOffTable,
+  moveSquadron,
   rollEmergencyThrust,
   rollTableReentry,
+  squadronLead,
   thrustBudget,
   validateOrder,
+  validateSquadron,
+  type MovementResult,
   type MovementState,
+  type Squadron,
+  type SquadronFormation,
+  type SquadronMovementResult,
+  type SquadronViolation,
   type TableEdge,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
@@ -98,6 +106,7 @@ import {
   canFireFromOrbit,
   deliberateLanding,
   ORBIT_SAME_POINT_RANGE,
+  shatterAsteroid,
   stationaryCollisionRisk,
   type DebrisCloud,
   type FlareSystem,
@@ -106,7 +115,11 @@ import {
 } from './terrain'
 import {
   arcsWhenInverted,
+  advanceTowLink,
+  beginTowLink,
   canManoeuvre,
+  canTakeAnotherInTow,
+  coursesMatched,
   crowdedEdge,
   dockingApproach,
   holdApproach,
@@ -116,9 +129,13 @@ import {
   readyToDisengage,
   resolveDisengagement,
   resolveRam,
+  linkedDriveRating,
   rollShip,
   tableShift,
+  TOW_LINK_TURNS,
+  TOW_MATCH_RANGE,
   type TableEdge as ShiftEdge,
+  type TowRig,
 } from './specialmoves'
 import { defaultPlacements, validatePlacement } from './battles'
 import {
@@ -389,6 +406,35 @@ export type GameAction =
    * explodes."* The order stands for the turn it was written in and no longer.
    */
   | { type: 'plot-detonate'; shipId: string; on: boolean }
+  /**
+   * 3.7 — a squadron is *"formed or broken at the start of the game turn,
+   * before writing movement orders"*, so both live in phase 1.
+   */
+  | {
+      type: 'form-squadron'
+      squadronId: string
+      formation: SquadronFormation
+      shipIds: string[]
+      /** 3.7's models on a single stand, which may not be split up. */
+      sharedBase?: boolean
+    }
+  | { type: 'break-squadron'; squadronId: string }
+  /**
+   * 16.3 — *"At the start of a turn (before the Ship Movement Phase) where the
+   * two ships have matched courses, the towing ship can begin establishing a
+   * link."* Phase 1, like every other order, and the link then takes one
+   * complete turn for an equipped tug or two for anything else.
+   */
+  | { type: 'begin-tow'; tugId: string; loadId: string }
+  /** 16.3 — let go, which any ship may do at any time it is allowed an order. */
+  | { type: 'release-tow'; loadId: string }
+  /**
+   * 17.1's optional damage to a rock: *"they may give each asteroid a large
+   * damage point value"*, and *"when an asteroid is reduced to zero damage, it
+   * disintegrates into 1D6 smaller chunks, which all move at random courses
+   * and speeds out from the point of destruction."*
+   */
+  | { type: 'fire-at-terrain'; shipId: string; weaponId: string; terrainId: string }
   /**
    * 7.12 — point defence used as a gun: *"Point Defense Systems can only be
    * fired against ships without an operational screen/field (of any type) or
@@ -881,6 +927,52 @@ function movementStateOf(ship: ShipState): MovementState {
   }
 }
 
+/**
+ * What a tug can actually do with a hull on the end of a line (16.3).
+ *
+ * *"Multiply the mass of the towing ship by its main drive rating: this is the
+ * available thrust. Divide the available thrust by the combined mass of the
+ * linked ships and round down."* The result is a *rating*, so every limit in
+ * section 3 applies to it unchanged — including 3.2's rating-1 exception,
+ * which is a fair description of towing a dreadnought.
+ *
+ * A rating of 0 is not a failure: *"the tow can still succeed, but the time
+ * required will be many hours or days, outside the time frame of a Full Thrust
+ * battle"*. The pair simply coasts.
+ */
+function towingStateOf(state: GameState, ship: ShipState): MovementState {
+  const base = movementStateOf(ship)
+  const loads = state.ships.filter(
+    (other) => other.tow?.tugId === ship.id && other.tow.linked && !other.destroyed,
+  )
+  if (loads.length === 0) return base
+  const linked = linkedDriveRating(
+    { mass: ship.design.mass, thrust: base.drive.rating },
+    loads.map((load) => ({ mass: load.design.mass })),
+  )
+  return { ...base, drive: { ...base.drive, rating: linked.thrust, hits: 0 } }
+}
+
+/** Drag every linked tow along behind its tug (16.3). */
+function dragTowedShips(state: GameState, tug: ShipState): void {
+  for (const load of state.ships) {
+    if (load.tow?.tugId !== tug.id || !load.tow.linked) continue
+    if (load.destroyed || load.offTable) continue
+    // "The two ships move as if they were in a line-ahead squadron formation":
+    // the load holds its offset behind the tug and turns with it.
+    load.placement = {
+      position: advance(tug.placement.position, oppositeCourse(tug.placement.facing), TOW_MATCH_RANGE),
+      facing: tug.placement.facing,
+    }
+    load.velocity = tug.velocity
+  }
+}
+
+/** The clock course pointing the other way (3.1). */
+function oppositeCourse(course: Course): Course {
+  return (((course + 5) % 12) + 1) as Course
+}
+
 function editOrder(
   state: GameState,
   shipId: string,
@@ -966,6 +1058,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // nothing.
       if (state.phase === state.phases[state.phases.length - 1]) {
         closeNovaArming(state)
+        // 16.3 counts "complete turns" of a held match, and the counter it
+        // reads is cleared at the turn boundary — so the link is advanced
+        // here, on this side of it.
+        closeTowLinks(state)
         // 7.9: "if the Antimatter Suicide Charge is not repaired by the end of
         // the turn roll a die." Phase 14's damage control has already had its
         // chance by here.
@@ -1365,6 +1461,17 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name} has its power in the Nova Cannon and holds course (7.23)`,
         })
       }
+      // 16.3: a linked hull is being dragged, not flown. It is put where its
+      // tug puts it, and its own order is worth nothing until the line is cut.
+      if (ship.tow?.linked) {
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name} is under tow and goes where the line takes it (16.3)`,
+        })
+        return OK
+      }
       const order =
         ftl === 'warming-up' || locked || powered ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
       const before = movementStateOf(ship)
@@ -1395,7 +1502,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         ship.cloaked = cloakMode(ship.cloak) !== 'none'
       }
 
-      const result = applyOrder(movementStateOf(ship), effective)
+      // 3.7: a squadron flies one order and the followers hold station. Every
+      // member still comes through here — its own mines, its own terrain, its
+      // own cloak — and only where it comes out is different.
+      const result =
+        squadronResultFor(state, ship, effective) ?? applyOrder(towingStateOf(state, ship), effective)
 
       // 16.2: "The roll then occurs at the start of the ship's movement." It
       // is read off `flown` rather than off the written order because 3.5
@@ -1421,6 +1532,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       ship.placement = result.placement
       ship.velocity = result.velocity
+      // 16.3: the tow comes with it.
+      dragTowedShips(state, ship)
       // 4.2's optional exception and 8.3's scramble both turn on whether the
       // ship touched its drive this turn, so the figure is recorded here — the
       // one place a ship's thrust is actually spent. An illegal plot is flown
@@ -1793,6 +1906,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // markHullBoxes owns the row accounting and the pending threshold, so
       // the hull damage goes through it rather than being written directly.
       markHullBoxes(target, applied.hullDamage)
+      // 16.3: "if the target ship fires any weapon against the other and
+      // inflicts at least one hull box of damage, the link is broken." A hulk
+      // under tow can shoot its way loose, and this is where the boxes are
+      // counted.
+      if (ship.tow?.tugId === target.id) ship.towDamageDealt += applied.hullDamage
       // 5.9: "Every hit generated allows the player to send one unit of
       // Marines or a Damage Control Party over to the enemy ship"; 5.18: "two
       // 'Marine' markers are placed on the enemy ship". Landing them is where
@@ -1846,6 +1964,221 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
      * fired through `fire-weapon` at a single named ship, in the full 60-degree
      * forward arc, every turn, with no consequence afterwards.
      */
+    /**
+     * 17.1's shot at a rock.
+     *
+     * Only a feature the scenario gave a damage track can be shot at all —
+     * *"the normal rules assume that asteroids cannot be destroyed"* — and the
+     * shot is an ordinary one, resolved through the same resolver as a shot at
+     * a ship. A rock has no screens, no armour and no arcs to be caught in.
+     */
+    case 'fire-at-terrain': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const rock = state.terrain.find((feature) => feature.id === action.terrainId)
+      if (!rock) return refuse('No such terrain')
+      if (rock.damagePoints === undefined) {
+        return refuse(
+          `${rock.label ?? rock.id} cannot be destroyed — this battle is not using 17.1's damage track`,
+        )
+      }
+      if ((rock.damageTaken ?? 0) >= rock.damagePoints) return refuse('That rock is already gone')
+      const activation = openFiringActivation(state, ship)
+      if (activation) return activation
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That weapon is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
+      // A rock is the size of its radius, so the shot is measured to its edge
+      // rather than to a point in the middle of it.
+      const range = Math.max(0, distance(ship.placement.position, rock.position) - rock.radius)
+      const arc = arcTo(ship.placement.position, ship.placement.facing, rock.position)
+      if (!weaponArcs(ship, weapon).includes(arc)) {
+        return refuse(`${weapon.label} does not bear on ${rock.label ?? rock.id}`)
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
+      }
+      if (!assignFireCon(ship, rock.id, state.phase)) {
+        return refuse(`No FireCon free to lay on ${rock.label ?? rock.id} (4.4)`)
+      }
+
+      const shot = fireWeapon(weapon, {
+        range,
+        arc,
+        targetScreens: 0,
+        rearArc: false,
+        drm: 0,
+        rng: state.rng,
+      })
+      markWeaponFired(ship, weapon.id, state.phase)
+      if ('refused' in shot) {
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} does not fire — ${shot.refused}`,
+        })
+        return OK
+      }
+      const damage = shot.normalDamage + shot.penetratingDamage
+      rock.damageTaken = (rock.damageTaken ?? 0) + damage
+      pushLog(state, {
+        kind: 'damage',
+        shipId: ship.id,
+        side: ship.side,
+        dice: shot.dice,
+        text:
+          `${ship.name} works on ${rock.label ?? rock.id}: ${damage} off, ` +
+          `${Math.max(0, rock.damagePoints - rock.damageTaken)} left (17.1)`,
+      })
+      if (rock.damageTaken >= rock.damagePoints) shatterTerrain(state, rock)
+      return OK
+    }
+
+    /**
+     * 16.3's tow, begun in phase 1.
+     *
+     * *"First the towing ship must match courses. The two ships must be within
+     * 3 MU of each other and either both halted, or both moving at the same
+     * velocity and course facing."* The link is not made here — it is begun,
+     * and it takes a complete turn of holding that match for a tug rigged for
+     * the job or two for anything else.
+     */
+    case 'begin-tow': {
+      if (state.phase !== 'orders') {
+        return refuse('A tow is begun at the start of a turn, before the ships move (16.3)')
+      }
+      const tug = shipById(state, action.tugId)
+      const load = shipById(state, action.loadId)
+      if (!tug || !load) return refuse('No such ship')
+      if (tug.id === load.id) return refuse('A ship cannot tow itself')
+      if (tug.destroyed || tug.offTable) return refuse('Ship is out of the battle')
+      if (load.destroyed || load.offTable) return refuse('That hull is out of the battle')
+      if (load.tow !== null) return refuse(`${load.name} is already under tow (16.3)`)
+      if (tug.tow !== null) return refuse(`${tug.name} is itself under tow (16.3)`)
+
+      const match = coursesMatched(
+        { position: tug.placement.position, facing: tug.placement.facing, velocity: tug.velocity },
+        { position: load.placement.position, facing: load.placement.facing, velocity: load.velocity },
+      )
+      if (!match.matched) return refuse(`${tug.name} and ${load.name}: ${match.reason}`)
+
+      // 11.6's oversized drive is the "equipped for towing as part of its
+      // normal duties" fit the rule names; anything else is improvising.
+      const rig: TowRig = tug.design.ftlTransferMass !== undefined ? 'equipped' : 'improvised'
+      const already = state.ships.filter((other) => other.tow?.tugId === tug.id).length
+      const room = canTakeAnotherInTow(rig, already)
+      if (!room.allowed) return refuse(`${tug.name}: ${room.reason}`)
+
+      load.tow = beginTowLink(tug.id, load.id, rig)
+      pushLog(state, {
+        kind: 'orders',
+        shipId: tug.id,
+        side: tug.side,
+        text:
+          `${tug.name} passes a line to ${load.name} — ` +
+          `${TOW_LINK_TURNS[rig]} complete turn${TOW_LINK_TURNS[rig] === 1 ? '' : 's'} to link (16.3)`,
+      })
+      return OK
+    }
+
+    case 'release-tow': {
+      const load = shipById(state, action.loadId)
+      if (!load) return refuse('No such ship')
+      if (load.tow === null) return refuse(`${load.name} is not under tow`)
+      const tug = shipById(state, load.tow.tugId)
+      load.tow = null
+      pushLog(state, {
+        kind: 'note',
+        shipId: load.id,
+        side: load.side,
+        text: `${tug?.name ?? 'The tug'} lets ${load.name} go (16.3)`,
+      })
+      return OK
+    }
+
+    /**
+     * 3.7's squadron, formed in phase 1.
+     *
+     * *"A squadron is two to four ships in line ahead, line abreast, wedge, or
+     * diamond formation; but it could also be one large ship surrounded by a
+     * ring of up to six escorts."* One order for the whole group, flown at the
+     * worst drive in it, and *"squadrons cannot mix ships with standard and
+     * Advanced Drives"*.
+     */
+    case 'form-squadron': {
+      if (state.phase !== 'orders') {
+        return refuse('A squadron is formed at the start of the turn, before orders (3.7)')
+      }
+      if (action.shipIds.length === 0) return refuse('A squadron needs ships in it (3.7)')
+      const members: ShipState[] = []
+      for (const id of action.shipIds) {
+        const ship = shipById(state, id)
+        if (!ship) return refuse(`No such ship: ${id}`)
+        if (ship.destroyed || ship.offTable) return refuse(`${ship.name} is out of the battle`)
+        if (ship.carriedBy !== null) return refuse(`${ship.name} is riding another hull (11.7)`)
+        if (ship.squadronId !== null && ship.squadronId !== action.squadronId) {
+          return refuse(`${ship.name} is already in a squadron (3.7)`)
+        }
+        members.push(ship)
+      }
+      const sides = new Set(members.map((ship) => ship.side))
+      if (sides.size > 1) return refuse('A squadron is one fleet\u2019s ships (3.7)')
+
+      const check = validateSquadron(squadronOf(state, action.squadronId, action.formation, members))
+      if (!check.legal) {
+        return refuse(squadronViolation(check.violations[0] ?? 'empty'))
+      }
+      // Anyone who was in this squadron and is not in the new list falls out.
+      for (const ship of state.ships) {
+        if (ship.squadronId === action.squadronId && !action.shipIds.includes(ship.id)) {
+          ship.squadronId = null
+          ship.squadronFormation = null
+          ship.squadronSharedBase = false
+        }
+      }
+      for (const ship of members) {
+        ship.squadronId = action.squadronId
+        ship.squadronFormation = action.formation
+        ship.squadronSharedBase = action.sharedBase === true
+      }
+      pushLog(state, {
+        kind: 'orders',
+        side: members[0].side,
+        text:
+          `${members.map((ship) => ship.name).join(', ')} form up in ` +
+          `${action.formation.replace('-', ' ')} (3.7)`,
+      })
+      return OK
+    }
+
+    case 'break-squadron': {
+      if (state.phase !== 'orders') {
+        return refuse('A squadron is broken at the start of the turn, before orders (3.7)')
+      }
+      const members = state.ships.filter((ship) => ship.squadronId === action.squadronId)
+      if (members.length === 0) return refuse('No such squadron')
+      for (const ship of members) {
+        ship.squadronId = null
+        ship.squadronFormation = null
+        ship.squadronSharedBase = false
+      }
+      pushLog(state, {
+        kind: 'orders',
+        side: members[0].side,
+        text: `${members.map((ship) => ship.name).join(', ')} break formation (3.7)`,
+      })
+      return OK
+    }
+
     /**
      * 7.9's *"detonate"* order.
      *
@@ -9072,6 +9405,269 @@ function prospectiveMissileTargets(state: GameState): Map<string, string> {
     alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
   )
   return new Map(acquired.acquisitions.map((hit) => [hit.markerId, hit.targetShipId]))
+}
+
+// ---------------------------------------------------------------------------
+// Destructible asteroids (17.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * A rock shot to pieces (17.1).
+ *
+ * *"When an asteroid is reduced to zero damage, it disintegrates into 1D6
+ * smaller chunks, which all move at random courses and speeds out from the
+ * point of destruction. Try to avoid that lot. . ."*
+ *
+ * The chunks are put on the table as asteroids in their own right, one
+ * MU out along each course `terrain.shatterAsteroid` rolled so the spray is
+ * visible and the collision tests have something to catch. No speed: 17.1's
+ * *"random speeds"* names no range, no bound and no die anywhere in the book,
+ * so the scenario sets them and neither `shatterAsteroid` nor this invents a
+ * number. What the rock leaves behind is a field where it stood.
+ */
+function shatterTerrain(state: GameState, rock: TerrainFeature): void {
+  const shatter = shatterAsteroid(state.rng)
+  const chunks: TerrainFeature[] = shatter.chunks.map((chunk, index) => ({
+    id: `${rock.id}-chunk-${index + 1}`,
+    kind: 'asteroid-field',
+    position: advance(rock.position, chunk.course, Math.max(1, rock.radius / 2)),
+    // A third of the parent's radius each, floored at something a player can
+    // still pick out on the plot.
+    radius: Math.max(0.5, rock.radius / 3),
+    label: `${rock.label ?? rock.id} fragment`,
+  }))
+  state.terrain = [...state.terrain.filter((feature) => feature.id !== rock.id), ...chunks]
+  pushLog(state, {
+    kind: 'note',
+    dice: [shatter.roll],
+    text:
+      `${rock.label ?? rock.id} disintegrates into ${shatter.chunks.length} chunks on ` +
+      `courses ${shatter.chunks.map((chunk) => chunk.course).join(', ')} (17.1)`,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Towing (16.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * One turn of holding the line, banked or broken (16.3).
+ *
+ * *"If either ship changes velocity or facing during this time without an exact
+ * match by the other ship, or if the target ship fires any weapon against the
+ * other and inflicts at least one hull box of damage, the link is broken and
+ * the procedure must be restarted from the beginning."*
+ *
+ * Run as the turn closes rather than as it opens, and that ordering is the
+ * rule: `towDamageDealt` counts what the tow shot into its tug *this* turn,
+ * and the turn boundary clears it. Advancing the link on the next turn's first
+ * phase would read a counter that had already been wiped, and a hulk could
+ * shoot its way out of nothing.
+ */
+function closeTowLinks(state: GameState): void {
+  for (const load of state.ships) {
+    const link = load.tow
+    if (!link) continue
+    const tug = shipById(state, link.tugId)
+    if (!tug || tug.destroyed || load.destroyed) {
+      load.tow = null
+      continue
+    }
+    const match = coursesMatched(
+      { position: tug.placement.position, facing: tug.placement.facing, velocity: tug.velocity },
+      { position: load.placement.position, facing: load.placement.facing, velocity: load.velocity },
+    )
+    const before = link.linked
+    const progress = advanceTowLink(link, {
+      matched: match.matched,
+      hullDamageToTug: load.towDamageDealt,
+    })
+    load.tow = progress.link
+    if (progress.broken) {
+      pushLog(state, {
+        kind: 'note',
+        shipId: load.id,
+        side: load.side,
+        text: `${tug.name}'s line to ${load.name} parts — ${progress.reason}`,
+      })
+      continue
+    }
+    if (!before && progress.link.linked) {
+      const rating = linkedDriveRating(
+        { mass: tug.design.mass, thrust: currentThrust(tug) },
+        [{ mass: load.design.mass }],
+      )
+      pushLog(state, {
+        kind: 'note',
+        shipId: tug.id,
+        side: tug.side,
+        text: rating.outsideBattleTimeframe
+          ? `${tug.name} has ${load.name} under tow, and cannot shift it inside a battle (16.3)`
+          : `${tug.name} has ${load.name} under tow at thrust ${rating.thrust} (16.3)`,
+      })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Squadrons (3.7)
+// ---------------------------------------------------------------------------
+
+/** The squadron `movement.ts` wants, built out of the ships that are in it. */
+function squadronOf(
+  state: GameState,
+  squadronId: string,
+  formation: SquadronFormation,
+  members: readonly ShipState[],
+): Squadron {
+  void state
+  return {
+    id: squadronId,
+    formation,
+    members: members.map((ship) => ({
+      id: ship.id,
+      placement: ship.placement,
+      drive: movementStateOf(ship).drive,
+    })),
+    // "One order for the whole squadron" implies one velocity; a squadron that
+    // was formed out of ships at different speeds flies at the slowest, which
+    // is the same principle 3.7 applies to the drive rating.
+    velocity: members.reduce((slowest, ship) => Math.min(slowest, ship.velocity), Infinity),
+    sharedBase: members.some((ship) => ship.squadronSharedBase),
+  }
+}
+
+/** The squadron this ship belongs to, or null. */
+function squadronFor(state: GameState, ship: ShipState): Squadron | null {
+  if (ship.squadronId === null || ship.squadronFormation === null) return null
+  const members = state.ships.filter(
+    (other) =>
+      other.squadronId === ship.squadronId && !other.destroyed && !other.offTable,
+  )
+  if (members.length < 2) return null
+  return squadronOf(state, ship.squadronId, ship.squadronFormation, members)
+}
+
+function squadronViolation(code: SquadronViolation): string {
+  switch (code) {
+    case 'bad-size':
+      return 'A squadron is two to four ships, or one hull with a ring of up to six escorts (3.7)'
+    case 'mixed-drive-types':
+      return 'Squadrons cannot mix ships with standard and Advanced Drives (3.7)'
+    case 'empty':
+      return 'A squadron needs ships in it (3.7)'
+  }
+}
+
+/**
+ * The squadron's flown move, computed once a turn and read by every member.
+ *
+ * 3.7's squadron is one order flown by one lead with the rest holding station,
+ * and every member still has its own mines to set off, its own terrain to fly
+ * through and its own cloak to raise — so each ship goes through `move-ship`
+ * as it always did and this is the only thing that changes: where it comes out.
+ */
+const SQUADRON_MOVES = new WeakMap<
+  GameState,
+  Map<string, { turn: number; result: SquadronMovementResult }>
+>()
+
+function squadronMoves(
+  state: GameState,
+): Map<string, { turn: number; result: SquadronMovementResult }> {
+  let moves = SQUADRON_MOVES.get(state)
+  if (!moves) {
+    moves = new Map()
+    SQUADRON_MOVES.set(state, moves)
+  }
+  return moves
+}
+
+/**
+ * This member's placement out of the squadron's single move (3.7).
+ *
+ * The squadron is flown on the first member to be told to move, using the
+ * order written on whichever ship 3.7 makes the lead — *"the ship that has to
+ * move furthest, which is the leftmost for starboard turns, the rightmost for
+ * port"*. Every member after that reads its own row out of the same answer.
+ *
+ * A follower's `MovementResult` is synthesised: the lead's thrust budget,
+ * because that is what the squadron spent, and a single straight leg from
+ * where the follower stood to where it ends up, because a rigid-body move is
+ * exactly that — it is the chord the model is slid along, and everything
+ * downstream that reads the legs (mines, terrain, gravity) wants the path the
+ * model actually travelled.
+ */
+function squadronResultFor(
+  state: GameState,
+  ship: ShipState,
+  fallbackOrder: MovementOrder,
+): MovementResult | null {
+  const squadron = squadronFor(state, ship)
+  if (!squadron) return null
+  const moves = squadronMoves(state)
+  let held = moves.get(squadron.id)
+  if (!held || held.turn !== state.turn) {
+    // 3.7 gives the squadron one order. The lead is the ship that flies it, so
+    // the lead's own written order is the squadron's — and a squadron whose
+    // lead wrote nothing holds course, like any ship.
+    const leadOrder = (() => {
+      for (const member of squadron.members) {
+        const candidate = shipById(state, member.id)
+        if (candidate?.order) return candidate.order
+      }
+      return fallbackOrder
+    })()
+    const lead = squadronLead(squadron, leadOrder)
+    const leadShip = shipById(state, lead.id)
+    const order = leadShip?.order ?? leadOrder
+    const result = moveSquadron(squadron, order)
+    held = { turn: state.turn, result }
+    moves.set(squadron.id, held)
+
+    // 3.7: "If any single ship cannot keep up with the rest of group due to
+    // engine damage or some other issue it is considered destroyed." On a
+    // shared base that is literal; off one, the ship has simply fallen out of
+    // formation and flies on alone.
+    for (const id of result.stragglers) {
+      const straggler = shipById(state, id)
+      if (!straggler || straggler.id === result.leadId) continue
+      if (squadron.sharedBase) {
+        markHullBoxes(straggler, straggler.design.hullBoxes)
+        pushLog(state, {
+          kind: 'destroyed',
+          shipId: straggler.id,
+          text: `${straggler.name} cannot hold the squadron's stand and is lost (3.7)`,
+        })
+      } else {
+        straggler.squadronId = null
+        straggler.squadronFormation = null
+        straggler.squadronSharedBase = false
+        pushLog(state, {
+          kind: 'move',
+          shipId: straggler.id,
+          side: straggler.side,
+          text: `${straggler.name} cannot keep up and falls out of formation (3.7)`,
+        })
+      }
+    }
+  }
+
+  const row = held.result.placements.find((entry) => entry.id === ship.id)
+  if (!row) return null
+  if (ship.id === held.result.leadId) return held.result.lead
+  return {
+    ...held.result.lead,
+    placement: row.placement,
+    legs: [
+      {
+        from: ship.placement.position,
+        to: row.placement.position,
+        course: row.placement.facing,
+        distance: distance(ship.placement.position, row.placement.position),
+      },
+    ],
+  }
 }
 
 function pdDefenderOf(state: GameState, ship: ShipState, mounts: PdMount[]): PdDefender {

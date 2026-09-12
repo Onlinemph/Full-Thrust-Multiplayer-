@@ -26,6 +26,7 @@ import {
   waveGunCharge,
 } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
+import { coursesMatched, TOW_LINK_TURNS, TOW_MATCH_RANGE } from '../engine/specialmoves'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -78,6 +79,16 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
   )
   // 7.9: charges still aboard and unexploded. A ship with none has nothing to
   // write a detonate order about.
+  // 16.3's candidates: matched course, matched velocity, inside 3 MU, and not
+  // already on somebody else's line.
+  const towable = game.ships.filter((other) => {
+    if (other.id === ship.id || other.side !== ship.side) return false
+    if (other.destroyed || other.offTable || other.tow !== null) return false
+    return coursesMatched(
+      { position: ship.placement.position, facing: ship.placement.facing, velocity: ship.velocity },
+      { position: other.placement.position, facing: other.placement.facing, velocity: other.velocity },
+    ).matched
+  })
   const charges = ship.design.systems.filter(
     (system) => system.kind === 'antimatter-charge' && !ship.destroyedSystems.has(system.id),
   )
@@ -369,6 +380,58 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
               ? 'ready — and a knocked-out capacitor takes the hull with it (7.24)'
               : 'one die a turn, and the charge is what the hull takes if it is shot out (7.24)'}
           </span>
+        </div>
+      ) : null}
+
+      {/* 3.7: the squadron this ship is in, and the way out of it. Forming one
+          is a fleet-level choice and lives in the phase panel; leaving is a
+          per-ship one and lives here. */}
+      {ship.squadronId !== null ? (
+        <div className="panel-row">
+          <span>Squadron</span>
+          <span className="spacer" />
+          <span style={{ color: 'var(--ink-dim)' }}>
+            {ship.squadronFormation?.replace('-', ' ')}
+            {ship.squadronSharedBase ? ' · one stand' : ''}
+          </span>
+          <button
+            disabled={!editable}
+            title="A squadron is broken at the start of the turn, before orders (3.7)"
+            onClick={() => dispatch({ type: 'break-squadron', squadronId: ship.squadronId! })}
+          >
+            Break
+          </button>
+        </div>
+      ) : null}
+
+      {/* 16.3: "the two ships must be within 3 MU of each other and either
+          both halted, or both moving at the same velocity and course facing."
+          A hull that matches is offered; one that does not is not. */}
+      {ship.tow !== null ? (
+        <div className="panel-row">
+          <span>Under tow</span>
+          <span className="spacer" />
+          <span style={{ color: 'var(--ink-dim)' }}>
+            {ship.tow.linked
+              ? 'linked — it goes where the line takes it'
+              : `${ship.tow.turnsSpent} of ${TOW_LINK_TURNS[ship.tow.rig]} turns`}
+          </span>
+          <button onClick={() => dispatch({ type: 'release-tow', loadId: ship.id })}>Let go</button>
+        </div>
+      ) : towable.length > 0 ? (
+        <div className="panel-row">
+          <span>Take in tow</span>
+          <span className="spacer" />
+          {towable.map((load) => (
+            <button
+              key={load.id}
+              disabled={!editable}
+              title={`${TOW_MATCH_RANGE} MU and a matched course — ${load.name} qualifies (16.3)`}
+              onClick={() => dispatch({ type: 'begin-tow', tugId: ship.id, loadId: load.id })}
+            >
+              {load.name}
+            </button>
+          ))}
         </div>
       ) : null}
 

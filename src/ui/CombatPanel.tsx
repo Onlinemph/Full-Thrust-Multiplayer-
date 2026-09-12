@@ -121,7 +121,18 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
     (weapon) => isSpinalMount(weapon) && !ship.destroyedSystems.has(weapon.id),
   )
 
-  if (targets.length === 0 && gates.length === 0 && spinals.length === 0 && !waveGun) {
+  const shootableRocks = game.terrain.filter(
+    (feature) =>
+      feature.damagePoints !== undefined && (feature.damageTaken ?? 0) < feature.damagePoints,
+  )
+
+  if (
+    targets.length === 0 &&
+    gates.length === 0 &&
+    spinals.length === 0 &&
+    shootableRocks.length === 0 &&
+    !waveGun
+  ) {
     return (
       <div className="panel">
         <h3>Phase 11 · Fire</h3>
@@ -325,6 +336,60 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                   ))}
                 </div>
               )}
+            </div>
+          )
+        })}
+
+      {/* 17.1: a rock the scenario gave a damage track to. "The normal rules
+          assume that asteroids cannot be destroyed", so the row exists only
+          for the ones a scenario opted in. */}
+      {game.terrain
+        .filter(
+          (feature) =>
+            feature.damagePoints !== undefined &&
+            (feature.damageTaken ?? 0) < feature.damagePoints,
+        )
+        .map((feature) => {
+          const range = Math.max(
+            0,
+            distance(ship.placement.position, feature.position) - feature.radius,
+          )
+          const arc = arcTo(ship.placement.position, ship.placement.facing, feature.position)
+          const reach = ship.design.weapons.map((weapon) => reachOf(ship, weapon, range, arc, aftOpen))
+          if (reach.every((r) => r.blocked !== null)) return null
+          const left = (feature.damagePoints ?? 0) - (feature.damageTaken ?? 0)
+          return (
+            <div key={feature.id} className="target-block">
+              <div className="panel-row">
+                <span>{feature.label ?? feature.id}</span>
+                <span className="spacer" />
+                <span style={{ color: 'var(--ink-dim)' }}>
+                  {left}/{feature.damagePoints} rock
+                </span>
+                <span className="num">{range.toFixed(1)} MU</span>
+                <span className="num arcs">{arc}</span>
+              </div>
+              <div className="ssd-systems">
+                {reach.map(({ weapon, blocked, dice }) => (
+                  <button
+                    key={weapon.id}
+                    className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
+                    disabled={blocked !== null}
+                    title={blocked ?? `${dice}D6 at ${range.toFixed(1)} MU`}
+                    onClick={() =>
+                      dispatch({
+                        type: 'fire-at-terrain',
+                        shipId: ship.id,
+                        weaponId: weapon.id,
+                        terrainId: feature.id,
+                      })
+                    }
+                  >
+                    {weapon.label}
+                    {blocked ? null : <span className="num">{dice}D6</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           )
         })}

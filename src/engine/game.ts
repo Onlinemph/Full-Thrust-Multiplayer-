@@ -26,6 +26,7 @@ import {
   type FighterMission,
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
+import type { SquadronFormation } from './movement'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
 import {
   completeCastOff,
@@ -35,6 +36,7 @@ import {
   UPRIGHT,
   type DockStatus,
   type RollStatus,
+  type TowLink,
 } from './specialmoves'
 import type { BattleType, DeploymentZone } from './battles'
 import { vectorStateFromCinematic, type VectorOrder, type VectorState } from './vectormovement'
@@ -157,6 +159,36 @@ export interface ShipState {
   design: ShipDesign
   /** Squadron membership (3.7); may only change in phase 1 (2.6). */
   squadronId: string | null
+  /**
+   * 3.7's formation, on every member of the squadron. It decides which ship
+   * leads a turn — *"the ship that has to move furthest, which is the leftmost
+   * for starboard turns, the rightmost for port"* — so a squadron id on its own
+   * is not enough to fly one.
+   */
+  squadronFormation: SquadronFormation | null
+  /**
+   * 3.7: *"Players mounting a squadron in such a way would write a single order
+   * for the whole group but may not split the group up."* A shared base also
+   * turns the straggler clause lethal: a ship that cannot keep up *"is
+   * considered destroyed"*.
+   */
+  squadronSharedBase: boolean
+  /**
+   * 16.3's tow, held on the ship being towed rather than on the tug.
+   *
+   * A hulk under tow has exactly one tug; a tug may have several loads (a
+   * purpose-built one, at least — *"any other ship … can only tow a single
+   * ship"*). Putting the link on the load keeps that one-to-many the right way
+   * round and means breaking a link is one field on one ship.
+   */
+  tow: TowLink | null
+  /**
+   * Hull boxes this ship has put into its tug this turn (16.3): *"if the
+   * target ship fires any weapon against the other and inflicts at least one
+   * hull box of damage, the link is broken"*. Counted as the shots land and
+   * read at the turn boundary, because the link is advanced there.
+   */
+  towDamageDealt: number
 
   // --- movement (3.1, 3.5) ------------------------------------------------
   /**
@@ -554,6 +586,10 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     side: opts.side,
     design: opts.design,
     squadronId: opts.squadronId ?? null,
+    squadronFormation: null,
+    squadronSharedBase: false,
+    tow: null,
+    towDamageDealt: 0,
     placement: { position: { ...opts.placement.position }, facing: opts.placement.facing },
     velocity: opts.velocity ?? 0,
     order: null,
@@ -770,6 +806,19 @@ export interface TerrainFeature {
    * scale or scenario"* — and the track wins if a body somehow has both.
    */
   simpleOrbit?: boolean
+  /**
+   * 17.1's optional damage track: *"The normal rules assume that asteroids
+   * cannot be destroyed … However, if the players wish, they may give each
+   * asteroid a large damage point value (perhaps 50 for a very small chunk,
+   * 100 for a larger one, etc.)"*.
+   *
+   * Optional in the schema as well as in the rules, because a `TerrainFeature`
+   * rides inside a saved custom scenario and a battle written before this
+   * existed must still parse. Absent means a rock that cannot be shot.
+   */
+  damagePoints?: number
+  /** Damage taken so far, against `damagePoints` (17.1). */
+  damageTaken?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -1524,6 +1573,10 @@ function onBeginTurn(state: GameState): void {
     // 7.4's scan mode is the same kind of order: it lasts "as long as the
     // FireCon is in active mode", and the mode is written each turn.
     ship.activeScan = false
+    // 16.3's link is advanced at the end of the turn, which has already read
+    // this; a new turn starts the count of what the tow shot into its tug
+    // again from nothing.
+    ship.towDamageDealt = 0
     // 16.6's clock turns here, because both of its steps are "the following
     // turn" and "one full turn" — durations measured in whole turns, which is
     // what a turn boundary is for.
