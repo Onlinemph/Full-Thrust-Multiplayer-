@@ -27,7 +27,14 @@ import {
   REAR_ARCS,
   BEAM_RANGE_BAND,
 } from './geometry'
-import { applyOrder, driveFromDef, standardTurnAllowance, validateOrder, type MovementState } from './movement'
+import {
+  applyOrder,
+  driveFromDef,
+  standardTurnAllowance,
+  validateOrder,
+  type MovementResult,
+  type MovementState,
+} from './movement'
 import {
   availableFireCons,
   canWeaponFire,
@@ -45,7 +52,13 @@ import {
   FIGHTER_ATTACK_RANGE,
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
-import { hasLineOfFire } from './terrain'
+import {
+  collisionAvoidanceTarget,
+  hasLineOfFire,
+  meteorFieldDice,
+  stationaryCollisionRisk,
+  CLOUD_SAFE_VELOCITY,
+} from './terrain'
 import { arcsWhenInverted } from './specialmoves'
 import { optional, type GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
@@ -236,7 +249,46 @@ export function scoreOrder(
   // The table edge. Leaving it is a real decision (3.9) and never an accident.
   score -= edgePenalty(game, result.placement.position)
 
+  // Section 17. A rock is not scenery when the hazards are in play.
+  score -= terrainPenalty(game, ship, result)
+
   return score
+}
+
+/**
+ * What this order risks flying into (17.2, 17.4, 17.6).
+ *
+ * Weighted so that a real chance of the ship simply ceasing to exist outranks
+ * everything else on the board: 17.6 destroys outright and there is no damage
+ * roll to survive. The dust and the field penalties are proportional to what
+ * they would actually cost, so a computer that has to cross a meteor field will
+ * slow down to do it rather than refuse.
+ */
+function terrainPenalty(game: GameState, ship: ShipState, result: MovementResult): number {
+  if (!optional(game).terrainHazards) return 0
+  if (game.terrain.length === 0) return 0
+
+  const path = [ship.placement.position, ...result.legs.map((leg) => leg.to)]
+  let penalty = 0
+  for (const feature of game.terrain) {
+    const body = { id: feature.id, position: feature.position, radius: feature.radius }
+    if (!stationaryCollisionRisk(path, body)) continue
+    if (feature.kind === 'planet' || feature.kind === 'planetoid') {
+      // The chance of the avoidance roll failing, times what losing the ship
+      // is worth. 17.6: above 6 and "a crash is inevitable".
+      const need = collisionAvoidanceTarget(result.velocity, currentThrust(ship), {
+        advancedDrive: ship.design.drive.advanced,
+      })
+      const fail = need <= 1 ? 0 : need > 6 ? 1 : (need - 1) / 6
+      penalty += fail * 1000
+    } else if (feature.kind === 'dust-cloud' || feature.kind === 'nebula') {
+      if (result.velocity > CLOUD_SAFE_VELOCITY) penalty += 40
+    } else if (feature.kind === 'asteroid-field' || feature.kind === 'debris') {
+      // 3.5 penetrating damage per die on average, and it goes past armour.
+      penalty += meteorFieldDice(result.velocity) * 25
+    }
+  }
+  return penalty
 }
 
 /**

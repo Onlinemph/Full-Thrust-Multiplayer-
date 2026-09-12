@@ -82,6 +82,15 @@ const OPTIONAL_RULES: Toggle[] = [
     detail: 'Missiles that fly on after a first stage burns out.',
   },
   {
+    key: 'terrainHazards',
+    rule: '17',
+    label: 'Terrain hazards',
+    detail:
+      'A planetoid you fly into destroys you outright, a cloud crossed above 12 MU costs a die, ' +
+      'and an asteroid field costs one per 6 MU straight through screens and armour. Without ' +
+      'this the rock on the table is only cover.',
+  },
+  {
     key: 'sensorRules',
     label: 'Sensors and ECM',
     rule: '12.1',

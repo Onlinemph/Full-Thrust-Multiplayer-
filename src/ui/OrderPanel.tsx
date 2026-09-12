@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { GameState, ShipState } from '../engine/game'
 import {
+  applyOrder,
   driveFromDef,
   formatOrder,
   standardTurnAllowance,
@@ -9,6 +10,14 @@ import {
   validateOrder,
   type MovementState,
 } from '../engine/movement'
+import {
+  collisionAvoidanceTarget,
+  meteorFieldDice,
+  stationaryCollisionRisk,
+  CLOUD_SAFE_VELOCITY,
+} from '../engine/terrain'
+import { currentThrust } from '../engine/game'
+import { optional } from '../engine/actions'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -52,6 +61,7 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
     (other) => other.side !== ship.side && !other.destroyed && !other.offTable,
   )
   const hasMines = ship.design.weapons.some((weapon) => weapon.weaponClass === 'mine-rack')
+  const hazards = plottedHazards(game, ship, order, movement)
 
   const setTurn = (direction: TurnDirection | null, points: number) =>
     dispatch({ type: 'plot-turn', shipId: ship.id, direction, points })
@@ -294,6 +304,12 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         </>
       ) : null}
 
+      {hazards.map((warning) => (
+        <p key={warning} style={{ color: 'var(--damage)', margin: '0.4rem 0 0' }}>
+          {warning}
+        </p>
+      ))}
+
       {!check.legal ? (
         <p style={{ color: 'var(--damage)', margin: '0.4rem 0 0' }}>{check.violations[0]}</p>
       ) : null}
@@ -305,6 +321,57 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
       ) : null}
     </div>
   )
+}
+
+/**
+ * What this plot flies through (17.2, 17.4, 17.6).
+ *
+ * 17.6 destroys the ship outright and gives it one roll to avoid that, so the
+ * number it has to beat belongs in front of the player while the order is
+ * still being written. A ship that dies in phase 5 for something it could not
+ * see in phase 1 reads as a bug, whatever the rulebook says.
+ */
+function plottedHazards(
+  game: GameState,
+  ship: ShipState,
+  order: MovementOrder,
+  movement: MovementState,
+): string[] {
+  if (optional(game).terrainHazards !== true) return []
+  if (game.terrain.length === 0) return []
+
+  const result = applyOrder(movement, order)
+  const path = [ship.placement.position, ...result.legs.map((leg) => leg.to)]
+  const out: string[] = []
+  for (const feature of game.terrain) {
+    const body = { id: feature.id, position: feature.position, radius: feature.radius }
+    if (!stationaryCollisionRisk(path, body)) continue
+    const name = feature.label ?? feature.kind.replace('-', ' ')
+    if (feature.kind === 'planet' || feature.kind === 'planetoid') {
+      const need = collisionAvoidanceTarget(result.velocity, currentThrust(ship), {
+        advancedDrive: ship.design.drive.advanced,
+      })
+      out.push(
+        need <= 1
+          ? `This track crosses ${name}, but at this speed the helm can make it (17.6).`
+          : need > 6
+            ? `This track crosses ${name} and cannot be flown at velocity ${result.velocity}: a crash is certain (17.6).`
+            : `This track crosses ${name}. ${need}+ on a D6 to miss it, or the ship is destroyed (17.6).`,
+      )
+    } else if (feature.kind === 'dust-cloud' || feature.kind === 'nebula') {
+      if (result.velocity > CLOUD_SAFE_VELOCITY) {
+        out.push(
+          `Through ${name} above ${CLOUD_SAFE_VELOCITY} MU: one die of damage, standard screens no help (17.2).`,
+        )
+      }
+    } else if (feature.kind === 'asteroid-field' || feature.kind === 'debris') {
+      const dice = meteorFieldDice(result.velocity)
+      if (dice > 0) {
+        out.push(`Through ${name} at velocity ${result.velocity}: ${dice}D6 penetrating (17.4).`)
+      }
+    }
+  }
+  return out
 }
 
 /** Current turn magnitude, so the buttons step it up rather than reset it. */

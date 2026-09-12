@@ -51,7 +51,14 @@ import {
   type MovementState,
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
-import { hasLineOfFire, type TerrainBody } from './terrain'
+import {
+  cloudSpeedDamage,
+  hasLineOfFire,
+  resolveCollision,
+  resolveMeteorField,
+  stationaryCollisionRisk,
+  type TerrainBody,
+} from './terrain'
 import { arcsWhenInverted, resolveRam, rollShip } from './specialmoves'
 import {
   ftlExitRestrictions,
@@ -148,6 +155,7 @@ import {
 import type {
   Arc,
   Course,
+  DamageMode,
   MovementOrder,
   Point,
   SystemKind,
@@ -572,6 +580,14 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         text: `${ship.name} ${formatOrder(effective, before.velocity)}`,
         side: ship.side,
       })
+      // 17.6 tests "its path during the Ship Movement Phase", so the track is
+      // the whole two-leg cinematic path (3.4), not the endpoints. Resolved
+      // before the ram, because a ship that flew into a planetoid does not go
+      // on to hit anything else.
+      resolveTerrainHazards(state, ship, [
+        before.placement.position,
+        ...result.legs.map((leg) => leg.to),
+      ])
       resolveDeclaredRam(state, ship)
       return OK
     }
@@ -2321,6 +2337,127 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  */
 const SOLID_TERRAIN: ReadonlySet<TerrainKind> = new Set<TerrainKind>(['planet', 'planetoid'])
 
+/** Dust and gas: 17.2 charges for speed through it and nothing for being in it. */
+const CLOUD_TERRAIN: ReadonlySet<TerrainKind> = new Set<TerrainKind>(['dust-cloud', 'nebula'])
+
+/** Rock and wreckage: 17.4's die per full 6 MU, straight through screens and armour. */
+const FIELD_TERRAIN: ReadonlySet<TerrainKind> = new Set<TerrainKind>(['asteroid-field', 'debris'])
+
+function terrainOfKinds(state: GameState, kinds: ReadonlySet<TerrainKind>): TerrainBody[] {
+  return state.terrain
+    .filter((feature) => kinds.has(feature.kind))
+    .map((feature) => ({ id: feature.id, position: feature.position, radius: feature.radius }))
+}
+
+/**
+ * What the ship flew through (17.2, 17.4, 17.6).
+ *
+ * Section 17 opens by calling itself *"mostly pure space opera"*, so it is an
+ * optional rule — and it has to be one for a second reason: every hazard draws
+ * from `state.rng`, and a die drawn in a path an old battle file did not draw
+ * it in shifts the stream for everything after it. Off, no dice, old files
+ * replay exactly as they were fought.
+ *
+ * The order below is fixed and is part of the rules reading, because the order
+ * is the RNG stream: solid bodies first (a ship killed by a rock throws nothing
+ * else), then clouds, then fields, each in the order the scenario placed them.
+ */
+function resolveTerrainHazards(state: GameState, ship: ShipState, path: readonly Point[]): void {
+  if (!optional(state).terrainHazards) return
+  if (ship.destroyed || ship.offTable) return
+
+  // 17.6: "When any ship, regardless of its class, hits an asteroid, the ship
+  // is completely destroyed. Ramming a billion tons of rock at any speed is not
+  // recommended, even in a superdreadnought!"
+  for (const body of terrainOfKinds(state, SOLID_TERRAIN)) {
+    if (!stationaryCollisionRisk(path, body)) continue
+    const miss = resolveCollision(ship.velocity, currentThrust(ship), state.rng, {
+      advancedDrive: ship.design.drive.advanced,
+    })
+    if (miss.avoided) {
+      pushLog(state, {
+        kind: 'move',
+        shipId: ship.id,
+        side: ship.side,
+        dice: miss.roll === null ? undefined : [miss.roll],
+        text: `${ship.name} threads the rock — ${miss.reason || `needed ${miss.target}`} (17.6)`,
+      })
+      continue
+    }
+    ship.destroyed = true
+    ship.pendingThresholdRows = 0
+    pushLog(state, {
+      kind: 'destroyed',
+      shipId: ship.id,
+      side: ship.side,
+      dice: miss.roll === null ? undefined : [miss.roll],
+      text: `${ship.name} flies into the rock and is gone — ${miss.reason} (17.6)`,
+    })
+    return
+  }
+
+  // 17.2 rule 1: over 12 MU through a cloud costs a die, read on the beam
+  // table, with standard screens offering nothing.
+  for (const body of terrainOfKinds(state, CLOUD_TERRAIN)) {
+    if (!stationaryCollisionRisk(path, body)) continue
+    const dust = cloudSpeedDamage(ship.velocity, state.rng, {
+      screens: effectiveScreenLevel(ship),
+      advancedScreens: ship.design.screens.advanced,
+    })
+    if (!dust.rolled) continue
+    hurtByTerrain(state, ship, {
+      normalDamage: dust.damage,
+      penetratingDamage: 0,
+      mode: dust.mode,
+      dice: dust.roll === null ? [] : [dust.roll],
+      detail: `dust at velocity ${ship.velocity} (17.2)`,
+    })
+    if (ship.destroyed) return
+  }
+
+  // 17.4: one die per full 6 MU, and the face is the damage, penetrating.
+  for (const body of terrainOfKinds(state, FIELD_TERRAIN)) {
+    if (!stationaryCollisionRisk(path, body)) continue
+    const hits = resolveMeteorField(ship.velocity, state.rng)
+    if (hits.dice.length === 0) continue
+    hurtByTerrain(state, ship, {
+      normalDamage: 0,
+      penetratingDamage: hits.penetratingDamage,
+      mode: hits.mode,
+      dice: hits.dice,
+      detail: `rock at velocity ${ship.velocity} (17.4)`,
+    })
+    if (ship.destroyed) return
+  }
+}
+
+/** Apply what a piece of terrain did, the same way a shot is applied (4.8). */
+function hurtByTerrain(
+  state: GameState,
+  ship: ShipState,
+  hit: { normalDamage: number; penetratingDamage: number; mode: DamageMode; dice: number[]; detail: string },
+): void {
+  const total = hit.normalDamage + hit.penetratingDamage
+  if (total <= 0) return
+  const applied = applyDamage(targetStateOf(ship), hit, {
+    rearArcRule: false,
+    rearArc: false,
+    source: 'direct-fire',
+  })
+  writeBackDamage(ship, applied.target)
+  markHullBoxes(ship, applied.hullDamage)
+  pushLog(state, {
+    kind: 'damage',
+    shipId: ship.id,
+    side: ship.side,
+    dice: hit.dice,
+    text: `${ship.name} takes ${applied.hullDamage} from ${hit.detail}`,
+  })
+  if (ship.destroyed) {
+    pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
+  }
+}
+
 function blockingTerrain(state: GameState): TerrainBody[] {
   return state.terrain
     .filter((feature) => SOLID_TERRAIN.has(feature.kind))
@@ -2486,6 +2623,13 @@ export interface OptionalRules {
    * Off by default, which leaves the ban absolute as the base rule states it.
    */
   aftArcFire?: boolean
+  /**
+   * Section 17's hazards: collisions with rock, dust at speed, meteor fields.
+   * *"The following suggestions are mostly pure space opera"* — the section
+   * says so itself — and every one of them draws dice, so it is off unless the
+   * table asks for it.
+   */
+  terrainHazards?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

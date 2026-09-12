@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { applyOrder, driveFromDef, type MovementState } from '../engine/movement'
+import { stationaryCollisionRisk } from '../engine/terrain'
+import { optional } from '../engine/actions'
 import type { GameState, ShipState } from '../engine/game'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Point } from '../engine/types'
@@ -186,7 +188,18 @@ export function MapView({
         drive: { ...driveFromDef(ship.design.drive), hits: ship.driveHits },
       }
       const result = applyOrder(movement, ship.order as NonNullable<typeof ship.order>)
-      return { ship, legs: result.legs }
+      // 17: whether this plot flies through something. Drawn on the track
+      // rather than written in a panel, because the thing a player is judging
+      // is a line on a map.
+      const hazard =
+        optional(game).terrainHazards === true &&
+        game.terrain.some((feature) =>
+          stationaryCollisionRisk(
+            [ship.placement.position, ...result.legs.map((leg) => leg.to)],
+            { id: feature.id, position: feature.position, radius: feature.radius },
+          ),
+        )
+      return { ship, legs: result.legs, hazard }
     })
 
   return (
@@ -277,10 +290,10 @@ export function MapView({
             </g>
           ) : null}
 
-          {tracks.map(({ ship, legs }) => (
+          {tracks.map(({ ship, legs, hazard }) => (
             <g key={`track-${ship.id}`}>
               <polyline
-                className="track"
+                className={hazard ? 'track is-hazard' : 'track'}
                 points={[
                   `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
                   ...legs.map((leg) => `${leg.to.x * scale},${leg.to.y * scale}`),

@@ -130,6 +130,14 @@
   opacity: 0.85;
 }
 
+/* 17: this plot crosses something. Red because the consequence at the far end
+   of it is 17.6, which does not have a damage roll. */
+.track.is-hazard {
+  stroke: var(--damage);
+  stroke-width: 2;
+  opacity: 1;
+}
+
 .track-end {
   fill: none;
   stroke: var(--thrust);

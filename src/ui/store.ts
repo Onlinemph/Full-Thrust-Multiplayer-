@@ -36,6 +36,10 @@ const DEFAULT_SETUP: GameSetup = {
   scenarioId: 'intro-fleet-engagement',
   seed: 0x7c0357,
   rulesVersion: CURRENT_RULES_VERSION,
+  // On for a new battle, off in every file that was saved before it existed —
+  // which is the whole point of it being a setup field. A rock that does
+  // nothing to a ship that flies into it is not terrain, it is scenery.
+  terrainHazards: true,
 }
 
 let setup: GameSetup = DEFAULT_SETUP

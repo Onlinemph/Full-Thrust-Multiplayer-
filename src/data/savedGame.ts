@@ -49,6 +49,8 @@ export interface GameSetup {
   multiStageMissiles?: boolean
   /** 12.1, 12.2 — sensors and ECM, which also close the SSDs (2.6). */
   sensorRules?: boolean
+  /** 17 — rock, dust and meteor fields do something when you fly into them. */
+  terrainHazards?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -114,6 +116,7 @@ export function buildGame(setup: GameSetup): GameState {
     reactorBreaches: setup.reactorBreaches,
     emergencyThrust: setup.emergencyThrust,
     sensorRules: setup.sensorRules,
+    terrainHazards: setup.terrainHazards,
   })
   return game
 }
