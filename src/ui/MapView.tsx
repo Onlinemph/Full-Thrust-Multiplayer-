@@ -201,7 +201,10 @@ export function MapView({
       }
       return
     }
-    if (!flight) return
+    // A group can be selected while it is still in the bay, so that its
+    // re-arming and pre-deployment orders are reachable (8.15). It cannot be
+    // flown from there.
+    if (!flight || flight.status !== 'in-flight') return
     if (game.phase === 'move-fighters') dispatch({ type: 'move-flight', flightId: flight.id, to })
     else if (game.phase === 'secondary-fighter-moves') {
       dispatch({ type: 'secondary-move-flight', flightId: flight.id, to })

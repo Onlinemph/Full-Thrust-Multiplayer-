@@ -11,6 +11,8 @@ import {
   isSquadronExhausted,
 } from '../engine/gunboats'
 import { distance } from '../engine/geometry'
+import { combatLandingAvailable } from '../engine/flightorders'
+import { FlightOrders } from './FlightOrders'
 import { dispatch } from './store'
 
 /**
@@ -73,16 +75,33 @@ export function FlightPanel({
         </p>
       ) : null}
 
+      {/* 8.4: "the carrier may perform a combat landing" — everyone down at
+          once, and the deck is fouled for the rest of the game. A carrier's
+          order rather than a group's, which is why it is not on the rows. */}
+      {ship && combatLandingAvailable(game, ship.id) ? (
+        <div className="panel-row">
+          <span>Combat landing</span>
+          <span className="spacer" />
+          <button onClick={() => dispatch({ type: 'combat-landing', carrierId: ship.id })}>
+            Everyone down
+          </button>
+          <span style={{ color: 'var(--warn)' }}>fouls the deck for the game (8.4)</span>
+        </div>
+      ) : null}
+
       {flights.map((flight) => (
         <div
           key={flight.id}
           className={`panel-row flight-row${flight.id === selectedFlightId ? ' is-selected' : ''}`}
         >
+          {/* A group in the bay is selectable too: 8.15's re-arming and the
+              FTL groups' pre-deployment are orders given to a group that has
+              not launched, and a disabled row put both out of reach. */}
           <button
             className="flight-pick"
             aria-pressed={flight.id === selectedFlightId}
             title={flight.label}
-            disabled={flight.status !== 'in-flight'}
+            disabled={flight.status === 'destroyed'}
             onClick={() => onSelectFlight?.(flight.id === selectedFlightId ? null : flight.id)}
           >
             <span className={`flight-strength num is-${flight.status}`}>{flight.strength}</span>
@@ -148,6 +167,15 @@ export function FlightPanel({
           <span className={`flight-status is-${flight.status}`}>{describe(flight)}</span>
         </div>
       ))}
+
+      {/* Everything a group can be told to do that is not "fly there". Shown
+          for the selected group only: fifteen controls on every row would bury
+          the three that matter most turns. */}
+      {selectedFlightId
+        ? flights
+            .filter((flight) => flight.id === selectedFlightId)
+            .map((flight) => <FlightOrders key={`orders-${flight.id}`} game={game} flight={flight} />)
+        : null}
 
       {squadrons.length > 0 ? (
         <>
