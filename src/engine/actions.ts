@@ -304,17 +304,26 @@ import {
   type GunboatSquadron,
 } from './gunboats'
 import {
+  advanceNovaBursts,
+  armNovaCannon,
   cancelCloakOrder,
   cloakCapability,
   cloakEndOfMovement,
   cloakMode,
   cloakStartOfMovement,
+  createNovaCannonState,
   ewFireEffect,
+  fireNovaCannon,
   isEnergyWeapon,
+  novaArmingLost,
+  novaContact,
   orderCloak,
   rollReflexField,
   AREA_ECM_RADIUS,
+  NOVA_SWEEPS,
   type EwDefences,
+  type NovaBurst,
+  type NovaCannonState,
 } from './ew'
 import type {
   Arc,
@@ -590,6 +599,22 @@ export type GameAction =
    */
   | { type: 'fire-spinal-mount'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
   /**
+   * 7.23 — arming the Nova Cannon, written in this turn's orders.
+   *
+   * *"the ship may not expend any other power at all for that turn: it may not
+   * apply any thrust to accelerate or maneuver, it may not fire any other
+   * weapons, and even its screens do not function for that turn!"* So this is
+   * an order, not a trigger: the cost is paid in phase 1 and the shot is taken
+   * in phase 11, or the arming is wasted.
+   */
+  | { type: 'arm-nova-cannon'; shipId: string; weaponId: string; on: boolean }
+  /**
+   * 7.23 — the shot itself. There is nothing to aim: *"the weapon fires in
+   * whatever direction the ship's bow is pointing"*, and the round is thrown 6
+   * MU ahead and sweeps out from there for three turns.
+   */
+  | { type: 'fire-nova-cannon'; shipId: string; weaponId: string }
+  /**
    * 5.22 — *"During the Write Orders Phase the facing of each turret must be
    * recorded."* One 60-degree arc; null lets the turret take any arc it
    * covers, which is what an unrecorded turret does.
@@ -816,6 +841,10 @@ function editOrder(
   if (optional(state).movementSystem === 'vector') {
     return refuse('This battle is fought under vector movement (12.12)')
   }
+  // 7.23: the arming has already torn up whatever was written, and a ship that
+  // spent its power on the cannon has none left to steer with.
+  const powered = novaPowerRefusal(state, ship)
+  if (powered) return powered
   const next = edit(ship.order ?? { ...BLANK_ORDER })
   const check = validateOrder(next, movementStateOf(ship))
   if (!check.legal) return refuse(check.violations[0] ?? 'Illegal order')
@@ -866,8 +895,17 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // boundary so that every way of dying reaches it, rather than at the
       // seven separate places a ship can be destroyed.
       sweepDebris(state)
+      // 7.23: the arming is spent "for that turn" whether or not the shot came,
+      // so it is swept as the turn ends and not as the firing phase closes — a
+      // hull whose screens came back on in phase 12 would have paid for
+      // nothing.
+      if (state.phase === state.phases[state.phases.length - 1]) closeNovaArming(state)
       const turnBefore = state.turn
       advancePhase(state)
+      // 7.23: "On the next turn, at the start of the firing phase, the 2 MU
+      // template is replaced by a 4 MU one." The sweep left standing last turn
+      // moves before anybody shoots.
+      if (state.phase === 'ship-fire') openNovaSweeps(state)
       if (state.phase === 'move-ships') driftDebris(state)
       // 17.3 dices "for each turn", so the star gets its roll as the turn
       // opens — before anyone writes an order they might have written
@@ -1239,7 +1277,19 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name} is locked out by its Spinal Mount and holds course (5.23)`,
         })
       }
-      const order = ftl === 'warming-up' || locked ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
+      // 7.23 puts an armed Nova Cannon's ship in the same place: "it may not
+      // apply any thrust to accelerate or maneuver".
+      const powered = novaPoweredDown(state, ship)
+      if (powered) {
+        pushLog(state, {
+          kind: 'move',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name} has its power in the Nova Cannon and holds course (7.23)`,
+        })
+      }
+      const order =
+        ftl === 'warming-up' || locked || powered ? BLANK_ORDER : (ship.order ?? BLANK_ORDER)
       const before = movementStateOf(ship)
 
       // Emergency thrust is checked immediately after orders are written, and
@@ -1436,6 +1486,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (isSpinalMount(weapon) && rulesReading(state) >= 6) {
         return refuse(`${weapon.label} is laid on a point, not a ship (5.23)`)
       }
+      // 7.23: a Nova Cannon is armed a phase earlier and fires down the bow
+      // line at everything in the template's path. Fired at a named ship
+      // through here it was a free 6D6 with no arming, no power-down and no
+      // template — the three things that make it the weapon it is.
+      if (weapon.weaponClass === 'nova-cannon' && rulesReading(state) >= 7) {
+        return refuse(`${weapon.label} is armed in orders and fires down the bow line (7.23)`)
+      }
       // 2.6: a weapon fires once a turn, and point defence in phase 9 spends it.
       if (!canWeaponFire(ship, weapon.id)) return refuse('That weapon has already fired')
 
@@ -1566,7 +1623,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // 17.2 rule 3: a cloud is worth one screen level against a beam or a
         // graser, capped at 2 — which is why it is worth least to the ship
         // that needed it least.
-        targetScreens: dust ? dust.screens : effectiveScreenLevel(target),
+        targetScreens: dust ? dust.screens : screensAgainst(state, target),
         rearArc: isRearArcAttack(
           target.placement.position,
           target.placement.facing,
@@ -1693,6 +1750,90 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
      * fired through `fire-weapon` at a single named ship, in the full 60-degree
      * forward arc, every turn, with no consequence afterwards.
      */
+    /**
+     * 7.23's arming order, written in phase 1 with the movement orders.
+     *
+     * The refusals are the rule's own preconditions: it is a spinal weapon, so
+     * it must be a Nova Cannon and it must still be there. Everything the
+     * arming *costs* is enforced elsewhere, because it is enforced against the
+     * rest of the ship rather than against this action.
+     */
+    case 'arm-nova-cannon': {
+      if (state.phase !== 'orders') {
+        return refuse('The Nova Cannon is armed in this turn\u2019s orders (7.23)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'nova-cannon') {
+        return refuse(`${weapon.label} is not a Nova Cannon (7.23)`)
+      }
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+
+      const mount = novaMountOf(state, ship, weapon)
+      mount.state = action.on ? armNovaCannon(mount.state) : novaArmingLost(mount.state)
+      if (action.on) {
+        // "It may not apply any thrust to accelerate or maneuver" — the order
+        // is torn up here rather than refused at the move, so a player who
+        // arms after writing one can see what it cost them.
+        ship.order = { ...BLANK_ORDER }
+      }
+      pushLog(state, {
+        kind: 'note',
+        shipId: ship.id,
+        side: ship.side,
+        text: action.on
+          ? `${ship.name} arms its Nova Cannon and powers everything else down (7.23)`
+          : `${ship.name} stands its Nova Cannon down (7.23)`,
+      })
+      return OK
+    }
+
+    /**
+     * 7.23's shot.
+     *
+     * No aim point and no FireCon: *"the weapon fires in whatever direction the
+     * ship's bow is pointing"*, and there is no to-hit roll to direct. The
+     * round is thrown to its minimum arming distance and the first sweep runs
+     * at once; the next two run as phase 11 opens on the following turns.
+     */
+    case 'fire-nova-cannon': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'nova-cannon') {
+        return refuse(`${weapon.label} is not a Nova Cannon (7.23)`)
+      }
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      const mount = novaMountOf(state, ship, weapon)
+      if (!mount.state.armed) {
+        return refuse(`${weapon.label} was not armed in this turn\u2019s orders (7.23)`)
+      }
+
+      mount.state = fireNovaCannon(mount.state, ship.placement.position, ship.placement.facing)
+      markWeaponFired(ship, weapon.id, state.phase)
+      markShipFired(ship)
+      pushLog(state, {
+        kind: 'fire',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} fires its Nova Cannon down the bow line (7.23)`,
+      })
+      const laid = mount.state.bursts[mount.state.bursts.length - 1]
+      if (laid) resolveNovaSweep(state, mount, laid)
+      return OK
+    }
+
     case 'fire-spinal-mount': {
       if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
       const ship = shipById(state, action.shipId)
@@ -1906,6 +2047,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'launch-missiles') return refuse('Missiles launch in phase 3')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      // 7.23: a launcher is a weapon, and an armed Nova Cannon has the power.
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
@@ -1997,6 +2141,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'launch-missiles') return refuse('Rocket pods fire in phase 3')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      // 7.23: "it may not fire any other weapons."
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
@@ -2066,6 +2213,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'launch-missiles') return refuse('Plasma bolts are fired in phase 3')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      // 7.23: "it may not fire any other weapons."
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
 
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
@@ -2198,7 +2348,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         }
 
         const result = resolveOrdnanceAttack(marker, incoming, {
-          level: effectiveScreenLevel(target),
+          level: screensAgainst(state, target),
           advanced: target.design.screens.advanced,
         }, state.rng)
         if (!result) continue
@@ -2919,7 +3069,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const run = resolveAttackRun(
         flight,
         {
-          screens: effectiveScreenLevel(target),
+          screens: screensAgainst(state, target),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -3018,7 +3168,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         flight,
         interceptor,
         {
-          screens: effectiveScreenLevel(target),
+          screens: screensAgainst(state, target),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -3260,7 +3410,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const marines = (carrier?.design.marineParties ?? 0) > 0
       const result = resolveBoardingRun(flight, state.rng, {
         marines,
-        advancedScreens: target.design.screens.advanced && effectiveScreenLevel(target) > 0,
+        advancedScreens: target.design.screens.advanced && screensAgainst(state, target) > 0,
       })
       if (!result.fired) return refuse(`${flight.label}: ${result.reason}`)
 
@@ -3554,7 +3704,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const result = resolveAttackRun(
         flight,
         {
-          screens: effectiveScreenLevel(target),
+          screens: screensAgainst(state, target),
           advancedScreens: target.design.screens.advanced,
           rearArc: isRearArcAttack(
             target.placement.position,
@@ -4742,7 +4892,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const result = resolveGunboatAttack(
         squadron,
         {
-          screens: effectiveScreenLevel(target),
+          screens: screensAgainst(state, target),
           range,
           arc: arcTo(target.placement.position, target.placement.facing, squadron.position),
         },
@@ -5103,6 +5253,10 @@ const FIRING_ACTIVATION = new WeakMap<GameState, { shipId: string; turn: number;
  * the activation is open and the shot may go ahead.
  */
 function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome | null {
+  // 7.23: "it may not fire any other weapons". Checked here rather than in
+  // each handler because this is already the gate every gun passes through.
+  const powered = novaPowerRefusal(state, ship)
+  if (powered) return powered
   if (rulesReading(state) < 5) return null
   const open = FIRING_ACTIVATION.get(state)
   const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
@@ -5279,6 +5433,222 @@ function resolveFlak(state: GameState): void {
   // "All 'Blast Markers' are removed at the end of the turn."
   FLAK.set(state, [])
   origins.clear()
+}
+
+// ---------------------------------------------------------------------------
+// The Nova Cannon (7.23)
+// ---------------------------------------------------------------------------
+
+/**
+ * A Nova Cannon in play: the arming written in this turn's orders, and the
+ * bursts it has already put on the table.
+ *
+ * `ew.ts` owns the rule and hands back a new `NovaCannonState` from every
+ * change, so this map is the only mutable thing here and the arithmetic stays
+ * where it can be read against 7.23. Keyed on ship and mount rather than held
+ * on the hull because a burst outlives the ship that fired it — *"any and all
+ * ships or other objects that are contacted by the template during its
+ * flight"*, and the template does not care that its gun has since blown up.
+ */
+interface NovaMount {
+  shipId: string
+  weaponId: string
+  side: SideId
+  state: NovaCannonState
+}
+
+const NOVA = new WeakMap<GameState, Map<string, NovaMount>>()
+
+function novaMounts(state: GameState): Map<string, NovaMount> {
+  let mounts = NOVA.get(state)
+  if (!mounts) {
+    mounts = new Map()
+    NOVA.set(state, mounts)
+  }
+  return mounts
+}
+
+const novaKey = (shipId: string, weaponId: string): string => `${shipId}:${weaponId}`
+
+function novaMountOf(state: GameState, ship: ShipState, weapon: WeaponDef): NovaMount {
+  const mounts = novaMounts(state)
+  const key = novaKey(ship.id, weapon.id)
+  let mount = mounts.get(key)
+  if (!mount) {
+    mount = { shipId: ship.id, weaponId: weapon.id, side: ship.side, state: createNovaCannonState() }
+    mounts.set(key, mount)
+  }
+  return mount
+}
+
+/** Every live burst on the table, for the plot and the sweep. */
+export function novaBursts(state: GameState): NovaBurst[] {
+  return [...novaMounts(state).values()].flatMap((mount) => mount.state.bursts)
+}
+
+/**
+ * Whether this ship has powered everything down to arm its Nova Cannon (7.23).
+ *
+ * The one question the rest of the file asks: it is the answer to "may it
+ * thrust", "may it fire anything else" and "do its screens work", all three of
+ * which 7.23 answers no.
+ */
+function novaPoweredDown(state: GameState, ship: ShipState): boolean {
+  for (const mount of novaMounts(state).values()) {
+    if (mount.shipId === ship.id && mount.state.armed) return true
+  }
+  return false
+}
+
+/**
+ * Whether this ship's Nova Cannon is armed, for the computer and the panel.
+ *
+ * The same question `novaPoweredDown` answers, exported under the name the
+ * caller means by it: a player looking at the panel wants to know whether the
+ * cannon is loaded, not whether the reactor is spoken for.
+ */
+export function novaArmedOn(state: GameState, ship: ShipState): boolean {
+  return novaPoweredDown(state, ship)
+}
+
+/** The refusal a powered-down ship gives anything that wants power (7.23). */
+function novaPowerRefusal(state: GameState, ship: ShipState): ActionOutcome | null {
+  if (!novaPoweredDown(state, ship)) return null
+  return refuse(
+    `${ship.name} has armed its Nova Cannon and may not expend any other power this turn (7.23)`,
+  )
+}
+
+/**
+ * Resolve one sweep of one burst (7.23).
+ *
+ * *"Any and all ships or other objects that are contacted by the template
+ * during its flight"* — so this is a pass over everything on the table, not a
+ * shot at a target. Each hull takes its own roll: 5.23 says in as many words
+ * that a spinal beam's victims *"all sustain the same number of dice of hits"*
+ * and 7.23 says nothing of the kind, so the dice are thrown per contact.
+ */
+function resolveNovaSweep(state: GameState, mount: NovaMount, burst: NovaBurst): void {
+  const sweep = NOVA_SWEEPS[burst.stage]
+  const weapon = novaWeaponOf(state, mount)
+  const firedBy = shipById(state, mount.shipId)
+  const name = firedBy?.name ?? 'A burnt-out hull'
+  pushLog(state, {
+    kind: 'fire',
+    side: mount.side,
+    shipId: mount.shipId,
+    text:
+      `${name}'s nova sweeps ${sweep.fromMu}–${sweep.toMu} MU behind a ` +
+      `${sweep.diameter} MU template (7.23)`,
+  })
+
+  for (const target of state.ships) {
+    if (target.destroyed || target.offTable || target.carriedBy !== null) continue
+    const { contact, geometry } = novaContact(burst, target.placement.position)
+    if (!contact) continue
+    // The spec guards on the sweep's own band; a hull caught at the very lip of
+    // the template is inside the radius but a shade past `toMu`, so the range
+    // handed over is clamped to the band the template actually swept.
+    const range = Math.min(Math.max(geometry.along, sweep.fromMu), sweep.toMu)
+    const shot = weapon
+      ? fireWeapon(weapon, {
+          range,
+          arc: 'F',
+          targetScreens: 0,
+          rearArc: false,
+          drm: 0,
+          rng: state.rng,
+          novaStage: burst.stage,
+        })
+      : { refused: 'the cannon that fired it is gone' }
+    if ('refused' in shot) continue
+    // "Damage from a Nova Cannon is Penetrating damage; neither type of screen
+    // nor armor has any effect."
+    const applied = applyDamage(targetStateOf(target), shot, {
+      rearArcRule: false,
+      rearArc: false,
+      source: 'direct-fire',
+      // "Neither type of screen nor armor has any effect" — all of it, not
+      // just the layer a beam's re-rolls skip.
+      ignoresArmour: true,
+    })
+    writeBackDamage(target, applied.target)
+    markHullBoxes(target, applied.hullDamage)
+    pushLog(state, {
+      kind: 'damage',
+      shipId: mount.shipId,
+      targetId: target.id,
+      side: mount.side,
+      dice: shot.dice,
+      text: `${target.name} is caught by the nova: ${applied.hullDamage} penetrating (7.23)`,
+    })
+    if (target.destroyed) {
+      pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+    }
+  }
+
+  // "or other objects" — a fighter or a missile in a fusion front is gone, the
+  // same way a spinal beam takes them (5.23).
+  for (const group of [...state.fighterGroups, ...state.gunboatSquadrons]) {
+    if (group.status !== 'in-flight') continue
+    if (!novaContact(burst, group.position).contact) continue
+    group.status = 'destroyed'
+    pushLog(state, {
+      kind: 'destroyed',
+      side: group.side,
+      text: `${group.label} flies into the nova and is gone (7.23)`,
+    })
+  }
+  const survivors = ordnanceOf(state).filter((marker) => !novaContact(burst, marker.position).contact)
+  if (survivors.length !== ordnanceOf(state).length) {
+    pushLog(state, { kind: 'note', side: mount.side, text: `Ordnance in the nova burns away (7.23)` })
+    setOrdnance(state, survivors)
+    projectOrdnance(state)
+  }
+}
+
+/** The mount's `WeaponDef`, or undefined once its ship has been destroyed. */
+function novaWeaponOf(state: GameState, mount: NovaMount): WeaponDef | undefined {
+  const ship = shipById(state, mount.shipId)
+  return ship?.design.weapons.find((weapon) => weapon.id === mount.weaponId)
+}
+
+/**
+ * Age and resolve every live burst — *"on the next turn, at the start of the
+ * firing phase"* (7.23).
+ *
+ * Run as phase 11 opens, so the sweep that was left standing at the end of last
+ * turn moves before anyone shoots. The burst laid this turn is not here: it is
+ * put down and resolved by `fire-nova-cannon` itself, later in the same phase.
+ */
+function openNovaSweeps(state: GameState): void {
+  for (const mount of novaMounts(state).values()) {
+    if (mount.state.bursts.length === 0) continue
+    mount.state = advanceNovaBursts(mount.state)
+    for (const burst of mount.state.bursts) resolveNovaSweep(state, mount, burst)
+  }
+}
+
+/**
+ * *"If the Nova Cannon is then not fired that turn, for any reason, then its
+ * 'arming' is lost and it must be re-armed the next turn"* (7.23).
+ *
+ * Swept as the turn ends rather than as the firing phase closes: the ship is
+ * powered down *"for that turn"*, and a hull whose screens came back on in
+ * phase 12 would have paid for something it did not get.
+ */
+function closeNovaArming(state: GameState): void {
+  for (const mount of novaMounts(state).values()) {
+    if (!mount.state.armed) continue
+    mount.state = novaArmingLost(mount.state)
+    const ship = shipById(state, mount.shipId)
+    pushLog(state, {
+      kind: 'note',
+      side: mount.side,
+      shipId: mount.shipId,
+      text: `${ship?.name ?? 'A hull'} did not fire its Nova Cannon and the arming is lost (7.23)`,
+    })
+  }
 }
 
 /**
@@ -5776,7 +6146,7 @@ function resolveMines(state: GameState): void {
     for (const trigger of triggers) {
       const target = shipById(state, trigger.shipId)
       if (!target || target.destroyed) continue
-      const result = resolveMineAttack(effectiveScreenLevel(target), state.rng)
+      const result = resolveMineAttack(screensAgainst(state, target), state.rng)
       const applied = applyDamage(targetStateOf(target), result, { source: 'ordnance' })
       writeBackDamage(target, applied.target)
       markHullBoxes(target, applied.hullDamage)
@@ -6259,7 +6629,7 @@ function rollSolarFlares(state: GameState): void {
       }
       if (systems.length === 0) continue
 
-      const result = resolveSolarFlare(systems, effectiveScreenLevel(ship), state.rng, {
+      const result = resolveSolarFlare(systems, screensAgainst(state, ship), state.rng, {
         advancedSensorRules: optional(state).sensorRules === true,
       })
       // 4.11's outcome, not 4.11's dice: the box is simply crossed off.
@@ -6300,7 +6670,7 @@ function blastTargetsNear(state: GameState, centre: Point, radius: number): Blas
       id: ship.id,
       position: ship.placement.position,
       kind: 'ship',
-      screens: { level: effectiveScreenLevel(ship), advanced: ship.design.screens.advanced },
+      screens: { level: screensAgainst(state, ship), advanced: ship.design.screens.advanced },
     })
   }
   for (const flight of state.fighterGroups) {
@@ -7229,14 +7599,14 @@ function cloudLockOn(
     return {
       locked: remembered,
       screens: beamOrGraser
-        ? attenuatedScreens(effectiveScreenLevel(target))
-        : effectiveScreenLevel(target),
+        ? attenuatedScreens(screensAgainst(state, target))
+        : screensAgainst(state, target),
       roll: null,
       reason: remembered ? '' : 'the dust already beat this nomination (17.2)',
     }
   }
   const result = cloudTargetLock(state.rng, {
-    screens: effectiveScreenLevel(target),
+    screens: screensAgainst(state, target),
     beamOrGraser,
   })
   ship.cloudLocks.set(target.id, result.locked)
@@ -7720,7 +8090,7 @@ function resolveTerrainHazards(
   for (const body of terrainOfKinds(state, CLOUD_TERRAIN)) {
     if (!stationaryCollisionRisk(path, body)) continue
     const dust = cloudSpeedDamage(ship.velocity, state.rng, {
-      screens: effectiveScreenLevel(ship),
+      screens: screensAgainst(state, ship),
       advancedScreens: ship.design.screens.advanced,
     })
     if (!dust.rolled) continue
@@ -7881,6 +8251,19 @@ function recoveredThisTurn(state: GameState, ship: ShipState): boolean {
  * cap belong to `defences.ts`, which owns 7.2; counting the surviving
  * generators off a ShipState is the part that belongs here.
  */
+/**
+ * The screen level a shot at this ship actually meets (4.7, 7.23).
+ *
+ * `effectiveScreenLevel` is the design's answer — generators still standing
+ * against the level bought. This is the table's: 7.23 takes the screens of a
+ * ship that armed its Nova Cannon off the board for the turn, *"and even its
+ * screens do not function for that turn!"*, and a shot resolved against the
+ * design's number would never notice.
+ */
+function screensAgainst(state: GameState, ship: ShipState): ScreenLevel {
+  return novaPoweredDown(state, ship) ? 0 : effectiveScreenLevel(ship)
+}
+
 export function effectiveScreenLevel(ship: ShipState): ScreenLevel {
   const working = ship.design.systems.filter(
     (system) => system.kind === 'screen-generator' && !ship.destroyedSystems.has(system.id),

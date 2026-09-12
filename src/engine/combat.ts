@@ -447,6 +447,18 @@ export interface DamageOptions {
    * row behind it. Offered as a toggle for groups that play it that way.
    */
   layeredHalfAbsorption?: boolean
+  /**
+   * The weapon goes through armour entirely, not just past the layer 4.6's
+   * re-rolls skip.
+   *
+   * 7.23's Nova Cannon: *"Damage from a Nova Cannon is Penetrating damage;
+   * neither type of screen nor armor has any effect."* Reporting the whole
+   * roll as `penetratingDamage` is not enough on a multi-layer hull — the
+   * penetrating pile skips the outermost layer and then soaks into the ones
+   * behind it, which is right for a beam's re-rolls and wrong for a weapon the
+   * book says armour does not answer at all.
+   */
+  ignoresArmour?: boolean
 }
 
 /** What one hit did to a target (4.8 – 4.11). */
@@ -507,9 +519,10 @@ export function applyDamage(
     !(opts.targetIsBigThing ?? false)
 
   let toHull = 0
-  if (rearArcBypass) {
+  if (rearArcBypass || (opts.ignoresArmour ?? false)) {
     // 4.10: the attack "automatically ignores the targets armor" — all of it,
-    // both piles, and no armour box is crossed off.
+    // both piles, and no armour box is crossed off. 7.23 says the same thing
+    // about the Nova Cannon in different words.
     toHull = result.normalDamage + result.penetratingDamage
   } else {
     toHull += soakNormalDamage(armour, absorbed, result.normalDamage, result.mode, opts)

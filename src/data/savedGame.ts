@@ -35,8 +35,18 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  * a fix that turns yesterday's refusal into today's success would rewrite every
  * old battle it replays. Files without a stamp replay under reading 1, exactly
  * as they were fought.
+ *
+ * The ladder so far:
+ *
+ *   2  5.23 — the Point Singularity Projector reads the target's mass.
+ *   3  6.4  — a salvo rolls its lock-on when it arrives.
+ *   4  6.4  — an antimatter warhead is answered on the heavy-missile table.
+ *   5  2.6  — a ship's fire is one activation, not one shot per mount.
+ *   6  5.23 — a Spinal Mount is laid on a point and has its own action.
+ *   7  7.23 — the Nova Cannon is armed and fired by its own actions, and no
+ *             longer resolves as an ordinary shot at a named ship.
  */
-export const CURRENT_RULES_VERSION = 6
+export const CURRENT_RULES_VERSION = 7
 
 export interface GameSetup {
   scenarioId: string

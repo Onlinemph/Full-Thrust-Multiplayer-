@@ -17,7 +17,7 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
-import { carriedHulls, isJumpPointDisoriented, optional } from '../engine/actions'
+import { carriedHulls, isJumpPointDisoriented, novaArmedOn, optional } from '../engine/actions'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -61,6 +61,10 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
     (other) => other.side !== ship.side && !other.destroyed && !other.offTable,
   )
   const hasMines = ship.design.weapons.some((weapon) => weapon.weaponClass === 'mine-rack')
+  // 7.23: at most one, "mounted in the spinal core of a capital ship".
+  const novaCannon = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'nova-cannon' && !ship.destroyedSystems.has(weapon.id),
+  )
   // 16.6: anything on the table that is not this ship and not a wreck.
   const dockable = game.ships.filter(
     (other) => other.id !== ship.id && !other.destroyed && !other.offTable,
@@ -287,6 +291,34 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           </label>
           <span className="spacer" />
           <span style={{ color: 'var(--warn)' }}>no weapons this turn</span>
+        </div>
+      ) : null}
+
+      {/* 7.23: the Nova Cannon is armed here, with the movement orders, because
+          arming it IS the ship's turn — "it may not apply any thrust to
+          accelerate or maneuver, it may not fire any other weapons, and even
+          its screens do not function for that turn". */}
+      {novaCannon ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={novaArmedOn(game, ship)}
+              onChange={(event) =>
+                dispatch({
+                  type: 'arm-nova-cannon',
+                  shipId: ship.id,
+                  weaponId: novaCannon.id,
+                  on: event.target.checked,
+                })
+              }
+            />{' '}
+            Arm the {novaCannon.label}
+          </label>
+          <span className="spacer" />
+          <span style={{ color: 'var(--warn)' }}>
+            no thrust, no other weapons, no screens (7.23)
+          </span>
         </div>
       ) : null}
 

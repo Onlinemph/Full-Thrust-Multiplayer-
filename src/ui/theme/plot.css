@@ -537,3 +537,14 @@
   stroke-dasharray: 3 3;
   opacity: 0.8;
 }
+
+/* 7.23's nova template. The swept band drawn at its true diameter and rounded
+   at both ends, because that is the shape the contact test measures: anything
+   within the radius of the segment the template's centre travelled. Painted
+   flat and translucent — it is a place on the table, not an effect. */
+.nova-sweep {
+  stroke: var(--warn);
+  stroke-opacity: 0.22;
+  stroke-linecap: round;
+  fill: none;
+}

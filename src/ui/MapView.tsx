@@ -4,11 +4,12 @@ import { applyOrder, driveFromDef, type MovementState } from '../engine/movement
 import { stationaryCollisionRisk } from '../engine/terrain'
 import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
-import { flakMarkers, optional } from '../engine/actions'
+import { flakMarkers, novaBursts, optional } from '../engine/actions'
 import { isGateActive } from '../engine/ftl'
 import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
+import { NOVA_SWEEPS } from '../engine/ew'
 import type { GameState, ShipState } from '../engine/game'
-import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
+import { advance, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
@@ -531,6 +532,35 @@ export function MapView({
               r={marker.kind === 'plasma-bolt' ? 5 : 3}
             />
           ))}
+
+          {/* 7.23's nova template: the swept band, drawn as a capsule from the
+              start of this generation's sweep to its end at the template's own
+              radius. It is the one thing on the table a player has to see to
+              plan around — it is coming through in a straight line for three
+              turns, and it does not care whose ships are in the lane. */}
+          {novaBursts(game).map((burst, index) => {
+            const sweep = NOVA_SWEEPS[burst.stage]
+            const unit = courseVector(burst.course)
+            const from = {
+              x: (burst.origin.x + unit.x * sweep.fromMu) * scale,
+              y: (burst.origin.y + unit.y * sweep.fromMu) * scale,
+            }
+            const to = {
+              x: (burst.origin.x + unit.x * sweep.toMu) * scale,
+              y: (burst.origin.y + unit.y * sweep.toMu) * scale,
+            }
+            return (
+              <line
+                key={`nova-${index}`}
+                className="nova-sweep"
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                strokeWidth={sweep.diameter * scale}
+              />
+            )
+          })}
 
           {/* 5.16's Blast Marker. Drawn at its true 2 MU radius, because the
               thing a player has to read off the table is which lane is now

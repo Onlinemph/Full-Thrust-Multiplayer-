@@ -2,7 +2,7 @@ import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCon
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
-import { optional } from '../engine/actions'
+import { novaArmedOn, optional } from '../engine/actions'
 import type { Arc, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
@@ -52,6 +52,41 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
   // them off takes its transfer mass down with them. A natural one "cannot be
   // destroyed by normal weapons fire", so it is not offered.
   const gates = game.gates.filter((gate) => !gate.def.natural && gate.state.hullMarked < gate.def.hullBoxes)
+
+  // 7.23: an armed Nova Cannon is the ship's whole turn. Everything else the
+  // panel could offer is already refused, so the panel offers one button.
+  const novaCannon = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'nova-cannon' && !ship.destroyedSystems.has(weapon.id),
+  )
+  if (novaCannon && novaArmedOn(game, ship)) {
+    return (
+      <div className="panel">
+        <h3>Phase 11 · Fire</h3>
+        <p style={{ color: 'var(--ink-dim)' }}>
+          {ship.name} has its whole reactor in the {novaCannon.label}. It fires down the bow line at
+          everything the template crosses, and nothing else on the hull fires at all (7.23).
+        </p>
+        <div className="panel-row">
+          <span>Bow line</span>
+          <span className="spacer" />
+          <button
+            className="primary"
+            disabled={!canWeaponFire(ship, novaCannon.id)}
+            onClick={() =>
+              dispatch({ type: 'fire-nova-cannon', shipId: ship.id, weaponId: novaCannon.id })
+            }
+          >
+            Fire the {novaCannon.label}
+          </button>
+        </div>
+        <p className="rule-detail">
+          The round is thrown 6 MU ahead and sweeps to 24 behind a 2 MU template for 6D6, then to 48
+          behind a 4 MU one for 4D6, then to 72 behind a 6 MU one for 2D6, and burns out. Neither
+          screens nor armour answer any of it, and it does not ask whose ships are in the way.
+        </p>
+      </div>
+    )
+  }
 
   // 2.6: a ship's fire is one activation. Once play has moved on to another
   // ship this one is finished for the turn, so the panel says so rather than

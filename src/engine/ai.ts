@@ -55,6 +55,7 @@ import {
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
 import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
+import { NOVA_SWEEPS, templateContacts } from './ew'
 import {
   canMountFlak,
   projectileLine,
@@ -73,6 +74,7 @@ import {
 import { arcsWhenInverted } from './specialmoves'
 import {
   deployingSide,
+  novaArmedOn,
   optional,
   proposeDeployment,
   shipsAwaitingGateEntry,
@@ -80,7 +82,7 @@ import {
 } from './actions'
 import { isGateActive } from './ftl'
 import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
-import type { MovementOrder, Point, TurnDirection } from './types'
+import type { MovementOrder, Point, TurnDirection, WeaponDef } from './types'
 import type { Rng } from './dice'
 
 /**
@@ -477,6 +479,13 @@ export function aiActions(
         actions.push({ type: 'detach-hull', shipId: rider.id })
       }
       for (const ship of mine) {
+        // 7.23: arming the Nova Cannon costs the whole ship for a turn, so it
+        // is decided before the course is, and it tears up any course written.
+        const nova = novaWorthArming(game, ship)
+        if (nova) {
+          actions.push({ type: 'arm-nova-cannon', shipId: ship.id, weaponId: nova.id, on: true })
+          continue
+        }
         // 8.1: a carrier with a wing still in the bay writes "Launch" and
         // nothing else — 8.2 refuses the launch outright if it spent thrust.
         // Holding station for a turn is what the launch costs, and a carrier
@@ -643,7 +652,19 @@ export function aiActions(
       break
 
     case 'ship-fire':
-      for (const ship of mine) actions.push(...planFire(game, ship))
+      for (const ship of mine) {
+        // 7.23: an armed cannon fires and nothing else does, so the shot is
+        // taken instead of the fire plan rather than alongside it.
+        const nova = ship.design.weapons.find(
+          (weapon) =>
+            weapon.weaponClass === 'nova-cannon' && !ship.destroyedSystems.has(weapon.id),
+        )
+        if (nova && novaArmedOn(game, ship)) {
+          actions.push({ type: 'fire-nova-cannon', shipId: ship.id, weaponId: nova.id })
+          continue
+        }
+        actions.push(...planFire(game, ship))
+      }
       break
 
     case 'move-fighters':
@@ -1082,4 +1103,58 @@ function flakBarrages(game: GameState, ship: ShipState): GameAction[] {
     })
   }
   return actions
+}
+
+/**
+ * Whether it is worth spending the whole ship on a Nova Cannon shot (7.23).
+ *
+ * The cannon is not a gun the computer adds to its fire plan: arming it means
+ * *"it may not apply any thrust to accelerate or maneuver, it may not fire any
+ * other weapons, and even its screens do not function"*. So the question is
+ * not "can it reach" but "is there a hull on the bow line worth standing still
+ * and unscreened for a turn".
+ *
+ * The answer is the first two sweeps. The round is thrown 6 MU ahead and runs
+ * to 24 on the firing turn behind a 2 MU template, then to 48 behind a 4 MU
+ * one; anything the computer can put inside either is worth 6D6 of penetrating
+ * damage that no screen and no armour will answer. Beyond that the template is
+ * wide but the shot is 2D6 and a turn and a half away, which is not worth a
+ * ship's whole turn.
+ */
+function novaWorthArming(game: GameState, ship: ShipState): WeaponDef | null {
+  const cannon = ship.design.weapons.find(
+    (weapon) => weapon.weaponClass === 'nova-cannon' && !ship.destroyedSystems.has(weapon.id),
+  )
+  if (!cannon) return null
+  if (novaArmedOn(game, ship)) return null
+  // The burst starts where the ship will be standing when it fires, and the
+  // ship it fires from cannot turn between now and then — that is the point of
+  // the power-down, and it is what makes the aim predictable at all.
+  const origin = predict(ship, 1)
+  const course = ship.placement.facing
+  const worthIt = ([1, 2] as const).some((stage) => {
+    const sweep = NOVA_SWEEPS[stage]
+    return game.ships.some(
+      (enemy) =>
+        enemy.side !== ship.side &&
+        !enemy.destroyed &&
+        !enemy.offTable &&
+        enemy.carriedBy === null &&
+        templateContacts(origin, course, sweep.fromMu, sweep.toMu, sweep.diameter, predict(enemy, 1)),
+    )
+  })
+  if (!worthIt) return null
+  // 7.23 does not exempt the firer's own fleet, and a nova is 6D6 penetrating.
+  const ownInPath = ([1, 2, 3] as const).some((stage) => {
+    const sweep = NOVA_SWEEPS[stage]
+    return game.ships.some(
+      (other) =>
+        other.side === ship.side &&
+        other.id !== ship.id &&
+        !other.destroyed &&
+        !other.offTable &&
+        templateContacts(origin, course, sweep.fromMu, sweep.toMu, sweep.diameter, predict(other, 1)),
+    )
+  })
+  return ownInPath ? null : cannon
 }

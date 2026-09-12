@@ -49,6 +49,16 @@ export interface FiringContext {
   targetMass?: number
   /** Target's current velocity in MU, for the Gravitic Gun (5.20). */
   targetVelocity?: number
+  /**
+   * 7.23: which generation of the nova template is passing over the target.
+   *
+   * Here beside `needleTarget` and for the same reason — `fireWeapon`
+   * dispatches through this type, so a caller cannot know which resolver it is
+   * about to reach. `EwFiringContext` narrows it; only the Nova Cannon reads
+   * it, and to it `range` means the distance along the burst's line of flight
+   * rather than the range from the ship, which has moved on since.
+   */
+  novaStage?: 1 | 2 | 3
   rng: Rng
 }
 
