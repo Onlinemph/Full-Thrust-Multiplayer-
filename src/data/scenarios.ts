@@ -29,6 +29,13 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
+import {
+  zonesFor,
+  PLACEMENT_BATCH_MAX,
+  PLACEMENT_BATCH_MIN,
+  type BattleType,
+} from '../engine/battles'
+import type { DeploymentState } from '../engine/game'
 import type { Course, Point, ShipGroup } from '../engine/types'
 import { designById } from './ships'
 
@@ -103,6 +110,23 @@ export interface Scenario {
    * somewhere to be that is not simply further away.
    */
   terrain?: TerrainFeature[]
+
+  // ── Deployment (18.1) ───────────────────────────────────────────────────
+  /**
+   * Which of 18.1's three battles this is. Absent means the scenario writes
+   * its own final positions, which is a legal outcome of any deployment — it
+   * has simply already been run. All three scenarios shipped before this
+   * existed leave it absent and are unchanged by it.
+   */
+  battleType?: BattleType
+  /** Offensive/defensive: the side that deploys first and owns a table half. */
+  defenderSideId?: SideId
+  /** Converging approach: which half of the long edges both fleets use. */
+  deploymentHalf?: 'first' | 'second'
+  /** *"Or two to four ships at a time for large battles"* (18.1). */
+  placementBatch?: number
+  /** 18.1: the attacker *"(if permitted)"* may make an FTL entry. */
+  ftlEntryPermitted?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -356,8 +380,48 @@ function fighterTypeOf(id: string): FighterTypeId {
   return id in FIGHTER_TYPES ? (id as FighterTypeId) : 'standard'
 }
 
+/**
+ * The deployment this battle runs, or null (18.1).
+ *
+ * A setup's choice beats the scenario's, so a player can put a stock scenario
+ * through a deployment without editing the scenario. Two sides only: 18.1 is
+ * written for two fleets and `zonesFor` returns nothing for anything else,
+ * which would otherwise leave a side with no zone to deploy into.
+ */
+function deploymentFor(scenario: Scenario, opts: StartOptions): DeploymentState | null {
+  const battleType =
+    opts.battleType === 'none'
+      ? undefined
+      : (opts.battleType ?? scenario.battleType)
+  if (!battleType) return null
+  if (scenario.sides.length !== 2) return null
+
+  const sides = scenario.sides.map((side) => side.id)
+  const zones = zonesFor(scenario.table, battleType, sides, {
+    half: scenario.deploymentHalf,
+    defenderSideId: scenario.defenderSideId,
+    ftlEntryPermitted: scenario.ftlEntryPermitted,
+  })
+  if (zones.length !== sides.length) return null
+
+  return {
+    battleType,
+    table: { ...scenario.table },
+    zones: Object.fromEntries(zones.map((zone) => [zone.sideId, zone])),
+    batch: Math.max(
+      PLACEMENT_BATCH_MIN,
+      Math.min(PLACEMENT_BATCH_MAX, Math.floor(scenario.placementBatch ?? PLACEMENT_BATCH_MIN)),
+    ),
+    order: [],
+    placed: [],
+    terrainPlaced: false,
+  }
+}
+
 export interface StartOptions {
   seed: number
+  /** Override the scenario's deployment (18.1). `'none'` turns one off. */
+  battleType?: BattleType | 'none'
   /** Override the scenario's forces outright — campaign battles. */
   forces?: Partial<Record<SideId, ForceEntry[]>>
   /**
@@ -423,6 +487,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
 
   return createGame({
     seed: opts.seed,
+    deployment: deploymentFor(scenario, opts),
     terrain: scenario.terrain ? scenario.terrain.map((f) => ({ ...f })) : undefined,
     fighterGroups: ships.flatMap(embarkedFlights),
     gunboatSquadrons: ships.flatMap(embarkedSquadrons),

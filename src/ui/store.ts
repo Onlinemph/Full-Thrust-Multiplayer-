@@ -10,7 +10,7 @@ import {
   type ActionOutcome,
   type GameAction,
 } from '../engine/actions'
-import type { GameState } from '../engine/game'
+import { shipsAwaitingDeployment, type GameState } from '../engine/game'
 import {
   buildGame,
   CURRENT_RULES_VERSION,
@@ -189,18 +189,40 @@ let aiActed = new Set<string>()
 function runAi(): void {
   const sides = setup.aiSides ?? []
   if (sides.length === 0) return
-  for (const side of sides) {
-    // In an online match the computer is driven from one console only — the
-    // creator's — or both ends would journal its orders twice.
-    if (matchSide !== null && matchSide !== game.sides[0]?.id) return
-    const key = `${game.turn}:${game.phase}:${side}`
-    if (aiActed.has(key)) continue
-    aiActed.add(key)
-    for (const action of aiActions(game, side)) {
-      applyJournaled(action)
-      net?.onAction(action, journal.length)
+  // In an online match the computer is driven from one console only — the
+  // creator's — or both ends would journal its orders twice.
+  if (matchSide !== null && matchSide !== game.sides[0]?.id) return
+
+  // 18.1's deployment alternates within one phase, so the computer has to be
+  // able to act several times in the same turn and phase — once per placement.
+  // The guard therefore keys on how far the deployment has got, and the loop
+  // runs until nobody moves, which terminates because every deployment action
+  // advances that counter and every other phase acts at most once per side.
+  let guard = 200
+  let acted = true
+  while (acted && guard-- > 0) {
+    acted = false
+    for (const side of sides) {
+      const key = aiKey(side)
+      if (aiActed.has(key)) continue
+      aiActed.add(key)
+      const actions = aiActions(game, side)
+      if (actions.length === 0) continue
+      acted = true
+      for (const action of actions) {
+        applyJournaled(action)
+        net?.onAction(action, journal.length)
+      }
     }
   }
+}
+
+function aiKey(side: string): string {
+  const deployment = game.deployment
+  if (deployment && shipsAwaitingDeployment(game).length > 0) {
+    return `${game.turn}:${game.phase}:${side}:d${deployment.order.length}:${deployment.placed.length}`
+  }
+  return `${game.turn}:${game.phase}:${side}`
 }
 
 /** Apply an action, journal it, autosave, notify. The only way state changes. */

@@ -122,6 +122,28 @@
 /* The course track: where the ship will be at the end of this turn, drawn as
    the two legs the cinematic rules actually move it through (3.4), because a
    straight line from A to B would hide the turn the player just plotted. */
+/* 18.1: where this side may put its ships. A wash rather than an outline,
+   because the player is aiming inside it, not at its border. */
+.deployment-zone {
+  fill: currentColor;
+  fill-opacity: 0.07;
+  stroke: currentColor;
+  stroke-opacity: 0.4;
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.deployment-zone.side-a {
+  color: var(--side-a);
+}
+.deployment-zone.side-b {
+  color: var(--side-b);
+}
+.deployment-zone.side-c {
+  color: var(--side-c);
+}
+
 .track {
   fill: none;
   stroke: var(--thrust);

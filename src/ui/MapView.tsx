@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { applyOrder, driveFromDef, type MovementState } from '../engine/movement'
 import { stationaryCollisionRisk } from '../engine/terrain'
+import { shipsAwaitingDeployment } from '../engine/game'
 import { optional } from '../engine/actions'
 import type { GameState, ShipState } from '../engine/game'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
-import type { Point } from '../engine/types'
+import type { Course, Point } from '../engine/types'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter } from './Counter'
@@ -38,6 +39,11 @@ export interface MapViewProps {
   /** The fighter group in hand, if any (8.5). */
   selectedFlightId?: string | null
   onSelectFlight?: (flightId: string | null) => void
+  /**
+   * While 18.1's deployment is running, the course and velocity a click on
+   * bare table gives the selected ship. Absent when there is no deployment.
+   */
+  deployWith?: { facing: Course; velocity: number } | null
 }
 
 const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
@@ -51,6 +57,7 @@ export function MapView({
   litArcs,
   selectedFlightId = null,
   onSelectFlight,
+  deployWith = null,
 }: MapViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 960, height: 640 })
@@ -111,14 +118,29 @@ export function MapView({
   const onPointerUp = (event: React.PointerEvent) => {
     const start = drag.current
     drag.current = null
-    if (!start || !(flight || squadron)) return
+    if (!start) return
+    const placing = deployWith !== null && selectedId !== null
+    if (!(flight || squadron) && !placing) return
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
     const box = host.current?.getBoundingClientRect()
     if (!box) return
-    flyTo({
+    const to = {
       x: (event.clientX - box.left - originX) / scale,
       y: (event.clientY - box.top - originY) / scale,
-    })
+    }
+    // 18.1 is placement, not movement, so it wins the bare-table click while
+    // it is running — there is nothing to fly yet.
+    if (placing && selectedId) {
+      dispatch({
+        type: 'deploy-ship',
+        shipId: selectedId,
+        position: to,
+        facing: deployWith.facing,
+        velocity: deployWith.velocity,
+      })
+      return
+    }
+    flyTo(to)
   }
 
   const flight = selectedFlightId
@@ -249,6 +271,22 @@ export function MapView({
             stroke="var(--line)"
             strokeWidth={1}
           />
+
+          {/* 18.1's deployment zones, while there is still a ship to place.
+              Drawn under everything, because the thing on top of it is the
+              counter the player is about to drag into it. */}
+          {game.deployment && shipsAwaitingDeployment(game).length > 0
+            ? Object.values(game.deployment.zones).map((zone) => (
+                <rect
+                  key={`zone-${zone.sideId}`}
+                  className={`deployment-zone side-${SIDE_CLASS[zone.sideId] ?? 'c'}`}
+                  x={zone.area.minX * scale}
+                  y={zone.area.minY * scale}
+                  width={Math.max(1, (zone.area.maxX - zone.area.minX) * scale)}
+                  height={Math.max(1, (zone.area.maxY - zone.area.minY) * scale)}
+                />
+              ))
+            : null}
 
           {game.terrain.map((feature) => (
             <circle

@@ -26,6 +26,7 @@ import {
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import { cloakEndOfTurn, cloakMode, createCloakState, type CloakKind, type CloakState } from './ew'
 import { movementPriority, UPRIGHT, type RollStatus } from './specialmoves'
+import type { BattleType, DeploymentZone } from './battles'
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -499,6 +500,35 @@ export interface InitiativeState {
   order: SideId[]
 }
 
+/**
+ * The deployment step, before the first order is written (18.1).
+ *
+ * Section 18 sits outside the turn sequence — *"players alternate in placing
+ * one ship at a time"* happens before phase 1 exists — so it cannot be a
+ * `Phase` and it is not per-ship state. It is one field on the battle, written
+ * once by `startScenario` and null for every scenario that does not ask for a
+ * deployment, which is all three of the ones shipped before it existed.
+ *
+ * The table lives here because `GameState` has never carried one: the table is
+ * a property of the scenario (`Scenario.table`) and the engine has only ever
+ * needed it in the UI. A deployment zone is a rectangle of table, so the
+ * rectangle has to come with it.
+ */
+export interface DeploymentState {
+  battleType: BattleType
+  table: { width: number; height: number }
+  /** One zone per side, by side id. */
+  zones: Record<SideId, DeploymentZone>
+  /** Ships placed per step (18.1: one, "or two to four for large battles"). */
+  batch: number
+  /** Sides in the order they place, lowest die first (4.12). Empty until rolled. */
+  order: SideId[]
+  /** Ship ids placed so far, in the order they were placed. */
+  placed: string[]
+  /** 18.1: the defender in an offensive/defensive battle places one feature. */
+  terrainPlaced: boolean
+}
+
 export interface GameState {
   /** Scenario or battle identifier, for the journal. */
   scenario: string
@@ -516,6 +546,8 @@ export interface GameState {
   ordnance: OrdnanceMarkerState[]
   terrain: TerrainFeature[]
   initiative: InitiativeState | null
+  /** 18.1's deployment, or null for a scenario that writes its own positions. */
+  deployment: DeploymentState | null
   log: LogEntry[]
 }
 
@@ -529,6 +561,7 @@ export interface GameOptions {
   terrain?: TerrainFeature[]
   phases?: readonly Phase[]
   scenario?: string
+  deployment?: DeploymentState | null
 }
 
 /**
@@ -565,6 +598,7 @@ export function createGame(opts: GameOptions): GameState {
     ordnance: opts.ordnance ?? [],
     terrain: opts.terrain ?? [],
     initiative: null,
+    deployment: opts.deployment ?? null,
     log: [],
   }
   pushLog(state, { kind: 'phase', text: `Turn 1 — ${PHASE_LABELS[state.phase]}` })
@@ -941,6 +975,26 @@ export function shipMovementRank(ship: ShipState): number {
   if (ship.layingMines) return 1
   if (ship.ftlTransit !== 'none') return 3
   return 2
+}
+
+/**
+ * Ships this battle's deployment still owes a placement (18.1).
+ *
+ * A ship that is out of the battle before it has been placed cannot be, so it
+ * does not hold the deployment open — which matters because `advance-phase`
+ * refuses while anything is owed.
+ */
+export function shipsAwaitingDeployment(state: GameState): ShipState[] {
+  if (!state.deployment) return []
+  const placed = new Set(state.deployment.placed)
+  return state.ships.filter(
+    (ship) => !placed.has(ship.id) && !ship.destroyed && !ship.offTable,
+  )
+}
+
+/** Whether this ship has been put on the table by 18.1's procedure. */
+export function isDeployed(state: GameState, shipId: string): boolean {
+  return state.deployment?.placed.includes(shipId) ?? false
 }
 
 /** Ships in the order phase 5 moves them (2.6). */

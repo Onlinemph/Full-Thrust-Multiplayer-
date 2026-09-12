@@ -34,6 +34,7 @@ import {
   rollInitiative,
   setInitiativeOrder,
   shipById,
+  shipsAwaitingDeployment,
   type FighterGroupState,
   type TerrainKind,
   type GameState,
@@ -60,6 +61,7 @@ import {
   type TerrainBody,
 } from './terrain'
 import { arcsWhenInverted, resolveRam, rollShip } from './specialmoves'
+import { defaultPlacements, validatePlacement } from './battles'
 import {
   ftlExitRestrictions,
   ftlExitStage,
@@ -106,7 +108,7 @@ import {
   type PdThreat,
   type StealthLevel,
 } from './defences'
-import type { ScreenLevel } from './dice'
+import { d6, type ScreenLevel } from './dice'
 import {
   fireWeapon,
   isAreaEffect,
@@ -192,6 +194,30 @@ export type GameAction =
   | { type: 'plot-roll'; shipId: string; on: boolean }
   | { type: 'plot-mines'; shipId: string; on: boolean }
   | { type: 'clear-order'; shipId: string }
+
+  // Deployment (18.1) — before the first order of turn 1
+  /** 4.12's die: the lower roll places first, and they alternate from there. */
+  | { type: 'roll-deployment-order' }
+  /**
+   * 18.1: *"Players alternate in placing one ship at a time within 6 MU of
+   * their table edge (or two to four ships at a time for large battles) with
+   * any desired course and an initial velocity."*
+   */
+  | {
+      type: 'deploy-ship'
+      shipId: string
+      position: { x: number; y: number }
+      facing: Course
+      velocity: number
+    }
+  /** 18.1: *"The defender can also place a planet or similar terrain feature."* */
+  | {
+      type: 'place-terrain'
+      sideId: SideId
+      kind: TerrainKind
+      position: { x: number; y: number }
+      radius: number
+    }
 
   // Movement (3, phase 5)
   | { type: 'move-ship'; shipId: string }
@@ -357,6 +383,12 @@ function orderable(state: GameState, ship: ShipState | undefined): ActionOutcome
   if (!ship) return refuse('No such ship')
   if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
   if (state.phase !== 'orders') return refuse('Orders are written in phase 1')
+  // 18.1 comes first, and a ship still in the wings has no station to plot a
+  // course from. Gated on there being a deployment at all, so it is inert for
+  // every scenario and every saved battle that has none.
+  if (state.deployment && !state.deployment.placed.includes(ship.id)) {
+    return refuse(`${ship.name} has not been deployed yet (18.1)`)
+  }
   return ship
 }
 
@@ -397,7 +429,146 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
   switch (action.type) {
     // ── Sequence ──────────────────────────────────────────────────────────
     case 'advance-phase': {
+      // 18.1 happens before the first order is written, so the turn cannot
+      // start with ships still in the wings. The guard lives here rather than
+      // in `advancePhase` because `advancePhase` is also the tests' and
+      // `advanceToPhase`'s way round the sequence, and because `applyAction`
+      // is the boundary — which is the whole point of it.
+      const owed = shipsAwaitingDeployment(state)
+      if (state.turn === 1 && owed.length > 0) {
+        return refuse(`${owed.length} ships are still to be deployed (18.1)`)
+      }
       advancePhase(state)
+      return OK
+    }
+
+    // ── Deployment (18.1) ─────────────────────────────────────────────────
+    case 'roll-deployment-order': {
+      const deployment = state.deployment
+      if (!deployment) return refuse('This battle has no deployment step')
+      if (state.turn !== 1 || state.phase !== 'orders') {
+        return refuse('Ships are deployed before the first orders are written (18.1)')
+      }
+      if (deployment.order.length > 0) return refuse('Deployment order has already been rolled')
+
+      // 4.12: "Both players roll a die. The player with the lowest roll sets up
+      // one heavy cruiser. The player with the higher roll then sets up one."
+      // Section 18 rolls nothing at all, so this die is 4.12's.
+      const rolls = state.sides.map((side) => ({ id: side.id, roll: d6(state.rng) }))
+      // Ties are broken by re-rolling among the tied sides, the way initiative
+      // is (2.6 phase 2), so the order is always total.
+      let guard = 20
+      while (guard-- > 0) {
+        const clash = rolls.find((a, i) => rolls.some((b, j) => i !== j && b.roll === a.roll))
+        if (!clash) break
+        const lowest = Math.min(...rolls.map((r) => r.roll))
+        for (const entry of rolls) {
+          if (rolls.filter((r) => r.roll === entry.roll).length > 1) {
+            entry.roll = lowest + d6(state.rng) / 10
+          }
+        }
+      }
+      deployment.order = [...rolls].sort((a, b) => a.roll - b.roll).map((r) => r.id)
+      pushLog(state, {
+        kind: 'orders',
+        dice: rolls.map((r) => Math.round(r.roll)),
+        text:
+          `Deployment order (4.12): ` +
+          deployment.order
+            .map((id) => state.sides.find((s) => s.id === id)?.name ?? id)
+            .join(', then '),
+      })
+      return OK
+    }
+
+    case 'deploy-ship': {
+      const deployment = state.deployment
+      if (!deployment) return refuse('This battle has no deployment step')
+      if (state.turn !== 1 || state.phase !== 'orders') {
+        return refuse('Ships are deployed before the first orders are written (18.1)')
+      }
+      if (deployment.order.length === 0) return refuse('Roll for who places first (4.12)')
+
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (deployment.placed.includes(ship.id)) return refuse(`${ship.name} is already deployed`)
+
+      const turnOf = deployingSide(state)
+      if (turnOf !== null && turnOf !== ship.side) {
+        const name = state.sides.find((s) => s.id === turnOf)?.name ?? turnOf
+        return refuse(`It is ${name}'s turn to place (18.1)`)
+      }
+
+      const zone = deployment.zones[ship.side]
+      if (!zone) return refuse('That side has no deployment zone')
+      const check = validatePlacement(zone, {
+        position: action.position,
+        facing: action.facing,
+        velocity: action.velocity,
+      })
+      if (!check.legal) return refuse(check.reasons[0] ?? 'Not a legal deployment')
+      if (!Number.isInteger(action.velocity) || action.velocity < 0) {
+        return refuse('Velocity is a whole number and 3.1 has no reverse')
+      }
+
+      ship.placement = { position: { ...action.position }, facing: action.facing }
+      ship.velocity = action.velocity
+      // A wing still in the bay goes where the ship goes — the same reason
+      // `move-ship` drags it, and the same three lines.
+      for (const group of state.fighterGroups) {
+        if (group.carrierId === ship.id && group.status === 'aboard') {
+          group.position = ship.placement.position
+          group.facing = ship.placement.facing
+        }
+      }
+      for (const squadron of state.gunboatSquadrons) {
+        if (squadron.carrierId === ship.id && squadron.status === 'aboard') {
+          squadron.position = ship.placement.position
+          squadron.facing = ship.placement.facing
+        }
+      }
+      deployment.placed.push(ship.id)
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} deploys at velocity ${action.velocity}, course ${action.facing} (18.1)`,
+      })
+      return OK
+    }
+
+    case 'place-terrain': {
+      const deployment = state.deployment
+      if (!deployment) return refuse('This battle has no deployment step')
+      if (deployment.battleType !== 'offensive-defensive') {
+        return refuse('Only the defender in an offensive/defensive battle places terrain (18.1)')
+      }
+      if (state.turn !== 1 || state.phase !== 'orders') {
+        return refuse('Terrain is placed at deployment (18.1)')
+      }
+      if (deployment.terrainPlaced) {
+        return refuse('The defender has already placed a feature (18.1)')
+      }
+      const defender = defendingSide(state)
+      if (defender === null || action.sideId !== defender) {
+        return refuse('Only the defending fleet places terrain (18.1)')
+      }
+      if (!(action.radius > 0)) return refuse('A feature needs a radius')
+
+      state.terrain.push({
+        id: 'deployed-terrain',
+        kind: action.kind,
+        position: { ...action.position },
+        radius: action.radius,
+        label: `${action.kind.replace('-', ' ')} (18.1)`,
+      })
+      deployment.terrainPlaced = true
+      pushLog(state, {
+        kind: 'orders',
+        side: action.sideId,
+        text: `The defender places a ${action.kind.replace('-', ' ')} (18.1)`,
+      })
       return OK
     }
 
@@ -2335,6 +2506,62 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  * planetoids are solid; a dust cloud, a nebula or an asteroid field is not
  * something a shot stops at, and each of those has its own rule instead.
  */
+/**
+ * Whose turn it is to place (18.1), or null when nobody owes a placement.
+ *
+ * *"Players alternate in placing one ship at a time … (or two to four ships at
+ * a time for large battles)"*, and a side that runs out drops out of the
+ * rotation rather than holding it up: alternation is a way of taking turns,
+ * not a claim that the fleets are the same size. Recomputed from the order,
+ * the batch and what has been placed, so nothing has to be kept in step.
+ */
+export function deployingSide(state: GameState): SideId | null {
+  const deployment = state.deployment
+  if (!deployment || deployment.order.length === 0) return null
+
+  const owed = new Map<SideId, number>()
+  for (const ship of shipsAwaitingDeployment(state)) {
+    owed.set(ship.side, (owed.get(ship.side) ?? 0) + 1)
+  }
+  if (owed.size === 0) return null
+
+  // How far into the rotation we are: each completed batch is one step, and a
+  // side with nothing left is skipped over.
+  const live = deployment.order.filter((id) => (owed.get(id) ?? 0) > 0)
+  if (live.length === 0) return null
+  const step = Math.floor(deployment.placed.length / deployment.batch)
+  return live[step % live.length]
+}
+
+/** The side that owns a table half in an offensive/defensive battle (18.1). */
+export function defendingSide(state: GameState): SideId | null {
+  const deployment = state.deployment
+  if (!deployment || deployment.battleType !== 'offensive-defensive') return null
+  for (const [sideId, zone] of Object.entries(deployment.zones)) {
+    if (zone.entry.includes('placed') && !zone.entry.includes('table-edge')) return sideId
+  }
+  return null
+}
+
+/** Where the computer would put a side's remaining ships (18.1). */
+export function proposeDeployment(
+  state: GameState,
+  sideId: SideId,
+): Array<{ shipId: string; position: Point; facing: Course; velocity: number }> {
+  const deployment = state.deployment
+  if (!deployment) return []
+  const zone = deployment.zones[sideId]
+  if (!zone) return []
+  const ships = shipsAwaitingDeployment(state).filter((ship) => ship.side === sideId)
+  const spots = defaultPlacements(zone, ships.length)
+  return ships.map((ship, i) => ({
+    shipId: ship.id,
+    position: spots[i]?.position ?? ship.placement.position,
+    facing: spots[i]?.facing ?? ship.placement.facing,
+    velocity: spots[i]?.velocity ?? 6,
+  }))
+}
+
 const SOLID_TERRAIN: ReadonlySet<TerrainKind> = new Set<TerrainKind>(['planet', 'planetoid'])
 
 /** Dust and gas: 17.2 charges for speed through it and nothing for being in it. */

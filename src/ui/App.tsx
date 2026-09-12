@@ -1,7 +1,17 @@
 import { useState } from 'react'
 
-import { PHASE_LABELS, type Arc, type Phase } from '../engine/types'
-import { logFor, phaseNumber, shipById, shipMovementOrder } from '../engine/game'
+import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
+import {
+  logFor,
+  phaseNumber,
+  shipById,
+  shipMovementOrder,
+  shipsAwaitingDeployment,
+  type GameState,
+  type ShipState,
+} from '../engine/game'
+import { deployingSide } from '../engine/actions'
+import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CombatPanel } from './CombatPanel'
@@ -55,9 +65,24 @@ export function App() {
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
+  /* 18.1 lets a player deploy "with any desired course and an initial
+     velocity", so both are chosen before the click that puts the ship down. */
+  const [deployFacing, setDeployFacing] = useState<Course>(12)
+  const [deployVelocity, setDeployVelocity] = useState(6)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
-  const table = scenario?.table ?? { width: 72, height: 48 }
+  const table = game.deployment?.table ?? scenario?.table ?? { width: 72, height: 48 }
+  const awaiting = shipsAwaitingDeployment(game)
+  const placingSide = deployingSide(game)
+  // A click on bare table places the selected ship, but only while it is that
+  // side's turn and only for a ship that has not been placed.
+  const deployWith =
+    game.deployment !== null &&
+    selected !== undefined &&
+    placingSide === selected.side &&
+    awaiting.some((ship) => ship.id === selected.id)
+      ? { facing: deployFacing, velocity: deployVelocity }
+      : null
   const log = viewingSide ? logFor(game, viewingSide) : game.log
   const end = battleEnd(game, scenario)
 
@@ -136,6 +161,7 @@ export function App() {
           litArcs={litArcs}
           selectedFlightId={selectedFlightId}
           onSelectFlight={setSelectedFlightId}
+          deployWith={deployWith}
         />
 
         <aside className="app-side">
@@ -149,6 +175,18 @@ export function App() {
                 same dice. Slide back to now to keep playing.
               </p>
             </div>
+          ) : game.deployment && awaiting.length > 0 ? (
+            <DeploymentPanel
+              game={game}
+              awaiting={awaiting}
+              placingSide={placingSide}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              facing={deployFacing}
+              onFacing={setDeployFacing}
+              velocity={deployVelocity}
+              onVelocity={setDeployVelocity}
+            />
           ) : game.phase === 'ship-fire' && selected ? (
             <CombatPanel game={game} ship={selected} onHoverWeapon={setLitArcs} />
           ) : (
@@ -197,7 +235,9 @@ export function App() {
               <OrderPanel
                 game={game}
                 ship={selected}
-                editable={game.phase === 'orders'}
+                editable={
+                  game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                }
                 emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
               />
             </>
@@ -252,6 +292,111 @@ export function App() {
           onClose={() => setResultSeen(true)}
         />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Putting the fleets on the table (18.1).
+ *
+ * It replaces the phase controls rather than sitting beside them, because
+ * until every ship is placed there is nothing else to do: `advance-phase`
+ * refuses while a deployment is owed, and a ship with no station has no course
+ * to plot from.
+ */
+function DeploymentPanel({
+  game,
+  awaiting,
+  placingSide,
+  selectedId,
+  onSelect,
+  facing,
+  onFacing,
+  velocity,
+  onVelocity,
+}: {
+  game: GameState
+  awaiting: readonly ShipState[]
+  placingSide: string | null
+  selectedId: string | null
+  onSelect: (shipId: string) => void
+  facing: Course
+  onFacing: (facing: Course) => void
+  velocity: number
+  onVelocity: (velocity: number) => void
+}) {
+  const deployment = game.deployment
+  if (!deployment) return null
+  const rolled = deployment.order.length > 0
+  const sideName = (id: string) => game.sides.find((s) => s.id === id)?.name ?? id
+  const mine = awaiting.filter((ship) => ship.side === placingSide)
+  const zone = placingSide ? deployment.zones[placingSide] : undefined
+
+  return (
+    <div className="panel">
+      <h3>Deploy · {BATTLE_TYPE_LABELS[deployment.battleType]}</h3>
+
+      {!rolled ? (
+        <>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            Both fleets roll. The lower roll sets up first, and from there you alternate
+            {deployment.batch > 1 ? `, ${deployment.batch} ships at a time` : ', a ship at a time'}.
+          </p>
+          <button className="primary" onClick={() => dispatch({ type: 'roll-deployment-order' })}>
+            Roll for who places first
+          </button>
+        </>
+      ) : (
+        <>
+          <p style={{ color: 'var(--ink-dim)' }}>
+            {placingSide ? <b>{sideName(placingSide)}</b> : null} to place. Pick a ship, set its
+            course and speed, then click inside the shaded zone.
+          </p>
+          {zone ? <p style={{ color: 'var(--ink-faint)' }}>{zone.note}</p> : null}
+
+          <div className="picked-list">
+            {mine.map((ship) => (
+              <button
+                key={ship.id}
+                className={`design-chip${ship.id === selectedId ? ' is-selected' : ''}`}
+                onClick={() => onSelect(ship.id)}
+              >
+                {ship.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="panel-row">
+            <span>Course</span>
+            <span className="spacer" />
+            <select
+              aria-label="Deployment course"
+              value={facing}
+              onChange={(event) => onFacing(Number(event.target.value) as Course)}
+            >
+              {([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as Course[])
+                .filter((course) => !zone?.courses || zone.courses.includes(course))
+                .map((course) => (
+                  <option key={course} value={course}>
+                    {course} o&rsquo;clock
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="panel-row">
+            <span>Velocity</span>
+            <span className="spacer" />
+            <button onClick={() => onVelocity(Math.max(0, velocity - 1))}>−</button>
+            <span className="num">{velocity}</span>
+            <button onClick={() => onVelocity(velocity + 1)}>+</button>
+          </div>
+
+          <p style={{ color: 'var(--ink-faint)' }}>
+            {awaiting.length} still to place.
+          </p>
+        </>
+      )}
     </div>
   )
 }

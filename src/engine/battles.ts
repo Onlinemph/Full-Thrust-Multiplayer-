@@ -912,6 +912,64 @@ export function offensiveDefensiveZones(
   ]
 }
 
+/**
+ * Which of 18.1's three battles this is.
+ *
+ * The three zone builders above take different shapes — two of them a pair of
+ * side ids, the third a named defender and attacker — because that is what
+ * each deployment is about. A caller that has to switch on a battle type needs
+ * one signature, and this is it.
+ */
+export type BattleType = 'meeting-engagement' | 'converging-approach' | 'offensive-defensive'
+
+export const BATTLE_TYPE_LABELS: Record<BattleType, string> = {
+  'meeting-engagement': 'Meeting engagement',
+  'converging-approach': 'Converging approach',
+  'offensive-defensive': 'Offensive / defensive',
+}
+
+export interface ZonesOptions {
+  /** Converging approach: which half of the long edges both fleets use. */
+  half?: 'first' | 'second'
+  /** Offensive/defensive: the side that deploys first and owns a half. */
+  defenderSideId?: string
+  defenderEdge?: TableEdge
+  ftlEntryPermitted?: boolean
+}
+
+/**
+ * The deployment zones for one battle (18.1), whichever battle it is.
+ *
+ * Two sides only. `meetingEngagementZones` and `convergingApproachZones` are
+ * typed for a pair and 18.1 is written for two fleets; a three-cornered
+ * scenario has no deployment in the section, and silently truncating to the
+ * first two sides would deploy somebody nowhere.
+ */
+export function zonesFor(
+  table: BattleTable,
+  battleType: BattleType,
+  sides: readonly string[],
+  opts: ZonesOptions = {},
+): readonly DeploymentZone[] {
+  if (sides.length !== 2) return []
+  const pair: readonly [string, string] = [sides[0], sides[1]]
+  switch (battleType) {
+    case 'meeting-engagement':
+      return meetingEngagementZones(table, pair)
+    case 'converging-approach':
+      return convergingApproachZones(table, pair, { half: opts.half })
+    case 'offensive-defensive': {
+      const defender = opts.defenderSideId ?? pair[0]
+      const attacker = pair.find((id) => id !== defender) ?? pair[1]
+      return offensiveDefensiveZones(
+        table,
+        { defender, attacker },
+        { defenderEdge: opts.defenderEdge, ftlEntryPermitted: opts.ftlEntryPermitted },
+      )
+    }
+  }
+}
+
 /** One ship's proposed deployment, as 18.1 lets a player write it. */
 export interface Placement {
   position: Point
@@ -953,6 +1011,48 @@ export function validatePlacement(
   }
 
   return { legal: reasons.length === 0, reasons }
+}
+
+/**
+ * Somewhere legal to put `count` ships in a zone, spread along it (18.1).
+ *
+ * The module otherwise only ever reports, but a deployment needs somebody to
+ * propose: a computer fleet has nothing to click, and a human wants a sensible
+ * line to drag out of rather than an empty rectangle. Spread evenly along the
+ * zone's longer axis, set back a little from the very edge so the counters are
+ * not half off the table, on the first course the zone permits.
+ *
+ * The velocity is the caller's: 18.1 states no limit and the engine should not
+ * invent one, so this proposes a walking pace and lets the player change it.
+ */
+export function defaultPlacements(
+  zone: DeploymentZone,
+  count: number,
+  opts: { velocity?: number } = {},
+): readonly Placement[] {
+  if (count <= 0) return []
+  const { area } = zone
+  const horizontal = area.maxX - area.minX >= area.maxY - area.minY
+  const along = horizontal
+    ? { min: area.minX, max: area.maxX }
+    : { min: area.minY, max: area.maxY }
+  // A margin so the outermost ship is inside the zone rather than on its
+  // corner, and so a one-ship fleet lands in the middle rather than at an end.
+  const span = along.max - along.min
+  const step = span / (count + 1)
+  const across = horizontal
+    ? (area.minY + area.maxY) / 2
+    : (area.minX + area.maxX) / 2
+  const facing = zone.courses?.[0] ?? courseAcrossFrom(zone.edge)
+
+  return Array.from({ length: count }, (_, i) => {
+    const offset = along.min + step * (i + 1)
+    return {
+      position: horizontal ? { x: offset, y: across } : { x: across, y: offset },
+      facing,
+      velocity: opts.velocity ?? 6,
+    }
+  })
 }
 
 /** One step of the alternating deployment: a side, and the ships it places now. */

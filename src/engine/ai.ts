@@ -41,6 +41,7 @@ import {
   currentThrust,
   enemiesOf,
   engagedTargets,
+  shipsAwaitingDeployment,
   type GameState,
   type ShipState,
 } from './game'
@@ -60,7 +61,7 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from './terrain'
 import { arcsWhenInverted } from './specialmoves'
-import { optional, type GameAction } from './actions'
+import { deployingSide, optional, proposeDeployment, type GameAction } from './actions'
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
 
@@ -385,6 +386,22 @@ export function aiActions(
 
   switch (game.phase) {
     case 'orders':
+      // 18.1 comes before the order is written, and until it is done there is
+      // nothing to write an order about — a ship that has not been placed has
+      // no station to plot a course from.
+      if (game.deployment && shipsAwaitingDeployment(game).length > 0) {
+        if (game.deployment.order.length === 0) {
+          actions.push({ type: 'roll-deployment-order' })
+          break
+        }
+        if (deployingSide(game) !== side) break
+        // One batch, then hand back: 18.1 alternates, and the loop that drives
+        // the computer calls this again for whoever is next.
+        for (const spot of proposeDeployment(game, side).slice(0, game.deployment.batch)) {
+          actions.push({ type: 'deploy-ship', ...spot })
+        }
+        break
+      }
       for (const ship of mine) {
         // 8.1: a carrier with a wing still in the bay writes "Launch" and
         // nothing else — 8.2 refuses the launch outright if it spent thrust.

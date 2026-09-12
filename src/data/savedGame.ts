@@ -11,6 +11,7 @@ import { applyAction, setOptionalRules, type GameAction } from '../engine/action
 import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
+import type { BattleType } from '../engine/battles'
 import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
 import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scenario } from './scenarios'
 
@@ -77,6 +78,12 @@ export interface GameSetup {
    */
   forces?: Partial<Record<string, string[]>>
 
+  /**
+   * Which of 18.1's three battles this is, overriding the scenario's own.
+   * `'none'` turns a scenario's deployment off; absent leaves it as written.
+   */
+  battleType?: BattleType | 'none'
+
   /** Sides the computer commands. */
   aiSides?: string[]
 
@@ -112,7 +119,11 @@ export interface SavedGame {
 export function buildGame(setup: GameSetup): GameState {
   setEmbeddedDesigns(setup.customDesigns ?? [])
   setEmbeddedScenario(setup.customScenario ?? null)
-  const game = startScenario(setup.scenarioId, { seed: setup.seed, forceIds: setup.forces })
+  const game = startScenario(setup.scenarioId, {
+    seed: setup.seed,
+    forceIds: setup.forces,
+    battleType: setup.battleType,
+  })
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay
   // fight under the rules the battle was actually fought under.

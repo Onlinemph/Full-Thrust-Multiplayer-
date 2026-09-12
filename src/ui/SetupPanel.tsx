@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { scenarioById, SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
+import { BATTLE_TYPE_LABELS, type BattleType } from '../engine/battles'
 import { TECH_BASE_OPTIONS, type TechBaseChoice } from '../data/techBaseCheck'
 import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
@@ -162,6 +163,40 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             The same seed and the same orders give the same battle, every time. Change it for a
             fresh roll of the dice; keep it to replay one.
           </p>
+        </section>
+
+        <section>
+          <h3>Deployment</h3>
+          <p>
+            18.1 gives three battles, and each of them puts the fleets on the table differently.
+            Pick one and the scenario&rsquo;s written positions are replaced by a deployment: the
+            lower die places first, then you alternate, ship by ship, inside your own zone. Leave
+            it as the scenario wrote it and the fleets start where they always have.
+          </p>
+          <label className="code-field">
+            Battle type
+            <select
+              aria-label="Battle type"
+              value={draft.battleType ?? 'scenario'}
+              onChange={(event) =>
+                setDraft((d) => ({
+                  ...d,
+                  battleType:
+                    event.target.value === 'scenario'
+                      ? undefined
+                      : (event.target.value as BattleType | 'none'),
+                }))
+              }
+            >
+              <option value="scenario">As the scenario writes it</option>
+              <option value="none">No deployment step</option>
+              {(Object.keys(BATTLE_TYPE_LABELS) as BattleType[]).map((type) => (
+                <option key={type} value={type}>
+                  {BATTLE_TYPE_LABELS[type]} (18.1)
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
 
         <section>
