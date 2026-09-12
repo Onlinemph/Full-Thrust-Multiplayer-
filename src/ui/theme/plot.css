@@ -497,3 +497,31 @@
   border-color: var(--line);
   background: var(--panel-2);
 }
+
+/* The shipyard's fitted-weapon rows. Each mounting is a small block rather
+   than a line, because 4.2's arc choice needs six buttons and 5.22's turret
+   needs a select, and both belong to the mounting rather than to the list. */
+.fitted-weapons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fitted-row {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 4px 6px;
+  background: var(--panel-2);
+}
+
+.arc-chip {
+  min-width: 2.4em;
+  padding: 1px 4px;
+  opacity: 0.45;
+}
+
+.arc-chip.is-on {
+  opacity: 1;
+  border-color: var(--side-a);
+  color: var(--side-a);
+}

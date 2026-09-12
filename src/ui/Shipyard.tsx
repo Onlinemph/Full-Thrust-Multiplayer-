@@ -18,9 +18,16 @@ import {
   HULL_ROW_OPTIONS,
 } from '../data/designPricing'
 import { ALL_ARCS, CATALOGUE_SYSTEMS, CATALOGUE_WEAPONS } from '../data/buildCatalog'
+import {
+  maxTurrets,
+  turretMass,
+  turretPoints,
+  TURRET_CAPACITY,
+} from '../engine/weapons/kinetics'
 import { allDesigns } from '../data/ships'
 import { deleteDesign, saveDesign, savedDesigns } from '../data/shipyard'
 import type { HullClass, HullRows, ShipDesign } from '../engine/types'
+import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
 
 /**
@@ -400,6 +407,72 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
               ))}
             </div>
 
+            {/* 5.22: "Turrets are sized to fit the weapons they carry" — a
+                2-arc turret carries 6 mass of guns per mass of turret, a
+                6-arc one only 2, and a ship gets one turret per 50 mass. */}
+            <h4>Turrets</h4>
+            <div className="panel-row">
+              <span className="rule-detail">
+                {design.turrets.length} of {maxTurrets(design.mass)} — one per 50 mass (5.22)
+              </span>
+              <span className="spacer" />
+              {([2, 3, 4, 5, 6] as const).map((arcs) => (
+                <button
+                  key={arcs}
+                  disabled={design.turrets.length >= maxTurrets(design.mass)}
+                  title={`${TURRET_CAPACITY[arcs]} mass of guns per mass of turret`}
+                  onClick={() => {
+                    // Sized for what it is meant to carry: the designer picks
+                    // the arc spread, and one mass of turret is the smallest
+                    // that can hold anything at all.
+                    const capacity = TURRET_CAPACITY[arcs]
+                    const mass = turretMass(capacity, arcs)
+                    edit({
+                      turrets: [
+                        ...design.turrets,
+                        {
+                          id: `t${design.turrets.length + 1}`,
+                          arcs: [...ALL_ARCS].slice(0, arcs),
+                          capacity,
+                          mass,
+                          points: turretPoints(mass),
+                        },
+                      ],
+                    })
+                  }}
+                >
+                  {arcs} arcs
+                </button>
+              ))}
+            </div>
+            {design.turrets.map((turret) => (
+              <div className="panel-row" key={turret.id}>
+                <span>
+                  {turret.id} · {turret.arcs.join(' ')}
+                </span>
+                <span className="spacer" />
+                <span className="num">{turret.capacity} cap</span>
+                <span className="num">{turret.mass}m</span>
+                <button
+                  onClick={() =>
+                    edit({
+                      turrets: design.turrets.filter((t) => t.id !== turret.id),
+                      // A weapon in a turret that is gone goes back to its own
+                      // printed arcs rather than pointing nowhere.
+                      weapons: design.weapons.map((w) =>
+                        w.turretId === turret.id ? { ...w, turretId: undefined } : w,
+                      ),
+                    })
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+
+            <h4>Fitted</h4>
+            <FittedWeapons design={design} edit={edit} />
+
             <h4>Weapons</h4>
             <div className="design-list">
               {CATALOGUE_WEAPONS.map((entry) =>
@@ -421,6 +494,10 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                             arcs: [...ALL_ARCS].slice(0, mounting.arcs),
                             mass: mounting.mass,
                             points: mounting.points,
+                            // 6.6's crossed-off mountings. Without this a
+                            // shipyard-built SM Rack fired for ever while the
+                            // roster's identical rack fired once.
+                            ...(entry.ammo === undefined ? {} : { ammo: entry.ammo }),
                           },
                         ],
                       })

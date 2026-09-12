@@ -20,6 +20,15 @@ export interface CatalogueWeapon {
   label: string
   /** Arc counts this mounting is sold in, and what each costs (14.4). */
   mountings: ReadonlyArray<{ arcs: number; mass: number; points: number }>
+  /**
+   * Shots the mount is built with, for 6.6's crossed-off mountings — "Once
+   * fired, it is crossed off and cannot be used again". Absent on everything
+   * that reloads between turns, which is nearly everything.
+   *
+   * The Shipyard has to copy it onto a fitted weapon or a hand-built rack
+   * fires for ever while the roster's identical rack does not.
+   */
+  ammo?: number
 }
 
 export interface CatalogueSystem {
@@ -45,9 +54,9 @@ export const CATALOGUE_WEAPONS: readonly CatalogueWeapon[] = [
   { weaponClass: 'k-gun', variant: 'standard', rating: 2, label: "K-2", mountings: [{ arcs: 1, mass: 3, points: 12 }, { arcs: 2, mass: 4, points: 16 }] },
   { weaponClass: 'k-gun', variant: 'standard', rating: 3, label: "K-3", mountings: [{ arcs: 1, mass: 5, points: 20 }] },
   { weaponClass: 'k-gun', variant: 'standard', rating: 4, label: "K-4", mountings: [{ arcs: 1, mass: 8, points: 32 }] },
-  { weaponClass: 'heavy-missile', variant: 'standard', rating: 1, label: "Heavy Missile", mountings: [{ arcs: 3, mass: 2, points: 6 }] },
-  { weaponClass: 'heavy-missile', variant: 'extended', rating: 1, label: "ER Missile", mountings: [{ arcs: 3, mass: 3, points: 9 }] },
-  { weaponClass: 'salvo-missile-rack', variant: 'standard', rating: 1, label: "SM Rack", mountings: [{ arcs: 3, mass: 4, points: 12 }] },
+  { weaponClass: 'heavy-missile', variant: 'standard', rating: 1, label: "Heavy Missile", mountings: [{ arcs: 3, mass: 2, points: 6 }], ammo: 1 },
+  { weaponClass: 'heavy-missile', variant: 'extended', rating: 1, label: "ER Missile", mountings: [{ arcs: 3, mass: 3, points: 9 }], ammo: 1 },
+  { weaponClass: 'salvo-missile-rack', variant: 'standard', rating: 1, label: "SM Rack", mountings: [{ arcs: 3, mass: 4, points: 12 }], ammo: 1 },
   { weaponClass: 'salvo-missile-launcher', variant: 'standard', rating: 1, label: "SML", mountings: [{ arcs: 3, mass: 3, points: 9 }] },
   { weaponClass: 'submunition-pack', variant: 'standard', rating: 1, label: "Submunition", mountings: [{ arcs: 3, mass: 1, points: 3 }] },
   { weaponClass: 'gatling', variant: 'standard', rating: 1, label: "Gatling", mountings: [{ arcs: 1, mass: 2, points: 8 }, { arcs: 3, mass: 3, points: 12 }, { arcs: 6, mass: 4, points: 16 }] },
@@ -101,7 +110,7 @@ export const CATALOGUE_WEAPONS: readonly CatalogueWeapon[] = [
   { weaponClass: 'plasma-cannon', variant: 'standard', rating: 4, label: "Plasma-4", mountings: [{ arcs: 1, mass: 16, points: 48 }, { arcs: 2, mass: 20, points: 60 }, { arcs: 3, mass: 24, points: 72 }] },
   { weaponClass: 'boarding-torpedo', variant: 'standard', rating: 1, label: "Boarding Torp", mountings: [{ arcs: 3, mass: 2, points: 6 }] },
   { weaponClass: 'mkp', variant: 'standard', rating: 1, label: "MKP", mountings: [{ arcs: 3, mass: 1, points: 4 }] },
-  { weaponClass: 'antimatter-missile', variant: 'standard', rating: 1, label: "AM Missile", mountings: [{ arcs: 3, mass: 2, points: 10 }] },
+  { weaponClass: 'antimatter-missile', variant: 'standard', rating: 1, label: "AM Missile", mountings: [{ arcs: 3, mass: 2, points: 10 }], ammo: 1 },
   { weaponClass: 'rocket-pod', variant: 'standard', rating: 1, label: "Rocket Pod", mountings: [{ arcs: 3, mass: 1, points: 3 }] },
   { weaponClass: 'mine-rack', variant: 'standard', rating: 1, label: "Mine Rack", mountings: [{ arcs: 3, mass: 2, points: 6 }] },
   { weaponClass: 'plasma-bolt-launcher', variant: 'standard', rating: 1, label: "PBL-1", mountings: [{ arcs: 1, mass: 3, points: 9 }, { arcs: 2, mass: 4, points: 12 }, { arcs: 3, mass: 5, points: 15 }] },

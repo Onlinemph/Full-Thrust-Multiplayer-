@@ -1186,6 +1186,15 @@ export interface CatalogueWeapon {
   label: string
   /** Arc counts this mounting is sold in, and what each costs (14.4). */
   mountings: ReadonlyArray<{ arcs: number; mass: number; points: number }>
+  /**
+   * Shots the mount is built with, for 6.6's crossed-off mountings — "Once
+   * fired, it is crossed off and cannot be used again". Absent on everything
+   * that reloads between turns, which is nearly everything.
+   *
+   * The Shipyard has to copy it onto a fitted weapon or a hand-built rack
+   * fires for ever while the roster's identical rack does not.
+   */
+  ammo?: number
 }
 
 export interface CatalogueSystem {
@@ -1207,8 +1216,9 @@ for wc, byrating in WEAPONS.items():
             "{ arcs: %d, mass: %s, points: %s }" % (a, m, pts)
             for a, (m, pts) in sorted(byarcs.items()))
         label = WEAPON_LABEL[wc].format(r=rating)
+        ammo = ", ammo: 1" if base in ONE_SHOT_MOUNTS else ""
         cat.append(f"  {{ weaponClass: '{base}', variant: '{variant}', rating: {rating}, "
-                   f"label: {json.dumps(label)}, mountings: [{mounts}] }},")
+                   f"label: {json.dumps(label)}, mountings: [{mounts}]{ammo} }},")
 cat.append("]")
 cat.append("")
 cat.append("export const CATALOGUE_SYSTEMS: readonly CatalogueSystem[] = [")

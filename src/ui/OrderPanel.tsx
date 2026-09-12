@@ -373,6 +373,37 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         </div>
       ) : null}
 
+      {/* 5.22: "During the Write Orders Phase the facing of each turret must
+          be recorded." A turret with no facing takes any arc it covers, which
+          is what an unrecorded turret does; writing one narrows it to a single
+          60-degree arc for the turn. */}
+      {ship.design.turrets.map((turret) => (
+        <div className="panel-row" key={turret.id}>
+          <span>Turret {turret.id}</span>
+          <span className="spacer" />
+          {turret.arcs.map((arc) => (
+            <button
+              key={arc}
+              className={ship.turretFacings.get(turret.id) === arc ? 'primary' : undefined}
+              disabled={!editable}
+              onClick={() =>
+                dispatch({
+                  type: 'plot-turret-facing',
+                  shipId: ship.id,
+                  turretId: turret.id,
+                  facing: ship.turretFacings.get(turret.id) === arc ? null : arc,
+                })
+              }
+            >
+              {arc}
+            </button>
+          ))}
+          <span style={{ color: 'var(--ink-dim)' }}>
+            {ship.turretFacings.has(turret.id) ? 'trained' : 'free to traverse'}
+          </span>
+        </div>
+      ))}
+
       {/* 11.10: "Ships exiting a jump point function as if they have taken a
           bridge critical hit until the next turn." Worth saying out loud —
           the ship is not steering and the order written here will not be

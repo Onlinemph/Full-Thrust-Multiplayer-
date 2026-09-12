@@ -41,6 +41,7 @@ import { vectorStateFromCinematic, type VectorOrder, type VectorState } from './
 import {
   PHASE_LABELS,
   PHASE_ORDER,
+  type Arc,
   type Course,
   type MovementOrder,
   type Phase,
@@ -415,6 +416,16 @@ export interface ShipState {
    * design is shared by every hull of the class.
    */
   ammo: Map<string, number>
+  /**
+   * 5.22: *"During the Write Orders Phase the facing of each turret must be
+   * recorded."* Turret id to the one arc it will fire into this turn; a turret
+   * with no entry is free to take any arc it covers.
+   *
+   * A knocked-out turret *"remains stuck in its current facing until
+   * repaired"*, which is why this survives the turn rather than being cleared
+   * with the orders: the last facing written is the facing it is stuck in.
+   */
+  turretFacings: Map<string, Arc>
   weaponsFired: Map<string, Phase>
   /**
    * The turn a weapon last fired, kept across turns.
@@ -558,6 +569,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     damageSink: null,
     ftlEntryTurn: null,
     ammo: new Map<string, number>(),
+    turretFacings: new Map<string, Arc>(),
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,

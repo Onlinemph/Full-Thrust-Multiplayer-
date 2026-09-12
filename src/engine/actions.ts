@@ -237,6 +237,7 @@ import {
   rollsBeamDice,
   type WeaponResult,
 } from './weapons'
+import { turretFiringArcs, turretMountedArcs } from './weapons/kinetics'
 import {
   acquireMissileTargets,
   canEngagePlasmaBolt,
@@ -555,6 +556,12 @@ export type GameAction =
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
   /**
+   * 5.22 — *"During the Write Orders Phase the facing of each turret must be
+   * recorded."* One 60-degree arc; null lets the turret take any arc it
+   * covers, which is what an unrecorded turret does.
+   */
+  | { type: 'plot-turret-facing'; shipId: string; turretId: string; facing: Arc | null }
+  /**
    * 11.9 — "The player writes a 'Gate Activate' order at the beginning of the
    * turn". Written in phase 1; the roll comes when the order is announced in
    * phase 5, so nobody gets to see the initiative before deciding.
@@ -701,6 +708,32 @@ function aftArcBlocked(state: GameState, ship: ShipState, arc: Arc): boolean {
  */
 function bearingArcs(ship: ShipState, arcs: readonly Arc[]): readonly Arc[] {
   return ship.rollStatus.inverted ? arcsWhenInverted(arcs, true) : arcs
+}
+
+/**
+ * Where one weapon actually bears, turret and roll together (4.2, 5.22, 16.2).
+ *
+ * A turret *replaces* a mounting's arcs rather than widening them — "weapons
+ * with more than 1 arc that are mounted in a turret lose their additional
+ * arcs" — and once a facing is written in orders the turret fires into that
+ * one 60-degree arc and no other. The roll is applied last, because 16.2
+ * mirrors what the ship presents, not what the turret was told.
+ *
+ * Separate from `bearingArcs` rather than folded into it: that one is also
+ * asked about `SystemDef`s, which have no `turretId`, and about bare arc lists
+ * with no weapon behind them at all.
+ */
+function weaponArcs(ship: ShipState, weapon: WeaponDef): readonly Arc[] {
+  if (weapon.turretId === undefined) return bearingArcs(ship, weapon.arcs)
+  const turret = ship.design.turrets.find((candidate) => candidate.id === weapon.turretId)
+  if (!turret) return bearingArcs(ship, weapon.arcs)
+  // A turret knocked out "remains stuck in its current facing until repaired",
+  // which is the facing it was last given — so the destroyed check does not
+  // free it, it freezes it.
+  const facing = ship.turretFacings.get(turret.id)
+  const mounted = turretMountedArcs(weapon, turret)
+  const firing = turretFiringArcs({ ...turret, arcs: mounted }, facing)
+  return bearingArcs(ship, firing)
 }
 
 /** Orders are written in phase 1 and nowhere else (2.6). */
@@ -1382,9 +1415,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         ? ORBIT_SAME_POINT_RANGE
         : distance(ship.placement.position, target.placement.position)
       const arc = samePoint
-        ? (bearingArcs(ship, weapon.arcs)[0] ?? 'F')
+        ? (weaponArcs(ship, weapon)[0] ?? 'F')
         : arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
-      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+      if (!weaponArcs(ship, weapon).includes(arc)) {
         return refuse('Target is not in that arc')
       }
       if (aftArcBlocked(state, ship, arc)) {
@@ -1624,7 +1657,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         grade: weapon.variant === 'extended' ? 'extended' : 'standard',
         stages: weapon.variant === 'two-stage' ? 2 : 1,
         origin: { position: ship.placement.position, facing: ship.placement.facing },
-        arcs: bearingArcs(ship, weapon.arcs),
+        arcs: weaponArcs(ship, weapon),
         aim: action.aimPoint,
         turn: state.turn,
         fireConsAvailable: availableFireCons(ship, state.phase),
@@ -1685,7 +1718,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           sourceShipId: ship.id,
           sourceWeaponId: weapon.id,
           origin: { position: ship.placement.position, facing: ship.placement.facing },
-          arcs: bearingArcs(ship, weapon.arcs),
+          arcs: weaponArcs(ship, weapon),
           target: {
             id: target.id,
             position: target.placement.position,
@@ -1763,7 +1796,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         sourceWeaponId: weapon.id,
         boltClass: weapon.rating,
         origin: { position: ship.placement.position, facing: ship.placement.facing },
-        arcs: bearingArcs(ship, weapon.arcs),
+        arcs: weaponArcs(ship, weapon),
         aim: action.aimPoint,
         turn: state.turn,
         lastFiredTurn: ship.weaponLastFiredTurn.get(weapon.id) ?? null,
@@ -3393,7 +3426,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
       const arc = arcTo(ship.placement.position, ship.placement.facing, flight.position)
-      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+      if (!weaponArcs(ship, weapon).includes(arc)) {
         return refuse(`${weapon.label} does not bear on ${flight.label}`)
       }
       if (aftArcBlocked(state, ship, arc)) {
@@ -3817,6 +3850,38 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 5.22's written facing.
+     *
+     * A turret that has one fires into that arc and no other; a turret with
+     * none is free to take any arc it covers, which is how an unrecorded
+     * turret behaves and what a fresh design starts as. The facing outlives
+     * the turn deliberately: a knocked-out turret *"remains stuck in its
+     * current facing until repaired"*, and the last thing written is what it
+     * is stuck in.
+     */
+    case 'plot-turret-facing': {
+      const found = orderable(state, shipById(state, action.shipId))
+      if (!('id' in found)) return found
+      const turret = found.design.turrets.find((candidate) => candidate.id === action.turretId)
+      if (!turret) return refuse(`${found.name} has no turret ${action.turretId}`)
+      if (action.facing === null) {
+        found.turretFacings.delete(action.turretId)
+        return OK
+      }
+      if (!turret.arcs.includes(action.facing)) {
+        return refuse(`Turret ${action.turretId} does not traverse ${action.facing} (5.22)`)
+      }
+      found.turretFacings.set(action.turretId, action.facing)
+      pushLog(state, {
+        kind: 'orders',
+        shipId: found.id,
+        side: found.side,
+        text: `${found.name} trains turret ${action.turretId} to ${action.facing} (5.22)`,
+      })
+      return OK
+    }
+
     // ── Jump Gates and Portals (11.9, 11.10) ─────────────────────────────
 
     /**
@@ -4112,7 +4177,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
       const arc = arcTo(ship.placement.position, ship.placement.facing, gate.def.position)
-      if (!bearingArcs(ship, weapon.arcs).includes(arc)) {
+      if (!weaponArcs(ship, weapon).includes(arc)) {
         return refuse(`${weapon.label} does not bear on ${gateName(gate)}`)
       }
       if (aftArcBlocked(state, ship, arc)) {
@@ -6047,7 +6112,7 @@ function pdMountsOf(ship: ShipState): PdMount[] {
     mounts.push({
       id: weapon.id,
       kind: 'beam-1',
-      arcs: bearingArcs(ship, weapon.arcs),
+      arcs: weaponArcs(ship, weapon),
       mode: 'beam-1',
     })
   }
