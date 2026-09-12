@@ -19,6 +19,7 @@ import {
   type SideId,
 } from '../engine/game'
 import { setHyperLimit } from '../engine/actions'
+import { battleriderRecovery, carryingCapacity } from '../engine/ftl'
 import { Rng } from '../engine/dice'
 import type { HyperLimitRules } from '../engine/ftl'
 import {
@@ -574,6 +575,58 @@ export const HYPER_LIMIT: Scenario = {
   ],
 }
 
+/**
+ * 11.7: a Mothership brings its riders to the fight and lets go.
+ *
+ * The Ordu is a mass-200 hull that spends 40 of it on an FTL package sized to
+ * haul two 50-mass riders (11.6's tug rate, the cheaper of the two the rule
+ * offers). Until the riders detach it is the only thing on that counter the
+ * Confederation may shoot at, and its screens cover them while its armour does
+ * not — so the Khanate player's real decision is when to let go, and, until
+ * then, which hull in the group is taking the damage.
+ *
+ * The riders are worth more in a fight than a 50-mass cruiser because they
+ * paid for no drive. They are also dead at the end of the battle if the Ordu
+ * is, which is the whole of 11.7's balance.
+ */
+export const RIDE_TO_BATTLE: Scenario = {
+  id: 'ride-to-battle',
+  name: 'Ride to Battle',
+  briefing:
+    'A Khanate Mothership comes in with two battleriders clamped to her flanks, and a ' +
+    'Confederation division that would very much rather she did not get to let go of them.',
+  objective:
+    'Break the enemy division. The riders are lost with the Mothership, whatever they were ' +
+    'doing at the time.',
+  table: { width: 84, height: 60 },
+  turnLimit: 12,
+  victory: INTRODUCTORY_VICTORY,
+  sides: [
+    {
+      id: 'a',
+      name: 'Durani Star-Khanate',
+      force: [
+        { designId: 'durani-mothership', position: { x: 14, y: 30 }, facing: 3, velocity: 4 },
+        { designId: 'durani-rider-lance', position: { x: 14, y: 30 }, facing: 3, velocity: 4 },
+        { designId: 'durani-rider-bow', position: { x: 14, y: 30 }, facing: 3, velocity: 4 },
+        { designId: 'durani-raider', position: { x: 10, y: 18 }, facing: 3, velocity: 8 },
+        { designId: 'durani-raider', position: { x: 10, y: 42 }, facing: 3, velocity: 8 },
+      ],
+    },
+    {
+      id: 'b',
+      name: 'New Anglian Confederation',
+      force: [
+        { designId: 'nac-battlecruiser', position: { x: 70, y: 30 }, facing: 9, velocity: 6 },
+        { designId: 'nac-heavy-cruiser', position: { x: 74, y: 20 }, facing: 9, velocity: 6 },
+        { designId: 'nac-heavy-cruiser', position: { x: 74, y: 40 }, facing: 9, velocity: 6 },
+        { designId: 'nac-destroyer', position: { x: 78, y: 12 }, facing: 9, velocity: 8 },
+        { designId: 'nac-destroyer', position: { x: 78, y: 48 }, facing: 9, velocity: 8 },
+      ],
+    },
+  ],
+}
+
 export const SCENARIOS: Scenario[] = [
   INTRODUCTORY_SCENARIO,
   BORDER_SKIRMISH,
@@ -582,6 +635,7 @@ export const SCENARIOS: Scenario[] = [
   FLARE_STAR,
   ORBITAL_APPROACH,
   HYPER_LIMIT,
+  RIDE_TO_BATTLE,
 ]
 
 /**
@@ -805,6 +859,40 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
       return ship
     })
   })
+
+  // 11.7: riders are "transported into battle like giant fighters by
+  // Motherships", so a rider whose Mothership is in the same force starts
+  // attached to it rather than flying in under its own power. Packed by the
+  // same function that decides which riders get home at the end, so a fleet
+  // that fits at the start fits at the finish.
+  for (const side of scenario.sides) {
+    const mine = ships.filter((ship) => ship.side === side.id && !ship.destroyed)
+    const riders = mine.filter((ship) => ship.design.battlerider === true)
+    if (riders.length === 0) continue
+    const motherships = mine
+      .filter((ship) => carryingCapacity(ship.design) > 0)
+      .map((ship) => ({ id: ship.id, capacity: carryingCapacity(ship.design) }))
+    const packed = battleriderRecovery(
+      riders.map((ship) => ({
+        id: ship.id,
+        mass: ship.design.mass,
+        ftl: ship.design.ftl,
+        mothershipId: ship.design.mothershipId ?? null,
+      })),
+      motherships,
+    )
+    for (const assignment of packed.assignments) {
+      const rider = mine.find((ship) => ship.id === assignment.riderId)
+      const carrier = mine.find((ship) => ship.id === assignment.mothershipId)
+      if (!rider || !carrier) continue
+      rider.carriedBy = carrier.id
+      rider.placement = {
+        position: { ...carrier.placement.position },
+        facing: carrier.placement.facing,
+      }
+      rider.velocity = carrier.velocity
+    }
+  }
 
   const game = createGame({
     seed: opts.seed,

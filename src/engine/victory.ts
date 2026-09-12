@@ -13,6 +13,7 @@
  */
 
 import { hullRowBounds } from './combat'
+import { battleriderRecovery, carryingCapacity } from './ftl'
 import { cpvPoints } from './battles'
 import { currentThrust, hullRowsCompleted, type GameState, type ShipState } from './game'
 import type { VictoryLadder } from '../data/scenarios'
@@ -68,6 +69,44 @@ export function damageLevelOf(ship: ShipState): DamageLevel {
   return ship.hullMarked > 0 ? 'damaged' : 'unhurt'
 }
 
+/**
+ * Riders that do not get home (11.7): *"In one-off battles, battleriders are
+ * considered destroyed at the end of the battle if there are no surviving
+ * Motherships capable of transporting them."*
+ *
+ * Per side, because a Mothership does not carry the enemy's riders, and
+ * excluding captured hulls, because a prize is not going anywhere its old
+ * owner wants. Riders still attached at the end are aboard already and count
+ * against their carrier's room like any other.
+ *
+ * Only meaningful once the battle is over, so `scoreBattle` asks for it rather
+ * than assuming it — a scoreboard drawn on turn three would otherwise write
+ * off every rider whose Mothership had not yet been built room for.
+ */
+export function strandedBattleriders(game: GameState): Set<string> {
+  const stranded = new Set<string>()
+  for (const side of game.sides) {
+    const mine = game.ships.filter(
+      (ship) => ship.side === side.id && !ship.destroyed && !ship.captured,
+    )
+    const riders = mine.filter((ship) => ship.design.battlerider === true)
+    if (riders.length === 0) continue
+    const recovery = battleriderRecovery(
+      riders.map((ship) => ({
+        id: ship.id,
+        mass: ship.design.mass,
+        ftl: ship.design.ftl,
+        mothershipId: ship.design.mothershipId ?? null,
+      })),
+      mine
+        .filter((ship) => carryingCapacity(ship.design) > 0)
+        .map((ship) => ({ id: ship.id, capacity: carryingCapacity(ship.design) })),
+    )
+    for (const id of recovery.destroyed) stranded.add(id)
+  }
+  return stranded
+}
+
 const SHARE: Record<DamageLevel, keyof VictoryLadder | null> = {
   unhurt: null,
   damaged: 'damaged',
@@ -89,8 +128,13 @@ function hullValue(ship: ShipState, cpv: boolean): number {
 }
 
 /** Points this hull is worth to the enemy, rounded down (4.12). */
-export function pointsConceded(ship: ShipState, ladder: VictoryLadder, cpv = false): number {
-  const key = SHARE[damageLevelOf(ship)]
+export function pointsConceded(
+  ship: ShipState,
+  ladder: VictoryLadder,
+  cpv = false,
+  level: DamageLevel = damageLevelOf(ship),
+): number {
+  const key = SHARE[level]
   if (!key) return 0
   return Math.floor(hullValue(ship, cpv) * ladder[key])
 }
@@ -117,22 +161,31 @@ export interface BattleScore {
 export function scoreBattle(
   game: GameState,
   ladder: VictoryLadder,
-  opts: { cpv?: boolean } = {},
+  opts: { cpv?: boolean; battleOver?: boolean } = {},
 ): BattleScore {
   const cpv = opts.cpv === true
+  // 11.7's stranded riders are a rule about the end of the battle, so they are
+  // only worked out when the caller says the battle has ended. A running
+  // scoreboard shows them alive, which they are.
+  const stranded = opts.battleOver === true ? strandedBattleriders(game) : new Set<string>()
+  const levelOf = (ship: ShipState): DamageLevel =>
+    stranded.has(ship.id) ? 'destroyed' : damageLevelOf(ship)
   const perSide = game.sides.map((side) => {
     const ships = game.ships.filter((ship) => ship.side === side.id)
     return {
       side: side.id,
       name: side.name,
       committed: ships.reduce((sum, ship) => sum + hullValue(ship, cpv), 0),
-      conceded: ships.reduce((sum, ship) => sum + pointsConceded(ship, ladder, cpv), 0),
+      conceded: ships.reduce(
+        (sum, ship) => sum + pointsConceded(ship, ladder, cpv, levelOf(ship)),
+        0,
+      ),
       scored: 0,
       ships: ships.map((ship) => ({
         id: ship.id,
         name: ship.name,
-        level: damageLevelOf(ship),
-        conceded: pointsConceded(ship, ladder, cpv),
+        level: levelOf(ship),
+        conceded: pointsConceded(ship, ladder, cpv, levelOf(ship)),
       })),
     }
   })

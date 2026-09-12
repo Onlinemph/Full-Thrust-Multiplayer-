@@ -10,7 +10,7 @@ import { advance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, Point } from '../engine/types'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
-import { Counter } from './Counter'
+import { Counter, counterRadius } from './Counter'
 import { dispatch } from './store'
 
 /**
@@ -511,7 +511,7 @@ export function MapView({
             .map((ship) => (
               <Counter
                 key={ship.id}
-                position={ship.placement.position}
+                position={riderOffset(game, ship)}
                 facing={ship.placement.facing}
                 side={SIDE_CLASS[ship.side] ?? 'c'}
                 mass={ship.design.mass}
@@ -628,6 +628,32 @@ export function MapView({
  * nicety and nothing else: the group's position is untouched, and a click on a
  * fanned marker still moves the group from where it really is.
  */
+/**
+ * Where an attached battlerider is drawn (11.7).
+ *
+ * A rider holds the Mothership's exact station, which on a real table is one
+ * model with riders clipped to its flanks and here would be two counters in
+ * the same place — the top one unclickable and the bottom one invisible. They
+ * are nudged clear so the player can see what is riding what and pick either.
+ */
+function riderOffset(game: GameState, ship: ShipState): Point {
+  if (ship.carriedBy === null) return ship.placement.position
+  const carrier = game.ships.find((other) => other.id === ship.carriedBy)
+  if (!carrier) return ship.placement.position
+  const siblings = game.ships.filter((other) => other.carriedBy === ship.carriedBy)
+  const index = siblings.findIndex((other) => other.id === ship.id)
+  // Clamped to the flanks: perpendicular to the Mothership's heading, one
+  // counter's width clear of both hulls, alternating port and starboard so a
+  // second pair sits outboard of the first.
+  const gap = counterRadius(carrier.design.mass) + counterRadius(ship.design.mass) + 0.6
+  const beam = (Math.floor(index / 2) + 1) * gap * (index % 2 === 0 ? -1 : 1)
+  const heading = ((carrier.placement.facing % 12) * Math.PI) / 6
+  return {
+    x: carrier.placement.position.x + beam * Math.cos(heading),
+    y: carrier.placement.position.y + beam * Math.sin(heading),
+  }
+}
+
 function stackFlights<T extends { id: string; position: Point }>(
   groups: readonly T[],
 ): Array<{ group: T; nudge: Point }> {

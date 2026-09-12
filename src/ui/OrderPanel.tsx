@@ -17,7 +17,7 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
-import { optional } from '../engine/actions'
+import { carriedHulls, optional } from '../engine/actions'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -292,6 +292,52 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
             {ship.design.streamlining === 'none'
               ? 'not streamlined — this is an uncontrolled entry'
               : 'slow below orbital velocity to come down'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* 11.7: a rider lets go in orders, and flies its own move in phase 5. */}
+      {ship.carriedBy !== null ? (
+        <div className="panel-row">
+          <span>Riding {game.ships.find((s) => s.id === ship.carriedBy)?.name ?? 'a Mothership'}</span>
+          <span className="spacer" />
+          <button
+            disabled={!editable}
+            onClick={() => dispatch({ type: 'detach-hull', shipId: ship.id })}
+          >
+            Detach
+          </button>
+        </div>
+      ) : null}
+
+      {/* 11.7: "Damage received can be applied to either the Mothership or
+          battleriders at the choice of the defending player." */}
+      {carriedHulls(game, ship.id).length > 0 ? (
+        <div className="panel-row">
+          <label>
+            Damage goes on{' '}
+            <select
+              aria-label={`${ship.name} damage allocation`}
+              value={ship.damageSink?.id ?? ''}
+              onChange={(event) =>
+                dispatch({
+                  type: 'nominate-damage-sink',
+                  shipId: ship.id,
+                  sinkId: event.target.value === '' ? null : event.target.value,
+                })
+              }
+            >
+              <option value="">{ship.name}</option>
+              {carriedHulls(game, ship.id).map((rider) => (
+                <option key={rider.id} value={rider.id}>
+                  {rider.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="spacer" />
+          <span style={{ color: 'var(--ink-dim)' }}>
+            riders share the screens, not the armour (11.7)
           </span>
         </div>
       ) : null}

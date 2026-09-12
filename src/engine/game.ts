@@ -352,6 +352,38 @@ export interface ShipState {
    */
   ftlArrival: { entryPoint: Point; course: Course; velocity: number } | null
   /**
+   * 11.6, 11.7: the hull carrying this one — a tug, a tender, or a Mothership
+   * with a battlerider attached.
+   *
+   * A carried hull is on the table and can be seen, but it does not fly, it
+   * cannot be fired at, and it goes wherever the carrier goes. Null for
+   * everything that flies itself, which is nearly everything.
+   */
+  carriedBy: string | null
+  /**
+   * 11.7: the hull in an attached group that damage is being put on, at the
+   * defending player's choice — *"Damage received can be applied to either the
+   * Mothership or battleriders at the choice of the defending player."*
+   *
+   * A direct reference rather than an id because `markHullBoxes` is the one
+   * place every damage path in the game passes through, and it does not have
+   * the game to look an id up in. Set by `nominate-damage-sink`, cleared when
+   * the rider detaches, dies, or the Mothership does.
+   *
+   * **[reading]** The nomination stands until the defender changes it, rather
+   * than being made afresh for each hit. 11.7 gives the choice to the defender
+   * without saying when it is made, and a per-hit prompt would stop the fire
+   * phase dead between every shot. A player who wants to spread damage moves
+   * the nomination, which is one action rather than one per hit.
+   */
+  damageSink: ShipState | null
+  /**
+   * 11.7: the turn this hull made an FTL entry, if it has — *"If the Mothership
+   * makes an FTL entry, the battleriders cannot detach and move independently
+   * until the next turn."*
+   */
+  ftlEntryTurn: number | null
+  /**
    * 17.8's orbit: the body being orbited and the clock marker the ship sits on.
    *
    * A ship in orbit is not flying: *"the ship does not have to have any course
@@ -506,6 +538,9 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     orbit: null,
     landed: null,
     ftlArrival: null,
+    carriedBy: null,
+    damageSink: null,
+    ftlEntryTurn: null,
     weaponsFired: new Map<string, Phase>(),
     weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,
@@ -1741,6 +1776,14 @@ export function markHullBoxes(
 ): { marked: number; rowsCrossed: number; destroyed: boolean } {
   if (points <= 0 || ship.destroyed) {
     return { marked: 0, rowsCrossed: 0, destroyed: ship.destroyed }
+  }
+  // 11.7: the defender has nominated a hull in the attached group to take the
+  // damage. Resolved here because this is the one function every damage path
+  // in the game ends at — the alternative is the same three lines in twelve
+  // places, and the thirteenth would be the one that got it wrong.
+  const sink = ship.damageSink
+  if (sink && sink !== ship && !sink.destroyed && sink.carriedBy === ship.id) {
+    return markHullBoxes(sink, points, cause)
   }
   if (cause === 'weapons') ship.hullHitByWeapons = true
   // 12.7: "A single point of damage is sufficient to destroy the captured

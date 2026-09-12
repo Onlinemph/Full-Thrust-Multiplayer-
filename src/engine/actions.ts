@@ -126,6 +126,9 @@ import {
   type VectorOrder,
 } from './vectormovement'
 import {
+  allocateBattleriderDamage,
+  attachedBattleriderDefence,
+  canDetachBattlerider,
   ftlExitMove,
   ftlExitRestrictions,
   ftlPermittedAt,
@@ -534,6 +537,19 @@ export type GameAction =
    * course and the ship is gone for good.
    */
   | { type: 'plot-ftl-exit'; shipId: string; on: boolean }
+  /**
+   * 11.7 — a battlerider lets go of its Mothership, or a tug drops its tow
+   * (11.6). Written in orders, because the rider then flies its own move in
+   * phase 5 and the enemy can shoot at it from that moment.
+   */
+  | { type: 'detach-hull'; shipId: string }
+  /**
+   * 11.7 — the defending player says which hull in an attached group the
+   * damage goes on: *"Damage received can be applied to either the Mothership
+   * or battleriders at the choice of the defending player."* `sinkId` is null
+   * to put it back on the Mothership.
+   */
+  | { type: 'nominate-damage-sink'; shipId: string; sinkId: string | null }
   /**
    * 11.5 — a ship drops out of hyperspace onto the table. The entry point, the
    * course and the velocity are what the player wrote down; where the ship
@@ -1070,6 +1086,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'move-ships') return refuse('Ships move in phase 5')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
       if (ship.captured) return refuse(`${ship.name} is a prize and does not move (12.7)`)
+      if (ship.carriedBy !== null) {
+        const carrier = shipById(state, ship.carriedBy)
+        return refuse(
+          `${ship.name} is riding ${carrier?.name ?? 'another hull'} and does not fly its own move (11.7)`,
+        )
+      }
       // `lastKnown` is stamped with the turn as the ship moves, so it doubles
       // as the has-moved flag and survives replay without extra state.
       if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
@@ -1208,6 +1230,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         resolveLeavingTable(state, ship)
       }
       dragDockedShips(state, ship)
+      dragCarriedHulls(state, ship)
       dragEscortingFlights(state, ship)
       return OK
     }
@@ -1248,6 +1271,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (ship.side === target.side) return refuse('That is a friendly ship')
+      // 11.7: "Until they detach, only the Mothership can be fired at." Shoot
+      // at the Mothership; where the damage lands is the defender's call.
+      if (target.carriedBy !== null) {
+        const carrier = shipById(state, target.carriedBy)
+        return refuse(
+          `${target.name} is attached to ${carrier?.name ?? 'another hull'}; only the Mothership can be fired at (11.7)`,
+        )
+      }
+      // A rider fires its own guns while attached — 11.7 restricts what may be
+      // fired AT the group, not what the group may fire.
 
       // 7.25: a ship running its Reflex Field "may not use any weaponry of its
       // own that turn", and 7.20 says the same of a cloaked one. 10.3 says it
@@ -1713,7 +1746,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'ordnance-vs-ships') {
         return refuse('Ordnance attacks in phase 10')
       }
-      const alive = state.ships.filter((ship) => !ship.destroyed && !ship.offTable)
+      // 11.7: a marker cannot acquire an attached rider any more than a gun
+      // can be aimed at one — the Mothership is the only hull out there.
+      const alive = state.ships.filter(
+        (ship) => !ship.destroyed && !ship.offTable && ship.carriedBy === null,
+      )
       const acquired = acquireMissileTargets(
         ordnanceOf(state),
         alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
@@ -3430,7 +3467,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!check.ready) return refuse(check.reason)
 
       const pursuing = state.ships.filter(
-        (ship) => ship.side !== side.id && !ship.destroyed && !ship.offTable,
+        (ship) =>
+          ship.side !== side.id && !ship.destroyed && !ship.offTable && ship.carriedBy === null,
       )
       const result = resolveDisengagement(
         mine.map((ship) => currentThrust(ship)),
@@ -3498,9 +3536,22 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           nearby: state.ships
             .filter(
               (other) =>
-                other.id !== ship.id && !other.destroyed && !other.offTable && !other.captured,
+                other.id !== ship.id &&
+                !other.destroyed &&
+                !other.offTable &&
+                !other.captured &&
+                // An attached rider is standing on its Mothership's counter;
+                // counting it as a bystander would hurt the same group twice.
+                other.carriedBy === null,
             )
             .map((other) => ({ id: other.id, position: other.placement.position })),
+          // 11.5: "Ships carried by a tug or tender or battleriders carried by
+          // a Mothership … move the same distance and direction as their
+          // ship", so a formation arrives as a formation.
+          carried: carriedHulls(state, ship.id).map((rider) => ({
+            id: rider.id,
+            position: rider.placement.position,
+          })),
           lightCraft: [
             ...state.fighterGroups
               .filter((group) => group.status === 'in-flight')
@@ -3556,6 +3607,18 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // "its current velocity being applied from the start of the next" turn:
       // the entry IS the move, so nothing else happens to the ship now.
       ship.velocity = action.velocity
+      // 11.7: "If the Mothership makes an FTL entry, the battleriders cannot
+      // detach and move independently until the next turn."
+      ship.ftlEntryTurn = state.turn
+      // The load arrives with the hull that brought it, at the same
+      // displacement rather than the same point (11.5).
+      for (const moved of result.carried) {
+        const rider = shipById(state, moved.id)
+        if (!rider) continue
+        rider.placement = { position: moved.to, facing: action.course }
+        rider.velocity = action.velocity
+        rider.offTable = false
+      }
       pushLog(state, {
         kind: 'move',
         shipId: ship.id,
@@ -3616,6 +3679,84 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         }
         projectOrdnance(state)
       }
+      return OK
+    }
+
+    /**
+     * 11.7: *"If the Mothership makes an FTL entry, the battleriders cannot
+     * detach and move independently until the next turn."*
+     *
+     * A rider that lets go keeps the Mothership's course and velocity — it has
+     * been flying them all along — and from this moment it is a ship like any
+     * other: it flies its own move, and it can be shot at.
+     */
+    case 'detach-hull': {
+      if (state.phase !== 'orders') return refuse('A rider detaches in orders (11.7)')
+      const rider = shipById(state, action.shipId)
+      if (!rider) return refuse('No such ship')
+      if (rider.destroyed) return refuse('Ship is out of the battle')
+      if (rider.carriedBy === null) return refuse(`${rider.name} is not attached to anything`)
+      const carrier = shipById(state, rider.carriedBy)
+      if (!carrier) return refuse(`${rider.name} has nothing to detach from`)
+      if (!canDetachBattlerider(carrier.ftlEntryTurn, state.turn)) {
+        return refuse(
+          `${carrier.name} came out of hyperspace this turn; its riders cannot detach until the next (11.7)`,
+        )
+      }
+      rider.carriedBy = null
+      rider.placement = {
+        position: { ...carrier.placement.position },
+        facing: carrier.placement.facing,
+      }
+      rider.velocity = carrier.velocity
+      if (carrier.damageSink === rider) carrier.damageSink = null
+      pushLog(state, {
+        kind: 'note',
+        shipId: rider.id,
+        side: rider.side,
+        text: `${rider.name} detaches from ${carrier.name} at course ${carrier.placement.facing}, velocity ${carrier.velocity} (11.7)`,
+      })
+      return OK
+    }
+
+    /**
+     * 11.7's defender's choice, validated by `allocateBattleriderDamage` rather
+     * than made by it: which hull in the attached group the damage lands on.
+     */
+    case 'nominate-damage-sink': {
+      const carrier = shipById(state, action.shipId)
+      if (!carrier) return refuse('No such ship')
+      if (carrier.destroyed) return refuse('Ship is out of the battle')
+      const riders = carriedHulls(state, carrier.id)
+      if (riders.length === 0) return refuse(`${carrier.name} is not carrying anything (11.7)`)
+      if (action.sinkId === null) {
+        carrier.damageSink = null
+        pushLog(state, {
+          kind: 'note',
+          shipId: carrier.id,
+          side: carrier.side,
+          text: `${carrier.name} takes its own damage again (11.7)`,
+        })
+        return OK
+      }
+      const sink = riders.find((rider) => rider.id === action.sinkId)
+      if (!sink) {
+        const defence = attachedBattleriderDefence(
+          carrier.id,
+          riders.map((rider) => rider.id),
+        )
+        // The engine builds the split and this checks it, which is the same
+        // check a hand-written allocation would get.
+        const problems = allocateBattleriderDamage(1, [{ unitId: action.sinkId, damage: 1 }], defence)
+        return refuse(problems[0] ?? `${action.sinkId} is not attached to ${carrier.name} (11.7)`)
+      }
+      carrier.damageSink = sink
+      pushLog(state, {
+        kind: 'note',
+        shipId: carrier.id,
+        side: carrier.side,
+        text: `${carrier.name} puts the damage it takes on ${sink.name} (11.7)`,
+      })
       return OK
     }
 
@@ -4747,6 +4888,13 @@ function moveInOrbit(state: GameState, ship: ShipState): ActionOutcome {
     ship.orbit = null
     return refuse('The body this ship was orbiting is gone')
   }
+  // A tug or Mothership going round the track takes its load round with it,
+  // the same as it would flying (11.6, 11.7). Deferred so it reads off wherever
+  // the orbit leaves the carrier, whichever branch below that turns out to be.
+  const dragged = (outcome: ActionOutcome): ActionOutcome => {
+    dragCarriedHulls(state, ship)
+    return outcome
+  }
   const { feature, track } = orbit
   const name = feature.label ?? 'the planet'
 
@@ -4760,7 +4908,7 @@ function moveInOrbit(state: GameState, ship: ShipState): ActionOutcome {
       turn: state.turn,
       cloaked: ship.cloaked,
     }
-    return OK
+    return dragged(OK)
   }
 
   const order = ship.order ?? BLANK_ORDER
@@ -4842,7 +4990,7 @@ function moveInOrbit(state: GameState, ship: ShipState): ActionOutcome {
       group.facing = ship.placement.facing
     }
   }
-  return OK
+  return dragged(OK)
 }
 
 // ---------------------------------------------------------------------------
@@ -5528,7 +5676,13 @@ function jumpToFtl(state: GameState, ship: ShipState): ActionOutcome {
       exitPoint: ship.placement.position,
       advancedDrive: isAdvancedFtl(ship.design.ftl),
       nearby: state.ships
-        .filter((other) => other.id !== ship.id && !other.destroyed && !other.offTable)
+        .filter(
+          (other) =>
+            other.id !== ship.id &&
+            !other.destroyed &&
+            !other.offTable &&
+            other.carriedBy === null,
+        )
         .map((other) => ({ id: other.id, position: other.placement.position })),
       lightCraft: [
         ...state.fighterGroups
@@ -5981,6 +6135,31 @@ function resolveDockingApproach(state: GameState, ship: ShipState): void {
  * The precedent is the wing still in the bay, dragged for the same reason and
  * with the same three lines.
  */
+/** Hulls this one is carrying (11.6, 11.7). */
+export function carriedHulls(state: GameState, carrierId: string): ShipState[] {
+  return state.ships.filter((ship) => ship.carriedBy === carrierId && !ship.destroyed)
+}
+
+/**
+ * A carried hull goes where its carrier goes (11.6, 11.7).
+ *
+ * *"The battleriders start with the velocity and course of the Mothership"* —
+ * so they hold the carrier's station and heading exactly, and take its
+ * velocity with them when they detach. On a real table this is one model with
+ * riders clipped to it; here they are separate counters, and a rider left
+ * behind at last turn's station would detach into empty space.
+ */
+function dragCarriedHulls(state: GameState, carrier: ShipState): void {
+  for (const rider of carriedHulls(state, carrier.id)) {
+    rider.placement = {
+      position: { ...carrier.placement.position },
+      facing: carrier.placement.facing,
+    }
+    rider.velocity = carrier.velocity
+    rider.offTable = carrier.offTable
+  }
+}
+
 function dragDockedShips(state: GameState, host: ShipState): void {
   for (const other of state.ships) {
     if (other.id === host.id) continue
@@ -6150,6 +6329,7 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
     resolveLeavingTable(state, ship)
   }
   dragDockedShips(state, ship)
+  dragCarriedHulls(state, ship)
   dragEscortingFlights(state, ship)
   return OK
 }
@@ -6484,8 +6664,24 @@ export function effectiveScreenLevel(ship: ShipState): ScreenLevel {
   return screenLevelOf(ship.design.screens, working)
 }
 
+/**
+ * Which hull actually takes the damage a hit on this one produced (11.7).
+ *
+ * *"Damage received can be applied to either the Mothership or battleriders at
+ * the choice of the defending player"* — and *"battleriders are protected by
+ * the Mothership's screens (but not armor)"*. Both halves fall out of putting
+ * the redirect here rather than at the shot: screens are spent when the weapon
+ * is resolved, against the Mothership, before this is reached; armour is read
+ * out of `targetStateOf`, which now reads the rider's.
+ */
+function damageBearer(ship: ShipState): ShipState {
+  const sink = ship.damageSink
+  return sink && !sink.destroyed && sink.carriedBy === ship.id ? sink : ship
+}
+
 /** The damage pipeline's view of a ship. */
-function targetStateOf(ship: ShipState): DamageableTarget {
+function targetStateOf(target: ShipState): DamageableTarget {
+  const ship = damageBearer(target)
   const fresh = createTargetState(ship.design)
   return {
     ...fresh,
@@ -6497,7 +6693,8 @@ function targetStateOf(ship: ShipState): DamageableTarget {
 }
 
 /** Write armour back; hull goes through markHullBoxes, which owns the rows. */
-function writeBackDamage(ship: ShipState, after: DamageableTarget): void {
+function writeBackDamage(target: ShipState, after: DamageableTarget): void {
+  const ship = damageBearer(target)
   ship.armourMarked = ship.design.armour.layers.map(
     (boxes, layer) => boxes - (after.armourRemaining[layer] ?? boxes),
   )

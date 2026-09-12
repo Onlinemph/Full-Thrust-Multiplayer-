@@ -69,6 +69,16 @@ import { deployingSide, optional, proposeDeployment, type GameAction } from './a
 import type { MovementOrder, Point, TurnDirection } from './types'
 import type { Rng } from './dice'
 
+/**
+ * How close the computer lets an enemy get before it lets its riders go (11.7).
+ *
+ * A rider that detaches early loses the Mothership's screens for nothing; one
+ * that detaches too late dies with the Mothership, which is what 11.7 does to
+ * riders with nothing left to carry them. Beam-2 range is the compromise: the
+ * riders come off in time to shoot on the pass.
+ */
+const RIDER_RELEASE_RANGE = 24
+
 // ---------------------------------------------------------------------------
 // Doctrine
 // ---------------------------------------------------------------------------
@@ -418,6 +428,19 @@ export function aiActions(
           actions.push({ type: 'deploy-ship', ...spot })
         }
         break
+      }
+      // 11.7: the riders come off when the enemy is close enough that they can
+      // do something about it. Too early and they lose the Mothership's
+      // screens for nothing; too late and the Mothership is dead with them
+      // still clamped to it, which 11.7 scores as their destruction.
+      for (const rider of mine) {
+        if (rider.carriedBy === null) continue
+        const enemy = pickTarget(game, rider)
+        if (!enemy) continue
+        if (distance(rider.placement.position, enemy.placement.position) > RIDER_RELEASE_RANGE) {
+          continue
+        }
+        actions.push({ type: 'detach-hull', shipId: rider.id })
       }
       for (const ship of mine) {
         // 8.1: a carrier with a wing still in the bay writes "Launch" and

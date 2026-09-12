@@ -38,7 +38,7 @@
 
 import { d6, rollD6, type Rng } from './dice'
 import { arcTo, distance, moveShip } from './geometry'
-import type { Course, FtlKind, Point } from './types'
+import type { Course, FtlKind, Point, ShipDesign } from './types'
 
 const EPSILON = 1e-9
 
@@ -1034,6 +1034,26 @@ export function allocateBattleriderDamage(
     problems.push(`allocation of ${allocated} does not account for the ${damage} points taken (11.7)`)
   }
   return problems
+}
+
+/**
+ * What a hull can carry, in mass of other hulls (11.6, 11.7).
+ *
+ * 11.7 offers a Mothership two ways to pay — *"internal bays or an oversized
+ * FTL Drive"* — and a hull may have bought both, so both are counted. Ship
+ * bays are 1.5 mass for every 1 mass carried; a tug's spare drive mass is 1
+ * for every 5 towed, which is why almost every Mothership in a fleet list is
+ * a tug.
+ */
+export function carryingCapacity(design: ShipDesign): number {
+  const bayMass = design.systems
+    .filter((system) => system.kind === 'tender')
+    .reduce((sum, system) => sum + system.mass, 0)
+  const drive =
+    design.ftl === 'tug'
+      ? tugTransferMass(design.mass, tugDriveMass(design.mass, design.ftlTransferMass ?? 0))
+      : 0
+  return tenderCapacityFor(bayMass) + drive
 }
 
 /** A surviving Mothership's lift, however it is provided — bay space or drive field (11.7). */

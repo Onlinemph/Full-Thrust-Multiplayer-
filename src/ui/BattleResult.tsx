@@ -37,7 +37,11 @@ export function battleEnd(game: GameState, scenario: Scenario | undefined): Batt
   }
 
   if (scenario.turnLimit && game.turn > scenario.turnLimit) {
-    return { over: true, reason: 'turn-limit', winner: scoreBattle(game, ladder, { cpv: optional(game).cpv }).winner }
+    return {
+      over: true,
+      reason: 'turn-limit',
+      winner: scoreBattle(game, ladder, { cpv: optional(game).cpv, battleOver: true }).winner,
+    }
   }
 
   return { over: false }
@@ -54,7 +58,11 @@ export function BattleResult({
   end: Extract<BattleEnd, { over: true }>
   onClose: () => void
 }) {
-  const score = scoreBattle(game, scenario.victory, { cpv: optional(game).cpv })
+  // 11.7's riders are written off here and only here: the battle is over.
+  const score = scoreBattle(game, scenario.victory, {
+    cpv: optional(game).cpv,
+    battleOver: true,
+  })
   const winner = score.sides.find((s) => s.side === end.winner)
 
   return (
