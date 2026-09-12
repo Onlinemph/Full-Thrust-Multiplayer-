@@ -58,11 +58,19 @@ import {
 } from './movement'
 import { applyDamage, createTargetState, type DamageableTarget } from './combat'
 import {
+  attenuatedScreens,
   cloudSpeedDamage,
+  createDebrisCloud,
+  debrisCloudExpired,
+  explosionCheck,
+  moveDebrisCloud,
+  cloudTargetLock,
   hasLineOfFire,
+  resolveKnockedOffCourse,
   resolveCollision,
   resolveMeteorField,
   stationaryCollisionRisk,
+  type DebrisCloud,
   type TerrainBody,
 } from './terrain'
 import {
@@ -515,7 +523,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase === 'move-ships') {
         for (const ship of state.ships) resolveDockingApproach(state, ship)
       }
+      // 17.5: a hull that has just been overkilled may come apart. Swept at the
+      // boundary so that every way of dying reaches it, rather than at the
+      // seven separate places a ship can be destroyed.
+      sweepDebris(state)
       advancePhase(state)
+      if (state.phase === 'move-ships') driftDebris(state)
       return OK
     }
 
@@ -958,6 +971,23 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
       }
 
+      // 17.2 rules 2 and 3. The lock-on is one die per target nomination, not
+      // per weapon, so the answer is remembered for the rest of the phase.
+      const dust = cloudLockOn(state, ship, target, weapon)
+      if (dust && !dust.locked) {
+        markWeaponFired(ship, weapon.id, state.phase)
+        markShipFired(ship)
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          targetId: target.id,
+          side: ship.side,
+          dice: dust.roll === null ? undefined : [dust.roll],
+          text: `${ship.name}: ${weapon.label} cannot see ${target.name} — ${dust.reason}`,
+        })
+        return OK
+      }
+
       // 7.17 – 7.22: what the target's electronic warfare fit does to this
       // particular shot. It can change the range as well as the die roll — a
       // Holofield adds 12 MU against a to-hit table and a Cloaking Device
@@ -1012,7 +1042,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const result = fireWeapon(weapon, {
         range: rangeToUse,
         arc,
-        targetScreens: effectiveScreenLevel(target),
+        // 17.2 rule 3: a cloud is worth one screen level against a beam or a
+        // graser, capped at 2 — which is why it is worth least to the ship
+        // that needed it least.
+        targetScreens: dust ? dust.screens : effectiveScreenLevel(target),
         rearArc: isRearArcAttack(
           target.placement.position,
           target.placement.facing,
@@ -1300,12 +1333,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         text: `${ship.name} crosses hull row ${result.rowsLost}: systems lost on ${result.target}+`,
         dice: result.checks.map((check) => check.roll),
       })
+      knockOffCourse(state, ship, result.rowsLost, result.extraRows)
       return OK
     }
 
     case 'threshold-sweep': {
       if (state.phase !== 'threshold') return refuse('Threshold checks are phase 13')
-      thresholdPhase(state, { driveDamage: optional(state).driveDamage })
+      for (const result of thresholdPhase(state, { driveDamage: optional(state).driveDamage })) {
+        const ship = shipById(state, result.shipId)
+        if (ship) knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+      }
       return OK
     }
 
@@ -2154,6 +2191,106 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
  * and both are rebuilt identically by a replay, so nothing about this is a
  * second source of truth.
  */
+/**
+ * 17.5's battle debris, kept beside the state rather than in it.
+ *
+ * The same shape as the ordnance markers one screen down, and for the same
+ * reasons: a `DebrisCloud` carries a diameter, a course, a velocity and the
+ * turn it was made on, none of which a `TerrainFeature` has room for, and
+ * widening `TerrainFeature` would widen a type that rides inside saved custom
+ * scenarios for a value no scenario author will ever write. What the map and
+ * 17.4 need — a disc of the right size in the right place — is projected into
+ * `state.terrain`, where `FIELD_TERRAIN` already treats a `debris` feature as
+ * a meteor field, which is exactly what 17.5 says it is: *"any ship
+ * encountering the cloud treats it exactly as for the meteor and debris rules
+ * given in the section above"*.
+ */
+const DEBRIS = new WeakMap<GameState, DebrisCloud[]>()
+
+function debrisOf(state: GameState): DebrisCloud[] {
+  let clouds = DEBRIS.get(state)
+  if (!clouds) {
+    clouds = []
+    DEBRIS.set(state, clouds)
+  }
+  return clouds
+}
+
+/** Copy the clouds into `state.terrain`, for drawing and for 17.4. */
+function projectDebris(state: GameState): void {
+  state.terrain = state.terrain.filter((feature) => !feature.id.startsWith('debris-'))
+  for (const cloud of debrisOf(state)) {
+    state.terrain.push({
+      id: cloud.id,
+      kind: 'debris',
+      position: { ...cloud.position },
+      radius: cloud.diameter / 2,
+      label: 'battle debris (17.5)',
+    })
+  }
+}
+
+/**
+ * The explosion check on a ship that has just died (17.5).
+ *
+ * *"Note the amount of excess damage inflicted (over that required to reduce
+ * the ship to zero points) and roll a D6. If the score is less than or equal to
+ * the excess damage then the remains of the ship explode."* Run as a sweep at
+ * every phase boundary rather than at each of the seven places a ship can die,
+ * so that a beam kill and a missile kill are treated the same way — the excess
+ * itself is recorded by `markHullBoxes`, which is the sole writer of hull
+ * damage.
+ */
+function sweepDebris(state: GameState): void {
+  if (!optional(state).terrainHazards) return
+  const clouds = debrisOf(state)
+  let made = false
+  for (const ship of state.ships) {
+    if (!ship.destroyed || ship.excessDamage === null) continue
+    const excess = ship.excessDamage
+    ship.excessDamage = null
+    const check = explosionCheck(excess, 0, state.rng)
+    if (!check.explodes) continue
+    clouds.push(
+      createDebrisCloud({
+        id: `debris-${ship.id}`,
+        position: ship.placement.position,
+        course: ship.placement.facing,
+        velocity: ship.velocity,
+        turn: state.turn,
+        group: ship.design.group,
+      }),
+    )
+    made = true
+    pushLog(state, {
+      kind: 'destroyed',
+      shipId: ship.id,
+      side: ship.side,
+      dice: check.roll === null ? undefined : [check.roll],
+      text: `${ship.name} blows apart — ${excess} points of overkill leaves a debris cloud (17.5)`,
+    })
+  }
+  if (made) projectDebris(state)
+}
+
+/**
+ * Drift the clouds and retire the expired ones (17.5).
+ *
+ * *"The debris cloud exists for only 1 turn after the explosion"*, which is one
+ * turn of danger straddling a turn boundary — so the sweep runs as the movement
+ * phase opens, beside the ordnance, rather than in the per-turn reset, which
+ * would kill the cloud before the turn it is supposed to be dangerous in.
+ */
+function driftDebris(state: GameState): void {
+  const clouds = debrisOf(state)
+  if (clouds.length === 0) return
+  DEBRIS.set(
+    state,
+    clouds.map(moveDebrisCloud).filter((cloud) => !debrisCloudExpired(cloud, state.turn)),
+  )
+  projectDebris(state)
+}
+
 const ORDNANCE = new WeakMap<GameState, MissileMarker[]>()
 
 function ordnanceOf(state: GameState): MissileMarker[] {
@@ -2727,6 +2864,93 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  * planetoids are solid; a dust cloud, a nebula or an asteroid field is not
  * something a shot stops at, and each of those has its own rule instead.
  */
+/** Dust and gas: 17.2 charges for speed through it and blinds shots across it. */
+function cloudsOver(state: GameState, ...points: Point[]): boolean {
+  if (!optional(state).terrainHazards) return false
+  return state.terrain.some(
+    (feature) =>
+      CLOUD_TERRAIN.has(feature.kind) &&
+      points.some((p) => distance(p, feature.position) <= feature.radius),
+  )
+}
+
+/**
+ * Getting a lock through dust (17.2 rules 2 and 3), or null when no cloud is
+ * involved and the ordinary screen level stands.
+ *
+ * *"When attempting to fire at a ship in a dust cloud, **or if the firing ship
+ * is itself in a cloud**, roll a D6 after nominating the target"* — either end
+ * is enough, which is the clause that catches people out: sitting in a nebula
+ * blinds you as much as it hides you.
+ *
+ * One die per nomination, not per weapon, so the answer is cached on the
+ * firing ship and cleared at every phase boundary along with the FireCons —
+ * phases 9, 10 and 11 are three separate nominations of the same target.
+ */
+function cloudLockOn(
+  state: GameState,
+  ship: ShipState,
+  target: ShipState,
+  weapon: WeaponDef,
+): { locked: boolean; screens: ScreenLevel; roll: number | null; reason: string } | null {
+  if (!cloudsOver(state, ship.placement.position, target.placement.position)) return null
+  const beamOrGraser =
+    weapon.weaponClass === 'beam' ||
+    weapon.weaponClass === 'graser' ||
+    weapon.weaponClass === 'heavy-graser'
+
+  const remembered = ship.cloudLocks.get(target.id)
+  if (remembered !== undefined) {
+    return {
+      locked: remembered,
+      screens: beamOrGraser
+        ? attenuatedScreens(effectiveScreenLevel(target))
+        : effectiveScreenLevel(target),
+      roll: null,
+      reason: remembered ? '' : 'the dust already beat this nomination (17.2)',
+    }
+  }
+  const result = cloudTargetLock(state.rng, {
+    screens: effectiveScreenLevel(target),
+    beamOrGraser,
+  })
+  ship.cloudLocks.set(target.id, result.locked)
+  return result
+}
+
+/**
+ * 12.11's further roll, after the systems have been checked.
+ *
+ * *"After checking for systems failures make one further roll at the same odds
+ * … to determine if the ship has been knocked off course."* Optional, because
+ * section 12 is the optional rules and because it draws two more dice per
+ * threshold point, which would move the stream under every battle file written
+ * before it existed.
+ *
+ * It runs after `thresholdPhase` rather than instead of it, and it is handed
+ * the same `rowsLost` and `extraRows` the systems check used, which is what
+ * *"at the same odds"* means.
+ */
+function knockOffCourse(
+  state: GameState,
+  ship: ShipState,
+  rowsLost: number,
+  extraRows: number,
+): void {
+  if (!optional(state).knockedOffCourse) return
+  if (ship.destroyed || ship.offTable) return
+  const result = resolveKnockedOffCourse(ship.placement.facing, rowsLost, state.rng, { extraRows })
+  if (!result.facing.knocked) return
+  ship.placement = { ...ship.placement, facing: result.facing.course }
+  pushLog(state, {
+    kind: 'threshold',
+    shipId: ship.id,
+    side: ship.side,
+    dice: [result.facing.roll, result.facing.directionRoll ?? 0],
+    text: `${ship.name} is knocked ${result.facing.direction} onto course ${result.facing.course} (12.11)`,
+  })
+}
+
 /**
  * Whether the approach flown this turn earns a docking (16.6).
  *
@@ -3301,6 +3525,11 @@ export interface OptionalRules {
   movingTable?: boolean
   /** 3.9's optional re-entry roll for a ship that flew off the edge. */
   tableReentry?: boolean
+  /**
+   * 12.11: *"after checking for systems failures make one further roll at the
+   * same odds … to determine if the ship has been knocked off course."*
+   */
+  knockedOffCourse?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

@@ -64,6 +64,8 @@ export interface GameSetup {
   movingTable?: boolean
   /** 3.9 — a ship that left the table rolls for whether it can come back. */
   tableReentry?: boolean
+  /** 12.11 — a threshold point may also knock the ship a point off course. */
+  knockedOffCourse?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -171,6 +173,7 @@ export function buildGame(setup: GameSetup): GameState {
     movementSystem: setup.movementSystem,
     movingTable: setup.movingTable,
     tableReentry: setup.tableReentry,
+    knockedOffCourse: setup.knockedOffCourse,
   })
   return game
 }

@@ -34,6 +34,14 @@ const OPTIONAL_RULES: Toggle[] = [
     detail: 'Up to 150% of the drive rating, at the risk of damaging it.',
   },
   {
+    key: 'knockedOffCourse',
+    label: 'Knocked off course',
+    rule: '12.11',
+    detail:
+      'A threshold point rolls once more, at the same odds, to see whether the hit slewed the ' +
+      'ship a clock point off its heading.',
+  },
+  {
     key: 'tableReentry',
     label: 'Return to the table',
     rule: '3.9',

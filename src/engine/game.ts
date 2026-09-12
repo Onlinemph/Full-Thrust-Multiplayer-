@@ -277,6 +277,15 @@ export interface ShipState {
   /** Hull rows already checked, so the next check knows which row it is for. */
   hullRowsChecked: number
   destroyed: boolean
+  /**
+   * Overkill on the blow that destroyed this ship (17.5): *"the amount of
+   * excess damage inflicted (over that required to reduce the ship to zero
+   * points)"*. Recorded by `markHullBoxes`, which is the sole writer of hull
+   * damage and therefore the only place that knows both numbers; null on a
+   * ship that is still alive, and on one brought to exactly zero, which 17.5
+   * cannot explode.
+   */
+  excessDamage: number | null
   /** Left the table (3.9) — off the board but not dead. */
   offTable: boolean
   /**
@@ -298,6 +307,16 @@ export interface ShipState {
   hasFiredThisTurn: boolean
   /** Cleared at every phase boundary, because FireCon limits are per phase (5.2). */
   fireconAssignments: FireConAssignment[]
+  /**
+   * 17.2 rule 2: whether the dust let this ship get a lock on that target.
+   *
+   * *"Roll a D6 after nominating the target"* — one die per nomination, not one
+   * per weapon, so a ship with six mounts does not get six chances at the same
+   * hull through the same cloud. Cleared at every phase boundary beside the
+   * FireCons and for the same reason: point defence in phase 9, ordnance in 10
+   * and ship fire in 11 are three separate nominations.
+   */
+  cloudLocks: Map<string, boolean>
   /** Phase 14 assignments (10.4). */
   damageControl: DamageControlAssignment[]
 
@@ -381,12 +400,14 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     pendingThresholdRows: 0,
     hullRowsChecked: 0,
     destroyed: false,
+    excessDamage: null,
     offTable: false,
     exitEdge: null,
     reentryTurn: null,
     weaponsFired: new Map<string, Phase>(),
     hasFiredThisTurn: false,
     fireconAssignments: [],
+    cloudLocks: new Map<string, boolean>(),
     damageControl: [],
     core: {
       bridgeDestroyed: false,
@@ -1165,7 +1186,10 @@ export function advanceToPhase(state: GameState, phase: Phase): SequencePosition
 function onLeavePhase(state: GameState): void {
   // FireCon allocation is per phase, not per turn (5.2), so leaving a phase
   // hands every FireCon back.
-  for (const ship of state.ships) ship.fireconAssignments = []
+  for (const ship of state.ships) {
+    ship.fireconAssignments = []
+    ship.cloudLocks.clear()
+  }
 
   if (state.phase === 'move-ships') recordLastKnownVectors(state)
 }
@@ -1553,6 +1577,9 @@ export function markHullBoxes(
   if (ship.hullMarked >= ship.design.hullBoxes) {
     ship.destroyed = true
     ship.pendingThresholdRows = 0
+    // 17.5 needs the overkill, and this is the only place both halves of it
+    // are in scope: what the blow was worth and what was left to absorb it.
+    ship.excessDamage = Math.max(0, points - (ship.design.hullBoxes - before))
     return { marked: ship.hullMarked - before, rowsCrossed, destroyed: true }
   }
   ship.pendingThresholdRows += rowsCrossed

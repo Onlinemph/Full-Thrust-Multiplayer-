@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { applyAction, setOptionalRules } from './actions'
 import { scoreOrder } from './ai'
-import { advancePhase, createGame, createShipState, type GameState } from './game'
+import { advancePhase, createGame, createShipState, markHullBoxes, type GameState } from './game'
 import { buildGame } from '../data/savedGame'
 import type { MovementOrder, Phase, ShipDesign } from './types'
 
@@ -280,5 +280,204 @@ describe('the border skirmish', () => {
     // ought to do something.
     const game = buildGame({ scenarioId: 'border-skirmish', seed: 1, terrainHazards: true })
     expect(game.terrain.some((f) => f.kind === 'planetoid')).toBe(true)
+  })
+})
+
+describe('shooting through dust (17.2 rules 2 and 3)', () => {
+  const MURK: GameState['terrain'] = [
+    { id: 'murk', kind: 'nebula', position: { x: 36, y: 24 }, radius: 8, label: 'the murk' },
+  ]
+
+  function gunnery(terrain: GameState['terrain'], hazards = true): GameState {
+    const game = createGame({
+      seed: 0x1702,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      terrain,
+      ships: [
+        createShipState({
+          id: 'red',
+          side: 'a',
+          design: design({
+            id: 'red',
+            name: 'Red',
+            weapons: [
+              {
+                id: 'b1',
+                label: 'Beam-3',
+                weaponClass: 'beam',
+                rating: 3,
+                variant: 'standard',
+                arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+                mass: 6,
+                points: 18,
+              },
+              {
+                id: 'b2',
+                label: 'Beam-2',
+                weaponClass: 'beam',
+                rating: 2,
+                variant: 'standard',
+                arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+                mass: 3,
+                points: 9,
+              },
+            ],
+            systems: [
+              { id: 'fc1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 },
+              { id: 'fc2', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 },
+            ],
+          }),
+          placement: { position: { x: 36, y: 20 }, facing: 6 },
+          velocity: 0,
+        }),
+        createShipState({
+          id: 'blue',
+          side: 'b',
+          design: design({ id: 'blue', name: 'Blue' }),
+          placement: { position: { x: 36, y: 28 }, facing: 12 },
+          velocity: 0,
+        }),
+      ],
+    })
+    setOptionalRules(game, { terrainHazards: hazards })
+    return game
+  }
+
+  it('blinds a ship sitting in it as much as it hides one', () => {
+    // Over enough seeds the die goes both ways; with no cloud it never does.
+    const withCloud = new Set<boolean>()
+    for (let seed = 1; seed <= 24; seed++) {
+      const game = gunnery(MURK)
+      advanceTo(game, 'ship-fire')
+      game.rng = new (game.rng.constructor as new (s: number) => typeof game.rng)(seed)
+      applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
+      withCloud.add(game.log.some((e) => e.text.includes('cannot see')))
+    }
+    expect(withCloud, 'a 1-3 blocks the lock, a 4-6 does not').toEqual(new Set([true, false]))
+
+    const clear = gunnery([])
+    advanceTo(clear, 'ship-fire')
+    applyAction(clear, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
+    expect(clear.log.some((e) => e.text.includes('cannot see'))).toBe(false)
+  })
+
+  it('rolls once per nomination, not once per gun', () => {
+    // "Roll a D6 after nominating the target." A ship with two mounts does not
+    // get two chances at the same hull through the same cloud.
+    for (let seed = 1; seed <= 12; seed++) {
+      const game = gunnery(MURK)
+      advanceTo(game, 'ship-fire')
+      game.rng = new (game.rng.constructor as new (s: number) => typeof game.rng)(seed)
+      applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
+      const firstBlocked = game.log.some((e) => e.text.includes('cannot see'))
+      applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b2', targetId: 'blue' })
+      const blocked = game.log.filter((e) => e.text.includes('cannot see')).length
+      expect(blocked, `seed ${seed}`).toBe(firstBlocked ? 2 : 0)
+    }
+  })
+
+  it('does nothing at all with the hazards switched off', () => {
+    const game = gunnery(MURK, false)
+    advanceTo(game, 'ship-fire')
+    applyAction(game, { type: 'fire-weapon', shipId: 'red', weaponId: 'b1', targetId: 'blue' })
+    expect(game.log.some((e) => e.text.includes('cannot see'))).toBe(false)
+  })
+})
+
+describe('battle debris (17.5)', () => {
+  /** A cruiser about to be overkilled by a much bigger one. */
+  function overkill(hull: number, hazards = true): GameState {
+    const game = createGame({
+      seed: 0x1705,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      ships: [
+        createShipState({
+          id: 'red',
+          side: 'a',
+          design: design({ id: 'red', name: 'Red' }),
+          placement: { position: { x: 36, y: 20 }, facing: 6 },
+          velocity: 4,
+        }),
+        createShipState({
+          id: 'blue',
+          side: 'b',
+          design: design({ id: 'blue', name: 'Blue', hullBoxes: hull }),
+          placement: { position: { x: 36, y: 24 }, facing: 12 },
+          velocity: 0,
+        }),
+      ],
+    })
+    setOptionalRules(game, { terrainHazards: hazards })
+    return game
+  }
+
+  it('records the overkill on the blow that did it', () => {
+    const game = overkill(4)
+    markHullBoxes(game.ships[1], 10)
+    expect(game.ships[1].destroyed).toBe(true)
+    expect(game.ships[1].excessDamage, '10 into 4 boxes is 6 over').toBe(6)
+  })
+
+  it('records nothing for a ship brought to exactly zero', () => {
+    // "A die roll of 5 - 2 = 3 or less will cause it to explode" — and a D6
+    // cannot roll at or below zero, so exact is safe.
+    const game = overkill(4)
+    markHullBoxes(game.ships[1], 4)
+    expect(game.ships[1].destroyed).toBe(true)
+    expect(game.ships[1].excessDamage).toBe(0)
+    applyAction(game, { type: 'advance-phase' })
+    expect(game.terrain.some((f) => f.kind === 'debris')).toBe(false)
+  })
+
+  it('leaves a cloud where a badly overkilled hull was', () => {
+    const game = overkill(2)
+    markHullBoxes(game.ships[1], 8)
+    applyAction(game, { type: 'advance-phase' })
+    expect(game.terrain.some((f) => f.id === 'debris-blue')).toBe(true)
+    expect(game.log.some((e) => e.text.includes('17.5'))).toBe(true)
+  })
+
+  it('makes the cloud a meteor field for anything that flies into it', () => {
+    // 17.5: "any ship encountering the cloud treats it exactly as for the
+    // meteor and debris rules given in the section above."
+    const game = overkill(2)
+    markHullBoxes(game.ships[1], 8)
+    applyAction(game, { type: 'advance-phase' })
+    const cloud = game.terrain.find((f) => f.id === 'debris-blue')
+    expect(cloud).toBeDefined()
+    game.ships[0].placement = { position: { ...cloud!.position }, facing: 6 }
+    game.ships[0].velocity = 18
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: 'red' })
+    expect(game.ships[0].hullMarked, 'three dice of penetrating rock').toBeGreaterThanOrEqual(3)
+  })
+
+  it('lasts one turn and then it is gone', () => {
+    const game = overkill(2)
+    markHullBoxes(game.ships[1], 8)
+    applyAction(game, { type: 'advance-phase' })
+    expect(game.terrain.some((f) => f.id === 'debris-blue')).toBe(true)
+
+    // "The debris cloud exists for only 1 turn after the explosion." It is
+    // swept as the movement phase opens, because that is the phase it is
+    // dangerous in — clearing it at the turn boundary would kill it before it
+    // ever threatened anybody.
+    let guard = 60
+    while (!(game.turn === 2 && game.phase === 'move-ships') && guard-- > 0) {
+      applyAction(game, { type: 'advance-phase' })
+    }
+    expect(game.terrain.some((f) => f.id === 'debris-blue'), 'dangerous on turn 2').toBe(true)
+
+    while (!(game.turn === 3 && game.phase === 'move-ships') && guard-- > 0) {
+      applyAction(game, { type: 'advance-phase' })
+    }
+    expect(game.terrain.some((f) => f.id === 'debris-blue'), 'and gone on turn 3').toBe(false)
+  })
+
+  it('does nothing at all with the hazards switched off', () => {
+    const game = overkill(2, false)
+    markHullBoxes(game.ships[1], 8)
+    applyAction(game, { type: 'advance-phase' })
+    expect(game.terrain.some((f) => f.kind === 'debris')).toBe(false)
   })
 })
