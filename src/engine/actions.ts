@@ -115,6 +115,7 @@ import {
 } from './boarding'
 import {
   adfcLockedOut,
+  applyFighterLosses,
   canDeclareAttack,
   evadeShipFire,
   interceptMissiles,
@@ -138,6 +139,7 @@ import {
   stealthHullLevel,
   STEALTH_BAND_SCALE,
   resolvePointDefence,
+  PDS_RANGE,
   type PdAllocation,
   type PdDefender,
   type PdMount,
@@ -156,11 +158,24 @@ import {
 } from './weapons'
 import {
   acquireMissileTargets,
+  canEngagePlasmaBolt,
+  fireRocketPod,
   launchMissile,
+  launchPlasmaBolt,
   moveOrdnanceMarkers,
   nearestCourse,
+  plasmaBoltLauncherLimit,
+  resolveAntimatterDetonation,
   resolveOrdnanceAttack,
+  resolvePlasmaBoltDefence,
+  resolvePlasmaBoltDetonation,
+  ANTIMATTER_BLAST_RADIUS,
+  PLASMA_BOLT_BLAST_RADIUS,
+  type BlastEffect,
+  type BlastTarget,
   type MissileMarker,
+  type PlasmaBolt,
+  type PlasmaBoltDefence,
 } from './ordnance'
 import {
   damageControlPhase,
@@ -280,6 +295,10 @@ export type GameAction =
 
   // Ordnance (6) — launched in phase 3, flown and resolved later
   | { type: 'launch-ordnance'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
+  /** 6.7 — a rocket pod picks a ship, not a point, and rolls at launch. */
+  | { type: 'fire-rocket-pod'; shipId: string; weaponId: string; targetId: string }
+  /** 6.8 — a plasma bolt is a marker placed on the table, not a shot. */
+  | { type: 'launch-plasma-bolt'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
   | { type: 'move-ordnance' }
   | { type: 'resolve-ordnance-attacks' }
 
@@ -1194,6 +1213,142 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 6.7: *"Select an enemy ship within range and firing arc of the rocket
+     * pod. The Rocket Pod fires TWO rockets at the target ship."*
+     *
+     * A separate action from `launch-ordnance` because a rocket pod is not a
+     * seeker: it names a ship rather than an aim point, both dice are rolled
+     * here in phase 3, and what flies on is the hits — a marker sitting on the
+     * target that can be shot down in phase 9 like anything else.
+     */
+    case 'fire-rocket-pod': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'launch-missiles') return refuse('Rocket pods fire in phase 3')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'rocket-pod') return refuse(`${weapon.label} is not a rocket pod`)
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That pod is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That pod has already fired')
+
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (target.side === ship.side) return refuse('That is a friendly ship')
+
+      const markers = ordnanceOf(state)
+      const result = fireRocketPod(
+        {
+          id: `rkt-${state.turn}-${markers.length + 1}-${ship.id}-${weapon.id}`,
+          owner: ship.side,
+          sourceShipId: ship.id,
+          sourceWeaponId: weapon.id,
+          origin: { position: ship.placement.position, facing: ship.placement.facing },
+          arcs: bearingArcs(ship, weapon.arcs),
+          target: {
+            id: target.id,
+            position: target.placement.position,
+            facing: target.placement.facing,
+            kind: 'ship',
+          },
+          turn: state.turn,
+        },
+        state.rng,
+      )
+
+      markWeaponFired(ship, weapon.id, state.phase)
+      if (!result.marker) {
+        pushLog(state, {
+          kind: 'launch',
+          shipId: ship.id,
+          side: ship.side,
+          dice: result.rolls,
+          text: `${ship.name}: ${weapon.label} scores nothing on ${target.name} — ${result.detail}`,
+        })
+        return OK
+      }
+      markers.push(result.marker)
+      projectOrdnance(state)
+      pushLog(state, {
+        kind: 'launch',
+        shipId: ship.id,
+        side: ship.side,
+        dice: result.rolls,
+        text: `${ship.name} fires ${weapon.label} at ${target.name}: ${result.detail}`,
+      })
+      return OK
+    }
+
+    /**
+     * 6.8: *"The PBL is fired during the Ordnance Launch Phase. A marker
+     * showing the detonation point is placed anywhere within arc and line of
+     * sight of the launcher, out to a range of 30 MU."*
+     *
+     * Not aimed at a ship: the bolt goes where the player says and detonates
+     * there in phase 10, on whatever is inside six MU of it by then — which is
+     * why it is worth shooting at in phase 9 and worth standing away from.
+     */
+    case 'launch-plasma-bolt': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'launch-missiles') return refuse('Plasma bolts are fired in phase 3')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'plasma-bolt-launcher') {
+        return refuse(`${weapon.label} is not a plasma bolt launcher`)
+      }
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That launcher is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That launcher has already fired')
+      // 6.8: "a ship can mount only one launcher per 50 mass of ship." A design
+      // over the limit is a shipyard fault, but the table is the last place it
+      // can be caught, and an imported SSD has never been near a shipyard.
+      const fitted = ship.design.weapons.filter(
+        (w) => w.weaponClass === 'plasma-bolt-launcher',
+      ).length
+      if (fitted > plasmaBoltLauncherLimit(ship.design.mass)) {
+        return refuse(
+          `${ship.name} mounts ${fitted} plasma bolt launchers; a ${ship.design.mass}-mass hull ` +
+            `may carry ${plasmaBoltLauncherLimit(ship.design.mass)} (6.8)`,
+        )
+      }
+
+      const bolts = boltsOf(state)
+      const result = launchPlasmaBolt({
+        id: `pbl-${state.turn}-${bolts.length + 1}-${ship.id}-${weapon.id}`,
+        owner: ship.side,
+        sourceShipId: ship.id,
+        sourceWeaponId: weapon.id,
+        boltClass: weapon.rating,
+        origin: { position: ship.placement.position, facing: ship.placement.facing },
+        arcs: bearingArcs(ship, weapon.arcs),
+        aim: action.aimPoint,
+        turn: state.turn,
+        lastFiredTurn: ship.weaponLastFiredTurn.get(weapon.id) ?? null,
+      })
+      if (!result.bolt) {
+        // A refusal, not a spent shot: a launcher that is still reloading has
+        // not fired, and one that could not bear has not either.
+        return refuse(`${weapon.label}: ${result.detail}`)
+      }
+
+      markWeaponFired(ship, weapon.id, state.phase)
+      ship.weaponLastFiredTurn.set(weapon.id, state.turn)
+      bolts.push(result.bolt)
+      projectBolts(state)
+      pushLog(state, {
+        kind: 'launch',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name} fires ${weapon.label}: ${result.detail}`,
+      })
+      return OK
+    }
+
     case 'move-ordnance': {
       if (state.phase !== 'move-ships') return refuse('Ordnance flies in phase 5')
       const markers = ordnanceOf(state)
@@ -1217,6 +1372,30 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         const marker = acquired.markers.find((m) => m.id === hit.markerId)
         const target = shipById(state, hit.targetShipId)
         if (!marker || !target) continue
+
+        // 6.6: an antimatter warhead is a blast with a radius, so it cannot be
+        // one target's damage roll — it is resolved against everything within
+        // three MU of where the marker went off, the launcher's own fleet
+        // included.
+        if (marker.kind === 'antimatter') {
+          const blast = resolveAntimatterDetonation(
+            marker.position,
+            marker.hits,
+            blastTargetsNear(state, marker.position, ANTIMATTER_BLAST_RADIUS),
+            state.rng,
+          )
+          pushLog(state, {
+            kind: 'damage',
+            side: marker.owner,
+            text: `Antimatter warhead detonates on ${target.name}: ${blast.detail}`,
+          })
+          applyBlastEffects(state, blast.effects, {
+            side: marker.owner,
+            source: 'An antimatter blast',
+            mode: 'standard',
+          })
+          continue
+        }
 
         const result = resolveOrdnanceAttack(marker, marker.missiles, {
           level: effectiveScreenLevel(target),
@@ -1253,12 +1432,17 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         acquired.markers.filter((marker) => !spent.has(marker.id)),
       )
       projectOrdnance(state)
+      detonateBolts(state)
       return OK
     }
 
     // ── Point defence (7.12 – 7.15, phase 9) ──────────────────────────────
     case 'resolve-point-defence': {
       if (state.phase !== 'point-defence') return refuse('Point defence is phase 9')
+      // 6.8's bolts are shot at in this phase too, and by mounts that may have
+      // nothing else to fire at — so they are resolved whether or not there is
+      // a missile marker on the table.
+      resolveBoltDefence(state)
       const markers = ordnanceOf(state)
       if (markers.length === 0) return OK
 
@@ -2311,6 +2495,249 @@ function driftDebris(state: GameState): void {
     clouds.map(moveDebrisCloud).filter((cloud) => !debrisCloudExpired(cloud, state.turn)),
   )
   projectDebris(state)
+}
+
+// ---------------------------------------------------------------------------
+// Blasts (6.6, 6.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything a blast can catch, at a point.
+ *
+ * 6.6 and 6.8 both say *"any ship or unit"* and neither says "enemy": an
+ * antimatter warhead going off among a fleet's own escorts is the risk of
+ * carrying one, and a plasma bolt is placed on the table rather than aimed at
+ * a hull. So this gathers both sides, plus the fighters, gunboats and other
+ * ordnance markers that a blast also removes.
+ */
+function blastTargetsNear(state: GameState, centre: Point, radius: number): BlastTarget[] {
+  const targets: BlastTarget[] = []
+  for (const ship of state.ships) {
+    if (ship.destroyed || ship.offTable) continue
+    if (distance(centre, ship.placement.position) > radius) continue
+    targets.push({
+      id: ship.id,
+      position: ship.placement.position,
+      kind: 'ship',
+      screens: { level: effectiveScreenLevel(ship), advanced: ship.design.screens.advanced },
+    })
+  }
+  for (const flight of state.fighterGroups) {
+    if (flight.status !== 'in-flight' || flight.strength <= 0) continue
+    if (distance(centre, flight.position) > radius) continue
+    targets.push({ id: flight.id, position: flight.position, kind: 'fighter-group', screens: { level: 0, advanced: false } })
+  }
+  for (const squadron of state.gunboatSquadrons) {
+    if (squadron.status !== 'in-flight' || squadron.boats.length === 0) continue
+    if (distance(centre, squadron.position) > radius) continue
+    targets.push({ id: squadron.id, position: squadron.position, kind: 'gunboat', screens: { level: 0, advanced: false } })
+  }
+  for (const marker of ordnanceOf(state)) {
+    if (distance(centre, marker.position) > radius) continue
+    targets.push({ id: marker.id, position: marker.position, kind: 'ordnance', screens: { level: 0, advanced: false } })
+  }
+  return targets
+}
+
+/**
+ * Put a blast's effects into the game.
+ *
+ * The dice are already rolled and the screens already counted by the resolver
+ * that produced them (6.6, 6.8), so what is left is bookkeeping: hull damage
+ * through the ordinary pipeline, fighter casualties through the fighter
+ * module, and gunboats and ordnance simply gone — *"Missiles and gunboats are
+ * destroyed."*
+ */
+function applyBlastEffects(
+  state: GameState,
+  effects: readonly BlastEffect[],
+  opts: { side: SideId; source: string; mode: WeaponResult['mode'] },
+): void {
+  for (const effect of effects) {
+    const ship = shipById(state, effect.targetId)
+    if (ship) {
+      if (effect.damage <= 0) continue
+      const result: WeaponResult = {
+        normalDamage: effect.damage,
+        penetratingDamage: 0,
+        mode: opts.mode,
+        dice: effect.dice,
+        detail: `${opts.source} at ${effect.range.toFixed(1)} MU`,
+      }
+      const applied = applyDamage(targetStateOf(ship), result, { source: 'ordnance' })
+      writeBackDamage(ship, applied.target)
+      markHullBoxes(ship, applied.hullDamage)
+      pushLog(state, {
+        kind: applied.hullDamage > 0 ? 'damage' : 'fire',
+        targetId: ship.id,
+        side: opts.side,
+        dice: effect.dice,
+        text: `${opts.source} catches ${ship.name} at ${effect.range.toFixed(1)} MU: ${effect.damage} damage`,
+      })
+      if (ship.destroyed) {
+        pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
+      }
+      continue
+    }
+
+    const flight = flightById(state, effect.targetId)
+    if (flight) {
+      const losses = Math.min(flight.strength, effect.damage)
+      if (losses <= 0) continue
+      writeFlight(flight, applyFighterLosses(flight, losses))
+      pushLog(state, {
+        kind: 'damage',
+        side: opts.side,
+        dice: effect.dice,
+        text: `${opts.source} catches ${flight.label}: ${losses} lost`,
+      })
+      continue
+    }
+
+    const squadron = squadronById(state, effect.targetId)
+    if (squadron) {
+      squadron.boats = []
+      squadron.status = 'destroyed'
+      pushLog(state, {
+        kind: 'destroyed',
+        side: opts.side,
+        text: `${opts.source} destroys ${squadron.label}`,
+      })
+      continue
+    }
+
+    const markers = ordnanceOf(state)
+    if (markers.some((marker) => marker.id === effect.targetId)) {
+      setOrdnance(state, markers.filter((marker) => marker.id !== effect.targetId))
+      projectOrdnance(state)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plasma bolts (6.8)
+// ---------------------------------------------------------------------------
+
+// Bolts sit on the table between phase 3 and phase 10, like missile markers,
+// and like them they are rebuilt by replaying the journal rather than saved.
+const PLASMA_BOLTS = new WeakMap<GameState, PlasmaBolt[]>()
+
+/**
+ * Shoot at the plasma bolts on the table — **phase 9** (6.8).
+ *
+ * *"Class 1 beams and class 1 K-guns may NOT be used in their secondary PDS
+ * role against Plasma Bolts"*, so a beam-1 mount sits this out; a PDS fires at
+ * −2 and therefore only on a six, a fighter group within 6 MU rolls a die per
+ * fighter, and a scattergun reads the beam table. Each hit takes a strength
+ * class off the bolt, and a bolt at zero never goes off.
+ */
+function resolveBoltDefence(state: GameState): void {
+  const bolts = boltsOf(state)
+  if (bolts.length === 0) return
+
+  const surviving: PlasmaBolt[] = []
+  for (const bolt of bolts) {
+    const defences: PlasmaBoltDefence[] = []
+    for (const ship of state.ships) {
+      if (ship.destroyed || ship.offTable || ship.side === bolt.owner) continue
+      if (isOutOfControl(ship, state.turn)) continue
+      const ftlStage = ftlStageOf(ship, state.turn)
+      if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
+      if (distance(ship.placement.position, bolt.position) > PDS_RANGE) continue
+      for (const mount of pdMountsOf(ship)) {
+        if (!canEngagePlasmaBolt(mount.mode)) continue
+        if (mount.kind !== 'pds' && mount.kind !== 'ads' && mount.kind !== 'scattergun') continue
+        defences.push({
+          sourceId: mount.id,
+          kind: mount.kind === 'scattergun' ? 'scattergun' : 'pds',
+          dice: 1,
+        })
+        markWeaponFired(ship, mount.id, state.phase)
+      }
+    }
+    for (const flight of state.fighterGroups) {
+      if (flight.status !== 'in-flight' || flight.strength <= 0) continue
+      if (flight.side === bolt.owner) continue
+      if (distance(flight.position, bolt.position) > PLASMA_BOLT_BLAST_RADIUS) continue
+      defences.push({ sourceId: flight.id, kind: 'fighter', dice: flight.strength })
+    }
+
+    if (defences.length === 0) {
+      surviving.push(bolt)
+      continue
+    }
+    const outcome = resolvePlasmaBoltDefence(bolt, defences, state.rng)
+    pushLog(state, {
+      kind: 'point-defence',
+      side: bolt.owner,
+      dice: outcome.rolls,
+      text: `Plasma bolt under fire: ${outcome.detail}`,
+    })
+    if (!outcome.destroyed) surviving.push(outcome.bolt)
+  }
+  setBolts(state, surviving)
+  projectBolts(state)
+}
+
+/**
+ * Set off every plasma bolt still standing — **phase 10** (6.8).
+ *
+ * A bolt does not chase anything: it goes off where it was placed, on whatever
+ * is inside six MU of it once the ships have finished moving, which is as
+ * likely to be the launcher's own escorts as the enemy's.
+ */
+function detonateBolts(state: GameState): void {
+  const bolts = boltsOf(state)
+  if (bolts.length === 0) return
+  for (const bolt of bolts) {
+    const blast = resolvePlasmaBoltDetonation(
+      bolt,
+      blastTargetsNear(state, bolt.position, PLASMA_BOLT_BLAST_RADIUS),
+      state.rng,
+    )
+    pushLog(state, { kind: 'damage', side: bolt.owner, text: `Plasma bolt: ${blast.detail}` })
+    applyBlastEffects(state, blast.effects, {
+      side: bolt.owner,
+      source: 'A plasma bolt',
+      mode: 'standard',
+    })
+  }
+  setBolts(state, [])
+  projectBolts(state)
+}
+
+
+function boltsOf(state: GameState): PlasmaBolt[] {
+  let bolts = PLASMA_BOLTS.get(state)
+  if (!bolts) {
+    bolts = []
+    PLASMA_BOLTS.set(state, bolts)
+  }
+  return bolts
+}
+
+function setBolts(state: GameState, bolts: PlasmaBolt[]): void {
+  PLASMA_BOLTS.set(state, bolts)
+}
+
+/** Copy the bolts into GameState for drawing, beside the missile markers. */
+function projectBolts(state: GameState): void {
+  const missiles = state.ordnance.filter((marker) => marker.kind !== 'plasma-bolt')
+  state.ordnance = [
+    ...missiles,
+    ...boltsOf(state).map((bolt) => ({
+      id: bolt.id,
+      side: bolt.owner,
+      sourceShipId: bolt.sourceShipId,
+      kind: 'plasma-bolt' as const,
+      grade: 'standard' as const,
+      missiles: bolt.strength,
+      position: bolt.position,
+      launchedTurn: bolt.launchedTurn,
+      stagesRemaining: 0,
+      targetShipId: null,
+    })),
+  ]
 }
 
 const ORDNANCE = new WeakMap<GameState, MissileMarker[]>()

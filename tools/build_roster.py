@@ -220,6 +220,9 @@ WEAPON_LABEL = {
     'spinal-psp': 'Spinal PSP-{r}', 'nova-cannon': 'Nova Cannon', 'wave-gun': 'Wave Gun',
 }
 F3, A3, ALL6, P3, S3 = ['FP','F','FS'], ['AP','A','AS'], ['F','FS','AS','A','AP','FP'], ['FP','AP','A'], ['FS','AS','A']
+# 14.4 mounts a K-gun in one arc or two and never in three, so a K-gun
+# broadside is the pair of arcs down that side rather than the usual three.
+PB, SB = ['FP','AP'], ['FS','AS']
 
 def solve_mass(d):
     """Smallest hull that carries the design.
@@ -251,7 +254,11 @@ def solve_mass(d):
                 flat += spec['mass'] * count
             continue
         flat += SYSTEMS[key][0] * count
-    need = flat / (1 - frac)
+    # Rounded before the ceiling: the fractions are tenths and twentieths held
+    # as binary floats, so an exact 90 comes back as 90.00000000000001 and the
+    # ceiling charges two more mass for nothing — which on a 90-mass hull is
+    # the difference between 13.4's cruiser band and its capital band.
+    need = round(flat / (1 - frac), 6)
     return int(math.ceil(need / 2) * 2)
 
 
@@ -268,6 +275,12 @@ def price(d):
         )
     if d.get('rows', 4) not in HULL_PTS:
         raise SystemExit(f"{d['id']}: {d['rows']} hull rows; 13.7 prices 3 to 6")
+    rows = d.get('rows', 4)
+    if math.floor(d['mass'] * HULL_FRACTION[d['hull']]) < rows:
+        raise SystemExit(
+            f"{d['id']}: {math.floor(d['mass'] * HULL_FRACTION[d['hull']])} hull boxes in "
+            f"{rows} rows leaves a row with nothing in it, which is not a threshold point"
+        )
     mass = pts = 0.0
     boxes = math.floor(d['mass'] * HULL_FRACTION[d['hull']])
     mass += boxes; pts += boxes * HULL_PTS[d['rows']]
@@ -693,6 +706,258 @@ DESIGNS = [
        weapons=[('pulser',1,P3), ('pulser',1,S3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',4),('ads6',2),('advanced-adfc',1),('gunboat-rack',3),('gunboat-bay',1)],
        marines=4, racks=3, gunboatType='beam'),
+
+  # ── Goliath Corporate Hegemony ───────────────────────────────────────────
+  # Kinetics and plate, and no answer to anything it cannot reach. Every hull
+  # is Strong or Super with the damage track in three rows, so it takes a
+  # third fewer threshold checks over its life and pays three points a box for
+  # the privilege. K-guns mount in one or two arcs and never in three (14.4),
+  # which is why the broadsides are paired arcs rather than the usual P3/S3 —
+  # a Goliath turns to shoot, and turning is what it is worst at.
+  dict(id='goliath-monitor', name='Anvil-class Monitor', faction='Goliath Corporate Hegemony',
+       group='escort', mass=44, hull='strong', rows=4, thrust=4, armour=[4],
+       weapons=[('k-gun',2,['F']), ('mkp',1,F3), ('k-gun',1,ALL6)],
+       systems=[('firecon',1),('pds',1),('grapeshot',1)], marines=1),
+  dict(id='goliath-cruiser', name='Ledger-class Heavy Cruiser', faction='Goliath Corporate Hegemony',
+       group='cruiser', mass=90, hull='strong', rows=4, thrust=4, armour=[7],
+       weapons=[('k-gun',3,['F']), ('k-gun',2,PB), ('k-gun',2,SB), ('mkp',1,F3), ('k-gun',1,ALL6)],
+       systems=[('firecon',2),('pds',2)], marines=3),
+  # Long-ranged K-guns are four times the mass of the standard gun for the
+  # same class (14.4), so this is a 78-mass hull carrying two guns. It opens
+  # at 48 MU and is still firing when the Ledgers arrive.
+  dict(id='goliath-longgun', name='Escrow-class Gun Cruiser', faction='Goliath Corporate Hegemony',
+       group='cruiser', mass=78, hull='strong', rows=4, thrust=3, armour=[7],
+       weapons=[('k-gun-long',2,['F']), ('k-gun-long',1,ALL6), ('mkp',1,F3), ('k-gun',2,['A','AP'])],
+       systems=[('firecon',2),('pds',2),('grapeshot',1)], marines=2),
+  dict(id='goliath-battleship', name='Hegemon-class Battleship', faction='Goliath Corporate Hegemony',
+       group='capital', mass=160, hull='strong', rows=3, thrust=3, armour=[14,7],
+       weapons=[('k-gun',4,['F']), ('k-gun',3,['FP']), ('k-gun',3,['FS']), ('k-gun',2,['A','AP']),
+                ('mkp',1,F3), ('mkp',1,A3), ('k-gun',1,ALL6)],
+       systems=[('firecon',3),('pds',4),('grapeshot',2)], marines=4),
+  # A hundred hull boxes, because a Super hull is half its mass in structure
+  # and this one is 200 mass. The Nova Cannon (7.23) is twenty of that and the
+  # only thing on board the Hegemony did not forge itself.
+  dict(id='goliath-dreadnought', name='Mercator-class Dreadnought', faction='Goliath Corporate Hegemony',
+       group='capital', mass=200, hull='super', rows=3, thrust=2, armour=[6],
+       weapons=[('nova-cannon',1,['F']), ('k-gun',4,['F']), ('k-gun',3,['FP']), ('k-gun',3,['FS']),
+                ('k-gun',2,['A','AP']), ('k-gun',1,ALL6)],
+       systems=[('firecon',3),('pds',5),('grapeshot',2)], marines=5),
+
+  # ── Aethelgard Ascendancy ────────────────────────────────────────────────
+  # One gun on the centre line and a hull built around it. A spinal mount is
+  # 8, 16 or 32 mass reaching 24, 32 or 48 MU (14.5), so the class of the
+  # mount is most of the design decision and everything else is what fits
+  # around it. No Class-1 battery anywhere: their own prohibition, which is
+  # why the close-in work is done by PDS and by nothing else.
+  dict(id='aethelgard-lance', name='Kestrel-class Lance', faction='Aethelgard Ascendancy',
+       group='escort', mass=32, hull='weak', rows=4, thrust=6, screens=1,
+       weapons=[('spinal-beam',1,['F'])],
+       systems=[('advanced-firecon',1),('pds',2)]),
+  dict(id='aethelgard-cruiser', name='Aurelian-class Lance Cruiser', faction='Aethelgard Ascendancy',
+       group='cruiser', mass=78, hull='weak', rows=4, thrust=5, screens=1,
+       weapons=[('spinal-beam',2,['F']), ('beam',3,F3), ('beam',2,P3), ('beam',2,S3)],
+       systems=[('advanced-firecon',2),('pds',3)], marines=1),
+  dict(id='aethelgard-plasma', name='Solaris-class Plasma Lance', faction='Aethelgard Ascendancy',
+       group='cruiser', mass=68, hull='weak', rows=4, thrust=5, screens=1,
+       weapons=[('spinal-plasma',2,['F']), ('plasma-cannon',2,F3), ('beam',2,A3)],
+       systems=[('advanced-firecon',2),('pds',3)], marines=1),
+  # The Spinal Beam-3 is 32 mass and 48 MU, which is the whole point of a
+  # 198-mass hull that mounts fifty-nine boxes of Average integrity: it has
+  # to survive one exchange, and it only has to survive one.
+  dict(id='aethelgard-battleship', name='Empyrean-class Battleship', faction='Aethelgard Ascendancy',
+       group='capital', mass=198, hull='average', rows=4, thrust=4, screens=2,
+       weapons=[('spinal-beam',3,['F']), ('beam',3,F3), ('beam',3,P3), ('beam',3,S3), ('beam',2,A3)],
+       systems=[('advanced-firecon',3),('pds',4)], marines=2),
+  # The Point Singularity Projector is the same 16 mass as a class-2 spinal
+  # beam and five points per mass instead of four (14.5). It is bought for
+  # what it does to a hull it hits, not for the arithmetic.
+  dict(id='aethelgard-psp', name='Threnody-class Singularity Ship', faction='Aethelgard Ascendancy',
+       group='capital', mass=118, hull='average', rows=4, thrust=4, screens=2,
+       weapons=[('spinal-psp',2,['F']), ('beam',3,F3), ('beam',2,P3), ('beam',2,S3), ('beam',2,A3)],
+       systems=[('advanced-firecon',3),('pds',4)], marines=2),
+
+  # ── Chytrid Mycelium ─────────────────────────────────────────────────────
+  # Grown, not built: five rows of damage track on every hull, which is their
+  # Hive Ship Vulnerability trait and costs 1.5 points a box instead of 2 in
+  # exchange for a threshold check every fifth of the way down. Regenerative
+  # armour on everything, nothing above class 2, no spinal mount, and the
+  # rocket pods are the only ordnance the Mycelium fires from the hull rather
+  # than from a wing.
+  dict(id='chytrid-spore', name='Spore-class Skirmisher', faction='Chytrid Mycelium',
+       group='escort', mass=34, hull='average', rows=5, thrust=6, armour=[4], regen=True,
+       weapons=[('rocket-pod',1,F3), ('beam',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',1)]),
+  dict(id='chytrid-cruiser', name='Mycelia-class Brood Cruiser', faction='Chytrid Mycelium',
+       group='cruiser', mass=68, hull='average', rows=5, thrust=4, armour=[7], regen=True,
+       weapons=[('rocket-pod',1,F3), ('rocket-pod',1,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('hangar-bay',1),('launch-tube',1)],
+       bays=1, fighterType='interceptor'),
+  # Two catapults on top of two launch tubes, because 8.2 launches one group
+  # per tube per turn and a carrier that takes three turns to get its wings
+  # out has already lost them on the deck.
+  dict(id='chytrid-carrier', name='Sporangium-class Carrier', faction='Chytrid Mycelium',
+       group='capital', mass=104, hull='average', rows=5, thrust=4, armour=[6], regen=True,
+       weapons=[('beam',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',4),('hangar-bay',3),('launch-tube',2),('catapult',2)],
+       bays=3, fighterType='standard'),
+  dict(id='chytrid-hive', name='Fruiting Body', faction='Chytrid Mycelium',
+       group='capital', mass=150, hull='average', rows=5, thrust=3, armour=[10], regen=True,
+       weapons=[('rocket-pod',1,F3), ('rocket-pod',1,A3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',6),('hangar-bay',5),('launch-tube',3),('catapult',2)],
+       bays=5, fighterType='standard', marines=2),
+
+  # ── Durani Star-Khanate ──────────────────────────────────────────────────
+  # Salvo missiles, pulse torpedoes and mines, on hulls that are faster than
+  # they should be and hold together worse. No advanced screens, no advanced
+  # drives, no spinal mount — their own prohibition — so the thrust ratings
+  # here are bought at the standard 5% of mass per point, and paid for in
+  # armour nobody fitted.
+  dict(id='durani-raider', name='Kagan-class Raider', faction='Durani Star-Khanate',
+       group='escort', mass=40, hull='weak', rows=4, thrust=7, armour=[3],
+       weapons=[('pulse-torpedo',1,F3), ('mine-rack',1,A3), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',1)]),
+  dict(id='durani-corsair', name='Orda-class Missile Corsair', faction='Durani Star-Khanate',
+       group='cruiser', mass=76, hull='average', rows=4, thrust=6, armour=[4], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
+                ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2)], marines=2),
+  # Three mine racks astern and an antimatter charge in the hold: 6.9 drops
+  # mines behind the ship that laid them, so a minelayer is a ship that runs
+  # away in a straight line and is worth chasing anyway.
+  dict(id='durani-minelayer', name='Tumen-class Minelayer', faction='Durani Star-Khanate',
+       group='cruiser', mass=60, hull='average', rows=4, thrust=5, armour=[4], screens=1,
+       weapons=[('mine-rack',1,A3), ('mine-rack',1,A3), ('mine-rack',1,A3), ('beam',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('antimatter-charge',1)], marines=2),
+  dict(id='durani-flagship', name='Khagan-class Flagship', faction='Durani Star-Khanate',
+       group='capital', mass=148, hull='average', rows=4, thrust=5, armour=[8], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
+                ('salvo-missile-launcher',1,A3), ('pulse-torpedo',1,F3),
+                ('beam',3,P3), ('beam',3,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',4),('antimatter-charge',1)], marines=3),
+
+  # ── Shard-Swarm ──────────────────────────────────────────────────────────
+  # Gatlings and beams on hulls nobody is aboard. No screens: not in the
+  # Swarm's starting tech, and an escort that costs 40% less RU to replace is
+  # not a hull you spend 5% of mass a level protecting. The Nexus flies Robot
+  # wings — 8.15's modification, at half a standard wing's points — which is
+  # the only kind of small craft the Swarm's own prohibition allows.
+  dict(id='shard-mote', name='Mote', faction='Shard-Swarm',
+       group='escort', mass=22, hull='weak', rows=4, thrust=8, ftl=False, armour=[3],
+       weapons=[('gatling',1,F3), ('beam',1,ALL6)],
+       systems=[('firecon',1)]),
+  dict(id='shard-splinter', name='Splinter', faction='Shard-Swarm',
+       group='escort', mass=40, hull='weak', rows=4, thrust=7, armour=[3],
+       weapons=[('gatling',1,F3), ('gatling',1,A3), ('beam',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',1)]),
+  dict(id='shard-lattice', name='Lattice', faction='Shard-Swarm',
+       group='cruiser', mass=80, hull='average', rows=4, thrust=6, armour=[5],
+       weapons=[('gatling',1,ALL6), ('beam',3,F3), ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2)]),
+  dict(id='shard-nexus', name='Nexus', faction='Shard-Swarm',
+       group='capital', mass=178, hull='average', rows=4, thrust=5, armour=[8],
+       weapons=[('gatling',1,ALL6), ('gatling',1,F3), ('beam',3,F3), ('beam',3,A3),
+                ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',3),('hangar-bay',3),('launch-tube',2)],
+       bays=3, fighterType='standard', fighterMods=['robot']),
+
+  # ── Tyrant Star Hegemony ─────────────────────────────────────────────────
+  # Ordnance and nothing else worth naming: no direct-fire weapon above class
+  # 2 and no Area Defence System, both their own prohibitions, so the fleet
+  # wins at 48 MU or does not win. Advanced Fire Control on every hull, since
+  # their Advanced Targeting Protocols fire two launchers off one AFC.
+  dict(id='tyrant-picket', name='Lictor-class Picket', faction='Tyrant Star Hegemony',
+       group='escort', mass=44, hull='average', rows=4, thrust=5, armour=[3], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('submunition-pack',1,F3), ('beam',1,ALL6)],
+       systems=[('advanced-firecon',1),('pds',2),('adfc',1)]),
+  dict(id='tyrant-cruiser', name='Praetor-class Missile Cruiser', faction='Tyrant Star Hegemony',
+       group='cruiser', mass=84, hull='average', rows=4, thrust=4, armour=[5], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
+                ('salvo-missile-rack',1,F3), ('heavy-missile-extended',1,F3),
+                ('submunition-pack',1,A3), ('beam',2,P3), ('beam',2,S3)],
+       systems=[('advanced-firecon',2),('pds',2),('adfc',1)], marines=2),
+  # Antimatter missiles are 2 mass and ten points for three arcs (14.4): the
+  # most expensive mass in the construction table by a wide margin, and a
+  # 60-mass hull that carries two of them is the cheapest way to deliver them.
+  dict(id='tyrant-arsenal', name='Proscription-class Arsenal Ship', faction='Tyrant Star Hegemony',
+       group='cruiser', mass=60, hull='average', rows=4, thrust=4, armour=[4], screens=1,
+       weapons=[('antimatter-missile',1,F3), ('antimatter-missile',1,F3),
+                ('salvo-missile-launcher',1,F3), ('beam',2,F3), ('beam',1,ALL6)],
+       systems=[('advanced-firecon',2),('pds',3),('adfc',1)], marines=2),
+  dict(id='tyrant-battleship', name='Dominus-class Battleship', faction='Tyrant Star Hegemony',
+       group='capital', mass=128, hull='average', rows=4, thrust=4, armour=[8], screens=2,
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,F3),
+                ('salvo-missile-launcher',1,A3), ('antimatter-missile',1,F3),
+                ('heavy-missile-extended',1,F3), ('submunition-pack',1,A3),
+                ('beam',2,P3), ('beam',2,S3), ('beam',1,ALL6)],
+       systems=[('advanced-firecon',3),('pds',5),('advanced-adfc',1)], marines=3),
+
+  # ── South African Mercantile Confederation ───────────────────────────────
+  # Merchant hulls with the guns behind the cargo. Class-1 beams everywhere,
+  # because their Q-ship batteries make a Beam-1 do a damage on 4, 5 or 6
+  # inside 6 MU and ignore the screen reduction doing it — the cheapest weapon
+  # in the table is the one this navy is built around. Two PDS at most on any
+  # cruiser or capital that is not a carrier: their Specialized Hulls trait,
+  # and the reason the ADS mounts do the work instead.
+  dict(id='samc-escort', name='Kruger-class Escort', faction='South African Mercantile Confederation',
+       group='escort', mass=38, hull='average', rows=4, thrust=6, armour=[2],
+       weapons=[('beam',1,ALL6), ('beam',1,ALL6), ('beam',2,F3)],
+       systems=[('firecon',1),('pds',2),('adfc',1)]),
+  dict(id='samc-qship', name='Karoo-class Q-Ship', faction='South African Mercantile Confederation',
+       group='cruiser', mass=78, hull='average', rows=4, thrust=4, armour=[4], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('beam',1,ALL6), ('beam',1,ALL6),
+                ('beam',2,P3), ('beam',2,S3)],
+       systems=[('firecon',2),('pds',2),('adfc',1),('cargo',8)], marines=2),
+  dict(id='samc-convoy-leader', name='Drakensberg-class Convoy Leader', faction='South African Mercantile Confederation',
+       group='cruiser', mass=78, hull='average', rows=4, thrust=4, armour=[5], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('beam',1,ALL6), ('beam',2,F3)],
+       systems=[('firecon',2),('pds',2),('advanced-adfc',1),('ads6',2),('cargo',4)], marines=2),
+  # Thrust 3 on a capital is the Freighter Hulls trait, already applied: the
+  # rating below is what the ship moves at, not what it would have bought.
+  dict(id='samc-liner', name='Cape Town-class Armed Liner', faction='South African Mercantile Confederation',
+       group='capital', mass=150, hull='average', rows=4, thrust=3, armour=[6], screens=1,
+       weapons=[('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,A3),
+                ('beam',1,ALL6), ('beam',1,ALL6), ('beam',2,P3), ('beam',2,S3)],
+       systems=[('firecon',3),('pds',2),('advanced-adfc',1),('ads6',2),('cargo',20),
+                ('hangar-bay',1),('launch-tube',1)],
+       bays=1, fighterType='standard', marines=3),
+
+  # ── Askvarian Hegemony ───────────────────────────────────────────────────
+  # Nothing in the Hegemony's starting tech, because the Hegemony starts with
+  # nothing: every weapon here is somebody else's, reverse-engineered at 75%
+  # off and bolted to a hull that was cheaper than repairing the last one.
+  # The names carry the clan each ship was laid down by; a ship takes exactly
+  # one Clan trait, and the four clans disagree about everything.
+  dict(id='askvarian-scrapper', name='Rustbucket-class Scrapper', faction='Askvarian Hegemony',
+       group='escort', mass=26, hull='weak', rows=4, thrust=6, armour=[3],
+       weapons=[('twin-particle-array',1,F3), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',1),('ecm',1)]),
+  # Krusual: shrapnel and shadows, and no beam, graser or phaser aboard by
+  # their own prohibition. A cloaking device is 1 mass and half the ship's
+  # mass in points (7.20), which on a 26-mass hull is the cheapest cloak
+  # anyone in this file flies — and it may not be combined with a screen.
+  dict(id='askvarian-shadow', name='Krusual Shadow', faction='Askvarian Hegemony',
+       group='escort', mass=26, hull='weak', rows=4, thrust=6, armour=[3],
+       weapons=[('k-gun',2,['F']), ('mkp',1,F3)],
+       systems=[('firecon',1),('pds',1),('cloaking-device',1)]),
+  dict(id='askvarian-meson-cruiser', name='Sebiestor Meson Cruiser', faction='Askvarian Hegemony',
+       group='cruiser', mass=56, hull='weak', rows=4, thrust=5, armour=[5], screens=1,
+       weapons=[('meson-projector',1,F3), ('meson-projector',1,A3), ('phaser',2,F3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('area-ecm',1)], marines=2),
+  # Vherokior: thin hulls and cheap electronics. A stealth field is 5% of the
+  # hull's mass and six points per point of it (14.2), which is a fifth of
+  # what a holofield costs to do less.
+  dict(id='askvarian-graser-cruiser', name='Vherokior Graser Cruiser', faction='Askvarian Hegemony',
+       group='cruiser', mass=66, hull='weak', rows=4, thrust=5, armour=[4],
+       weapons=[('heavy-graser',2,['F']), ('graser',2,P3), ('graser',2,S3), ('beam',1,ALL6)],
+       systems=[('firecon',2),('pds',2),('stealth-field',1)], marines=2),
+  # A stealth hull is free mass and two points per hull and armour box (14.1):
+  # it charges for what there is to hide, so it is the one fitting that gets
+  # more expensive the better the ship it is fitted to.
+  dict(id='askvarian-flagship', name='Hegemon Council Ship', faction='Askvarian Hegemony',
+       group='capital', mass=124, hull='average', rows=4, thrust=4, armour=[6],
+       weapons=[('phaser',3,F3), ('heavy-graser',2,['F']), ('graser',2,P3), ('graser',2,S3),
+                ('twin-particle-array',1,ALL6), ('beam',1,ALL6)],
+       systems=[('firecon',3),('pds',4),('area-ecm',1),('stealth-hull',1)], marines=3),
 ]
 
 import sys
@@ -753,6 +1018,30 @@ lines = ['''/**
 import type { ShipDesign } from '../engine/types'
 ''']
 
+def bays(d):
+    """8.15: a bay names a fighter type and the modifications flown with it."""
+    mods = list(d.get('fighterMods', []))
+    out = []
+    for i in range(d.get('bays', 0)):
+        bay = {'typeId': d.get('fighterType', 'standard'), 'label': f'Flight {i+1}'}
+        if mods:
+            bay['modifiers'] = mods
+        out.append(bay)
+    return out
+
+
+def squadrons(d):
+    """9.2's squadron options, the same way."""
+    mods = list(d.get('gunboatMods', []))
+    out = []
+    for i in range(d.get('racks', 0)):
+        rack = {'typeId': d.get('gunboatType', 'beam'), 'label': f'Squadron {i+1}'}
+        if mods:
+            rack['modifiers'] = mods
+        out.append(rack)
+    return out
+
+
 def design_ts(r):
     d = r['design']
     parts = [f"  id: {ts(d['id'])},", f"  name: {ts(d['name'])},",
@@ -770,8 +1059,8 @@ def design_ts(r):
              "  systems: [",
              *[f"    {ts(s)}," for s in r['systems']],
              "  ],",
-             f"  fighterBays: {ts([{'typeId': d.get('fighterType', 'standard'), 'label': f'Flight {i+1}'} for i in range(d.get('bays', 0))])},",
-             f"  gunboats: {ts([{'typeId': d.get('gunboatType', 'beam'), 'label': f'Squadron {i+1}'} for i in range(d.get('racks', 0))])},",
+             f"  fighterBays: {ts(bays(d))},",
+             f"  gunboats: {ts(squadrons(d))},",
              f"  additionalDamageControlParties: {d.get('dcp', 0)},",
              f"  marineParties: {d.get('marines', 0)},",
              f"  points: {r['points']},"]

@@ -548,3 +548,30 @@
   background: var(--panel-2);
   border-radius: var(--radius);
 }
+
+/* ── Phase 3, the launchers (6) ────────────────────────────────────────────── */
+
+.ordnance-ship {
+  margin-bottom: 0.5rem;
+}
+
+.ordnance-ship > b {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.ordnance-mount {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  margin-bottom: 2px;
+}
+
+.ordnance-mount > span:first-child {
+  flex: 1;
+  min-width: 7rem;
+}

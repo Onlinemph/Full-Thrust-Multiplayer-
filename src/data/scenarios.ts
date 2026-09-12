@@ -29,6 +29,7 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
+import { fighterMods, gunboatMods } from './smallCraftMods'
 import {
   zonesFor,
   PLACEMENT_BATCH_MAX,
@@ -406,6 +407,7 @@ function embarkedFlights(ship: ShipState): FighterGroupState[] {
       id: `${ship.id}-flight-${index + 1}`,
       side: ship.side,
       typeId: fighterTypeOf(bay.typeId),
+      modifiers: fighterMods(bay.modifiers),
       carrierId: ship.id,
       position: ship.placement.position,
       facing: ship.placement.facing,
@@ -431,6 +433,7 @@ function embarkedSquadrons(ship: ShipState): GunboatSquadronState[] {
       side: ship.side,
       label: `${ship.name} ${rack.label}`,
       boats: Array(GUNBOAT_SQUADRON_SIZE).fill(gunboatTypeOf(rack.typeId)),
+      modifiers: gunboatMods(rack.modifiers),
       carrierId: ship.id,
       position: ship.placement.position,
       facing: ship.placement.facing,

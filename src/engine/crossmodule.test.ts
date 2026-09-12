@@ -184,3 +184,70 @@ describe('boarding parties', () => {
     expect(stamped).toBeGreaterThan(0)
   })
 })
+
+/**
+ * Point defence, from the SSD to the dice.
+ *
+ * `defences.ts` resolves a PDS correctly and its own tests hand it mounts
+ * directly, so they pass whatever `actions.ts` decides a ship's mounts are.
+ * What `actions.ts` decided, for a long time, was "the class-1 beams and
+ * nothing else": it asked `canWeaponFire` whether each mount still had its
+ * shot, and that function looked the id up in `design.weapons`, where a PDS —
+ * a system — has never been. Every ship in the roster went through a battle
+ * with its point defence switched off, and no test noticed, because no test
+ * asked a whole ship to shoot at a missile.
+ */
+describe('point defence', () => {
+  const pdShip = (id: string): ShipDesign => ({
+    ...(SHIP_DESIGNS.find((d) => d.id === 'esu-battleship') as ShipDesign),
+    id,
+    name: id,
+    // Beam batteries stripped, so a class-1 beam cannot stand in for the PDS.
+    weapons: [],
+  })
+
+  it('offers a ship its PDS, not just its class-1 beams', () => {
+    const game = createGame({
+      seed: 0x9d5,
+      sides: [{ id: 'a' }, { id: 'b' }],
+      ships: [
+        createShipState({
+          id: 'defender',
+          side: 'a',
+          design: pdShip('defender'),
+          placement: { position: { x: 40, y: 20 }, facing: 12 },
+        }),
+        createShipState({
+          id: 'shooter',
+          side: 'b',
+          design: SHIP_DESIGNS.find((d) => d.id === 'tyrant-cruiser') as ShipDesign,
+          placement: { position: { x: 40, y: 8 }, facing: 6 },
+        }),
+      ],
+    })
+    let guard = 40
+    while (game.phase !== 'launch-missiles' && guard-- > 0) advancePhase(game)
+    const launcher = game.ships[1].design.weapons.find(
+      (w) => w.weaponClass === 'salvo-missile-launcher',
+    )
+    expect(launcher).toBeDefined()
+    applyAction(game, {
+      type: 'launch-ordnance',
+      shipId: 'shooter',
+      weaponId: launcher!.id,
+      // Right on top of the defender, so the salvo is unambiguously a threat.
+      aimPoint: { x: 40, y: 20 },
+    })
+    expect(game.ordnance.length).toBe(1)
+
+    guard = 40
+    while (game.phase !== 'point-defence' && guard-- > 0) advancePhase(game)
+    applyAction(game, { type: 'resolve-point-defence' })
+
+    const defender = game.ships[0]
+    const usedMounts = defender.design.systems.filter(
+      (system) => system.kind === 'pds' && defender.weaponsFired.has(system.id),
+    )
+    expect(usedMounts.length, 'not one PDS was offered the shot').toBeGreaterThan(0)
+  })
+})

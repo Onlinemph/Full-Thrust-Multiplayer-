@@ -45,6 +45,14 @@ export interface MapViewProps {
    * bare table gives the selected ship. Absent when there is no deployment.
    */
   deployWith?: { facing: Course; velocity: number } | null
+  /**
+   * The ordnance mount in hand in phase 3, if any (6.3, 6.8). A missile and a
+   * plasma bolt are both aimed at a point on the table rather than at a ship,
+   * so the aim is a click on bare table like a fighter's move is.
+   */
+  aimWith?: { shipId: string; weaponId: string; kind: 'missile' | 'plasma-bolt' } | null
+  /** Called once the aim point is taken, so the launcher leaves the hand. */
+  onAimed?: () => void
 }
 
 const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
@@ -59,6 +67,8 @@ export function MapView({
   selectedFlightId = null,
   onSelectFlight,
   deployWith = null,
+  aimWith = null,
+  onAimed,
 }: MapViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 960, height: 640 })
@@ -121,13 +131,24 @@ export function MapView({
     drag.current = null
     if (!start) return
     const placing = deployWith !== null && selectedId !== null
-    if (!(flight || squadron) && !placing) return
+    if (!(flight || squadron) && !placing && aimWith === null) return
     if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return
     const box = host.current?.getBoundingClientRect()
     if (!box) return
     const to = {
       x: (event.clientX - box.left - originX) / scale,
       y: (event.clientY - box.top - originY) / scale,
+    }
+    // An aim point is what a launcher wants and nothing else does, so a mount
+    // in hand takes the click ahead of everything (6.3, 6.8).
+    if (aimWith) {
+      dispatch(
+        aimWith.kind === 'plasma-bolt'
+          ? { type: 'launch-plasma-bolt', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
+          : { type: 'launch-ordnance', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to },
+      )
+      onAimed?.()
+      return
     }
     // 18.1 is placement, not movement, so it wins the bare-table click while
     // it is running — there is nothing to fly yet.

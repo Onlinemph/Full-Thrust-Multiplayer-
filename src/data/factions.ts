@@ -43,6 +43,15 @@ export type FactionBan =
   | { kind: 'system'; system: SystemKind }
   /** *"Direct-fire weapons of class 3 or higher"* — a rating cut, not a list. */
   | { kind: 'weapon-class-above'; rating: number }
+  /**
+   * *"Any Class-1 weapon except PDS"* — the bottom rung of the battery ladder.
+   *
+   * Not every rating-1 weapon: a Pulser, a Gatling and a Mine Rack are rating 1
+   * in the construction table because they have no ladder at all, and a Spinal
+   * Beam-1 is a 24 MU centre-line gun. Only the families printed with a class
+   * ladder count, which is `BATTERY_CLASSES`.
+   */
+  | { kind: 'class-one-batteries' }
   /** Every spinal mount, whatever it fires. */
   | { kind: 'spinal-mounts' }
   /** *"Any physical projectile"* — K-guns, torpedoes, MKP, missiles, rockets, mines. */
@@ -126,6 +135,24 @@ export const PROJECTILE_CLASSES: readonly WeaponClass[] = [
   'mine-rack',
   'submunition-pack',
   'boarding-torpedo',
+]
+
+/**
+ * The direct-fire families the rules print with a class ladder.
+ *
+ * "Class-1", "class-3 or higher" and the like are statements about these, and
+ * about nothing else: the table gives a Pulser rating 1 because a Pulser is a
+ * Pulser, not because it sits below a Pulser-2.
+ */
+export const BATTERY_CLASSES: readonly WeaponClass[] = [
+  'beam',
+  'graser',
+  'heavy-graser',
+  'phaser',
+  'plasma-cannon',
+  'emp',
+  'gravitic-gun',
+  'k-gun',
 ]
 
 /** Every spinal mount in the engine's weapon list. */
@@ -221,7 +248,7 @@ export const FACTIONS: readonly Faction[] = [
         { kind: 'prose' },
         false,
       ),
-      ban([{ kind: 'weapon-class-above', rating: 0 }], 'Any Class-1 weapon except PDS'),
+      ban([{ kind: 'class-one-batteries' }], 'Any Class-1 weapon except PDS'),
     ],
   },
   {

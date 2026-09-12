@@ -19,8 +19,24 @@
  */
 
 import {
+  fighterMods,
+  gunboatMods,
+} from './smallCraftMods'
+import {
+  validateFighterBuild,
+  FIGHTER_TYPES,
+  type FighterTypeId,
+} from '../engine/fighters'
+import {
+  validateGunboatBuild,
+  GUNBOAT_SQUADRON_SIZE,
+  GUNBOAT_TYPES,
+  type GunboatTypeId,
+} from '../engine/gunboats'
+import {
   factionById,
   traitsFor,
+  BATTERY_CLASSES,
   PROJECTILE_CLASSES,
   SPINAL_CLASSES,
 } from './factions'
@@ -310,6 +326,8 @@ export type DesignFault =
   | { kind: 'faction-prohibition'; faction: string; what: string; rule: string }
   /** A faction design trait this hull does not satisfy. */
   | { kind: 'faction-design'; faction: string; trait: string; rule: string }
+  /** An 8.15 fighter build or a 9.2 squadron build the rules do not allow. */
+  | { kind: 'bad-small-craft'; label: string; problem: string }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -341,6 +359,8 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.what}: the ${fault.faction} does not build it — ${fault.rule}`
     case 'faction-design':
       return `${fault.faction} ${fault.trait}: ${fault.rule}`
+    case 'bad-small-craft':
+      return `${fault.label}: ${fault.problem}`
   }
 }
 
@@ -379,6 +399,13 @@ function factionFaults(design: ShipDesign, factionId: string, clanId?: string): 
             if (weapon.rating > banned.rating) bar(weapon.label, trait.rule)
           }
           break
+        case 'class-one-batteries':
+          for (const weapon of design.weapons) {
+            if (weapon.rating === 1 && (BATTERY_CLASSES as readonly string[]).includes(weapon.weaponClass)) {
+              bar(weapon.label, trait.rule)
+            }
+          }
+          break
         case 'spinal-mounts':
           for (const weapon of design.weapons) {
             if ((SPINAL_CLASSES as readonly string[]).includes(weapon.weaponClass)) {
@@ -400,7 +427,13 @@ function factionFaults(design: ShipDesign, factionId: string, clanId?: string): 
           if (design.screens.advanced) bar('advanced screens', trait.rule)
           break
         case 'manned-small-craft':
-          if (design.fighterBays.length > 0) bar('manned fighter bays', trait.rule)
+          // *"robot fighters only"*, not "no fighters": 8.15's Robot option is
+          // what makes a wing unmanned, so a bay declaring it is the one kind
+          // of bay this faction may fit. No gunboat has the option (9.2), so
+          // every squadron is still a crew the Shard-Swarm does not have.
+          for (const bay of design.fighterBays) {
+            if (!(bay.modifiers ?? []).includes('robot')) bar(`${bay.label} (manned)`, trait.rule)
+          }
           if (design.gunboats.length > 0) bar('gunboat squadrons', trait.rule)
           break
         case 'emergency-thrust':
@@ -491,6 +524,32 @@ export function validateDesign(
   const hangars = countKind(design, 'hangar-bay')
   const tubes = countKind(design, 'launch-tube')
   if (hangars > 0 && tubes === 0) faults.push({ kind: 'hangar-without-tube' })
+
+  // 8.15 and 9.2 both have builds that are illegal rather than merely bad —
+  // a Light Torpedo wing, a Long Range option twice, FTL gunboats in a rack.
+  // The engine has said so since the modules were written; nothing asked it
+  // until a design could name a modification.
+  for (const bay of design.fighterBays) {
+    const typeId = bay.typeId as FighterTypeId
+    if (!(typeId in FIGHTER_TYPES)) continue
+    for (const problem of validateFighterBuild(typeId, fighterMods(bay.modifiers))) {
+      faults.push({ kind: 'bad-small-craft', label: bay.label, problem })
+    }
+  }
+  for (const rack of design.gunboats) {
+    const typeId = rack.typeId as GunboatTypeId
+    if (!(typeId in GUNBOAT_TYPES)) continue
+    const problems = validateGunboatBuild(
+      Array<GunboatTypeId>(GUNBOAT_SQUADRON_SIZE).fill(typeId),
+      gunboatMods(rack.modifiers),
+      // A design's squadrons ride the racks it bought (9.1), so an FTL
+      // squadron on this hull is an FTL squadron in a rack.
+      { carriedOnRack: countKind(design, 'gunboat-rack') > 0 },
+    )
+    for (const problem of problems) {
+      faults.push({ kind: 'bad-small-craft', label: rack.label, problem })
+    }
+  }
 
   for (const turret of design.turrets) {
     const fitted = design.weapons

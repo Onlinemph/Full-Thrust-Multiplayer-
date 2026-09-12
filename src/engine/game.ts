@@ -316,6 +316,14 @@ export interface ShipState {
   // --- what this turn has spent (2.6, 5.2) --------------------------------
   /** Weapon id → the phase it fired in. Cleared at the start of each turn. */
   weaponsFired: Map<string, Phase>
+  /**
+   * The turn a weapon last fired, kept across turns.
+   *
+   * `weaponsFired` is cleared at the top of each turn, which is right for the
+   * once-a-turn rule and useless for 6.8's *"a PBL may only fire every other
+   * turn"*. This is the reload clock, and nothing clears it.
+   */
+  weaponLastFiredTurn: Map<string, number>
   /** Phase 11: a ship gets one firing activation per turn. */
   hasFiredThisTurn: boolean
   /** Cleared at every phase boundary, because FireCon limits are per phase (5.2). */
@@ -420,6 +428,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     exitEdge: null,
     reentryTurn: null,
     weaponsFired: new Map<string, Phase>(),
+    weaponLastFiredTurn: new Map<string, number>(),
     hasFiredThisTurn: false,
     fireconAssignments: [],
     cloudLocks: new Map<string, boolean>(),
@@ -1334,10 +1343,16 @@ export function lastKnownVector(
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a weapon still has its shot (2.6): "weapons can only be used once per
+ * Whether a mount still has its shot (2.6): *"weapons can only be used once per
  * turn, so any system used for point defense … cannot be used again in that
- * turn against a ship." A destroyed mount (4.11) and an empty one-shot rack
+ * turn against a ship."* A destroyed mount (4.11) and an empty one-shot rack
  * (6.6) are out too.
+ *
+ * The id may name a weapon or a system. That sentence of 2.6 is about systems
+ * as much as weapons — a PDS is a mount that fires once a turn — and for a long
+ * time this function answered `false` for every one of them, because it looked
+ * the id up in `design.weapons` and gave up when it was not there. Point
+ * defence went on working, quietly, with nothing but the class-1 beams.
  */
 export function canWeaponFire(ship: ShipState, weaponId: string): boolean {
   if (ship.destroyed || ship.offTable) return false
@@ -1345,9 +1360,11 @@ export function canWeaponFire(ship: ShipState, weaponId: string): boolean {
   if (ship.weaponsFired.has(weaponId)) return false
   if (ship.ongoing.some((effect) => effect.weaponsOffline?.includes(weaponId))) return false
   const weapon = ship.design.weapons.find((w) => w.id === weaponId)
-  if (!weapon) return false
-  if (weapon.ammo !== undefined && weapon.ammo <= 0) return false
-  return true
+  if (weapon) {
+    if (weapon.ammo !== undefined && weapon.ammo <= 0) return false
+    return true
+  }
+  return ship.design.systems.some((system) => system.id === weaponId)
 }
 
 /**

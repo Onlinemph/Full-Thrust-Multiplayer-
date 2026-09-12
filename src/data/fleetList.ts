@@ -25,20 +25,34 @@ import {
   type FleetCompositionReport,
   type FleetShip,
 } from '../engine/battles'
-import { FIGHTER_TYPES, type FighterTypeId } from '../engine/fighters'
-import { GUNBOAT_SQUADRON_SIZE, GUNBOAT_TYPES, type GunboatTypeId } from '../engine/gunboats'
+import { fighterProfile, FIGHTER_TYPES, type FighterTypeId } from '../engine/fighters'
+import {
+  squadronPoints,
+  GUNBOAT_SQUADRON_SIZE,
+  GUNBOAT_TYPES,
+  type GunboatTypeId,
+} from '../engine/gunboats'
+import { fighterMods, gunboatMods } from './smallCraftMods'
 import type { ShipDesign } from '../engine/types'
 
 /** 14.7 prices a wing by its type; 9.1 prices a gunboat squadron by the boat. */
 export function embarkedPointsOf(design: ShipDesign): number {
   let points = 0
   for (const bay of design.fighterBays) {
-    const type = FIGHTER_TYPES[bay.typeId as FighterTypeId]
-    points += type?.pointsPerWing ?? 0
+    const typeId = bay.typeId as FighterTypeId
+    if (!(typeId in FIGHTER_TYPES)) continue
+    // Through the profile rather than off the type, because 8.15's options are
+    // priced per fighter: a Heavy wing is not a wing that costs what a plain
+    // one costs, and a Robot wing costs less.
+    points += fighterProfile(typeId, fighterMods(bay.modifiers)).points
   }
   for (const rack of design.gunboats) {
-    const type = GUNBOAT_TYPES[rack.typeId as GunboatTypeId]
-    points += (type?.pointsEach ?? 0) * GUNBOAT_SQUADRON_SIZE
+    const typeId = rack.typeId as GunboatTypeId
+    if (!(typeId in GUNBOAT_TYPES)) continue
+    points += squadronPoints(
+      Array<GunboatTypeId>(GUNBOAT_SQUADRON_SIZE).fill(typeId),
+      gunboatMods(rack.modifiers),
+    )
   }
   return points
 }

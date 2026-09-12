@@ -53,6 +53,7 @@ import {
   FIGHTER_ATTACK_RANGE,
 } from './fighters'
 import { GUNBOAT_FIRE_CONTROL, GUNBOAT_MOVE, GUNBOAT_SECONDARY_MOVE } from './gunboats'
+import { PLASMA_BOLT_BLAST_RADIUS } from './ordnance'
 import {
   collisionAvoidanceTarget,
   createGravityWell,
@@ -435,6 +436,49 @@ export function aiActions(
           if (distance(ship.placement.position, aim) > maxRangeOf(weapon)) continue
           actions.push({
             type: 'launch-ordnance',
+            shipId: ship.id,
+            weaponId: weapon.id,
+            aimPoint: aim,
+          })
+        }
+
+        // 6.7 and 6.8 launch in the same phase and neither is aimed like a
+        // missile: a rocket pod names a ship and rolls now, a plasma bolt puts
+        // a marker on the table and waits for phase 10.
+        for (const weapon of ship.design.weapons) {
+          if (ship.destroyedSystems.has(weapon.id)) continue
+          if (!canWeaponFire(ship, weapon.id)) continue
+          const target = pickTarget(game, ship)
+          if (!target) continue
+          if (weapon.weaponClass === 'rocket-pod') {
+            if (distance(ship.placement.position, target.placement.position) > maxRangeOf(weapon)) {
+              continue
+            }
+            actions.push({
+              type: 'fire-rocket-pod',
+              shipId: ship.id,
+              weaponId: weapon.id,
+              targetId: target.id,
+            })
+            continue
+          }
+          if (weapon.weaponClass !== 'plasma-bolt-launcher') continue
+          // The bubble is 6 MU across, so a bolt put where the target will be
+          // catches it even if the prediction is a move out.
+          const aim = predict(target, 1)
+          if (distance(ship.placement.position, aim) > maxRangeOf(weapon)) continue
+          // 6.8 does not care whose ships are inside the blast. A computer that
+          // drops one on its own line has not understood the weapon.
+          const friendlyInBlast = game.ships.some(
+            (other) =>
+              other.side === ship.side &&
+              !other.destroyed &&
+              !other.offTable &&
+              distance(predict(other, 1), aim) <= PLASMA_BOLT_BLAST_RADIUS,
+          )
+          if (friendlyInBlast) continue
+          actions.push({
+            type: 'launch-plasma-bolt',
             shipId: ship.id,
             weaponId: weapon.id,
             aimPoint: aim,

@@ -342,10 +342,17 @@ export interface ShipDesign {
   systems: SystemDef[]
   coreSystems?: CoreSystemsDef
 
-  /** Fighter groups carried, by fighter-type id (8.15). */
-  fighterBays: Array<{ typeId: string; label: string }>
+  /**
+   * Fighter groups carried, by fighter-type id (8.15).
+   *
+   * `modifiers` are 8.15's "(+Mod)" options — Heavy, Fast, Long Range, FTL,
+   * Robot, Light — which stack onto the type rather than replacing it. Held as
+   * plain strings for the same reason `typeId` is: this file is the schema
+   * every module reads and may not depend on `fighters.ts`.
+   */
+  fighterBays: Array<{ typeId: string; label: string; modifiers?: string[] }>
   /** Gunboat squadrons carried (9). */
-  gunboats: Array<{ typeId: string; label: string }>
+  gunboats: Array<{ typeId: string; label: string; modifiers?: string[] }>
 
   /** Damage control parties (10.4) and marine boarding parties (12.7). */
   /**

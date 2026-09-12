@@ -338,7 +338,13 @@ export function hullRowBounds(hullBoxes: number, hullRows: number): number[] {
   const bounds: number[] = []
   let cumulative = 0
   for (let row = 0; row < rows; row++) {
-    cumulative += base + (row < extra ? 1 : 0)
+    const size = base + (row < extra ? 1 : 0)
+    // A row with no boxes in it is not a threshold point: nothing can cross
+    // it, and counting it would hand out a free check at the same damage that
+    // crossed the row before. `game.hullRowBoundaries` has always dropped
+    // these; this is the same rule, on the damage pipeline's side of it.
+    if (size <= 0) continue
+    cumulative += size
     bounds.push(cumulative)
   }
   return bounds

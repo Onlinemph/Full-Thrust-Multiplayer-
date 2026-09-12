@@ -26,6 +26,7 @@ import { ShipLibrary } from './ShipLibrary'
 import { Shipyard } from './Shipyard'
 import { KEY_HELP, useKeyboard } from './useKeyboard'
 import { OrderPanel } from './OrderPanel'
+import { OrdnancePanel, type AimingMount } from './OrdnancePanel'
 import { VectorOrderPanel } from './VectorOrderPanel'
 import { Ssd } from './Ssd'
 import {
@@ -71,6 +72,9 @@ export function App() {
      velocity", so both are chosen before the click that puts the ship down. */
   const [deployFacing, setDeployFacing] = useState<Course>(12)
   const [deployVelocity, setDeployVelocity] = useState(6)
+  /* 6.3 and 6.8 both aim at a point, so a launcher is taken in hand and then
+     the table is clicked — the same two steps as moving a fighter group. */
+  const [aiming, setAiming] = useState<AimingMount | null>(null)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
   const table = game.table
@@ -164,6 +168,8 @@ export function App() {
           selectedFlightId={selectedFlightId}
           onSelectFlight={setSelectedFlightId}
           deployWith={deployWith}
+          aimWith={game.phase === 'launch-missiles' ? aiming : null}
+          onAimed={() => setAiming(null)}
         />
 
         <aside className="app-side">
@@ -192,7 +198,13 @@ export function App() {
           ) : game.phase === 'ship-fire' && selected ? (
             <CombatPanel game={game} ship={selected} onHoverWeapon={setLitArcs} />
           ) : (
-            <PhaseControls phase={game.phase} />
+            <PhaseControls
+              phase={game.phase}
+              game={game}
+              viewingSide={viewingSide}
+              aiming={aiming}
+              onAim={setAiming}
+            />
           )}
 
           {optional(game).movingTable ? <MovingTablePanel game={game} /> : null}
@@ -470,7 +482,19 @@ function DeploymentPanel({
  * question, and showing all of them at once is how a fifteen-phase turn becomes
  * unplayable.
  */
-function PhaseControls({ phase }: { phase: Phase }) {
+function PhaseControls({
+  phase,
+  game,
+  viewingSide,
+  aiming,
+  onAim,
+}: {
+  phase: Phase
+  game: GameState
+  viewingSide: string | null
+  aiming: AimingMount | null
+  onAim: (mount: AimingMount | null) => void
+}) {
   switch (phase) {
     case 'orders':
       return (
@@ -505,13 +529,7 @@ function PhaseControls({ phase }: { phase: Phase }) {
       )
     case 'launch-missiles':
       return (
-        <div className="panel">
-          <h3>Phase 3 · Launch missiles</h3>
-          <p style={{ color: 'var(--ink-dim)' }}>
-            A missile is aimed at a point, not at a ship: it attacks whatever it finds within 6 MU
-            of that point once everything has moved. The side with initiative launches last.
-          </p>
-        </div>
+        <OrdnancePanel game={game} side={viewingSide} aiming={aiming} onAim={onAim} />
       )
     case 'point-defence':
       return (

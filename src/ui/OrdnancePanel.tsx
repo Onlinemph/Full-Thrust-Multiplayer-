@@ -1,0 +1,125 @@
+import { canWeaponFire, enemiesOf, type GameState, type ShipState } from '../engine/game'
+import { distance, arcTo, bearsOn } from '../engine/geometry'
+import { maxRangeOf } from '../engine/weapons'
+import { dispatch } from './store'
+import type { WeaponDef } from '../engine/types'
+
+/**
+ * Phase 3, from the player's side of the table (6).
+ *
+ * Section 6 was reachable only by the computer: the engine had a launch action
+ * and the screen had a paragraph explaining what missiles do. Everything a
+ * player can launch is here, and each family launches the way its rule says —
+ * a missile at a point, a rocket pod at a ship, a plasma bolt at a spot on the
+ * table it will go off on regardless of who is standing there.
+ */
+
+export type AimingMount = { shipId: string; weaponId: string; kind: 'missile' | 'plasma-bolt' }
+
+export interface OrdnancePanelProps {
+  game: GameState
+  /** The side taking its launches; null while nobody is nominated. */
+  side: string | null
+  aiming: AimingMount | null
+  onAim: (mount: AimingMount | null) => void
+}
+
+const MISSILES = new Set([
+  'heavy-missile',
+  'salvo-missile-rack',
+  'salvo-missile-launcher',
+  'antimatter-missile',
+])
+
+function launchable(ship: ShipState): WeaponDef[] {
+  return ship.design.weapons.filter((weapon) => {
+    if (ship.destroyedSystems.has(weapon.id)) return false
+    if (!canWeaponFire(ship, weapon.id)) return false
+    return (
+      MISSILES.has(weapon.weaponClass) ||
+      weapon.weaponClass === 'rocket-pod' ||
+      weapon.weaponClass === 'plasma-bolt-launcher'
+    )
+  })
+}
+
+export function OrdnancePanel({ game, side, aiming, onAim }: OrdnancePanelProps) {
+  const mine = game.ships.filter(
+    (ship) => !ship.destroyed && !ship.offTable && (side === null || ship.side === side),
+  )
+  const armed = mine.filter((ship) => launchable(ship).length > 0)
+
+  return (
+    <div className="panel">
+      <h3>Phase 3 · Launch ordnance</h3>
+      <p style={{ color: 'var(--ink-dim)' }}>
+        A missile is aimed at a point, not at a ship: it attacks whatever it finds within 6 MU of
+        that point once everything has moved. The side with initiative launches last.
+      </p>
+
+      {armed.length === 0 ? (
+        <p style={{ color: 'var(--ink-dim)' }}>Nothing left to launch.</p>
+      ) : null}
+
+      {armed.map((ship) => (
+        <div key={ship.id} className="ordnance-ship">
+          <b>{ship.name}</b>
+          {launchable(ship).map((weapon) => {
+            if (weapon.weaponClass === 'rocket-pod') {
+              // 6.7 picks a ship and rolls both rockets now, so the choice is
+              // which hull rather than which patch of table.
+              const reachable = enemiesOf(game, ship.side).filter((enemy) => {
+                if (enemy.destroyed || enemy.offTable) return false
+                const range = distance(ship.placement.position, enemy.placement.position)
+                if (range > maxRangeOf(weapon)) return false
+                return bearsOn(
+                  weapon.arcs,
+                  arcTo(ship.placement.position, ship.placement.facing, enemy.placement.position),
+                )
+              })
+              return (
+                <div key={weapon.id} className="ordnance-mount">
+                  <span>{weapon.label}</span>
+                  {reachable.length === 0 ? (
+                    <span style={{ color: 'var(--ink-dim)' }}>nothing in arc</span>
+                  ) : (
+                    reachable.map((enemy) => (
+                      <button
+                        key={enemy.id}
+                        onClick={() =>
+                          dispatch({
+                            type: 'fire-rocket-pod',
+                            shipId: ship.id,
+                            weaponId: weapon.id,
+                            targetId: enemy.id,
+                          })
+                        }
+                      >
+                        {enemy.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )
+            }
+
+            const kind = weapon.weaponClass === 'plasma-bolt-launcher' ? 'plasma-bolt' : 'missile'
+            const inHand = aiming?.shipId === ship.id && aiming.weaponId === weapon.id
+            return (
+              <div key={weapon.id} className="ordnance-mount">
+                <span>{weapon.label}</span>
+                <button
+                  className={inHand ? 'primary' : undefined}
+                  onClick={() => onAim(inHand ? null : { shipId: ship.id, weaponId: weapon.id, kind })}
+                >
+                  {inHand ? 'Click the table…' : 'Take aim'}
+                </button>
+                <span style={{ color: 'var(--ink-dim)' }}>{maxRangeOf(weapon)} MU</span>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
