@@ -7,7 +7,12 @@
  * actions without a server. See docs/architecture.md.
  */
 
-import { applyAction, setOptionalRules, type GameAction } from '../engine/actions'
+import {
+  applyAction,
+  setOptionalRules,
+  setRulesReading,
+  type GameAction,
+} from '../engine/actions'
 import {
   tugTowCheck,
   tugTransferMass,
@@ -31,7 +36,7 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  * old battle it replays. Files without a stamp replay under reading 1, exactly
  * as they were fought.
  */
-export const CURRENT_RULES_VERSION = 1
+export const CURRENT_RULES_VERSION = 2
 
 export interface GameSetup {
   scenarioId: string
@@ -276,6 +281,10 @@ export function buildGame(setup: GameSetup): GameState {
         `(11.6, 11.8) — ${problems.join('; ')}`,
     })
   }
+
+  // The reading this battle is fought under, so a fix that changes the dice
+  // does not rewrite a fight that was already had.
+  setRulesReading(game, setup.rulesVersion)
 
   setOptionalRules(game, {
     driveDamage: setup.driveDamage,

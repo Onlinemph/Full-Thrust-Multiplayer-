@@ -64,12 +64,6 @@ import type { FiringContext, WeaponResult, WeaponSpec, WeaponSpecTable } from '.
  *   home on `WeaponDef`.
  */
 export interface KineticContext extends FiringContext {
-  /** The target's screens are Advanced Screens rather than Standard (7.3). */
-  advancedScreens?: boolean
-  /** Target's total mass, for the PSP damage scale (5.23). */
-  targetMass?: number
-  /** Target's current velocity in MU, for the Gravitic Gun (5.20). */
-  targetVelocity?: number
   /** The target is a fighter, gunboat, missile or other small craft (5.23). */
   targetIsSmallCraft?: boolean
   /** 5.14: this Pulse Torpedo was ordered to fire overloaded this turn. */

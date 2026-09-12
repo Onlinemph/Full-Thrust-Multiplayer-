@@ -1489,6 +1489,18 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // defence, not fighters, none of which is helped by knowing where the
         // hull is thin.
         drm: ew.drm + civilWarDrm(civilWarHere(state), isOrdnance(weapon) ? 'ordnance' : 'direct-fire'),
+        // Everything `KineticContext` adds to a firing context, re-derived
+        // from the game as rule 1 of the journal requires. None of it was ever
+        // supplied, so 7.3's Advanced Screens protected nothing against a
+        // pulse torpedo, a submunition pack or an MKP — a ship that paid half
+        // again for the better screen got exactly the worse one — and a
+        // Gravitic Gun read its target's velocity as zero.
+        advancedScreens: target.design.screens.advanced,
+        targetVelocity: target.velocity,
+        // 5.23's PSP scales its damage dice on the target's mass, so this one
+        // changes how many dice a shot throws and is stamped: an older battle
+        // replays on the mass-50 default it was fought under.
+        targetMass: rulesReading(state) >= 2 ? target.design.mass : undefined,
         rng: state.rng,
       })
       markWeaponFired(ship, weapon.id, state.phase)
@@ -7394,6 +7406,30 @@ export function setOptionalRules(state: GameState, rules: OptionalRules): void {
 
 export function optional(state: GameState): OptionalRules {
   return OPTIONS.get(state) ?? {}
+}
+
+/**
+ * The engine's rules reading, as the battle was stamped with it.
+ *
+ * A battle file is a journal, so a fix that changes how many dice a shot
+ * throws rewrites every old battle that threw them. `CURRENT_RULES_VERSION`
+ * in `savedGame.ts` is what a fight is stamped with, and this is where the
+ * engine reads it back: a change that shifts the RNG stream is written as
+ * `rulesReading(state) >= n`, and an unstamped file replays as reading 1,
+ * exactly as it was fought.
+ *
+ * This is the mechanism the architecture doc describes. It was stamped onto
+ * every setup from the start and never read by anything, so the first fix
+ * that needed it is also the one that makes it work.
+ */
+const RULES_READING = new WeakMap<GameState, number>()
+
+export function setRulesReading(state: GameState, version: number | undefined): void {
+  RULES_READING.set(state, Math.max(1, Math.floor(version ?? 1)))
+}
+
+export function rulesReading(state: GameState): number {
+  return RULES_READING.get(state) ?? 1
 }
 
 const READY = new WeakMap<GameState, Record<SideId, boolean>>()

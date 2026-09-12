@@ -35,6 +35,20 @@ export interface FiringContext {
    * the caller cannot know which resolver it is about to reach.
    */
   needleTarget?: string
+  /**
+   * 7.3: the target's screens are Advanced Screens rather than Standard.
+   *
+   * Here for the same reason `needleTarget` is: `fireWeapon` dispatches
+   * through this type, so the caller cannot know which resolver it is about to
+   * reach and has to hand over everything any of them might read. Only the
+   * kinetic family looks at it, and to that family it is the *only* screen
+   * that counts — a Standard Screen stops nothing solid.
+   */
+  advancedScreens?: boolean
+  /** Target's total mass, for the Point Singularity Projector's scale (5.23). */
+  targetMass?: number
+  /** Target's current velocity in MU, for the Gravitic Gun (5.20). */
+  targetVelocity?: number
   rng: Rng
 }
 
