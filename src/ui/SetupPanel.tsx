@@ -139,6 +139,24 @@ export const OPTIONAL_RULES: Toggle[] = [
       'and speed, three to five turns later depending on its thrust.',
   },
   {
+    key: 'strikeColors',
+    rule: '12.9',
+    label: 'Striking the colors',
+    detail:
+      'A ship crossing a hull row rolls against the same ladder as its threshold check, and on a ' +
+      'failure her captain surrenders to the nearest enemy vessel. The hull is a prize, intact ' +
+      'and out of the fight.',
+  },
+  {
+    key: 'civilWar',
+    rule: '12.10',
+    label: 'Civil war',
+    detail:
+      'Both fleets built by the same navy know where each other are thin: +1 on every direct-fire ' +
+      'die. Nothing for ordnance, point defence or fighters, and the engine checks the fleets ' +
+      'really are one navy before granting it.',
+  },
+  {
     key: 'solarFlares',
     rule: '17.3',
     label: 'Solar flares',

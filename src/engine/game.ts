@@ -17,6 +17,7 @@
  */
 
 import { d6, Rng } from './dice'
+import { capturedShipDestroyed } from './boarding'
 import {
   beginFighterTurn,
   type FighterGroup,
@@ -392,6 +393,26 @@ export interface ShipState {
    * destroyed one — 18.3 scores it differently and it can be sailed away.
    */
   captured: boolean
+  /**
+   * Whose prize it is (12.7). Null until a boarding action carries the hull.
+   *
+   * The side matters as much as the flag: a captured ship is out of its own
+   * fleet's order of battle and counts against its morale (12.8), and 12.7's
+   * *"a single point of damage is sufficient to destroy the captured ship"*
+   * needs to know who would be denying whom.
+   */
+  capturedBy: SideId | null
+  /**
+   * Whether any of this turn's hull damage came from something other than
+   * boarding combat.
+   *
+   * 12.7: *"Marines and Boarding Parties cannot be killed in a threshold test
+   * caused by boarding combat. Both Marines and Boarding Parties are
+   * vulnerable to being killed in threshold tests caused by weapons fire."*
+   * A ship can take both in one turn, so the flag records whether anything
+   * but the boarders put a row in — cleared with the rest of the turn.
+   */
+  hullHitByWeapons: boolean
 }
 
 export interface ShipStateOptions {
@@ -483,6 +504,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     boarders: [],
     marinesAboard: opts.design.marineParties,
     captured: false,
+    capturedBy: null,
+    hullHitByWeapons: false,
   }
 }
 
@@ -1324,6 +1347,7 @@ function onBeginTurn(state: GameState): void {
     ship.thrustUsed = 0
     ship.layingMines = false
     ship.landing = false
+    ship.hullHitByWeapons = false
     // A transit already under way is not re-declared each turn: 11.4 gives the
     // drive a warm-up turn and a jump turn, and the order that started it
     // stands until the ship is gone.
@@ -1686,9 +1710,25 @@ export function hullRowsCompleted(ship: ShipState): number {
 export function markHullBoxes(
   ship: ShipState,
   points: number,
+  // 12.7 needs to know what put the row in: a threshold test caused by
+  // boarding combat cannot kill Marines or boarders, and one caused by
+  // weapons fire can. Everything except the boarding step is weapons fire.
+  cause: 'weapons' | 'boarding' = 'weapons',
 ): { marked: number; rowsCrossed: number; destroyed: boolean } {
   if (points <= 0 || ship.destroyed) {
     return { marked: 0, rowsCrossed: 0, destroyed: ship.destroyed }
+  }
+  if (cause === 'weapons') ship.hullHitByWeapons = true
+  // 12.7: "A single point of damage is sufficient to destroy the captured
+  // ship" — how a navy denies the enemy its own hull. A prize has no armour
+  // and no screens worth the name any more; one hit and it is gone.
+  if (ship.captured && capturedShipDestroyed(points)) {
+    const standing = ship.design.hullBoxes - ship.hullMarked
+    ship.hullMarked = ship.design.hullBoxes
+    ship.destroyed = true
+    ship.pendingThresholdRows = 0
+    ship.excessDamage = 0
+    return { marked: standing, rowsCrossed: 0, destroyed: true }
   }
   const rowsBefore = hullRowsCompleted(ship)
   const before = ship.hullMarked

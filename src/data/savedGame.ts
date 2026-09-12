@@ -73,6 +73,10 @@ export interface GameSetup {
    * off the edge is going round the world and comes back on the far side.
    */
   orbitalTable?: boolean
+  /** 12.9 — a beaten captain may strike the colors and surrender the ship. */
+  strikeColors?: boolean
+  /** 12.10 — both fleets built by the same navy: +1 on direct fire. */
+  civilWar?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -189,6 +193,8 @@ export function buildGame(setup: GameSetup): GameState {
     knockedOffCourse: setup.knockedOffCourse,
     solarFlares: setup.solarFlares,
     orbitalTable: setup.orbitalTable,
+    strikeColors: setup.strikeColors,
+    civilWar: setup.civilWar,
   })
   return game
 }

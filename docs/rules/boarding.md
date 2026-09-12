@@ -427,6 +427,18 @@ Related and smaller: the comparison is `>=`, because 12.8 says the loss of 50% "
 
 ---
 
+## Wired since
+
+Everything the table below called the integrator's job is now done. A prize is out of the fight —
+no orders, no movement, no fire — and one point of damage destroys her (12.7); a boarding action
+carries on after the ship leaves the table or jumps out; Marines and boarders are rolled for in a
+threshold check caused by weapons fire and never in one caused by the boarders themselves; fleet
+morale is reported once per side as it crosses (12.8); striking the colors (12.9) and the civil-war
++1 (12.10) are optional rules on the setup screen, both off by default because each changes what
+an already-saved battle would replay as. `src/engine/prizes.test.ts` covers the lot.
+
+Still the integrator's job and still undone: victory points for a prize, which is `victory.ts`'s.
+
 ## Not implemented, and why
 
 | Rule | Why |

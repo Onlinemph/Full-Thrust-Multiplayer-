@@ -132,8 +132,15 @@ import {
   type FtlExitStage,
 } from './ftl'
 import {
+  boardersAtRiskInThreshold,
+  boardingContinues,
   boardingUnits,
+  civilWarDrm,
+  fleetMorale,
+  isCivilWar,
+  nearestEnemyVessel,
   resolveBoardingCombat,
+  strikeColorsCheck,
   MAX_DCPS_PER_TARGET,
   type BoardedShip,
   type BoardingForce,
@@ -173,10 +180,11 @@ import {
   type PdThreat,
   type StealthLevel,
 } from './defences'
-import { d6, type ScreenLevel } from './dice'
+import { d6, thresholdTarget, type ScreenLevel } from './dice'
 import {
   fireWeapon,
   isAreaEffect,
+  isOrdnance,
   maxRangeOf,
   needsFireCon,
   rollsBeamDice,
@@ -514,6 +522,9 @@ function bearingArcs(ship: ShipState, arcs: readonly Arc[]): readonly Arc[] {
 function orderable(state: GameState, ship: ShipState | undefined): ActionOutcome | ShipState {
   if (!ship) return refuse('No such ship')
   if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+  // 12.7: a prize "cannot be used in that combat", and that starts with the
+  // order sheet.
+  if (ship.captured) return refuse(`${ship.name} is a prize and takes no orders (12.7)`)
   if (state.phase !== 'orders') return refuse('Orders are written in phase 1')
   // 18.1 comes first, and a ship still in the wings has no station to plot a
   // course from. Gated on there being a deployment at all, so it is inert for
@@ -928,6 +939,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'move-ships') return refuse('Ships move in phase 5')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (ship.captured) return refuse(`${ship.name} is a prize and does not move (12.7)`)
       // `lastKnown` is stamped with the turn as the ship moves, so it doubles
       // as the has-moved flag and survives replay without extra state.
       if (ship.lastKnown?.turn === state.turn) return refuse('Already moved this turn')
@@ -1111,6 +1123,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // of a ship whose bridge has gone: "While a ship is out of control it
       // will continue on its present course and velocity, and may not fire
       // weapons, launch fighters, or take any other offensive action."
+      // 12.7: "While the ship is captured, the ship cannot be used in that
+      // combat." Not its guns, not its drive, not its orders.
+      if (ship.captured) return refuse(`${ship.name} is a prize and out of the fight (12.7)`)
       if (ship.reflexFieldActive) return refuse(`${ship.name} is running its Reflex Field (7.25)`)
       if (ship.cloaked) return refuse(`${ship.name} is cloaked and cannot fire (7.20)`)
       if (isOutOfControl(ship, state.turn)) {
@@ -1264,7 +1279,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           target.placement.facing,
           ship.placement.position,
         ),
-        drm: ew.drm,
+        // 12.10: "all ships and squadrons roll a +1 on their direct fire
+        // weapons. The crews of these ships are well aware of the enemy ships
+        // vulnerable areas." Direct fire only — not ordnance, not point
+        // defence, not fighters, none of which is helped by knowing where the
+        // hull is thin.
+        drm: ew.drm + civilWarDrm(civilWarHere(state), isOrdnance(weapon) ? 'ordnance' : 'direct-fire'),
         rng: state.rng,
       })
       markWeaponFired(ship, weapon.id, state.phase)
@@ -1712,6 +1732,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         dice: result.checks.map((check) => check.roll),
       })
       knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+      partiesInThreshold(state, ship, result.rowsLost, result.extraRows)
+      strikeTheColors(state, ship, result.rowsLost, result.extraRows)
       orbitAfterThreshold(
         state,
         ship,
@@ -1728,6 +1750,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         const ship = shipById(state, result.shipId)
         if (!ship) continue
         knockOffCourse(state, ship, result.rowsLost, result.extraRows)
+        partiesInThreshold(state, ship, result.rowsLost, result.extraRows)
+        strikeTheColors(state, ship, result.rowsLost, result.extraRows)
         orbitAfterThreshold(
           state,
           ship,
@@ -1736,6 +1760,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           result.checks.filter((check) => check.destroyed).map((check) => check.id),
         )
       }
+      reportFleetMorale(state)
       return OK
     }
 
@@ -1809,8 +1834,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     case 'resolve-boarding': {
       if (state.phase !== 'boarding') return refuse('Boarding is resolved in phase 12')
       for (const ship of state.ships) {
-        if (ship.destroyed || ship.offTable) continue
-        if (!ship.boarders.some((party) => party.side !== ship.side)) continue
+        if (ship.destroyed) continue
+        // 12.7: "If a ship jumps away into FTL with enemy boarders on board,
+        // the battle for control of the ship continues. Resolve the boarding
+        // action until either all the boarders are killed, or the ship has
+        // been captured." So a hull that left the table is still fighting for
+        // itself somewhere, and this loop is the only place that happens.
+        if (!boardingContinues(ship.side, ship.boarders, ship.captured)) continue
 
         const boarded: BoardedShip = {
           side: ship.side,
@@ -1822,6 +1852,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           damageControlParties: availableDamageControlParties(ship),
           marines: ship.marinesAboard,
         }
+        // Read before the survivors overwrite the list: whoever was aboard
+        // fighting for the hull is whoever ends up owning it.
+        const capturedBy = ship.boarders.find((force) => force.side !== ship.side)?.side ?? null
         const result = resolveBoardingCombat(
           boarded,
           ship.boarders,
@@ -1844,7 +1877,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (result.hullDamage > 0) {
           // Boarders wreck a ship from the inside, so their damage meets no
           // armour and no screens on the way to the hull (12.7).
-          markHullBoxes(ship, result.hullDamage)
+          markHullBoxes(ship, result.hullDamage, 'boarding')
           pushLog(state, {
             kind: 'damage',
             shipId: ship.id,
@@ -1853,9 +1886,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           })
         }
         if (result.captured) {
-          // "it is considered captured" — an intact hull in someone else's
-          // hands, which is not at all the same as a destroyed one.
+          // 12.7: "If a ship is 'destroyed' by Boarding Parties or Marines it
+          // is considered captured." The quotation marks are the rule: the
+          // boarders filled her hull track, and what that produces is a prize
+          // rather than a wreck. So the destruction `markHullBoxes` just
+          // recorded is taken back, and the flag put on instead.
+          ship.destroyed = false
+          ship.excessDamage = null
+          ship.pendingThresholdRows = 0
           ship.captured = true
+          ship.capturedBy = capturedBy ?? ship.capturedBy
           pushLog(state, {
             kind: 'boarding',
             shipId: ship.id,
@@ -2692,6 +2732,178 @@ function driftDebris(state: GameState): void {
     clouds.map(moveDebrisCloud).filter((cloud) => !debrisCloudExpired(cloud, state.turn)),
   )
   projectDebris(state)
+}
+
+// ---------------------------------------------------------------------------
+// After the boarding action (12.7 - 12.10)
+// ---------------------------------------------------------------------------
+
+/**
+ * A prize is out of the fight (12.7).
+ *
+ * *"If a ship is 'destroyed' by Boarding Parties or Marines it is considered
+ * captured. While the ship is captured, the ship cannot be used in that
+ * combat."* Not destroyed — an intact hull in somebody else's hands, which is
+ * a different thing for the scoreboard, for 12.8's morale and for the enemy
+ * commander deciding whether to shoot it.
+ */
+function isOutOfAction(ship: ShipState): boolean {
+  return ship.destroyed || ship.captured
+}
+
+/**
+ * 12.10's civil war, worked out from the two orders of battle.
+ *
+ * *"If both fleets are composed of ships built by the same navy"* — a property
+ * of the pairing, so it is answered once for the battle rather than shot by
+ * shot, and a single foreign hull anywhere takes the bonus away from everyone.
+ */
+function civilWarHere(state: GameState): boolean {
+  if (!optional(state).civilWar) return false
+  const bySide = new Map<SideId, string[]>()
+  for (const ship of state.ships) {
+    const list = bySide.get(ship.side) ?? []
+    list.push(ship.design.faction)
+    bySide.set(ship.side, list)
+  }
+  const fleets = [...bySide.values()]
+  // 12.10 is written for two fleets. With three sides on the table the
+  // condition is that every one of them is the same navy.
+  if (fleets.length < 2) return false
+  return fleets.every((fleet, index) => index === 0 || isCivilWar(fleets[0], fleet))
+}
+
+/**
+ * Roll for the Marines and the boarders when a hull row goes (12.7, 13.13).
+ *
+ * 13.13 puts Marines on the SSD as systems, so 4.11's dice find them like
+ * anything else — except that *"Marines and Boarding Parties cannot be killed
+ * in a threshold test caused by boarding combat"*, and an attacking party
+ * *"cannot be lost to threshold checks caused on the turn they boarded"*.
+ *
+ * No optional-rule flag: this is a base rule of 12.7, but it only draws dice
+ * for a ship that has Marines aboard or boarders on it, and a boarding action
+ * can only have started inside an action a journal written before any of this
+ * existed never contained.
+ */
+function partiesInThreshold(state: GameState, ship: ShipState, rowsLost: number, extraRows: number): void {
+  if (ship.destroyed || rowsLost <= 0) return
+  // "caused by boarding combat": if nothing but the boarders put a row in
+  // this turn, neither side's parties are at risk.
+  if (!ship.hullHitByWeapons) return
+
+  const target = thresholdTarget(rowsLost)
+  const roll = () => d6(state.rng) + extraRows >= target
+
+  let marinesLost = 0
+  for (let i = 0; i < ship.marinesAboard; i++) if (roll()) marinesLost += 1
+  if (marinesLost > 0) {
+    ship.marinesAboard = Math.max(0, ship.marinesAboard - marinesLost)
+    pushLog(state, {
+      kind: 'threshold',
+      shipId: ship.id,
+      side: ship.side,
+      text: `${ship.name} loses ${marinesLost} Marine part${marinesLost === 1 ? 'y' : 'ies'} to the damage (12.7)`,
+    })
+  }
+
+  for (const force of ship.boarders) {
+    if (!boardersAtRiskInThreshold(force, 'weapons', state.turn)) continue
+    let lost = 0
+    for (let i = 0; i < Math.floor(force.parties); i++) if (roll()) lost += 1
+    if (lost === 0) continue
+    force.parties = Math.max(0, force.parties - lost)
+    pushLog(state, {
+      kind: 'threshold',
+      shipId: ship.id,
+      side: force.side,
+      text: `${lost} boarding part${lost === 1 ? 'y' : 'ies'} aboard ${ship.name} killed by the damage (12.7)`,
+    })
+  }
+  ship.boarders = ship.boarders.filter((force) => Math.floor(force.parties) > 0)
+}
+
+/**
+ * The surrender roll of 12.9, *"at the same time as any threshold check"*.
+ *
+ * A captain who strikes hands the ship to the nearest enemy vessel, which is
+ * a capture by another road: the hull is intact and out of the fight.
+ */
+function strikeTheColors(state: GameState, ship: ShipState, rowsLost: number, extraRows: number): void {
+  if (!optional(state).strikeColors) return
+  if (isOutOfAction(ship) || ship.offTable || rowsLost <= 0) return
+
+  const captor = nearestEnemyVessel(
+    ship.placement.position,
+    ship.side,
+    state.ships
+      .filter((other) => !isOutOfAction(other) && !other.offTable && other.side !== ship.side)
+      .map((other) => ({ id: other.id, side: other.side, position: other.placement.position })),
+  )
+  // "surrender to the nearest enemy vessel": with nobody to surrender to, a
+  // captain keeps fighting whatever they have decided.
+  if (!captor) return
+
+  const result = strikeColorsCheck(
+    {
+      rowsLost,
+      extraRows,
+      mode: optional(state).coreSystems ? 'core-system' : 'system',
+      captorSide: captor.side,
+    },
+    state.rng,
+  )
+  if (!result.struck) return
+
+  ship.captured = true
+  ship.capturedBy = captor.side
+  pushLog(state, {
+    kind: 'boarding',
+    shipId: ship.id,
+    side: ship.side,
+    dice: result.rolled === null ? undefined : [result.rolled],
+    text: `${ship.name} strikes her colors and surrenders to ${captor.side} (12.9)`,
+  })
+}
+
+/**
+ * Report a fleet that has lost enough to break (12.8).
+ *
+ * There is no die and no compulsion: *"it would be quite likely that the
+ * admirals on either side would consider the preservation of their own ships
+ * and crew to be quite a high priority."* So it is said once, when the line is
+ * crossed, and what the commander does about it is 3.9 and the player.
+ */
+const BROKEN = new WeakMap<GameState, Set<SideId>>()
+
+function reportFleetMorale(state: GameState): void {
+  let broken = BROKEN.get(state)
+  if (!broken) {
+    broken = new Set()
+    BROKEN.set(state, broken)
+  }
+  for (const side of state.sides) {
+    if (broken.has(side.id)) continue
+    const report = fleetMorale(
+      state.ships
+        .filter((ship) => ship.side === side.id)
+        .map((ship) => ({
+          mass: ship.design.mass,
+          destroyed: ship.destroyed,
+          captured: ship.captured,
+          offTable: ship.offTable,
+        })),
+    )
+    if (!report.withdraw) continue
+    broken.add(side.id)
+    pushLog(state, {
+      kind: 'note',
+      side: side.id,
+      text:
+        `${side.name} has lost ${Math.round(report.fraction * 100)}% of its mass — enough for a ` +
+        `commander to break off (12.8)`,
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -5004,6 +5216,25 @@ export interface OptionalRules {
    * that is a patch of open space.
    */
   orbitalTable?: boolean
+  /**
+   * 12.9: a captain whose ship is coming apart may *"strike the colors"* and
+   * surrender to the nearest enemy vessel, rolled at the same time as the
+   * threshold check.
+   *
+   * A die in a path that already existed, so it is off unless the table asks:
+   * switching it on shifts the RNG stream and every battle saved before it
+   * would replay differently.
+   */
+  strikeColors?: boolean
+  /**
+   * 12.10: *"If both fleets are composed of ships built by the same navy … all
+   * ships and squadrons roll a +1 on their direct fire weapons."*
+   *
+   * No extra dice, but it changes what the same dice mean, which is the same
+   * problem for a saved battle. Off unless the table says the war is a civil
+   * one — and the engine still checks that both fleets really are one navy.
+   */
+  civilWar?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()
