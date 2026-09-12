@@ -67,14 +67,14 @@ function vectorGame(velocity = 6): GameState {
         id: 'red',
         side: 'a',
         design: design({ id: 'red', name: 'Red' }),
-        placement: { position: { x: 0, y: 0 }, facing: 6 },
+        placement: { position: { x: 36, y: 10 }, facing: 6 },
         velocity,
       }),
       createShipState({
         id: 'blue',
         side: 'b',
         design: design({ id: 'blue', name: 'Blue' }),
-        placement: { position: { x: 0, y: -20 }, facing: 6 },
+        placement: { position: { x: 36, y: 2 }, facing: 6 },
         velocity: 0,
       }),
     ],
@@ -197,7 +197,7 @@ describe('a battle under 12.12', () => {
     applyAction(game, { type: 'move-ship', shipId: 'red' })
 
     const red = game.ships[0]
-    expect(red.placement.position.y, 'still running away').toBeGreaterThan(0)
+    expect(red.placement.position.y, 'still running away').toBeGreaterThan(10)
     expect(
       arcTo(red.placement.position, red.placement.facing, game.ships[1].placement.position),
       'and the forward battery bears on the pursuer',
@@ -232,7 +232,7 @@ describe('a battle under 12.12', () => {
     const game = vectorGame(6)
     advanceTo(game, 'move-ships')
     applyAction(game, { type: 'move-ship', shipId: 'red' })
-    expect(game.ships[0].placement.position.y).toBeCloseTo(6, 6)
+    expect(game.ships[0].placement.position.y).toBeCloseTo(16, 6)
     expect(game.ships[0].velocity).toBe(6)
     expect(game.ships[0].placement.facing).toBe(6)
   })

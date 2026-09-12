@@ -299,7 +299,7 @@ function terrainPenalty(game: GameState, ship: ShipState, result: MovementResult
  * of turns instead of jamming itself against the boundary.
  */
 function edgePenalty(game: GameState, position: Point): number {
-  const table = tableOf(game)
+  const table = game.table
   const margin = Math.min(
     position.x,
     position.y,
@@ -309,24 +309,6 @@ function edgePenalty(game: GameState, position: Point): number {
   if (margin >= BEAM_RANGE_BAND) return 0
   if (margin < 0) return 400
   return ((BEAM_RANGE_BAND - margin) / BEAM_RANGE_BAND) ** 2 * 60
-}
-
-/**
- * The table the battle is on.
- *
- * The engine does not carry it — a Full Thrust table is a property of the
- * scenario, not of the rules — so the AI works from the spread of the ships
- * with a margin. Wrong by a little, and only used to keep ships from wandering
- * off, which is a soft preference anyway.
- */
-function tableOf(game: GameState): { width: number; height: number } {
-  let width = 72
-  let height = 48
-  for (const ship of game.ships) {
-    width = Math.max(width, ship.placement.position.x + BEAM_RANGE_BAND)
-    height = Math.max(height, ship.placement.position.y + BEAM_RANGE_BAND)
-  }
-  return { width, height }
 }
 
 function movementStateOf(ship: ShipState): MovementState {

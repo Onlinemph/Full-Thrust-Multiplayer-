@@ -68,7 +68,13 @@ function advanceTo(game: GameState, phase: Phase): void {
   while (game.phase !== phase && guard-- > 0) advancePhase(game)
 }
 
-/** Red at the origin facing 12; blue dead astern of it, in arc A. */
+/**
+ * Red mid-table facing 12 (up the table); blue dead astern of it, in arc A.
+ *
+ * Well inside the 72 × 48 board on purpose: 3.9 now takes a ship off the table
+ * when it flies past an edge, and a fixture that starts outside one is testing
+ * something other than what it says it is.
+ */
 function sternChase(): GameState {
   return createGame({
     seed: 0x0402,
@@ -78,14 +84,14 @@ function sternChase(): GameState {
         id: 'red',
         side: 'a',
         design: design({ id: 'red', name: 'Red' }),
-        placement: { position: { x: 0, y: 0 }, facing: 12 },
+        placement: { position: { x: 36, y: 24 }, facing: 12 },
         velocity: 0,
       }),
       createShipState({
         id: 'blue',
         side: 'b',
         design: design({ id: 'blue', name: 'Blue' }),
-        placement: { position: { x: 0, y: 20 }, facing: 12 },
+        placement: { position: { x: 36, y: 40 }, facing: 12 },
         velocity: 0,
       }),
       // Off the bow, as a control: whatever the aft arc does, this shot stands.
@@ -93,7 +99,7 @@ function sternChase(): GameState {
         id: 'green',
         side: 'b',
         design: design({ id: 'green', name: 'Green' }),
-        placement: { position: { x: 0, y: -20 }, facing: 6 },
+        placement: { position: { x: 36, y: 8 }, facing: 6 },
         velocity: 0,
       }),
     ],

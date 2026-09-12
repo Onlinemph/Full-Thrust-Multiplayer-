@@ -60,6 +60,10 @@ export interface GameSetup {
    * may use instead of the standard FT movement rules"*. Absent is cinematic.
    */
   movementSystem?: 'cinematic' | 'vector'
+  /** 16.4 — the playing area slides under the ships instead of running out. */
+  movingTable?: boolean
+  /** 3.9 — a ship that left the table rolls for whether it can come back. */
+  tableReentry?: boolean
 
   /**
    * Systems barred from play. The campaign rules ban the Reflex Shield, the
@@ -165,6 +169,8 @@ export function buildGame(setup: GameSetup): GameState {
     terrainHazards: setup.terrainHazards,
     cpv: setup.cpv,
     movementSystem: setup.movementSystem,
+    movingTable: setup.movingTable,
+    tableReentry: setup.tableReentry,
   })
   return game
 }

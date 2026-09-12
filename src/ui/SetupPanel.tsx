@@ -34,6 +34,22 @@ const OPTIONAL_RULES: Toggle[] = [
     detail: 'Up to 150% of the drive rating, at the risk of damaging it.',
   },
   {
+    key: 'tableReentry',
+    label: 'Return to the table',
+    rule: '3.9',
+    detail:
+      'A ship that flies off the edge rolls a die: 4 or better and it may come back after that ' +
+      'many turns, 3 or less and it has left the battle for good.',
+  },
+  {
+    key: 'movingTable',
+    label: 'Moving table',
+    rule: '16.4',
+    detail:
+      'Slide the playing area under the ships when the action drifts into a corner. Leaving the ' +
+      'edge then stops being a retreat, and a fleet that runs can be pursued (16.5).',
+  },
+  {
     key: 'aftArcFire',
     label: 'Aft arc fire',
     rule: '4.2',

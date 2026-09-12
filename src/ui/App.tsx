@@ -10,7 +10,8 @@ import {
   type GameState,
   type ShipState,
 } from '../engine/game'
-import { deployingSide, optional } from '../engine/actions'
+import { deployingSide, optional, tableIsCrowded } from '../engine/actions'
+import { BEAM_RANGE_BAND } from '../engine/geometry'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { battleEnd, BattleResult } from './BattleResult'
@@ -72,7 +73,7 @@ export function App() {
   const [deployVelocity, setDeployVelocity] = useState(6)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
-  const table = game.deployment?.table ?? scenario?.table ?? { width: 72, height: 48 }
+  const table = game.table
   const awaiting = shipsAwaitingDeployment(game)
   const placingSide = deployingSide(game)
   // A click on bare table places the selected ship, but only while it is that
@@ -194,6 +195,8 @@ export function App() {
             <PhaseControls phase={game.phase} />
           )}
 
+          {optional(game).movingTable ? <MovingTablePanel game={game} /> : null}
+
           {scenario ? <Scoreboard game={game} ladder={scenario.victory} /> : null}
 
           {game.fighterGroups.length > 0 || game.gunboatSquadrons.length > 0 ? (
@@ -302,6 +305,57 @@ export function App() {
           onClose={() => setResultSeen(true)}
         />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The moving table, and what hangs off it (16.4, 16.5).
+ *
+ * Both rules are about the playing area rather than about any one ship, so
+ * they belong in a panel of their own rather than under a phase: 16.4 slides
+ * the board whenever the action has drifted, and 16.5 is rolled the moment a
+ * fleet's last hull is clear of the edge.
+ */
+function MovingTablePanel({ game }: { game: GameState }) {
+  const crowding = tableIsCrowded(game, BEAM_RANGE_BAND)
+  const running = game.sides.filter((side) => {
+    const mine = game.ships.filter((ship) => ship.side === side.id && !ship.destroyed)
+    return mine.length > 0 && mine.every((ship) => ship.offTable)
+  })
+
+  return (
+    <div className="panel">
+      <h3>Moving table</h3>
+      <p style={{ color: 'var(--ink-dim)' }}>
+        {crowding
+          ? `The whole action has drifted into the ${crowding} edge. Slide the board back and every
+             range, bearing and arc stays exactly as it is.`
+          : 'Slide the board when the action drifts into a corner. Every range is unchanged by it.'}
+      </p>
+      <div className="panel-row">
+        {(['top', 'bottom', 'left', 'right'] as const).map((edge) => (
+          <button
+            key={edge}
+            className={edge === crowding ? 'primary' : undefined}
+            onClick={() =>
+              dispatch({ type: 'shift-table', crowding: edge, distance: BEAM_RANGE_BAND })
+            }
+          >
+            {edge}
+          </button>
+        ))}
+      </div>
+
+      {running.map((side) => (
+        <button
+          key={side.id}
+          className="primary"
+          onClick={() => dispatch({ type: 'resolve-disengagement', sideId: side.id })}
+        >
+          {side.name} disengages (16.5)
+        </button>
+      ))}
     </div>
   )
 }

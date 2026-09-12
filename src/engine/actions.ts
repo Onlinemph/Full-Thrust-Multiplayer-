@@ -35,6 +35,7 @@ import {
   setInitiativeOrder,
   shipById,
   shipsAwaitingDeployment,
+  tableBounds,
   vectorStateOf,
   type FighterGroupState,
   type TerrainKind,
@@ -45,9 +46,12 @@ import {
 } from './game'
 import {
   applyOrder,
+  departureEdge,
   driveFromDef,
   formatOrder,
+  isOffTable,
   rollEmergencyThrust,
+  rollTableReentry,
   thrustBudget,
   validateOrder,
   type MovementState,
@@ -61,7 +65,17 @@ import {
   stationaryCollisionRisk,
   type TerrainBody,
 } from './terrain'
-import { arcsWhenInverted, resolveRam, rollShip } from './specialmoves'
+import {
+  arcsWhenInverted,
+  crowdedEdge,
+  leavingTableIsRetreat,
+  readyToDisengage,
+  resolveDisengagement,
+  resolveRam,
+  rollShip,
+  tableShift,
+  type TableEdge as ShiftEdge,
+} from './specialmoves'
 import { defaultPlacements, validatePlacement } from './battles'
 import {
   formatVectorOrders,
@@ -327,6 +341,19 @@ export type GameAction =
    * resolved at the end of the movement phase, when both ships have arrived.
    */
   | { type: 'plot-ram'; shipId: string; targetId: string | null }
+  /**
+   * 16.4: *"move every ship and object in play a certain agreed distance back
+   * towards the opposite table edge … effectively you can think of it as
+   * extending the playing area under the ships."* The distance is the players',
+   * because 16.4 names none.
+   */
+  | { type: 'shift-table'; crowding: 'top' | 'bottom' | 'left' | 'right'; distance: number }
+  /**
+   * 16.5: *"when all the ships are off the table edge, each player rolls a
+   * D6"*. Declared by the side running away, once its last ship is clear and
+   * they all went out by the same edge.
+   */
+  | { type: 'resolve-disengagement'; sideId: SideId }
 
   /**
    * Answers to questions the rules put to a player mid-resolution — which
@@ -811,6 +838,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         ...result.legs.map((leg) => leg.to),
       ])
       resolveDeclaredRam(state, ship)
+      resolveLeavingTable(state, ship)
       return OK
     }
 
@@ -1776,6 +1804,81 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    case 'shift-table': {
+      if (!optional(state).movingTable) {
+        return refuse('The table only moves when the table agrees to it (16.4)')
+      }
+      if (!(action.distance > 0)) return refuse('A shift has to go somewhere')
+      const offset = tableShift(action.crowding as ShiftEdge, action.distance)
+      // Every object, or the rule is not a shift of the table: "because the
+      // same offset is applied to every object, every range, bearing and arc
+      // in the game is identical afterwards".
+      const slide = (p: Point): Point => ({ x: p.x + offset.x, y: p.y + offset.y })
+      for (const ship of state.ships) ship.placement = { ...ship.placement, position: slide(ship.placement.position) }
+      for (const group of state.fighterGroups) group.position = slide(group.position)
+      for (const squadron of state.gunboatSquadrons) squadron.position = slide(squadron.position)
+      for (const marker of ordnanceOf(state)) marker.position = slide(marker.position)
+      for (const feature of state.terrain) feature.position = slide(feature.position)
+      projectOrdnance(state)
+      pushLog(state, {
+        kind: 'move',
+        text:
+          `The table slides ${action.distance} MU away from the ${action.crowding} edge ` +
+          `— every range and bearing is unchanged (16.4)`,
+      })
+      return OK
+    }
+
+    case 'resolve-disengagement': {
+      if (!optional(state).movingTable) {
+        // 16.5's abstract roll is what you do *instead* of playing out the
+        // stern chase, and 16.4's moving table is what makes a stern chase
+        // possible at all. Without it, 3.9 has already settled the question.
+        return refuse('A disengagement is rolled under the moving table rules (16.4, 16.5)')
+      }
+      const side = state.sides.find((s) => s.id === action.sideId)
+      if (!side) return refuse('No such side')
+
+      const mine = state.ships.filter((ship) => ship.side === side.id && !ship.destroyed)
+      const check = readyToDisengage(
+        mine.map((ship) => ({
+          onTable: !ship.offTable,
+          exitEdge: ship.exitEdge,
+          thrust: currentThrust(ship),
+        })),
+      )
+      if (!check.ready) return refuse(check.reason)
+
+      const pursuing = state.ships.filter(
+        (ship) => ship.side !== side.id && !ship.destroyed && !ship.offTable,
+      )
+      const result = resolveDisengagement(
+        mine.map((ship) => currentThrust(ship)),
+        pursuing.map((ship) => currentThrust(ship)),
+        state.rng,
+      )
+      pushLog(state, {
+        kind: 'note',
+        side: side.id,
+        dice: [result.disengagingRoll, result.pursuingRoll],
+        text: `${side.name} tries to disengage by the ${check.edge} edge: ${result.detail} (16.5)`,
+      })
+      if (result.disengaged) return OK
+
+      // "The fleeing player may then attempt the disengagement again by leaving
+      // the opposite edge of the new playing area" — so the fleet comes back on
+      // with the table slid under it, and the chase carries on.
+      for (const ship of mine) {
+        ship.offTable = false
+        ship.exitEdge = null
+      }
+      pushLog(state, {
+        kind: 'note',
+        text: `The pursuit continues: ${side.name} is back on the new playing area (16.5)`,
+      })
+      return OK
+    }
+
     case 'plot-ftl-exit': {
       if (state.phase !== 'orders') return refuse('An FTL exit is announced in orders (11.4)')
       const ship = shipById(state, action.shipId)
@@ -2558,6 +2661,55 @@ function resolveDeclaredRam(state: GameState, ship: ShipState): void {
  * something a shot stops at, and each of those has its own rule instead.
  */
 /**
+ * A ship that has flown off the playing area (3.9).
+ *
+ * *"This is usually considered a retreat from the battle unless using the
+ * moving table rules (section 16.4) or fighting an orbital scenario (section
+ * 17.8)."* Either way the model is not on the table any more; what 16.4
+ * changes is whether that means the ship has left the battle, and 4.12 scores
+ * a disengaged hull at full value to the enemy.
+ *
+ * The optional re-entry roll is 3.9's own and is off unless the table asks for
+ * it — it draws a die, and a die drawn where an old battle file drew none
+ * moves the stream for everything after it.
+ */
+function resolveLeavingTable(state: GameState, ship: ShipState): void {
+  if (ship.destroyed || ship.offTable) return
+  const bounds = tableBounds(state)
+  if (!isOffTable(ship.placement.position, bounds)) return
+
+  const edge = departureEdge(ship.placement.position, bounds)
+  const rules = optional(state)
+  const retreat = leavingTableIsRetreat(rules.movingTable === true)
+  ship.offTable = true
+  ship.exitEdge = edge
+
+  if (!rules.tableReentry) {
+    pushLog(state, {
+      kind: 'move',
+      shipId: ship.id,
+      side: ship.side,
+      text: retreat
+        ? `${ship.name} leaves the table by the ${edge ?? 'edge'} — a retreat from the battle (3.9)`
+        : `${ship.name} runs off the ${edge ?? 'edge'} of the drawn area (3.9, 16.4)`,
+    })
+    return
+  }
+
+  const reentry = rollTableReentry(state.rng, state.turn, edge)
+  ship.reentryTurn = reentry.reentryTurn
+  pushLog(state, {
+    kind: 'move',
+    shipId: ship.id,
+    side: ship.side,
+    dice: [reentry.roll],
+    text: reentry.returns
+      ? `${ship.name} leaves by the ${edge ?? 'edge'} and may return on turn ${reentry.reentryTurn} (3.9)`
+      : `${ship.name} leaves by the ${edge ?? 'edge'} and does not return (3.9)`,
+  })
+}
+
+/**
  * Fly one ship for one turn under 12.12.
  *
  * The cinematic path is not reused and cannot be: `applyOrder` writes
@@ -2631,6 +2783,7 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
   // what a collision is tested against, and it is not the flown sequence.
   resolveTerrainHazards(state, ship, [result.chord.from, result.chord.to])
   resolveDeclaredRam(state, ship)
+  resolveLeavingTable(state, ship)
   return OK
 }
 
@@ -2669,6 +2822,21 @@ export function defendingSide(state: GameState): SideId | null {
     if (zone.entry.includes('placed') && !zone.entry.includes('table-edge')) return sideId
   }
   return null
+}
+
+/**
+ * The edge the whole action has drifted into, if any (16.4).
+ *
+ * *"Very close"* is the players' call, so the margin is the caller's; a beam
+ * range band is the natural unit on a Full Thrust table and is what the UI
+ * offers.
+ */
+export function tableIsCrowded(state: GameState, margin: number): ShiftEdge | null {
+  if (!optional(state).movingTable) return null
+  const positions = state.ships
+    .filter((ship) => !ship.destroyed && !ship.offTable)
+    .map((ship) => ship.placement.position)
+  return crowdedEdge(positions, state.table, margin)
 }
 
 /** Where the computer would put a side's remaining ships (18.1). */
@@ -2997,6 +3165,14 @@ export interface OptionalRules {
    * like every other option, and absent means 3.1's cinematic movement.
    */
   movementSystem?: 'cinematic' | 'vector'
+  /**
+   * 16.4: the playing area slides under the ships instead of the action
+   * running out of room, which is also what makes 3.9's departure something
+   * other than a retreat and what 16.5's pursuit hangs off.
+   */
+  movingTable?: boolean
+  /** 3.9's optional re-entry roll for a ship that flew off the edge. */
+  tableReentry?: boolean
 }
 
 const OPTIONS = new WeakMap<GameState, OptionalRules>()

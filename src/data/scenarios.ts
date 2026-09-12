@@ -406,7 +406,6 @@ function deploymentFor(scenario: Scenario, opts: StartOptions): DeploymentState 
 
   return {
     battleType,
-    table: { ...scenario.table },
     zones: Object.fromEntries(zones.map((zone) => [zone.sideId, zone])),
     batch: Math.max(
       PLACEMENT_BATCH_MIN,
@@ -487,6 +486,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
 
   return createGame({
     seed: opts.seed,
+    table: { ...scenario.table },
     deployment: deploymentFor(scenario, opts),
     terrain: scenario.terrain ? scenario.terrain.map((f) => ({ ...f })) : undefined,
     fighterGroups: ships.flatMap(embarkedFlights),

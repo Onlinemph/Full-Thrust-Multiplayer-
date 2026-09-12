@@ -257,6 +257,17 @@ export interface ShipState {
   destroyed: boolean
   /** Left the table (3.9) — off the board but not dead. */
   offTable: boolean
+  /**
+   * The edge it went out by (3.9): *"ships will always re-enter play from the
+   * same side of the playing area as they left."* Also 16.5's second condition,
+   * which is that a disengaging fleet must all leave by the *same* edge.
+   */
+  exitEdge: 'top' | 'bottom' | 'left' | 'right' | null
+  /**
+   * The first turn it may come back on, under 3.9's optional re-entry rule.
+   * Null when it is gone for good, and null when the rule is not in play.
+   */
+  reentryTurn: number | null
 
   // --- what this turn has spent (2.6, 5.2) --------------------------------
   /** Weapon id → the phase it fired in. Cleared at the start of each turn. */
@@ -347,6 +358,8 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     hullRowsChecked: 0,
     destroyed: false,
     offTable: false,
+    exitEdge: null,
+    reentryTurn: null,
     weaponsFired: new Map<string, Phase>(),
     hasFiredThisTurn: false,
     fireconAssignments: [],
@@ -547,14 +560,11 @@ export interface InitiativeState {
  * once by `startScenario` and null for every scenario that does not ask for a
  * deployment, which is all three of the ones shipped before it existed.
  *
- * The table lives here because `GameState` has never carried one: the table is
- * a property of the scenario (`Scenario.table`) and the engine has only ever
- * needed it in the UI. A deployment zone is a rectangle of table, so the
- * rectangle has to come with it.
+ * The zones are rectangles of `GameState.table`, which is where the playing
+ * area lives now that three separate rules need to measure against its edges.
  */
 export interface DeploymentState {
   battleType: BattleType
-  table: { width: number; height: number }
   /** One zone per side, by side id. */
   zones: Record<SideId, DeploymentZone>
   /** Ships placed per step (18.1: one, "or two to four for large battles"). */
@@ -570,6 +580,15 @@ export interface DeploymentState {
 export interface GameState {
   /** Scenario or battle identifier, for the journal. */
   scenario: string
+  /**
+   * The playing area, in MU (2.1).
+   *
+   * The table is a property of the scenario rather than of the rules, which is
+   * why the engine went without one for so long — but three rules need edges
+   * to measure from: 3.9's ships leaving the table, 16.4's moving table and
+   * 18.1's deployment zones. It defaults to the 72 × 48 of a 6' × 4' board.
+   */
+  table: { width: number; height: number }
   seed: number
   /** The only source of randomness in the engine (1.7). */
   rng: Rng
@@ -599,6 +618,7 @@ export interface GameOptions {
   terrain?: TerrainFeature[]
   phases?: readonly Phase[]
   scenario?: string
+  table?: { width: number; height: number }
   deployment?: DeploymentState | null
 }
 
@@ -614,10 +634,24 @@ export const INTRODUCTORY_PHASES: readonly Phase[] = [
   'threshold',
 ]
 
+/** A 6' × 4' board in MU (2.1), which is what a scenario means by "the table". */
+export const DEFAULT_TABLE = { width: 72, height: 48 } as const
+
+/** The playing area as `movement.isOffTable` measures it (3.9). */
+export function tableBounds(state: GameState): {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+} {
+  return { minX: 0, minY: 0, maxX: state.table.width, maxY: state.table.height }
+}
+
 /** Start a battle at turn 1, phase 1 (2.6). */
 export function createGame(opts: GameOptions): GameState {
   const state: GameState = {
     scenario: opts.scenario ?? 'battle',
+    table: { ...(opts.table ?? DEFAULT_TABLE) },
     seed: opts.seed,
     rng: new Rng(opts.seed),
     turn: 1,
