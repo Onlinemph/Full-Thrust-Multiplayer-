@@ -958,6 +958,24 @@ DESIGNS = [
        weapons=[('phaser',3,F3), ('heavy-graser',2,['F']), ('graser',2,P3), ('graser',2,S3),
                 ('twin-particle-array',1,ALL6), ('beam',1,ALL6)],
        systems=[('firecon',3),('pds',4),('area-ecm',1),('stealth-hull',1)], marines=3),
+  # ── Orbital installations ────────────────────────────────────────────────
+  # 17.8: "A planet may have satellites or starbases in orbit. These move at
+  # the orbit speed of points per turn around the orbital track, and always
+  # face 'away' from the center of the planet." Neither has a drive or an FTL
+  # plant, because neither is going anywhere: the mass that would have bought
+  # them goes into hull, plate and guns, which is what a 206-mass Bastion is.
+  dict(id='orbital-satellite', name='Sentinel-class Satellite', faction='Continuum',
+       group='station', mass=20, hull='strong', rows=4, thrust=0, ftl=False, armour=[5],
+       weapons=[('beam',2,ALL6), ('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',2)]),
+  dict(id='orbital-starbase', name='Bastion-class Starbase', faction='Continuum',
+       group='station', mass=206, hull='strong', rows=4, thrust=0, ftl=False, armour=[20,10],
+       screens=2,
+       weapons=[('beam',4,ALL6), ('beam',3,ALL6), ('beam',2,ALL6), ('beam',1,ALL6),
+                ('salvo-missile-launcher',1,F3), ('salvo-missile-launcher',1,A3)],
+       systems=[('firecon',4),('pds',6),('ads6',2),('advanced-adfc',1),('hangar-bay',2),
+                ('launch-tube',2)],
+       bays=2, fighterType='interceptor', marines=6),
 ]
 
 import sys

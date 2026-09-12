@@ -88,6 +88,7 @@ import {
   resolveKnockedOffCourse,
   resolveMeteorField,
   resolveSolarFlare,
+  satelliteFacing,
   simpleOrbitApproach,
   SIMPLE_ORBIT_BAND,
   advanceOrbit,
@@ -2783,13 +2784,32 @@ function orbitOf(
 /** Put a ship on the track at a marker, facing the way 17.8 says it faces. */
 function placeInOrbit(ship: ShipState, feature: TerrainFeature, track: OrbitTrack, marker: Course): void {
   ship.orbit = { featureId: feature.id, marker }
+  // 17.8 gives satellites and starbases the opposite rule to ships: they
+  // "always face 'away' from the center of the planet", so a station at marker
+  // 4 points outward along course 4 whichever way the track runs.
+  const satellite = isSatellite(ship)
   ship.placement = {
     position: orbitMarkerPosition(track, marker),
-    // 17.8: "ships in orbit face forward in the closest course facing to the
-    // orbit path at that point", which reading 13 makes the exact tangent.
-    facing: orbitFacing(marker, track.orbitSpeed),
+    // For a ship: "face forward in the closest course facing to the orbit path
+    // at that point", which reading 13 makes the exact tangent.
+    facing: satellite ? satelliteFacing(marker) : orbitFacing(marker, track.orbitSpeed),
   }
-  ship.velocity = track.orbitalVelocity
+  // A satellite has no drive to hold a velocity with; 17.8 gives it an orbit
+  // speed and nothing else, so it keeps whatever the scenario gave it.
+  if (!satellite) ship.velocity = track.orbitalVelocity
+}
+
+/**
+ * 17.8's other kind of thing in orbit: *"A planet may have satellites or
+ * starbases in orbit."*
+ *
+ * They are given an orbit speed and no velocity rules at all, which is the
+ * only reading that works: a station has no main drive, so under the ship
+ * rules its velocity of zero would be below the orbital velocity and every
+ * starbase in the game would fall out of the sky on turn one.
+ */
+function isSatellite(ship: ShipState): boolean {
+  return ship.design.group === 'station'
 }
 
 /**
@@ -2978,6 +2998,20 @@ function moveInOrbit(state: GameState, ship: ShipState): ActionOutcome {
   }
   const { feature, track } = orbit
   const name = feature.label ?? 'the planet'
+
+  // A satellite simply goes round: no throttle, so no way down and no way off.
+  if (isSatellite(ship)) {
+    const marker = advanceOrbit(orbit.marker, track.orbitSpeed)
+    placeInOrbit(ship, feature, track, marker)
+    ship.lastKnown = {
+      course: ship.placement.facing,
+      velocity: ship.velocity,
+      turn: state.turn,
+      cloaked: ship.cloaked,
+    }
+    return OK
+  }
+
   const order = ship.order ?? BLANK_ORDER
   const velocity = Math.max(0, ship.velocity + (order.accel ?? 0))
   ship.lastKnown = {

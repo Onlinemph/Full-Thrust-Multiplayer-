@@ -11,6 +11,7 @@ import {
 } from './game'
 import { orbitMarkerPosition } from './terrain'
 import { designById } from '../data/ships'
+import { buildGame } from '../data/savedGame'
 import type { Phase, ShipDesign, Streamlining } from './types'
 
 /**
@@ -339,5 +340,24 @@ describe('the simple way (17.10)', () => {
     game.terrain[0].simpleOrbit = false
     flyOneTurn(game)
     expect(shipOf(game).velocity).toBe(7)
+  })
+})
+
+describe('satellites and starbases (17.8)', () => {
+  it('starts a station on the track and carries it round facing outward', () => {
+    const game = buildGame({ scenarioId: 'orbital-approach', seed: 3 })
+    const station = game.ships.find((ship) => ship.design.group === 'station')
+    expect(station, 'the scenario places no starbase').toBeDefined()
+    expect(station!.orbit?.featureId).toBe('meridian')
+    const startedAt = station!.orbit!.marker
+
+    advanceTo(game, 'move-ships')
+    applyAction(game, { type: 'move-ship', shipId: station!.id })
+    const after = game.ships.find((ship) => ship.id === station!.id)!
+    // The track runs anticlockwise at one point a turn.
+    expect(after.orbit?.marker).toBe(startedAt === 1 ? 12 : startedAt - 1)
+    // 17.8: a satellite "always faces away from the center of the planet", so
+    // its facing is its marker, not the tangent a ship would take.
+    expect(after.placement.facing).toBe(after.orbit?.marker)
   })
 })

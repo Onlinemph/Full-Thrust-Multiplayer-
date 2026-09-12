@@ -80,6 +80,12 @@ export interface ForceEntry {
   facing: Course
   /** Starting velocity (3.1). Ships usually deploy with way on. */
   velocity?: number
+  /**
+   * 17.8: *"A planet may have satellites or starbases in orbit."* Placed on a
+   * body's track at a clock marker rather than at a position, and carried
+   * round it from turn one.
+   */
+  orbit?: { featureId: string; marker: Course }
 }
 
 export interface ScenarioSide {
@@ -438,7 +444,7 @@ export const ORBITAL_APPROACH: Scenario = {
     'the orbit track holds the argument, and the track only takes so many hulls.',
   objective:
     'Take and hold the orbit track. Coming in at the wrong speed does not put you in orbit, it ' +
-    'puts you in the atmosphere.',
+    'puts you in the atmosphere, and the Confederation already has a starbase up there.',
   table: { width: 96, height: 72 },
   terrain: [
     {
@@ -469,6 +475,16 @@ export const ORBITAL_APPROACH: Scenario = {
         { designId: 'nac-heavy-cruiser', position: { x: 86, y: 42 }, facing: 9, velocity: 6 },
         { designId: 'nac-light-cruiser', position: { x: 86, y: 30 }, facing: 9, velocity: 6 },
         { designId: 'nac-destroyer', position: { x: 90, y: 48 }, facing: 9, velocity: 8 },
+        // 17.8's starbase, already on the track and facing outward. It rides
+        // round at the orbit speed like everything else up there, so the two
+        // markers it can shoot into change every turn.
+        {
+          designId: 'orbital-starbase',
+          name: 'Meridian Station',
+          position: { x: 48, y: 26 },
+          facing: 12,
+          orbit: { featureId: 'meridian', marker: 12 },
+        },
       ],
     },
   ],
@@ -664,7 +680,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
       if (!design) throw new Error(`Unknown ship design: ${entry.designId}`)
       const n = (counts.get(design.id) ?? 0) + 1
       counts.set(design.id, n)
-      return createShipState({
+      const ship = createShipState({
         id: `${side.id}-${entry.designId}-${index + 1}`,
         side: side.id,
         design,
@@ -672,6 +688,10 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
         velocity: entry.velocity ?? 0,
         name: entry.name ?? `${design.name} ${n}`,
       })
+      // 17.8's satellites and starbases start on the track rather than flying
+      // onto it, so they are put there before the first turn opens.
+      if (entry.orbit) ship.orbit = { ...entry.orbit }
+      return ship
     })
   })
 
