@@ -5,7 +5,7 @@ import {
   BYSTANDER_DAMAGE_DICE,
   FTL_DANGER_RADIUS,
   MAX_BATTLERIDER_MASS,
-  MAX_FTL_ENTRY_SCATTER,
+  validateBattleriderDesign,
   allocateBattleriderDamage,
   attachedBattleriderDefence,
   battleriderRecovery,
@@ -40,7 +40,6 @@ import {
   tugSpareDriveMassFor,
   tugTowCheck,
   tugTransferMass,
-  validateBattlerider,
   validateFleetFtl,
   validateGateBuild,
   type BattleriderFit,
@@ -388,9 +387,7 @@ describe('the entry scatter (11.5)', () => {
 
   it('caps the massive error at 36 MU and never rolls the second die on 1 to 5', () => {
     const worst = findSeed((r) => d12(r) === 1 && d6(r) === 6 && d6(r) === 6)
-    expect(rollFtlEntryScatter(ORIGIN, new Rng(worst), { massiveError: true }).distance).toBe(
-      MAX_FTL_ENTRY_SCATTER,
-    )
+    expect(rollFtlEntryScatter(ORIGIN, new Rng(worst), { massiveError: true }).distance).toBe(36)
     const modest = findSeed((r) => d12(r) === 1 && d6(r) === 5)
     const scatter = rollFtlEntryScatter(ORIGIN, new Rng(modest), { massiveError: true })
     expect(scatter.distance).toBe(5)
@@ -603,12 +600,15 @@ describe('what a set of tugs may haul (11.6)', () => {
 // ---------------------------------------------------------------------------
 
 describe('battleriders (11.7)', () => {
-  it('are 60 mass at most, carry no FTL drive, and need a Mothership', () => {
+  it('are 60 mass at most and carry no FTL drive', () => {
+    // The Mothership clause is a fact about the fleet, so `validateFleetFtl`
+    // has it and the design check does not.
     expect(MAX_BATTLERIDER_MASS).toBe(60)
-    expect(validateBattlerider(rider('r', 60))).toEqual([])
-    expect(validateBattlerider(rider('r', 61))[0]).toContain('60')
-    expect(validateBattlerider({ ...rider('r', 40), ftl: 'standard' })[0]).toContain('FTL Drive')
-    expect(validateBattlerider({ ...rider('r', 40), mothershipId: null })[0]).toContain('Mothership')
+    expect(validateBattleriderDesign(rider('r', 60))).toEqual([])
+    expect(validateBattleriderDesign(rider('r', 61))[0]).toContain('60')
+    expect(validateBattleriderDesign({ ...rider('r', 40), ftl: 'standard' })[0]).toContain(
+      'FTL Drive',
+    )
   })
 
   it('cannot detach on the turn their Mothership drops out of FTL', () => {

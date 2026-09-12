@@ -135,6 +135,7 @@ import {
   GATE_HULL_FRACTION,
   gateBearsOn,
   gateEntry,
+  isDisoriented,
   isGateActive,
   jumpPointDisorientation,
   portalPairTransit,
@@ -153,6 +154,7 @@ import {
   boardersAtRiskInThreshold,
   boardingContinues,
   boardingUnits,
+  BOARDING_PHASE,
   civilWarDrm,
   fleetMorale,
   isCivilWar,
@@ -2066,7 +2068,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
     // ── Boarding (phase 12) ───────────────────────────────────────────────
     case 'resolve-boarding': {
-      if (state.phase !== 'boarding') return refuse('Boarding is resolved in phase 12')
+      if (state.phase !== BOARDING_PHASE) return refuse('Boarding is resolved in phase 12')
       for (const ship of state.ships) {
         if (ship.destroyed) continue
         // 12.7: "If a ship jumps away into FTL with enemy boarders on board,
@@ -4877,6 +4879,25 @@ function disorientIfJumpPoint(state: GameState, ship: ShipState, gate: TableGate
     side: ship.side,
     text: `${ship.name} comes out of ${gateName(gate)} disorientated — out of control until next turn (11.10)`,
   })
+}
+
+/**
+ * Whether a ship is still shaking off a jump point (11.10).
+ *
+ * `isOutOfControl` already covers what the disorientation *does*; this says
+ * where it came from, so the order panel can tell a player their ship is not
+ * steering because of the jump point rather than because of a bridge hit.
+ */
+export function isJumpPointDisoriented(state: GameState, ship: ShipState): boolean {
+  const held = ship.ongoing.find((effect) => effect.source === 'jump-point')
+  if (!held) return false
+  return isDisoriented(
+    {
+      ...jumpPointDisorientation(held.appliedTurn),
+      expiresAfterTurn: held.expiresAfterTurn ?? held.appliedTurn,
+    },
+    state.turn,
+  )
 }
 
 /** Ships waiting behind a gate to come onto the table (11.9). */

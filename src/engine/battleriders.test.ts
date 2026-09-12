@@ -122,7 +122,7 @@ describe('11.8 when a battle starts', () => {
       'a',
     )
     expect(note).toContain('11.8')
-    expect(note).toContain('2 hulls')
+    expect(note).toContain('cannot be part of a fleet')
   })
 
   it('says nothing once the scenario permits them', () => {

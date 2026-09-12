@@ -59,9 +59,6 @@ export const BYSTANDER_DAMAGE_DICE = 2
 /** Points on the course gauge a D12 scatter reads onto (3.1, 11.5). */
 export const COURSE_GAUGE_POINTS = 12
 
-/** *"a potentially massive error (up to 36 MU)"* — 6 × 6 (11.5, optional rule). */
-export const MAX_FTL_ENTRY_SCATTER = 36
-
 /**
  * How a ship is using its FTL drive this turn. The same three strings as
  * `game.ts`'s `FtlTransit`, so `ship.ftlTransit` passes straight into this
@@ -575,6 +572,8 @@ export function rollFtlEntryScatter(
   let secondDistanceRoll: number | null = null
   let error = distanceRoll
   if (opts.massiveError === true && distanceRoll === 6) {
+    // "a potentially massive error (up to 36 MU)" — the second die multiplied
+    // by six, so a 6 and a 6 puts the ship most of a table away (11.5).
     secondDistanceRoll = d6(rng)
     error = 6 * secondDistanceRoll
   }
@@ -953,15 +952,6 @@ export function validateBattleriderDesign(fit: Omit<BattleriderFit, 'mothershipI
   if (fit.mass <= 0) problems.push('a battlerider needs a hull (11.7)')
   if (fit.ftl !== 'none') {
     problems.push('battleriders do not pay mass or points cost for an FTL Drive (11.7)')
-  }
-  return problems
-}
-
-/** Check a battlerider against 11.7, fleet clause included. Empty when legal. */
-export function validateBattlerider(fit: BattleriderFit): string[] {
-  const problems = validateBattleriderDesign(fit)
-  if (fit.mothershipId === null) {
-    problems.push('a fleet with battleriders must deploy the Motherships as well (11.7)')
   }
   return problems
 }

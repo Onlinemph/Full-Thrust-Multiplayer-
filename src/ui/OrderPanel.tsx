@@ -17,7 +17,7 @@ import {
   CLOUD_SAFE_VELOCITY,
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
-import { carriedHulls, optional } from '../engine/actions'
+import { carriedHulls, isJumpPointDisoriented, optional } from '../engine/actions'
 import type { MovementOrder, TurnDirection } from '../engine/types'
 import { dispatch } from './store'
 
@@ -292,6 +292,18 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
             {ship.design.streamlining === 'none'
               ? 'not streamlined — this is an uncontrolled entry'
               : 'slow below orbital velocity to come down'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* 11.10: "Ships exiting a jump point function as if they have taken a
+          bridge critical hit until the next turn." Worth saying out loud —
+          the ship is not steering and the order written here will not be
+          flown. */}
+      {isJumpPointDisoriented(game, ship) ? (
+        <div className="panel-row">
+          <span style={{ color: 'var(--warn)' }}>
+            Disorientated by the jump point — out of control until next turn (11.10)
           </span>
         </div>
       ) : null}

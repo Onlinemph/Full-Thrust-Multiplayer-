@@ -261,7 +261,7 @@ on the result gives each rider's before and after.
 > appears off table then that ship is deemed unable to enter the table during the battle."
 
 Distance is then `6 × secondRoll`, i.e. 6, 12, 18, 24, 30 or 36 MU — never the base 6 plus
-something. `MAX_FTL_ENTRY_SCATTER` is 36.
+something.
 
 **[reading] R6 — the "appears off table" clause is applied to any scatter, not only to the massive
 error.** The sentence sits inside the optional-rule paragraph and "this" grammatically means the
@@ -387,8 +387,10 @@ capacity of the Advanced tugs alone.
 > "The maximum mass for any battlerider is 60, following the science fiction convention that
 > battleriders are smaller than the FTL-capable Motherships."
 
-`MAX_BATTLERIDER_MASS` is 60 and `validateBattlerider` checks it, that the rider carries no FTL
-drive, and that it has a Mothership.
+`MAX_BATTLERIDER_MASS` is 60. The rule splits in two along the line between what a shipyard can
+settle and what only a fleet can: `validateBattleriderDesign` checks the mass and the absent
+drive, and `validateFleetFtl` checks that the Mothership is actually coming, because that is a
+fact about the fleet and not about the hull on the drawing board.
 
 > "A fleet with battleriders must deploy the Motherships as well. If the Mothership makes an FTL
 > entry, the battleriders cannot detach and move independently until the next turn."

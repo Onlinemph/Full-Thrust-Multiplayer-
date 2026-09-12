@@ -33,7 +33,13 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
-import { tugDriveMass, validateBattleriderDesign } from '../engine/ftl'
+import {
+  tenderBayMassFor,
+  tenderBayPoints,
+  tenderCapacityFor,
+  tugDriveMass,
+  validateBattleriderDesign,
+} from '../engine/ftl'
 import {
   factionById,
   traitsFor,
@@ -357,6 +363,8 @@ export type DesignFault =
   | { kind: 'bad-small-craft'; label: string; problem: string }
   /** 11.7: a battlerider that is too big, or that paid for a drive it may not have. */
   | { kind: 'bad-battlerider'; problem: string }
+  /** 11.6: hangar space for ships, priced at something other than the rule's rate. */
+  | { kind: 'mispriced-ship-bay'; carried: number; mass: number; points: number }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -392,6 +400,8 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.label}: ${fault.problem}`
     case 'bad-battlerider':
       return fault.problem
+    case 'mispriced-ship-bay':
+      return `ship bay for ${fault.carried} mass of carried hull: 11.6 charges ${fault.mass} mass and ${fault.points} points`
   }
 }
 
@@ -562,6 +572,20 @@ export function validateDesign(
       ftl: design.ftl,
     })) {
       faults.push({ kind: 'bad-battlerider', problem })
+    }
+  }
+
+  // 11.6: "every 1.5 mass used for hangar bay space provides capacity for 1
+  // mass of carried ship(s) … The points cost of such space is … 3 x the total
+  // mass used." A catalogue entry that drifts from that is a fleet quietly
+  // getting cheap capacity, and 11.7 lets a Mothership buy its lift this way.
+  for (const system of design.systems) {
+    if (system.kind !== 'tender') continue
+    const carried = tenderCapacityFor(system.mass)
+    const mass = tenderBayMassFor(carried)
+    const points = tenderBayPoints(mass)
+    if (Math.abs(system.mass - mass) > 1e-6 || Math.abs(system.points - points) > 1e-6) {
+      faults.push({ kind: 'mispriced-ship-bay', carried, mass, points })
     }
   }
 

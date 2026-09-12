@@ -8,7 +8,13 @@
  */
 
 import { applyAction, setOptionalRules, type GameAction } from '../engine/actions'
-import { validateFleetFtl, type FleetFtlEntry } from '../engine/ftl'
+import {
+  tugTowCheck,
+  tugTransferMass,
+  tugDriveMass,
+  validateFleetFtl,
+  type FleetFtlEntry,
+} from '../engine/ftl'
 import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
@@ -206,13 +212,42 @@ export function buildGame(setup: GameSetup): GameState {
         hulls.find((other) => other.design.id === ship.design.mothershipId)?.name ?? null,
     }))
     const problems = validateFleetFtl(fleet, { allowNonFtl: setup.allowNonFtl })
+
+    // 11.6: if the fleet is bringing non-FTL hulls it needs tugs enough for
+    // them, and the surprise is that capacity adds up across tugs only where
+    // the tugs are Advanced — "two tugs with Advanced FTL Drives of transfer
+    // mass 60 each" can move a 120-mass battleship where two standard ones
+    // cannot. Battleriders are out of it: 11.7 gives them their own carriage,
+    // and so is a fleet the scenario has already excused from 11.8 — a table
+    // that agreed the monitors are here did not also agree to tow them.
+    const load = hulls.filter(
+      (ship) => ship.design.ftl === 'none' && ship.design.battlerider !== true,
+    )
+    if (load.length > 0 && setup.allowNonFtl !== true) {
+      const tow = tugTowCheck(
+        hulls
+          .filter((ship) => ship.design.ftl === 'tug')
+          .map((ship) => ({
+            id: ship.name,
+            transferMass: tugTransferMass(
+              ship.design.mass,
+              tugDriveMass(ship.design.mass, ship.design.ftlTransferMass ?? 0),
+            ),
+            advanced: false,
+          })),
+        load.map((ship) => ({ id: ship.name, mass: ship.design.mass })),
+      )
+      problems.push(...tow.problems)
+    }
+
     if (problems.length === 0) continue
     pushLog(game, {
       kind: 'note',
       side: side.id,
       text:
-        `${side.name}: ${problems.length} ${problems.length === 1 ? 'hull' : 'hulls'} ` +
-        `11.8 would keep out of a one-off battle — ${problems.join('; ')}`,
+        `${side.name}: ${problems.length} ` +
+        `${problems.length === 1 ? 'problem' : 'problems'} getting this fleet to the battle ` +
+        `(11.6, 11.8) — ${problems.join('; ')}`,
     })
   }
 
