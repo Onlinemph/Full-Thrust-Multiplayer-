@@ -12,8 +12,17 @@ A faction trait is one of four kinds, and `src/data/factions.ts` types them that
 - **campaign** — changes RU income, repair cost or research.
 - **prohibition** — forbids a system outright.
 
-Prohibitions and design traits are enforced by `designPricing.validateDesign()`. Tactical traits are read
-by the engine at the point of the roll they modify.
+Prohibitions and design traits are enforced by `designPricing.validateDesign()`, which takes a
+`factionId` and an optional `clanId`; the shipyard passes them and shows the refusals beside the
+ordinary construction faults. Tactical traits are read by the engine at the point of the roll they
+modify — **and none of them is, yet**. `factionTraitCoverage()` counts what is in force, and a test
+asserts the tactical count is zero rather than letting the file imply otherwise: a faction whose
+traits are typed and read by nothing plays exactly like plain Continuum.
+
+What a shipyard can check, it checks: every prohibition, and the design traits that are a limit
+rather than a discount — a mass ceiling, a hull class, a row count, a system count, no damage
+control. The ones marked `prose` are costs and ratings the generator would have to apply while
+building rather than refusals to make afterwards, and they are typed with `implemented: false`.
 
 ---
 

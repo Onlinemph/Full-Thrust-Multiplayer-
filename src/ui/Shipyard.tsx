@@ -6,6 +6,7 @@ import {
   techBaseLabel,
   type TechBaseChoice,
 } from '../data/techBaseCheck'
+import { FACTIONS, factionById } from '../data/factions'
 import {
   describeFault,
   hullBoxesFor,
@@ -47,8 +48,18 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
      faults because it is a different kind of no: a fault means the hull cannot
      fly, a tech-base refusal means this empire cannot build it. */
   const [techBase, setTechBase] = useState<TechBaseChoice>('unrestricted')
+  /* The campaign supplement's factions, which are a different question from
+     section 15's tech base: a tech base is a list of technologies an empire
+     bought, a faction is a set of traits it flies under. A hull can be legal
+     under one and refused by the other. */
+  const [factionId, setFactionId] = useState('')
+  const [clanId, setClanId] = useState('')
   const cost = priceDesign(design)
-  const faults = validateDesign(design)
+  const faults = validateDesign(design, {
+    factionId: factionId || undefined,
+    clanId: clanId || undefined,
+  })
+  const faction = factionId ? factionById(factionId) : undefined
   const offBase = designProblems(techBase, design)
 
   /** Any edit that changes mass has to re-derive the hull box count with it. */
@@ -90,6 +101,46 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
         ) : (
           <p style={{ color: 'var(--screens)' }}>A legal design.</p>
         )}
+
+        <div className="panel-row">
+          <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+            Faction
+            <select
+              aria-label="Faction"
+              value={factionId}
+              onChange={(event) => {
+                setFactionId(event.target.value)
+                setClanId('')
+              }}
+            >
+              <option value="">None</option>
+              {FACTIONS.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {faction?.clans ? (
+            <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>
+              Clan
+              <select
+                aria-label="Clan"
+                value={clanId}
+                onChange={(event) => setClanId(event.target.value)}
+              >
+                <option value="">None</option>
+                {faction.clans.map((clan) => (
+                  <option key={clan.id} value={clan.id}>
+                    {clan.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <span className="spacer" />
+          {faction ? <span style={{ color: 'var(--ink-dim)' }}>{faction.doctrine}</span> : null}
+        </div>
 
         <div className="panel-row">
           <label className="code-field" style={{ flexDirection: 'row', gap: '0.4rem' }}>

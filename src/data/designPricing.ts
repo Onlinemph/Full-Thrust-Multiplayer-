@@ -19,6 +19,12 @@
  */
 
 import {
+  factionById,
+  traitsFor,
+  PROJECTILE_CLASSES,
+  SPINAL_CLASSES,
+} from './factions'
+import {
   HULL_FRACTION,
   HULL_POINTS_PER_BOX,
   type ArmourDef,
@@ -298,6 +304,10 @@ export type DesignFault =
   | { kind: 'mispriced-proportional'; system: string; mass: number; points: number }
   | { kind: 'two-cloaks' }
   | { kind: 'too-many-parties'; bought: number; crew: number }
+  /** A faction trait forbids this outright (`docs/rules/factions.md`). */
+  | { kind: 'faction-prohibition'; faction: string; what: string; rule: string }
+  /** A faction design trait this hull does not satisfy. */
+  | { kind: 'faction-design'; faction: string; trait: string; rule: string }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -323,14 +333,137 @@ export function describeFault(fault: DesignFault): string {
       return 'two cloaks on one hull: a cloak may not be combined with any other field (7.20)'
     case 'too-many-parties':
       return `${fault.bought} extra crew parties on a hull crewed for ${fault.crew}: a ship "may not mount more Damage Control Parties (and or additional Marines) than the number of crew it was initially designed with" (13.13)`
+    case 'faction-prohibition':
+      return `${fault.what}: the ${fault.faction} does not build it — ${fault.rule}`
+    case 'faction-design':
+      return `${fault.faction} ${fault.trait}: ${fault.rule}`
   }
+}
+
+/**
+ * A design against its faction's traits (`docs/rules/factions.md`).
+ *
+ * Prohibitions and design traits are the two kinds a shipyard can check — the
+ * other two change a roll in a battle or a number in a campaign turn — so this
+ * is where the supplement meets a player, and it is where the supplement's own
+ * documentation says it belongs.
+ */
+function factionFaults(design: ShipDesign, factionId: string, clanId?: string): DesignFault[] {
+  const faction = factionById(factionId)
+  if (!faction) return []
+  const faults: DesignFault[] = []
+  const armourBoxes = design.armour.layers.reduce((sum, n) => sum + n, 0)
+
+  const bar = (what: string, rule: string) =>
+    faults.push({ kind: 'faction-prohibition', faction: faction.name, what, rule })
+
+  for (const trait of traitsFor(factionId, clanId)) {
+    for (const banned of trait.bans ?? []) {
+      switch (banned.kind) {
+        case 'weapon':
+          for (const weapon of design.weapons) {
+            if (weapon.weaponClass === banned.weaponClass) bar(weapon.label, trait.rule)
+          }
+          break
+        case 'system':
+          for (const system of design.systems) {
+            if (system.kind === banned.system) bar(system.label, trait.rule)
+          }
+          break
+        case 'weapon-class-above':
+          for (const weapon of design.weapons) {
+            if (weapon.rating > banned.rating) bar(weapon.label, trait.rule)
+          }
+          break
+        case 'spinal-mounts':
+          for (const weapon of design.weapons) {
+            if ((SPINAL_CLASSES as readonly string[]).includes(weapon.weaponClass)) {
+              bar(weapon.label, trait.rule)
+            }
+          }
+          break
+        case 'projectiles':
+          for (const weapon of design.weapons) {
+            if ((PROJECTILE_CLASSES as readonly string[]).includes(weapon.weaponClass)) {
+              bar(weapon.label, trait.rule)
+            }
+          }
+          break
+        case 'advanced-drives':
+          if (design.drive.advanced) bar('an advanced gravity drive', trait.rule)
+          break
+        case 'advanced-screens':
+          if (design.screens.advanced) bar('advanced screens', trait.rule)
+          break
+        case 'manned-small-craft':
+          if (design.fighterBays.length > 0) bar('manned fighter bays', trait.rule)
+          if (design.gunboats.length > 0) bar('gunboat squadrons', trait.rule)
+          break
+        case 'emergency-thrust':
+          // An order rather than a fitting, so nothing on the hull to refuse.
+          break
+      }
+    }
+
+    const rule = trait.design
+    if (!rule) continue
+    const fail = (detail: string) =>
+      faults.push({
+        kind: 'faction-design',
+        faction: faction.name,
+        trait: trait.name ?? 'design trait',
+        rule: detail,
+      })
+    switch (rule.kind) {
+      case 'max-mass':
+        if (design.mass > rule.mass) fail(`mass ${design.mass} is over the ${rule.mass} limit`)
+        break
+      case 'hull-classes':
+        if (!rule.allowed.includes(design.hullClass)) {
+          fail(`a ${design.hullClass} hull, where only ${rule.allowed.join(' or ')} is built`)
+        }
+        break
+      case 'hull-rows':
+        if (design.hullRows !== rule.rows) {
+          fail(`${design.hullRows} hull rows, where the damage track must be in ${rule.rows}`)
+        }
+        break
+      case 'max-systems': {
+        if (!rule.groups.includes(design.group)) break
+        if (design.fighterBays.length > 0) break
+        const fitted = design.systems.filter((system) => system.kind === rule.system).length
+        if (fitted > rule.count) {
+          fail(`${fitted} ${rule.system}, where a hull of this class may mount ${rule.count}`)
+        }
+        break
+      }
+      case 'no-damage-control':
+        if (design.additionalDamageControlParties > 0) {
+          fail('damage control parties on an unmanned hull')
+        }
+        break
+      case 'thrust-modifier':
+      case 'prose':
+        // A cost or a rating change rather than something to refuse; the
+        // generator applies it, and a hull that already has it looks legal.
+        break
+    }
+    if (armourBoxes < 0) fail('negative armour')
+  }
+  return faults
 }
 
 export function validateDesign(
   design: ShipDesign,
-  opts: { bannedSystems?: readonly string[] } = {},
+  opts: {
+    bannedSystems?: readonly string[]
+    /** Check against a campaign faction's traits too (`docs/rules/factions.md`). */
+    factionId?: string
+    clanId?: string
+  } = {},
 ): DesignFault[] {
   const faults: DesignFault[] = []
+  if (opts.factionId) faults.push(...factionFaults(design, opts.factionId, opts.clanId))
   const cost = priceDesign(design)
 
   if (cost.spare < -1e-6) faults.push({ kind: 'overweight', by: -cost.spare })
