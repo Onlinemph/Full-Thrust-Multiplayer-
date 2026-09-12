@@ -1,4 +1,4 @@
-import { canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
+import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
@@ -42,6 +42,21 @@ export function CombatPanel({ game, ship, onHoverWeapon }: CombatPanelProps) {
   // them off takes its transfer mass down with them. A natural one "cannot be
   // destroyed by normal weapons fire", so it is not offered.
   const gates = game.gates.filter((gate) => !gate.def.natural && gate.state.hullMarked < gate.def.hullBoxes)
+
+  // 2.6: a ship's fire is one activation. Once play has moved on to another
+  // ship this one is finished for the turn, so the panel says so rather than
+  // offering buttons that will be refused.
+  if (!canShipFire(ship)) {
+    return (
+      <div className="panel">
+        <h3>Phase 11 · Fire</h3>
+        <p style={{ color: 'var(--ink-dim)' }}>
+          {ship.name} has had its fire this turn: 2.6 gives a ship one firing activation, and play
+          has moved on.
+        </p>
+      </div>
+    )
+  }
 
   if (targets.length === 0 && gates.length === 0) {
     return (

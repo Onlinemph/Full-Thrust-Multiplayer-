@@ -1013,7 +1013,14 @@ export function activeShips(state: GameState, side?: SideId): ShipState[] {
   )
 }
 
-/** Fighter and gunboat groups actually on the table (8.2). */
+/**
+ * Fighter groups actually on the table (8.2).
+ *
+ * Fighter groups only: 9.1's gunboat squadrons are a separate list on the
+ * state and a separate type, and they fly and are shot at by different rules.
+ * The name and the old doc line both said "and gunboat groups", which was
+ * never what the body did.
+ */
 export function activeFighterGroups(state: GameState, side?: SideId): FighterGroupState[] {
   return state.fighterGroups.filter(
     (group) =>

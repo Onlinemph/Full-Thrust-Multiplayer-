@@ -1310,6 +1310,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (ship.side === target.side) return refuse('That is a friendly ship')
+      // 2.6's one firing activation a turn, checked before any of it is spent.
+      const spentAlready = openFiringActivation(state, ship)
+      if (spentAlready) return spentAlready
       // 11.7: "Until they detach, only the Mothership can be fired at." Shoot
       // at the Mothership; where the damage lands is the defender's call.
       if (target.carriedBy !== null) {
@@ -1407,7 +1410,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const dust = cloudLockOn(state, ship, target, weapon)
       if (dust && !dust.locked) {
         markWeaponFired(ship, weapon.id, state.phase)
-        markShipFired(ship)
         pushLog(state, {
           kind: 'fire',
           shipId: ship.id,
@@ -1447,7 +1449,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const rangeToUse = stealth > 0 ? ew.effectiveRange / STEALTH_BAND_SCALE[stealth] : ew.effectiveRange
       if (stealth > 0 && rangeToUse > maxRangeOf(weapon)) {
         markWeaponFired(ship, weapon.id, state.phase)
-        markShipFired(ship)
         pushLog(state, {
           kind: 'fire',
           shipId: ship.id,
@@ -1459,7 +1460,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       if (ew.autoMiss) {
         markWeaponFired(ship, weapon.id, state.phase)
-        markShipFired(ship)
         pushLog(state, {
           kind: 'fire',
           shipId: ship.id,
@@ -1507,7 +1507,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         rng: state.rng,
       })
       markWeaponFired(ship, weapon.id, state.phase)
-      markShipFired(ship)
 
       if ('refused' in result) {
         pushLog(state, {
@@ -1593,7 +1592,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const ship = shipById(state, action.shipId)
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      // Holding fire spends the activation exactly as firing does: 2.6 gives a
+      // ship one, and choosing not to use it is using it.
       markShipFired(ship)
+      FIRING_ACTIVATION.delete(state)
       return OK
     }
 
@@ -3375,6 +3377,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const flight = flightById(state, action.flightId)
       if (!flight) return refuse('No such flight')
       if (flight.side === ship.side) return refuse('A ship does not shoot its own fighters')
+      const flightActivation = openFiringActivation(state, ship)
+      if (flightActivation) return flightActivation
       if (flight.status !== 'in-flight') return refuse(`${flight.label} is not on the table`)
       // 8.6: "Only groups that are not engaged … may be fired at."
       if (isEngaged(flight)) return refuse(`${flight.label} is engaged; ships may not fire into it (8.6, 8.10)`)
@@ -3412,7 +3416,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // dice table does not come into it, and one mount is one die.
       const result = shipFireAtFighters(flight, 1, state.rng)
       markWeaponFired(ship, weapon.id, state.phase)
-      markShipFired(ship)
       writeFlight(flight, result.group)
       pushLog(state, {
         kind: 'fire',
@@ -4103,6 +4106,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (gate.def.natural) {
         return refuse(`${gateName(gate)} cannot be destroyed by normal weapons fire (11.9)`)
       }
+      const gateActivationSpent = openFiringActivation(state, ship)
+      if (gateActivationSpent) return gateActivationSpent
       const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
       if (!weapon) return refuse('No such weapon')
       if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
@@ -4142,7 +4147,6 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
       const after = currentTransferMass(gate.def, gate.state)
       markWeaponFired(ship, weapon.id, state.phase)
-      markShipFired(ship)
       pushLog(state, {
         kind: 'damage',
         shipId: ship.id,
@@ -4699,6 +4703,55 @@ function pdThreatKind(kind: OrdnanceKind, reading: number): PdTargetKind {
   if (kind === 'heavy') return 'heavy-missile'
   if (kind === 'antimatter' && reading >= 4) return 'antimatter-missile'
   return 'salvo-missile'
+}
+
+/**
+ * 2.6's firing activation: whose it is, and when it closed.
+ *
+ * > *"After a ship has fired some or all of its weaponry and play has moved on
+ * > to another ship that ship may not fire any other ship to ship weapons in
+ * > that game turn."*
+ *
+ * So a ship's fire is one activation, not one shot: it may fire everything it
+ * has, and the moment somebody else fires it is finished for the turn. That is
+ * what stops a player dribbling one mount at a time across the phase to watch
+ * each result before committing the next.
+ *
+ * `hasFiredThisTurn` and `canShipFire` have carried this rule since the state
+ * was written; `markShipFired` was called on the *first* weapon of an
+ * activation and `canShipFire` was read by nothing, so the flag went true
+ * immediately and stopped nobody.
+ *
+ * Stamped with the turn and phase rather than cleared by a hook, so a stale
+ * entry from an earlier phase cannot close an activation in this one.
+ */
+const FIRING_ACTIVATION = new WeakMap<GameState, { shipId: string; turn: number; phase: Phase }>()
+
+/**
+ * Open this ship's firing activation, closing whoever had it (2.6).
+ *
+ * Returns a refusal if the ship has already had its turn's fire, and null when
+ * the activation is open and the shot may go ahead.
+ */
+function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome | null {
+  if (rulesReading(state) < 5) return null
+  const open = FIRING_ACTIVATION.get(state)
+  const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
+  if (live && open.shipId === ship.id) return ship.hasFiredThisTurn ? spent(ship) : null
+  if (ship.hasFiredThisTurn) return spent(ship)
+  if (live) {
+    // Play has moved on. Whoever was firing is finished for the turn.
+    const previous = shipById(state, open.shipId)
+    if (previous) markShipFired(previous)
+  }
+  FIRING_ACTIVATION.set(state, { shipId: ship.id, turn: state.turn, phase: state.phase })
+  return null
+}
+
+function spent(ship: ShipState): ActionOutcome {
+  return refuse(
+    `${ship.name} has had its fire this turn — play moved on to another ship (2.6)`,
+  )
 }
 
 /** The point-defence mounts on this hull that could still fire (phase 9). */

@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
 import {
+  currentThrust,
   logFor,
   phaseNumber,
   shipById,
@@ -292,14 +293,11 @@ export function App() {
                     armourMarked: selected.armourMarked,
                     destroyed: selected.destroyedSystems,
                     fired: new Set(selected.weaponsFired.keys()),
-                    thrust: Math.max(
-                      0,
-                      selected.driveHits >= 2
-                        ? 0
-                        : selected.driveHits === 1
-                          ? Math.floor(selected.design.drive.thrust / 2)
-                          : selected.design.drive.thrust,
-                    ),
+                    // `currentThrust` and not a copy of its arithmetic: the
+                    // copy that was here knew about drive hits and not about
+                    // ongoing effects, so an EMP'd ship printed a thrust
+                    // rating on its own sheet that the engine would not honour.
+                    thrust: currentThrust(selected),
                   }}
                 />
               </div>
