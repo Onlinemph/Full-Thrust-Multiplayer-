@@ -20,6 +20,8 @@ import { currentThrust } from '../engine/game'
 import {
   antimatterChargesAboard,
   areaEcmLevelOf,
+  describeWeaponMode,
+  weaponModeOf,
   carriedHulls,
   isJumpPointDisoriented,
   novaArmedOn,
@@ -29,8 +31,42 @@ import {
 } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
 import { coursesMatched, TOW_LINK_TURNS, TOW_MATCH_RANGE } from '../engine/specialmoves'
-import type { MovementOrder, TurnDirection } from '../engine/types'
+import type { MovementOrder, TurnDirection, WeaponDef } from '../engine/types'
 import { dispatch } from './store'
+
+/**
+ * 5.14 and 5.19's per-turn settings, and which mounts may be set to them.
+ *
+ * A Pulse Torpedo can be overloaded unless it is a short-range or Variable
+ * Strength tube; a VPT picks one of three lines; a Fusion Array picks a mode.
+ * The engine refuses anything else, and refuses an overload on a tube that
+ * fired last turn — the panel only decides what is worth showing.
+ */
+function modesFor(weapon: WeaponDef): Array<{ value: WeaponModeValue; label: string }> {
+  if (weapon.weaponClass === 'pulse-torpedo') {
+    if (weapon.variant === 'variable') {
+      return [
+        { value: 'standard', label: 'standard' },
+        { value: 'vpt-short', label: 'short, AP' },
+        { value: 'vpt-long', label: 'long' },
+      ]
+    }
+    if (weapon.variant === 'short') return []
+    return [
+      { value: 'standard', label: 'standard' },
+      { value: 'overload', label: 'overload' },
+    ]
+  }
+  if (weapon.weaponClass === 'fusion-array') {
+    return [
+      { value: 'fusion-torpedo', label: 'torpedo' },
+      { value: 'fusion-flare', label: 'flare' },
+    ]
+  }
+  return []
+}
+
+type WeaponModeValue = Parameters<typeof describeWeaponMode>[0]
 
 /**
  * Writing a movement order (3.5).
@@ -480,6 +516,40 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
           </span>
         </div>
       ) : null}
+
+      {/* 5.14, 5.19: settings the gun crew writes down in phase 1 and cannot
+          change once the shooting starts. An overload is the gamble: a
+          different table line, AP damage and +2 on the die, against a 1-in-36
+          chance of blowing the tube clean off the SSD. */}
+      {ship.design.weapons
+        .filter((weapon) => modesFor(weapon).length > 0 && !ship.destroyedSystems.has(weapon.id))
+        .map((weapon) => (
+          <div className="panel-row" key={`mode-${weapon.id}`}>
+            <span>{weapon.label}</span>
+            <span className="spacer" />
+            <select
+              disabled={!editable}
+              value={weaponModeOf(game, ship, weapon.id)}
+              onChange={(event) =>
+                dispatch({
+                  type: 'plot-weapon-mode',
+                  shipId: ship.id,
+                  weaponId: weapon.id,
+                  mode: event.target.value as WeaponModeValue,
+                })
+              }
+            >
+              {modesFor(weapon).map((mode) => (
+                <option key={mode.value} value={mode.value}>
+                  {mode.label}
+                </option>
+              ))}
+            </select>
+            <span style={{ color: 'var(--ink-dim)', marginLeft: 8 }}>
+              {describeWeaponMode(weaponModeOf(game, ship, weapon.id))}
+            </span>
+          </div>
+        ))}
 
       {/* 7.19: "When Area ECM is turned on, the carrying ship cannot use its
           own FireCon systems." So the emitter is a switch, and the ship that

@@ -67,12 +67,6 @@ import type { FiringContext, WeaponResult, WeaponSpec, WeaponSpecTable } from '.
 export interface KineticContext extends FiringContext {
   /** The target is a fighter, gunboat, missile or other small craft (5.23). */
   targetIsSmallCraft?: boolean
-  /** 5.14: this Pulse Torpedo was ordered to fire overloaded this turn. */
-  overloaded?: boolean
-  /** 5.14: the setting a Variable Strength Pulse Torpedo is on this turn. */
-  vptMode?: ProjectileLine
-  /** 5.19: the mode a Fusion Array is configured in. */
-  fusionMode?: FusionMode
   /**
    * 5.20: damage one Gravitic Gun hit does at a given target velocity. The
    * rulebook's speed/damage table is not in the source text (see the module

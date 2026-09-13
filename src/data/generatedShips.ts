@@ -2520,6 +2520,37 @@ export const DURANI_MINELAYER: ShipDesign = {
   points: 151,
 }
 
+export const DURANI_SWEEPER: ShipDesign = {
+  id: "durani-sweeper",
+  name: "Noyan-class Minesweeper",
+  faction: "Durani Star-Khanate",
+  group: "escort",
+  mass: 40,
+  hullClass: "average",
+  hullRows: 4,
+  hullBoxes: 12,
+  drive: { thrust: 4, advanced: false },
+  ftl: "standard",
+  streamlining: "none",
+  armour: { layers: [7], regenerative: false },
+  screens: { level: 0, generators: 0, advanced: false },
+  weapons: [
+    {"id": "w1", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
+  ],
+  turrets: [], 
+  systems: [
+    {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "minesweeper-1", "kind": "minesweeper", "label": "Minesweeper", "mass": 5, "points": 15},
+  ],
+  fighterBays: [],
+  gunboats: [],
+  additionalDamageControlParties: 0,
+  marineParties: 0,
+  points: 90,
+}
+
 export const DURANI_MOTHERSHIP: ShipDesign = {
   id: "durani-mothership",
   name: "Ordu-class Mothership",
@@ -3486,6 +3517,7 @@ export const GENERATED_DESIGNS: ShipDesign[] = [
   DURANI_RAIDER,
   DURANI_CORSAIR,
   DURANI_MINELAYER,
+  DURANI_SWEEPER,
   DURANI_MOTHERSHIP,
   DURANI_RIDER_LANCE,
   DURANI_RIDER_BOW,

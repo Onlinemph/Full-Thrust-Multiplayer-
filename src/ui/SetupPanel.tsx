@@ -60,6 +60,14 @@ export const OPTIONAL_RULES: Toggle[] = [
       'many turns, 3 or less and it has left the battle for good.',
   },
   {
+    key: 'shapedCharges',
+    label: 'Shaped charges',
+    rule: '6.8',
+    detail:
+      'A Plasma Bolt Launcher may be fired straight at a ship in phase 11 instead of placing a ' +
+      'marker: 1D3 a class, Semi-Armour Piercing, and Standard Screens do nothing to it.',
+  },
+  {
     key: 'movingTable',
     label: 'Moving table',
     rule: '16.4',

@@ -275,6 +275,7 @@ import {
   type WeaponResult,
 } from './weapons'
 import {
+  canFireOverloaded,
   canMountFlak,
   flakBarrageDice,
   kGunCanPointDefend,
@@ -285,6 +286,7 @@ import {
   isInSpinalArc,
   isSpinalMount,
   projectileLine,
+  rollProjectileHit,
   rollFlakShipHit,
   FLAK_DRM,
   FLAK_MARKER_RANGE,
@@ -295,6 +297,7 @@ import {
   turretFiringArcs,
   turretMountedArcs,
   SPINAL_ARC_DEGREES,
+  type KineticWeaponResult,
 } from './weapons/kinetics'
 import {
   acquireMissileTargets,
@@ -302,8 +305,14 @@ import {
   VECTOR_MISSILE_ATTACK_RADIUS,
   type SeekerTarget,
   canEngagePlasmaBolt,
+  clearMine,
   layMines,
   minesTriggeredBy,
+  MINE_DETECTION_RADIUS,
+  plasmaBoltMayFire,
+  resolveAntimatterRackExplosion,
+  resolvePlasmaBoltShapedCharge,
+  PLASMA_BOLT_RANGE,
   resolveMineAttack,
   fireRocketPod,
   launchMissile,
@@ -427,6 +436,12 @@ export type GameAction =
    * explodes."* The order stands for the turn it was written in and no longer.
    */
   | { type: 'plot-detonate'; shipId: string; on: boolean }
+  | {
+      type: 'plot-weapon-mode'
+      shipId: string
+      weaponId: string
+      mode: WeaponMode
+    }
   /**
    * 3.7 — a squadron is *"formed or broken at the start of the game turn,
    * before writing movement orders"*, so both live in phase 1.
@@ -544,6 +559,7 @@ export type GameAction =
   | { type: 'fire-rocket-pod'; shipId: string; weaponId: string; targetId: string }
   /** 6.8 — a plasma bolt is a marker placed on the table, not a shot. */
   | { type: 'launch-plasma-bolt'; shipId: string; weaponId: string; aimPoint: { x: number; y: number } }
+  | { type: 'fire-shaped-charge'; shipId: string; weaponId: string; targetId: string }
   | { type: 'move-ordnance' }
   | { type: 'resolve-ordnance-attacks' }
 
@@ -1011,6 +1027,7 @@ function dragTowedShips(state: GameState, tug: ShipState): void {
     const track = [from, load.placement.position]
     tracksOf(state).set(load.id, track)
     dropMines(state, load, track)
+    sweepMines(state, load, track)
     resolveTerrainHazards(state, load, track)
     resolveLeavingTable(state, load)
   }
@@ -1098,6 +1115,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // those reach `destroyedSystems` by different routes. Zeroing the
       // charge makes the sweep idempotent.
       for (const ship of state.ships) waveGunBacklash(state, ship)
+      // 5.14: an overload loaded and not fired is ejected by the crew, and
+      // "counts as having fired" — so it is spent either way and next turn's
+      // order is refused. Swept at the boundary with the rest.
+      ejectUnfiredOverloads(state)
       // 7.20 – 7.22: a cloak crossed off the SSD stops being a cloak. Same
       // boundary, same reasoning as the Wave Gun above, and gated with the
       // rest of reading 11 because a cloak that comes down changes the DRM
@@ -1651,6 +1672,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // moved and the mines can be answered together.
       tracksOf(state).set(ship.id, track)
       dropMines(state, ship, track)
+      sweepMines(state, ship, track)
       const metTrack = resolveOrbitEntry(state, ship, track)
       if (!metTrack) {
         resolveTerrainHazards(state, ship, track, { shielded: swung })
@@ -1979,9 +2001,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // changes how many dice a shot throws and is stamped: an older battle
         // replays on the mass-50 default it was fought under.
         targetMass: rulesReading(state) >= 2 ? target.design.mass : undefined,
+        // 5.14, 5.19: the settings the gun crew wrote down in phase 1.
+        ...weaponModeContext(state, ship, weapon),
         rng: state.rng,
       })
       markWeaponFired(ship, weapon.id, state.phase)
+      ship.weaponLastFiredTurn.set(weapon.id, state.turn)
 
       if ('refused' in result) {
         pushLog(state, {
@@ -1992,6 +2017,19 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           text: `${ship.name}: ${weapon.label} holds fire — ${result.refused}`,
         })
         return OK
+      }
+
+      // 5.14: *"if the second die is also a 1 the Pulse Torpedo tube is
+      // destroyed and may not be repaired by DCPs"* — the *firing* ship's own
+      // mount, which is what makes the overload a gamble rather than a bonus.
+      if ((result as KineticWeaponResult).launcherDestroyed === true) {
+        ship.destroyedSystems.add(weapon.id)
+        pushLog(state, {
+          kind: 'damage',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} blows itself apart on the overload — no repair (5.14)`,
+        })
       }
 
       // 7.25: the damage is rolled first, then the field's own die decides how
@@ -2308,6 +2346,40 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
      * Written in phase 1 like the mines, and good for that turn only: the ship
      * blows itself up at the top of phase 13, or the order lapses.
      */
+    case 'plot-weapon-mode': {
+      // 5.14, 5.19: three settings a gun crew writes down in phase 1 and
+      // cannot change once the shooting starts — an overload, a Variable
+      // Strength Pulse Torpedo's line, and a Fusion Array's mode. None of them
+      // belongs on the design: they are per-turn orders, and the resolvers
+      // have read them off the firing context since they were written.
+      if (state.phase !== 'orders') {
+        return refuse('Weapon settings are written in phase 1 (2.6)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (ship.destroyedSystems.has(weapon.id)) return refuse(`${weapon.label} is knocked out`)
+      const problem = weaponModeRefusal(state, ship, weapon, action.mode)
+      if (problem) return refuse(problem)
+
+      const modes = weaponModes(state)
+      const key = novaKey(ship.id, weapon.id)
+      if (action.mode === 'standard') modes.delete(key)
+      else modes.set(key, { mode: action.mode, turn: state.turn })
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        // Written orders are the one secret in an open-book game (2.6), and an
+        // overload is exactly the kind a player would rather keep.
+        visibleTo: [ship.side],
+        text: `${ship.name}: ${weapon.label} set to ${describeWeaponMode(action.mode)}`,
+      })
+      return OK
+    }
+
     case 'plot-detonate': {
       if (state.phase !== 'orders') {
         return refuse('A detonate order is written in phase 1 (7.9)')
@@ -3097,6 +3169,96 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       return OK
     }
 
+    /**
+     * 6.8's optional direct-fire mode.
+     *
+     * *"A hit will generate 1D3 points of damage per size class of the Plasma
+     * Bolt. Standard Screens will have no effect but Advanced Screens will at
+     * -1 DRM for each level of screens. Damage is Semi-Armor Piercing."*
+     *
+     * A shaped charge is the launcher used as a gun instead of a bomb, so it
+     * fires in phase 11 with everything else and spends the same shot the
+     * marker would have. The to-hit roll is the Projectile Weapon Hit
+     * Probability Table — the same reconstruction 5.14 and 5.16 read (see
+     * `docs/rules/weapons-kinetic.md`), because the printed table is on a page
+     * the extract does not reach.
+     *
+     * Optional, so it is behind `shapedCharges`: the section calls it an
+     * option and it is not the way a PBL usually goes off.
+     */
+    case 'fire-shaped-charge': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11 (2.6)')
+      if (!optional(state).shapedCharges) {
+        return refuse('Shaped charges are an option this table is not playing (6.8)')
+      }
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const powered = novaPowerRefusal(state, ship)
+      if (powered) return powered
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'plasma-bolt-launcher') {
+        return refuse(`${weapon.label} is not a plasma bolt launcher`)
+      }
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That launcher is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse('That launcher has already fired')
+      // 6.8: "a PBL may only fire every other turn" — the shaped charge is the
+      // same launcher and the same reload.
+      const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null
+      if (!plasmaBoltMayFire(lastFired, state.turn)) {
+        return refuse(`${weapon.label} fired on turn ${lastFired} and reloads every other turn (6.8)`)
+      }
+      const target = shipById(state, action.targetId)
+      if (!target) return refuse('No such target')
+      if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
+      if (target.side === ship.side) return refuse('That is a friendly ship')
+
+      const arc = arcTo(ship.placement.position, ship.placement.facing, target.placement.position)
+      if (!weaponArcs(ship, weapon).includes(arc)) return refuse('Target is not in that arc')
+      const range = distance(ship.placement.position, target.placement.position)
+      if (range > PLASMA_BOLT_RANGE) {
+        return refuse(`${target.name} is ${range.toFixed(1)} MU away; a PBL reaches ${PLASMA_BOLT_RANGE} (6.8)`)
+      }
+      const activation = openFiringActivation(state, ship)
+      if (activation) return activation
+      if (needsFireCon(weapon) && !engagedTargets(ship, state.phase).includes(target.id)) {
+        if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
+      }
+      claimFiringActivation(state, ship)
+
+      const shot = rollProjectileHit('standard', range, state.rng, 0)
+      if (shot === null) return refuse(`${weapon.label} cannot range that far`)
+      const umbrella = screenUmbrella(state, target, ship.placement.position)
+      const result = resolvePlasmaBoltShapedCharge(
+        weapon.rating,
+        shot.hit,
+        {
+          level: Math.min(2, umbrella.level) as ScreenLevel,
+          advanced: umbrella.advancedLevel > 0,
+        },
+        state.rng,
+      )
+      markWeaponFired(ship, weapon.id, state.phase)
+      ship.weaponLastFiredTurn.set(weapon.id, state.turn)
+
+      const applied = applyDamage(targetStateOf(target), result, { source: 'direct-fire' })
+      writeBackDamage(target, applied.target)
+      markHullBoxes(target, applied.hullDamage)
+      pushLog(state, {
+        kind: applied.hullDamage > 0 ? 'damage' : 'fire',
+        shipId: ship.id,
+        targetId: target.id,
+        side: ship.side,
+        dice: [shot.face, ...result.dice],
+        text: `${ship.name}: ${weapon.label} as a shaped charge on ${target.name} — needs ${shot.target}+, rolled ${shot.face}: ${result.detail}`,
+      })
+      if (target.destroyed) {
+        pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
+      }
+      return OK
+    }
+
     case 'move-ordnance': {
       if (state.phase !== 'move-ships') return refuse('Ordnance flies in phase 5')
       const markers = ordnanceOf(state)
@@ -3453,13 +3615,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       knockOffCourse(state, ship, result.rowsLost, result.extraRows)
       partiesInThreshold(state, ship, result.rowsLost, result.extraRows)
       strikeTheColors(state, ship, result.rowsLost, result.extraRows)
-      orbitAfterThreshold(
-        state,
-        ship,
-        result.rowsLost,
-        result.extraRows,
-        result.checks.filter((check) => check.destroyed).map((check) => check.id),
-      )
+      const lost = result.checks.filter((check) => check.destroyed).map((check) => check.id)
+      orbitAfterThreshold(state, ship, result.rowsLost, result.extraRows, lost)
+      antimatterRacksLost(state, ship, lost)
       return OK
     }
 
@@ -3471,13 +3629,9 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         knockOffCourse(state, ship, result.rowsLost, result.extraRows)
         partiesInThreshold(state, ship, result.rowsLost, result.extraRows)
         strikeTheColors(state, ship, result.rowsLost, result.extraRows)
-        orbitAfterThreshold(
-          state,
-          ship,
-          result.rowsLost,
-          result.extraRows,
-          result.checks.filter((check) => check.destroyed).map((check) => check.id),
-        )
+        const lost = result.checks.filter((check) => check.destroyed).map((check) => check.id)
+        orbitAfterThreshold(state, ship, result.rowsLost, result.extraRows, lost)
+        antimatterRacksLost(state, ship, lost)
       }
       reportFleetMorale(state)
       return OK
@@ -6518,6 +6672,149 @@ function regenerateArmourAcrossFleet(state: GameState): void {
 }
 
 /**
+ * The three settings a gun crew writes in phase 1 (5.14, 5.19).
+ *
+ * 5.14's overload has to be *"noted in the orders"*, 5.14's Variable Strength
+ * Pulse Torpedo picks one of three lines *"in the Write Orders Phase"*, and
+ * 5.19's Fusion Array is *"configured"* the same way. None of them belongs on
+ * `WeaponDef`, which every hull of a class shares; all three are read off the
+ * firing context, and until now nothing put them there.
+ *
+ * The turn stamp is the point: an order is good for the turn it was written
+ * in, so a tube left on overload two turns running has to be ordered twice.
+ */
+export type WeaponMode = 'standard' | 'overload' | 'vpt-short' | 'vpt-long' | 'fusion-flare' | 'fusion-torpedo'
+
+const WEAPON_MODES = new WeakMap<GameState, Map<string, { mode: WeaponMode; turn: number }>>()
+
+function weaponModes(state: GameState): Map<string, { mode: WeaponMode; turn: number }> {
+  let modes = WEAPON_MODES.get(state)
+  if (!modes) {
+    modes = new Map()
+    WEAPON_MODES.set(state, modes)
+  }
+  return modes
+}
+
+/** The setting this mount is on this turn, or `standard` (5.14, 5.19). */
+export function weaponModeOf(state: GameState, ship: ShipState, weaponId: string): WeaponMode {
+  const held = weaponModes(state).get(novaKey(ship.id, weaponId))
+  return held && held.turn === state.turn ? held.mode : 'standard'
+}
+
+/** What the panel and the log call each setting. */
+export function describeWeaponMode(mode: WeaponMode): string {
+  switch (mode) {
+    case 'overload':
+      return 'overload (5.14)'
+    case 'vpt-short':
+      return 'short range, AP (5.14)'
+    case 'vpt-long':
+      return 'long range (5.14)'
+    case 'fusion-flare':
+      return 'flare (5.19)'
+    case 'fusion-torpedo':
+      return 'torpedo (5.19)'
+    case 'standard':
+      return 'standard'
+  }
+}
+
+/**
+ * Whether this mount can be set to this mode, and why not (5.14, 5.19).
+ *
+ * The overload is the interesting one: *"the Pulse Torpedo may not have fired
+ * in the previous turn"*, which `canFireOverloaded` answers, and a short-range
+ * or Variable Strength tube may not overload at all.
+ */
+function weaponModeRefusal(
+  state: GameState,
+  ship: ShipState,
+  weapon: WeaponDef,
+  mode: WeaponMode,
+): string | null {
+  if (mode === 'standard') return null
+  if (mode === 'overload') {
+    if (weapon.weaponClass !== 'pulse-torpedo') {
+      return `${weapon.label} is not a Pulse Torpedo and has no overload (5.14)`
+    }
+    const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null
+    if (!canFireOverloaded(weapon, lastFired === state.turn - 1)) {
+      return weapon.variant === 'short' || weapon.variant === 'variable'
+        ? `a ${weapon.variant === 'short' ? 'short-range' : 'Variable Strength'} tube may not be fired overloaded (5.14)`
+        : `${weapon.label} fired last turn and may not be overloaded (5.14)`
+    }
+    return null
+  }
+  if (mode === 'vpt-short' || mode === 'vpt-long') {
+    return weapon.weaponClass === 'pulse-torpedo' && weapon.variant === 'variable'
+      ? null
+      : `${weapon.label} is not a Variable Strength Pulse Torpedo (5.14)`
+  }
+  return weapon.weaponClass === 'fusion-array'
+    ? null
+    : `${weapon.label} is not a Fusion Array (5.19)`
+}
+
+/**
+ * The settings one shot reads off the orders (5.14, 5.19).
+ *
+ * Gated: the overload changes the table line, adds a confirmation die on a
+ * natural 1 and can cross the tube off, and a VPT on its short setting reads a
+ * different line altogether. All three change the dice, and no older journal
+ * could have written the order.
+ */
+function weaponModeContext(
+  state: GameState,
+  ship: ShipState,
+  weapon: WeaponDef,
+): { overloaded?: boolean; vptMode?: 'short' | 'standard' | 'long'; fusionMode?: 'flare' | 'torpedo' } {
+  if (rulesReading(state) < 12) return {}
+  switch (weaponModeOf(state, ship, weapon.id)) {
+    case 'overload':
+      return { overloaded: true }
+    case 'vpt-short':
+      return { vptMode: 'short' }
+    case 'vpt-long':
+      return { vptMode: 'long' }
+    case 'fusion-flare':
+      return { fusionMode: 'flare' }
+    case 'fusion-torpedo':
+      return { fusionMode: 'torpedo' }
+    case 'standard':
+      return {}
+  }
+}
+
+/**
+ * 5.14: *"If the overload is not fired in the turn it is loaded it is ejected
+ * by the crew and counts as having fired."*
+ *
+ * Swept at the turn boundary, because the ejection is what stops a captain
+ * loading an overload every turn and firing it on the turn it suits them: the
+ * tube is spent either way, and the *next* turn's order is refused.
+ */
+function ejectUnfiredOverloads(state: GameState): void {
+  if (rulesReading(state) < 12) return
+  const modes = weaponModes(state)
+  for (const ship of state.ships) {
+    for (const weapon of ship.design.weapons) {
+      const key = novaKey(ship.id, weapon.id)
+      const held = modes.get(key)
+      if (!held || held.turn !== state.turn || held.mode !== 'overload') continue
+      if (ship.weaponLastFiredTurn.get(weapon.id) === state.turn) continue
+      ship.weaponLastFiredTurn.set(weapon.id, state.turn)
+      pushLog(state, {
+        kind: 'note',
+        shipId: ship.id,
+        side: ship.side,
+        text: `${ship.name}: ${weapon.label}'s overload was not fired — the crew eject it (5.14)`,
+      })
+    }
+  }
+}
+
+/**
  * Charges that have already gone off (7.9).
  *
  * A spent charge is crossed off the SSD, which makes it look exactly like one
@@ -7618,6 +7915,53 @@ function pointAlong(path: readonly Point[], fraction: number): Point {
     want -= spans[i]
   }
   return path[path.length - 1]
+}
+
+/**
+ * Clear the mines a minesweeper flew through — **phase 5** (6.10).
+ *
+ * 6.10 says a marker stays on the table *"until it detonates, or is cleared by
+ * a minesweeping system"*, and 2.6 phase 5 says to *"resolve collisions, mine
+ * sweeping, or mine attacks as they occur"*. What it never says is the
+ * sweeper's range or its die: the minesweeper is a secondary system of 13.13,
+ * which is past the last page of the extract.
+ *
+ * READING. The sweeper clears what it flew through, at the same
+ * `MINE_DETECTION_RADIUS` the mine itself uses to notice a ship — the two
+ * numbers are the same question from opposite ends — and nothing is rolled,
+ * because a die with no printed target would be invented. A sweeper that flies
+ * into a live mine still sets it off: `resolveMines` runs after this, and the
+ * markers this took away are gone before it looks, so the sweep is the reward
+ * for flying the ship through the field yourself.
+ */
+function sweepMines(state: GameState, ship: ShipState, path: readonly Point[]): void {
+  if (rulesReading(state) < 12) return
+  if (ship.destroyed || ship.offTable) return
+  const sweepers = ship.design.systems.filter(
+    (system) => system.kind === 'minesweeper' && !ship.destroyedSystems.has(system.id),
+  ).length
+  if (sweepers === 0) return
+
+  let mines = minesOf(state)
+  const cleared: string[] = []
+  for (const mine of [...mines]) {
+    if (cleared.length >= sweepers) break
+    // A mine the ship laid itself is not in the way, and one laid this turn is
+    // not yet active (6.10) — but an inactive marker is still a marker, and a
+    // sweeper that flew over it has swept it.
+    if (closestApproach(path, mine.position) > MINE_DETECTION_RADIUS) continue
+    mines = clearMine(mines, mine.id)
+    cleared.push(mine.id)
+  }
+  if (cleared.length === 0) return
+  MINES.set(state, mines)
+  projectMines(state)
+  pushLog(state, {
+    kind: 'note',
+    shipId: ship.id,
+    side: ship.side,
+    text: `${ship.name} sweeps ${cleared.length} mine${cleared.length === 1 ? '' : 's'} from its track (6.10)`,
+  })
 }
 
 /**
@@ -9155,6 +9499,57 @@ function cloudLockOn(
 }
 
 /**
+ * An antimatter missile that failed its threshold check (6.6).
+ *
+ * *"If an Antimatter Missile fails a threshold test it explodes on the rack,
+ * immediately doing 1d6 damage to the carrying ship, and 1d6 damage to any unit
+ * within 1 MU … Screens and armor will not protect a ship from its own
+ * exploding missiles."*
+ *
+ * The carrier's die goes straight to the hull, which is why it does not go
+ * through `applyDamage`: 6.6 takes the armour and the screens off the table for
+ * this one blast. The neighbours are an ordinary blast and keep theirs.
+ *
+ * Called with the ids this check crossed off, so it fires once per rack and a
+ * second sweep over the same wreck finds nothing left to explode.
+ */
+function antimatterRacksLost(
+  state: GameState,
+  ship: ShipState,
+  lost: readonly string[],
+): void {
+  if (rulesReading(state) < 12) return
+  const racks = ship.design.weapons.filter(
+    (weapon) => weapon.weaponClass === 'antimatter-missile' && lost.includes(weapon.id),
+  )
+  for (const rack of racks) {
+    const blast = resolveAntimatterRackExplosion(
+      { id: ship.id, position: ship.placement.position },
+      blastTargetsNear(state, ship.placement.position, 1).filter(
+        (target) => target.id !== ship.id,
+      ),
+      state.rng,
+    )
+    markHullBoxes(ship, blast.hullDamage)
+    pushLog(state, {
+      kind: 'damage',
+      shipId: ship.id,
+      side: ship.side,
+      dice: blast.dice,
+      text: `${ship.name}: ${rack.label} explodes on the rack for ${blast.hullDamage} straight to the hull (6.6)`,
+    })
+    applyBlastEffects(state, blast.nearby, {
+      side: ship.side,
+      source: `${ship.name}'s antimatter rack`,
+      mode: 'AP',
+    })
+    if (ship.destroyed) {
+      pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
+    }
+  }
+}
+
+/**
  * Staying in orbit after a hit (17.8).
  *
  * *"Any ship that suffers a drive or bridge threshold failure while in orbit
@@ -9456,6 +9851,7 @@ function moveUnderVector(state: GameState, ship: ShipState, warmingUp: boolean):
   const track = [result.chord.from, result.chord.to]
   tracksOf(state).set(ship.id, track)
   dropMines(state, ship, track)
+  sweepMines(state, ship, track)
   const swung = resolveGravity(state, ship, track)
   const metTrack = resolveOrbitEntry(state, ship, track)
   if (!metTrack) {
@@ -10418,6 +10814,13 @@ export interface OptionalRules {
   movingTable?: boolean
   /** 3.9's optional re-entry roll for a ship that flew off the edge. */
   tableReentry?: boolean
+  /**
+   * 6.8's optional direct-fire mode for a Plasma Bolt Launcher: a shaped
+   * charge fired at a named ship in phase 11 instead of a marker placed in
+   * phase 3. Off by default, because 6.8 calls it an option and the marker is
+   * how a PBL normally goes off.
+   */
+  shapedCharges?: boolean
   /**
    * 12.11: *"after checking for systems failures make one further roll at the
    * same odds … to determine if the ship has been knocked off course."*

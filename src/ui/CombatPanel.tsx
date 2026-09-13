@@ -10,6 +10,7 @@ import {
   waveGunCharge,
 } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
+import { PLASMA_BOLT_RANGE } from '../engine/ordnance'
 import type { Arc, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
@@ -309,6 +310,41 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                       <span className="num">1D6</span>
                     </button>
                   ))}
+                </div>
+              ) : null}
+
+              {/* 6.8's optional shaped charge: the launcher used as a gun,
+                  1D3 a class, SAP, and Standard Screens do nothing to it. Its
+                  own row because it spends the launcher's every-other-turn
+                  shot rather than placing a marker. */}
+              {optional(game).shapedCharges === true ? (
+                <div className="ssd-systems">
+                  {ship.design.weapons
+                    .filter(
+                      (weapon) =>
+                        weapon.weaponClass === 'plasma-bolt-launcher' &&
+                        !ship.destroyedSystems.has(weapon.id) &&
+                        range <= PLASMA_BOLT_RANGE &&
+                        weapon.arcs.includes(arc),
+                    )
+                    .map((weapon) => (
+                      <button
+                        key={`charge-${weapon.id}`}
+                        className="system-chip weapon-fire"
+                        title={`${weapon.rating}D3 Semi-Armour Piercing at ${range.toFixed(1)} MU (6.8)`}
+                        onClick={() =>
+                          dispatch({
+                            type: 'fire-shaped-charge',
+                            shipId: ship.id,
+                            weaponId: weapon.id,
+                            targetId: target.id,
+                          })
+                        }
+                      >
+                        {weapon.label} charge
+                        <span className="num">{weapon.rating}D3</span>
+                      </button>
+                    ))}
                 </div>
               ) : null}
 

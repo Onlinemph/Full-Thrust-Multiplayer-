@@ -69,6 +69,17 @@ export interface FiringContext {
    * is about to reach.
    */
   areaScreen?: boolean
+  /**
+   * The three per-turn weapon settings 2.6 phase 1 writes down, and that have
+   * no home on `WeaponDef` because they change every turn: 5.14's overload,
+   * 5.14's Variable Strength setting, and 5.19's Fusion Array mode.
+   *
+   * Here for the same reason `needleTarget` is — `fireWeapon` dispatches
+   * through this type — and only the kinetic family reads them.
+   */
+  overloaded?: boolean
+  vptMode?: 'short' | 'standard' | 'long'
+  fusionMode?: 'flare' | 'torpedo'
   rng: Rng
 }
 

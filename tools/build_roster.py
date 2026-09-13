@@ -954,6 +954,14 @@ DESIGNS = [
        group='cruiser', mass=60, hull='average', rows=4, thrust=5, armour=[4], screens=1,
        weapons=[('mine-rack',1,A3), ('mine-rack',1,A3), ('mine-rack',1,A3), ('beam',2,F3), ('beam',1,ALL6)],
        systems=[('firecon',2),('pds',2),('antimatter-charge',1)], marines=2),
+  # The answer to the Tumen, and the only hull in the roster that carries a
+  # minesweeper: 6.10 lets a marker be "cleared by a minesweeping system", and
+  # a system nobody buys is a rule nobody plays. Slow and lightly armed on
+  # purpose — it goes in first, down the track the fleet means to use.
+  dict(id='durani-sweeper', name='Noyan-class Minesweeper', faction='Durani Star-Khanate',
+       group='escort', mass=40, hull='average', rows=4, thrust=4, armour=[2],
+       weapons=[('beam',1,ALL6)],
+       systems=[('firecon',1),('pds',2),('minesweeper',1)]),
   # 11.7's battleriders, and the hull that hauls them. "The Mothership is
   # treated as an FTL tug or tender, paying extra mass and points for internal
   # bays or an oversized FTL Drive" — the oversized drive is the cheaper of the

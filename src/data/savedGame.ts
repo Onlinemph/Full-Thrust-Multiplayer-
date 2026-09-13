@@ -65,8 +65,13 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             Every one of them deletes or adds dice: a marker that no longer
  *             acquires never rolls in phase 10, and a shot refused for range
  *             takes its whole volley out of the stream.
+ *  12  5.14, 5.19 — the three settings a gun crew writes in phase 1 reach the
+ *             resolvers that have always read them: the Pulse Torpedo
+ *             overload (a different table line, a confirmation die, and a
+ *             tube that can blow itself off the SSD), the Variable Strength
+ *             tube's line, and the Fusion Array's mode.
  */
-export const CURRENT_RULES_VERSION = 11
+export const CURRENT_RULES_VERSION = 12
 
 export interface GameSetup {
   scenarioId: string
@@ -107,6 +112,8 @@ export interface GameSetup {
   movingTable?: boolean
   /** 3.9 — a ship that left the table rolls for whether it can come back. */
   tableReentry?: boolean
+  /** 6.8 — a Plasma Bolt Launcher may fire a shaped charge at a named ship. */
+  shapedCharges?: boolean
   /** 12.11 — a threshold point may also knock the ship a point off course. */
   knockedOffCourse?: boolean
   /** 17.3 — a bad-tempered star burns FireCons out of every ship in reach. */
@@ -329,6 +336,7 @@ export function buildGame(setup: GameSetup): GameState {
     movementSystem: setup.movementSystem,
     movingTable: setup.movingTable,
     tableReentry: setup.tableReentry,
+    shapedCharges: setup.shapedCharges,
     knockedOffCourse: setup.knockedOffCourse,
     solarFlares: setup.solarFlares,
     orbitalTable: setup.orbitalTable,
