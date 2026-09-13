@@ -61,8 +61,8 @@ Source** must be **GitHub Actions**, not *Deploy from a branch*:
   its own. Selecting it without a workflow that calls `actions/deploy-pages` is the state where
   the setting looks correct and nothing whatsoever happens.
 
-The workflow passes `enablement: true` to `actions/configure-pages`, so the first successful run
-switches the source over by itself if it is still set to a branch.
+Both halves are needed, and the setting is the half you have to do by hand: the workflow cannot
+select itself as the source.
 
 Once it has run, the site is at `https://<user>.github.io/<repo-name>/`.
 

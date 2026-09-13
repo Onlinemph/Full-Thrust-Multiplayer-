@@ -47,14 +47,14 @@ jobs:
       # this repository's name ends in a hyphen — exactly the sort of thing a
       # hand-typed base path gets wrong and then 404s every asset over.
       #
-      # `enablement: true` also switches the Pages source to this workflow if
-      # it is still set to "Deploy from a branch", which is the state that
-      # serves the repository's source and shows the boot message in index.html.
+      # Left on its default `enablement: false` deliberately. The flag only does
+      # anything when the Pages API says the site does not exist, and in that
+      # case the default is the more useful of the two: it fails the run with
+      # the exact remedy, where enabling would downgrade it to a warning the log
+      # scrolls straight past.
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       # The install is already paid for and the suite runs in seconds, so the
       # site only ships when the rules engine agrees with itself.
