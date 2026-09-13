@@ -48,9 +48,17 @@
         </p>
         <p>
           <strong>On GitHub Pages</strong>, that means the source is set to
-          <em>Deploy from a branch</em>, which publishes the files through Jekyll — Jekyll cannot
-          build this app, and it overwrites the real build on every push. Go to
+          <em>Deploy from a branch</em>, which publishes these files through Jekyll — Jekyll
+          cannot build this app, and it overwrites the real build on every push. Go to
           <em>Settings → Pages → Source</em> and choose <strong>GitHub Actions</strong>.
+        </p>
+        <p>
+          Choosing it is only half of the fix, and the half that catches people out: that
+          setting means <em>“some workflow in this repository publishes the site”</em>, and it
+          does nothing at all until one does. This repository ships
+          <code>.github/workflows/pages.yml</code> for exactly that. Check
+          <em>Actions → Deploy to GitHub Pages</em> — if it has never run, push a commit to the
+          default branch or run it by hand from that page.
         </p>
         <p>
           <strong>Anywhere else</strong>, run <code>npm install &amp;&amp; npm run build</code> and

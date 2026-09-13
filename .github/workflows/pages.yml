@@ -1,0 +1,83 @@
+name: Deploy to GitHub Pages
+
+# Setting Settings → Pages → Source to "GitHub Actions" does not create this
+# file, and without it nothing publishes: that source means "some workflow in
+# this repository calls actions/deploy-pages", and until one does, the setting
+# is a promise nobody keeps. This is that workflow.
+
+on:
+  push:
+  workflow_dispatch:
+
+# `deploy-pages` uploads through an OIDC token, so the job needs to mint one.
+# Nothing else here writes anything.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one that is already publishing —
+# a half-uploaded artifact is a broken site, which is worse than an old one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only the default branch publishes. Compared against the API's own answer
+    # rather than a branch name typed in here, so renaming the branch does not
+    # quietly stop the deploys.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages-deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Answers the one question the build cannot ask for itself: which path
+      # this site is served from. A project site lives under /<repo-name>/, and
+      # this repository's name ends in a hyphen — exactly the sort of thing a
+      # hand-typed base path gets wrong and then 404s every asset over.
+      #
+      # `enablement: true` also switches the Pages source to this workflow if
+      # it is still set to "Deploy from a branch", which is the state that
+      # serves the repository's source and shows the boot message in index.html.
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # The install is already paid for and the suite runs in seconds, so the
+      # site only ships when the rules engine agrees with itself.
+      - name: Rules engine tests
+        run: npm test
+
+      # `npm run build` is `tsc -b && vite build`, so this typechecks too.
+      #
+      # The base-path fallback is not paranoia: an empty base path builds a site whose
+      # assets are addressed from the domain root, which on a project site
+      # 404s every one of them and shows index.html's boot message — a failure
+      # that looks exactly like the one this workflow exists to fix. A
+      # non-empty output (including the bare "/" of a user site or a custom
+      # domain) is truthy and wins; only an empty one reaches the repo name.
+      - name: Build
+        run: npm run build
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path || format('/{0}/', github.event.repository.name) }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy
+        id: pages-deploy
+        uses: actions/deploy-pages@v4

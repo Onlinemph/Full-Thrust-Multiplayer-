@@ -7,8 +7,20 @@ import { fileURLToPath, URL } from 'node:url'
  * from any file host. `BASE_PATH` exists for project-scoped hosting such as
  * GitHub Pages, where the site lives under `/<repo-name>/`; leave it unset for
  * a domain root, a local preview, or a container.
+ *
+ * Normalised rather than used as given, because the value arrives from three
+ * places that disagree about slashes: a person types `Full-Thrust-Multiplayer-`,
+ * `actions/configure-pages` reports `/Full-Thrust-Multiplayer-` with no trailing
+ * slash, and Vite wants both. Getting it wrong does not fail the build — it
+ * ships a page whose every asset 404s, which is a much slower thing to notice.
  */
-const base = process.env.BASE_PATH ?? '/'
+function normaliseBase(raw: string | undefined): string {
+  const trimmed = (raw ?? '').trim()
+  if (trimmed === '' || trimmed === '/') return '/'
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}/`
+}
+
+const base = normaliseBase(process.env.BASE_PATH)
 
 export default defineConfig({
   base,

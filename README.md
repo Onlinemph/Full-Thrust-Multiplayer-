@@ -31,6 +31,41 @@ npm run serve        # preview the built site on your network at :4173
 To play on a tablet or a second screen, run `npm run dev -- --host` and open the printed LAN
 address.
 
+## Deploying
+
+The build is a folder of static files with no server behind it, so anything that serves a
+directory will do. `BASE_PATH` is the only knob: leave it unset for a domain root, set it to the
+subfolder for anything else.
+
+```bash
+npm ci
+npm run build                                  # dist/, served from /
+BASE_PATH=/my-subfolder/ npm run build         # dist/, served from /my-subfolder/
+```
+
+### GitHub Pages
+
+`.github/workflows/pages.yml` builds and publishes on every push to the default branch, and can
+be run by hand from **Actions → Deploy to GitHub Pages → Run workflow**. It works out the base
+path from the repository name itself, so a project site under `/<repo-name>/` needs no
+configuration — which matters more than it sounds, because getting that path wrong does not fail
+the build. It ships a page whose every asset 404s.
+
+One setting has to be right, and it is the one that catches people out. **Settings → Pages →
+Source** must be **GitHub Actions**, not *Deploy from a branch*:
+
+- *Deploy from a branch* publishes the repository's **source** through Jekyll. Jekyll cannot build
+  a Vite app, so what gets served is `index.html` with no bundle behind it — which is why that
+  file carries a visible boot message explaining the situation rather than showing a blank page.
+- *GitHub Actions* means "a workflow in this repository publishes the site". It does nothing on
+  its own. Selecting it without a workflow that calls `actions/deploy-pages` is the state where
+  the setting looks correct and nothing whatsoever happens.
+
+The workflow passes `enablement: true` to `actions/configure-pages`, so the first successful run
+switches the source over by itself if it is still set to a branch.
+
+Once it has run, the site is at `https://<user>.github.io/<repo-name>/`.
+
 ## What is implemented
 
 The tactical game is playable end to end: write orders, roll initiative, move, fire, take
