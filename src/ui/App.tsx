@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
 import {
@@ -17,10 +17,13 @@ import {
   defendingSide,
   deployingSide,
   optional,
+  phaseDebt,
   pointDefenceMounts,
   pointDefenceOrder,
   shipsAwaitingFtlEntry,
+  shipsAwaitingOrders,
   tableIsCrowded,
+  type PhaseDebt,
 } from '../engine/actions'
 import { BEAM_RANGE_BAND } from '../engine/geometry'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
@@ -30,7 +33,9 @@ import { CombatPanel } from './CombatPanel'
 import { DamageControlPanel } from './DamageControlPanel'
 import { FlightPanel } from './FlightPanel'
 import { GatePanel } from './GatePanel'
+import { MainMenu } from './MainMenu'
 import { MapView } from './MapView'
+import { useNet } from './net'
 import { OnlinePanel } from './OnlinePanel'
 import { ReplayBar } from './ReplayBar'
 import { Scoreboard } from './Scoreboard'
@@ -49,6 +54,7 @@ import {
   currentSetup,
   dispatch,
   exportGame,
+  journalLength,
   loadGame,
   undo,
   useGame,
@@ -84,6 +90,18 @@ export function App() {
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
+  /* The front of the house. The app opens on it rather than on whatever
+     battle was last on the table; a connected remote match goes straight to
+     the table, since the other console is waiting. */
+  const [screen, setScreen] = useState<'menu' | 'battle'>('menu')
+  const net = useNet()
+  useEffect(() => {
+    if (net.phase === 'connected') setScreen('battle')
+  }, [net.phase])
+  /* 2.6: a phase with optional work left — ships that have not fired — is
+     ended by asking twice. The first click arms the button and says what the
+     second one will skip; the arming is dropped the moment the phase changes. */
+  const [armedSkip, setArmedSkip] = useState<string | null>(null)
   /* 18.1 lets a player deploy "with any desired course and an initial
      velocity", so both are chosen before the click that puts the ship down. */
   const [deployFacing, setDeployFacing] = useState<Course>(12)
@@ -114,7 +132,70 @@ export function App() {
   const log = viewingSide ? logFor(game, viewingSide) : game.log
   const end = battleEnd(game, scenario)
 
-  useKeyboard({ game, selectedId, onSelect: setSelectedId, suspended: showOnline || showSetup || showLibrary || showYard })
+  const debt = phaseDebt(game)
+  const phaseKey = `${game.turn}:${game.phase}`
+  const endPhase = () => {
+    if (debt.required.length > 0) {
+      // The engine refuses it too; going through dispatch is what puts the
+      // reason on screen.
+      dispatch({ type: 'advance-phase' })
+      return
+    }
+    if (debt.optional.length > 0 && armedSkip !== phaseKey) {
+      setArmedSkip(phaseKey)
+      return
+    }
+    setArmedSkip(null)
+    dispatch({ type: 'advance-phase' })
+  }
+
+  useKeyboard({
+    game,
+    selectedId,
+    onSelect: setSelectedId,
+    suspended: screen !== 'battle' || showOnline || showSetup || showLibrary || showYard,
+    onEndPhase: endPhase,
+  })
+
+  const modals = (
+    <>
+      {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
+      {showSetup ? (
+        <SetupPanel onClose={() => setShowSetup(false)} onStarted={() => setScreen('battle')} />
+      ) : null}
+      {showLibrary ? <ShipLibrary onClose={() => setShowLibrary(false)} /> : null}
+      {showYard ? <Shipyard onClose={() => setShowYard(false)} /> : null}
+    </>
+  )
+
+  if (screen === 'menu') {
+    const underway = journalLength() > 0 || game.turn > 1
+    return (
+      <>
+        <MainMenu
+          continueLabel={
+            underway
+              ? `${scenario?.name ?? game.scenario} · turn ${game.turn}, ${PHASE_LABELS[game.phase].toLowerCase()}`
+              : null
+          }
+          onContinue={() => setScreen('battle')}
+          onNewBattle={() => {
+            setResultSeen(false)
+            setShowSetup(true)
+          }}
+          onRemotePlay={() => setShowOnline(true)}
+          onLibrary={() => setShowLibrary(true)}
+          onShipyard={() => setShowYard(true)}
+          onLoadFile={(text) => {
+            const error = loadGame(text)
+            if (error) window.alert(error)
+            else setScreen('battle')
+          }}
+        />
+        {modals}
+      </>
+    )
+  }
 
   return (
     <div className="app">
@@ -146,14 +227,7 @@ export function App() {
           </select>
         </label>
 
-        <button
-          onClick={() => {
-            setResultSeen(false)
-            setShowSetup(true)
-          }}
-        >
-          New battle
-        </button>
+        <button onClick={() => setScreen('menu')}>Menu</button>
         <button onClick={() => setShowLibrary(true)}>Ships</button>
         <button onClick={() => setShowYard(true)}>Shipyard</button>
         <button onClick={() => setShowOnline(true)}>Remote play</button>
@@ -175,8 +249,13 @@ export function App() {
             }}
           />
         </label>
-        <button className="primary" onClick={() => dispatch({ type: 'advance-phase' })}>
-          End phase
+        <button
+          className={`primary end-phase${armedSkip === phaseKey ? ' is-armed' : ''}`}
+          disabled={debt.required.length > 0}
+          title={debt.required.length > 0 ? debt.required.join('\n') : undefined}
+          onClick={endPhase}
+        >
+          {armedSkip === phaseKey ? 'End phase anyway' : 'End phase'}
         </button>
       </header>
 
@@ -213,6 +292,8 @@ export function App() {
 
         <aside className="app-side">
           <ReplayBar onPreview={setPreviewing} />
+
+          <PhaseDebtNotice debt={debt} armed={armedSkip === phaseKey} />
 
           {previewing ? (
             <div className="panel">
@@ -378,10 +459,7 @@ export function App() {
         </aside>
       </main>
 
-      {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
-      {showSetup ? <SetupPanel onClose={() => setShowSetup(false)} /> : null}
-      {showLibrary ? <ShipLibrary onClose={() => setShowLibrary(false)} /> : null}
-      {showYard ? <Shipyard onClose={() => setShowYard(false)} /> : null}
+      {modals}
       {end.over && scenario && !resultSeen ? (
         <BattleResult
           game={game}
@@ -390,6 +468,35 @@ export function App() {
           onClose={() => setResultSeen(true)}
         />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * What the phase still owes, in the rules' own words (2.6).
+ *
+ * Shown rather than only refused: a disabled End phase button with no
+ * explanation is a locked door, and the whole point of gating the sequence is
+ * that a player in an online match knows what the other console is waiting
+ * on.
+ */
+function PhaseDebtNotice({ debt, armed }: { debt: PhaseDebt; armed: boolean }) {
+  if (debt.required.length === 0 && debt.optional.length === 0) return null
+  const required = debt.required.length > 0
+  return (
+    <div className={`phase-debt ${required ? 'is-required' : 'is-optional'}`}>
+      <h4>
+        {required
+          ? 'Before the phase can end'
+          : armed
+            ? 'End phase anyway will skip'
+            : 'Still to do, if you mean to'}
+      </h4>
+      <ul>
+        {(required ? debt.required : debt.optional).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -590,13 +697,43 @@ function PhaseControls({
           ship.reentryTurn !== null &&
           game.turn >= ship.reentryTurn,
       )
+      const unordered = shipsAwaitingOrders(game).filter(
+        (ship) => viewingSide === null || ship.side === viewingSide,
+      )
+      // 3.5: "no change" is an order too, and the commonest one. Written as a
+      // plotted acceleration of nothing, which is what a blank sheet means.
+      const holdCourse = (shipId: string) =>
+        optional(game).movementSystem === 'vector'
+          ? dispatch({ type: 'plot-vector-orders', shipId, orders: [] })
+          : dispatch({ type: 'plot-accel', shipId, accel: 0 })
       return (
         <div className="panel">
           <h3>Phase 1 · Write orders</h3>
           <p style={{ color: 'var(--ink-dim)' }}>
             Every ship gets a course change and a thrust order, written before anything moves.
-            Select a ship on the plot.
+            Select a ship on the plot. The phase cannot end until every ship has one — holding
+            course is an order too.
           </p>
+          {unordered.length > 0 ? (
+            <div className="panel-block">
+              {unordered.map((ship) => (
+                <div className="panel-row" key={ship.id}>
+                  {/* Named in the side's colour: on an open table both fleets
+                      can have a "Heavy Cruiser 1", and the colour is what
+                      tells a hot-seat player whose it is. */}
+                  <span style={{ color: `var(--side-${ship.side})` }}>{ship.name}</span>
+                  <span className="spacer" />
+                  <span style={{ color: 'var(--ink-faint)' }}>no orders</span>
+                  <button onClick={() => holdCourse(ship.id)}>Hold course</button>
+                </div>
+              ))}
+              {unordered.length > 1 ? (
+                <button onClick={() => unordered.forEach((ship) => holdCourse(ship.id))}>
+                  Hold course, all {unordered.length}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {due.map((ship) => (
             <div className="panel-row" key={ship.id}>
               <span>{ship.name}</span>

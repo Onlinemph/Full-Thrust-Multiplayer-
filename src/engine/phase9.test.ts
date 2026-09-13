@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   antiShipPdMounts,
   applyAction,
+  endPhase,
   pointDefenceCanEngage,
   setRulesReading,
   stealthLevelOf,
@@ -35,7 +36,7 @@ import type { Phase, ShipDesign } from './types'
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function ship(
@@ -410,7 +411,7 @@ describe("the stealth ship's scan mode (7.4)", () => {
     expect(shipOf(game, 'ghost').activeScan).toBe(true)
     const turn = game.turn
     let guard = 60
-    while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+    while (game.turn === turn && guard-- > 0) endPhase(game)
     expect(shipOf(game, 'ghost').activeScan).toBe(false)
   })
 

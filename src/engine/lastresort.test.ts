@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setRulesReading } from './actions'
+import {
+  applyAction,
+  endPhase,
+  setRulesReading,
+} from './actions'
 import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import { aiActions } from './ai'
 import {
@@ -30,13 +34,13 @@ import type { Phase, ShipDesign } from './types'
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function nextTurn(game: GameState): void {
   const turn = game.turn
   let guard = 60
-  while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.turn === turn && guard-- > 0) endPhase(game)
 }
 
 /** The Xxcha heavy cruiser: 8 and 4 boxes of regenerative armour. */
@@ -313,7 +317,7 @@ describe('a wreck with charges aboard (7.9)', () => {
     expect(shipOf(game, 'bomb').destroyed).toBe(true)
     expect(marked(shipOf(game, 'mark'))).toBe(0)
 
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(marked(shipOf(game, 'mark'))).toBeGreaterThan(0)
     expect(game.log.some((entry) => /the wreck goes up/.test(entry.text))).toBe(true)
   })
@@ -324,7 +328,7 @@ describe('a wreck with charges aboard (7.9)', () => {
     })
     advanceTo(game, 'ship-fire')
     markHullBoxes(shipOf(game, 'bomb'), shipOf(game, 'bomb').design.hullBoxes)
-    for (let i = 0; i < 8; i++) applyAction(game, { type: 'advance-phase' })
+    for (let i = 0; i < 8; i++) endPhase(game)
     expect(game.log.filter((entry) => /the wreck goes up/.test(entry.text))).toHaveLength(1)
   })
 })

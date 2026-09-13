@@ -142,6 +142,13 @@ describe('a console that has claimed a side', () => {
   })
 
   it('may still advance the shared sequence, which belongs to neither side', () => {
+    // Once the phase's work is done: 2.6 will not leave phase 1 with orders
+    // unwritten, and this console can only write its own — so the table
+    // writes everyone's first, then the side claims its fleet and steps on.
+    setMatchSide(null)
+    for (const ship of currentGame().ships) {
+      dispatch({ type: 'plot-accel', shipId: ship.id, accel: 0 })
+    }
     setMatchSide('a')
     expect(dispatch({ type: 'advance-phase' }).refused).toBeUndefined()
   })

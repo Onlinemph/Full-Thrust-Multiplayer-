@@ -1,0 +1,101 @@
+import { useEffect, useState } from 'react'
+
+import { CURRENT_RULES_VERSION } from '../data/savedGame'
+import { Starfield } from './Starfield'
+
+/**
+ * The front of the house.
+ *
+ * The app used to open straight onto a battle, which is fine for the person
+ * who built it and bewildering for anyone else: no way to tell whether the
+ * ships on the table are theirs, a saved game, or the default. A menu says
+ * what there is to do and whether a battle is waiting. Nothing here touches
+ * the game; every button hands off to something that already existed.
+ */
+export interface MainMenuProps {
+  /** A battle is under way and can be picked back up. */
+  continueLabel: string | null
+  onContinue: () => void
+  onNewBattle: () => void
+  onRemotePlay: () => void
+  onLibrary: () => void
+  onShipyard: () => void
+  onLoadFile: (text: string) => void
+}
+
+const MENU_TABLE = { width: 160, height: 100 }
+
+export function MainMenu({
+  continueLabel,
+  onContinue,
+  onNewBattle,
+  onRemotePlay,
+  onLibrary,
+  onShipyard,
+  onLoadFile,
+}: MainMenuProps) {
+  const [size, setSize] = useState({ width: 1280, height: 800 })
+  useEffect(() => {
+    const read = () => setSize({ width: window.innerWidth, height: window.innerHeight })
+    read()
+    window.addEventListener('resize', read)
+    return () => window.removeEventListener('resize', read)
+  }, [])
+
+  const scale = Math.max(size.width / MENU_TABLE.width, size.height / MENU_TABLE.height)
+
+  return (
+    <div className="menu">
+      <svg className="menu-sky" width={size.width} height={size.height} aria-hidden="true">
+        <Starfield
+          seed={0x46545043}
+          table={MENU_TABLE}
+          scale={scale}
+          originX={(size.width - MENU_TABLE.width * scale) / 2}
+          originY={(size.height - MENU_TABLE.height * scale) / 2}
+        />
+      </svg>
+
+      <div className="menu-card">
+        <p className="menu-kicker">Project Continuum</p>
+        <h1 className="menu-title">Full Thrust</h1>
+        <p className="menu-sub">
+          Fleet actions in deep space, fought by the book: written orders, a fifteen-phase turn,
+          threshold checks and all. Hot-seat on one screen or two browsers over a code.
+        </p>
+
+        <div className="menu-actions">
+          {continueLabel ? (
+            <button className="primary" onClick={onContinue}>
+              Continue <span className="menu-hint">{continueLabel}</span>
+            </button>
+          ) : null}
+          <button className={continueLabel ? undefined : 'primary'} onClick={onNewBattle}>
+            New battle
+          </button>
+          <button onClick={onRemotePlay}>Remote play</button>
+          <button onClick={onLibrary}>Ship library</button>
+          <button onClick={onShipyard}>Shipyard</button>
+          <label className="file-button menu-file">
+            Load a battle file
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={async (event) => {
+                const file = event.target.files?.[0]
+                if (!file) return
+                onLoadFile(await file.text())
+                event.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+
+        <p className="menu-foot">
+          Full Thrust: Project Continuum v1.1.4 · rules reading {CURRENT_RULES_VERSION} · no
+          server, no account; battles live in this browser and in the files you save.
+        </p>
+      </div>
+    </div>
+  )
+}

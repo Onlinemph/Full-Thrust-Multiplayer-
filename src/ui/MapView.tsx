@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   applyOrder,
@@ -29,6 +29,7 @@ import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
+import { Starfield } from './Starfield'
 import { dispatch } from './store'
 
 /**
@@ -142,9 +143,18 @@ export function MapView({
   const originX = (size.width - table.width * scale) / 2 + pan.x
   const originY = (size.height - table.height * scale) / 2 + pan.y
 
-  const onWheel = useCallback((event: React.WheelEvent) => {
-    event.preventDefault()
-    setZoom((z) => Math.min(6, Math.max(0.5, z * (event.deltaY < 0 ? 1.12 : 1 / 1.12))))
+  // Wheel zoom is attached natively rather than through React, because React
+  // registers wheel listeners as passive and a passive listener cannot stop the
+  // page scrolling under the table.
+  useEffect(() => {
+    const element = host.current
+    if (!element) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      setZoom((z) => Math.min(6, Math.max(0.5, z * (event.deltaY < 0 ? 1.12 : 1 / 1.12))))
+    }
+    element.addEventListener('wheel', onWheel, { passive: false })
+    return () => element.removeEventListener('wheel', onWheel)
   }, [])
 
   const onPointerDown = (event: React.PointerEvent) => {
@@ -367,7 +377,6 @@ export function MapView({
       className="plot"
       ref={host}
       style={{ ['--mu' as string]: `${scale}px` }}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -390,9 +399,25 @@ export function MapView({
             />
           </pattern>
         </defs>
+        <Starfield
+          seed={game.seed}
+          table={table}
+          scale={scale}
+          originX={originX}
+          originY={originY}
+        />
         <g transform={`translate(${originX} ${originY})`}>
           {/* The table, gridded at the beam range band, and its edge — which a
-              ship can cross to leave the battle (3.9). */}
+              ship can cross to leave the battle (3.9). A shade darker than the
+              sky and edged with a soft glow, so the playing area reads as a
+              surface with stars behind it. */}
+          <rect
+            className="table-surface"
+            x={0}
+            y={0}
+            width={table.width * scale}
+            height={table.height * scale}
+          />
           <rect
             className="plot-grid"
             x={0}
@@ -401,13 +426,18 @@ export function MapView({
             height={table.height * scale}
           />
           <rect
+            className="table-edge-glow"
             x={0}
             y={0}
             width={table.width * scale}
             height={table.height * scale}
-            fill="none"
-            stroke="var(--line)"
-            strokeWidth={1}
+          />
+          <rect
+            className="table-edge"
+            x={0}
+            y={0}
+            width={table.width * scale}
+            height={table.height * scale}
           />
 
           {/* 18.1's deployment zones, while there is still a ship to place.

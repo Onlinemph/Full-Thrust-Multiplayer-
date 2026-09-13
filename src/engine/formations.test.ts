@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setRulesReading } from './actions'
+import {
+  applyAction,
+  endPhase,
+  setRulesReading,
+} from './actions'
 import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import {
   createGame,
@@ -31,13 +35,13 @@ import type { Phase, ShipDesign } from './types'
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function nextTurn(game: GameState): void {
   const turn = game.turn
   let guard = 60
-  while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.turn === turn && guard-- > 0) endPhase(game)
 }
 
 function ship(
@@ -543,7 +547,7 @@ describe('a wreck with a shot-out charge (7.9)', () => {
     advanceTo(game, 'ship-fire')
     shipOf(game, 'bomb').destroyedSystems.add(charge.id)
     markHullBoxes(shipOf(game, 'bomb'), shipOf(game, 'bomb').design.hullBoxes)
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(game.log.some((entry) => /the wreck goes up/.test(entry.text))).toBe(true)
   })
 })

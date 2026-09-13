@@ -79,14 +79,27 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             ships". Three more dice at every threshold point on a table
  *             that plays with them, which only a design that named its own
  *             block ever rolled before.
+ *  15  2.6  — the sequence refuses to move on past a phase whose work is not
+ *             done: unwritten orders, unmoved ships, unrolled threshold
+ *             checks, unresolved point defence, ordnance, boarding, repairs
+ *             and breached cores. A refusal changes what the next action sees,
+ *             so an older journal that skipped a phase keeps skipping it.
  */
-export const CURRENT_RULES_VERSION = 14
+export const CURRENT_RULES_VERSION = 15
 
 export interface GameSetup {
   scenarioId: string
   seed: number
   /** Engine rules reading (see CURRENT_RULES_VERSION). Absent = 1. */
   rulesVersion?: number
+  /**
+   * How much bigger than the scenario wrote it the table is played at, with
+   * every written position scaled to match. 1 is the scenario's own table;
+   * absent, which is every battle saved before this existed, reads as 1. A
+   * new battle opens at 1.5 — a 6' × 4' board is a knife fight at Full
+   * Thrust's ranges, and the extra sea room is what makes manoeuvre matter.
+   */
+  tableScale?: number
 
   // ── Optional rules, each off unless the table agrees to it ──────────────
   /** 3.6 — emergency thrust, up to 150% of the drive rating at risk. */
@@ -231,6 +244,7 @@ export function buildGame(setup: GameSetup): GameState {
     forceIds: setup.forces,
     battleType: setup.battleType,
     fighterQuality: setup.fighterQuality,
+    tableScale: setup.tableScale,
   })
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay

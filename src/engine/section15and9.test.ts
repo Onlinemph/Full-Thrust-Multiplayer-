@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setRulesReading } from './actions'
+import {
+  applyAction,
+  endPhase,
+  setRulesReading,
+} from './actions'
 import {
   createGame,
   createShipState,
@@ -44,7 +48,7 @@ const READING_BEFORE = 12
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function design(name: string, weapons: WeaponDef[], systems: SystemKind[] = []): ShipDesign {

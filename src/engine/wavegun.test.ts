@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setRulesReading, waveGunCharge } from './actions'
+import {
+  applyAction,
+  endPhase,
+  setRulesReading,
+  waveGunCharge,
+} from './actions'
 import { aiActions } from './ai'
 import {
   createGame,
@@ -29,13 +34,13 @@ import type { Phase, ShipDesign } from './types'
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function nextTurn(game: GameState): void {
   const turn = game.turn
   let guard = 60
-  while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.turn === turn && guard-- > 0) endPhase(game)
 }
 
 function waveShip(id: string, side: string, at: { x: number; y: number }): ShipState {
@@ -373,7 +378,7 @@ describe('the backlash (7.24)', () => {
     // A needle beam is one of the two things 7.24 names, and the backlash is
     // swept at the next phase boundary whichever of the two did it.
     destroySystem(shipOf(game, 'wave'), GUN(game))
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(shipOf(game, 'wave').hullMarked).toBeGreaterThanOrEqual(charge)
     expect(game.log.some((entry) => /capacitors let go/.test(entry.text))).toBe(true)
     // And it only goes off once.
@@ -384,7 +389,7 @@ describe('the backlash (7.24)', () => {
     const game = battle()
     advanceTo(game, 'orders')
     destroySystem(shipOf(game, 'wave'), GUN(game))
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(shipOf(game, 'wave').hullMarked).toBe(0)
   })
 })

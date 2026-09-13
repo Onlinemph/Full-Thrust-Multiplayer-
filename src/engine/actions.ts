@@ -49,6 +49,9 @@ import {
   type ShipState,
   type SideId,
   type TableGate,
+  activeShips,
+  shipsAwaitingThreshold,
+  shotsLeft,
 } from './game'
 import {
   applyOrder,
@@ -351,6 +354,7 @@ import {
   reactorExplosionPhase,
   rollThresholdChecks,
   thresholdPhase,
+  isDerelict,
 } from './threshold'
 import {
   directFireKills,
@@ -410,6 +414,7 @@ import type {
   Point,
   SystemKind,
   TurnDirection,
+  WeaponClass,
   WeaponDef,
 } from './types'
 
@@ -1106,88 +1111,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.turn === 1 && owed.length > 0) {
         return refuse(`${owed.length} ships are still to be deployed (18.1)`)
       }
-      // 16.6 tests where a ship "ends up … at the end of the turn", and against
-      // a target that is itself under way that cannot be answered until both
-      // have moved. So the approach is settled as the movement phase closes,
-      // not as each ship arrives.
-      if (state.phase === 'move-ships') {
-        for (const ship of state.ships) resolveDockingApproach(state, ship)
-        // 6.9: a mine fires on the move that passed it, and "after a mine has
-        // detonated, remove its marker from the table at the end of the
-        // movement phase" — which is here.
-        resolveMines(state)
+      // 2.6 is a sequence, not a suggestion: a phase whose work is not done
+      // does not end. Refused here, at the boundary, so that a console in an
+      // online match cannot walk the shared sequence past the other player's
+      // unmoved ships. Gated on the reading, because an older journal was
+      // free to skip and must replay as it was played.
+      if (rulesReading(state) >= 15) {
+        const debt = phaseDebt(state)
+        if (debt.required.length > 0) return refuse(debt.required[0])
       }
-      // 5.16's Blast Markers answer the same question the mines do, but one
-      // phase later: a fighter has a secondary move (phase 6) as well as a
-      // main one, and a barrage that burned out before it would let a wing
-      // fly straight through the shrapnel on the second leg. Ships have
-      // finished moving by here, so their endpoint is settled either way.
-      if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
-      // 7.9: a wreck with charges still aboard "explodes at the end of the
-      // phase in which it was destroyed, at full strength" — whichever phase
-      // that was, which is what a boundary sweep means. Gated with the rest of
-      // 7.9: the blast rolls dice, and it rolls them at a boundary every
-      // battle walks.
-      if (rulesReading(state) >= 9) sweepWreckedCharges(state)
-      // 7.24: a Wave Gun knocked out with its capacitors up puts the charge
-      // through its own hull. Swept at the boundary for the same reason the
-      // debris is: the rule names a threshold roll and a needle beam, and
-      // those reach `destroyedSystems` by different routes. Zeroing the
-      // charge makes the sweep idempotent.
-      for (const ship of state.ships) waveGunBacklash(state, ship)
-      // 5.14: an overload loaded and not fired is ejected by the crew, and
-      // "counts as having fired" — so it is spent either way and next turn's
-      // order is refused. Swept at the boundary with the rest.
-      ejectUnfiredOverloads(state)
-      // 7.20 – 7.22: a cloak crossed off the SSD stops being a cloak. Same
-      // boundary, same reasoning as the Wave Gun above, and gated with the
-      // rest of reading 11 because a cloak that comes down changes the DRM
-      // on every shot at the hull, re-rolls included.
-      if (rulesReading(state) >= 11) {
-        for (const ship of state.ships) cloakBoxSweep(state, ship)
-      }
-      // 17.5: a hull that has just been overkilled may come apart. Swept at the
-      // boundary so that every way of dying reaches it, rather than at the
-      // seven separate places a ship can be destroyed.
-      sweepDebris(state)
-      // 7.23: the arming is spent "for that turn" whether or not the shot came,
-      // so it is swept as the turn ends and not as the firing phase closes — a
-      // hull whose screens came back on in phase 12 would have paid for
-      // nothing.
-      if (state.phase === state.phases[state.phases.length - 1]) {
-        closeNovaArming(state)
-        // 16.3 counts "complete turns" of a held match, and the counter it
-        // reads is cleared at the turn boundary — so the link is advanced
-        // here, on this side of it.
-        closeTowLinks(state)
-        // Both of these throw dice at a boundary every battle walks, so both
-        // are gated: nine roster designs carry regenerative armour and two
-        // carry a charge, and an older journal drew neither.
-        if (rulesReading(state) >= 9) {
-          // 7.9: "if the Antimatter Suicide Charge is not repaired by the end
-          // of the turn roll a die." Phase 14's damage control has already had
-          // its chance by here.
-          rollDamagedCharges(state)
-          // 7.8: "during the End Phase roll a d6 for each point of
-          // Regenerative Armor that has been damaged." 2.6 has no End Phase,
-          // so this is it.
-          regenerateArmourAcrossFleet(state)
-        }
-      }
-      const turnBefore = state.turn
-      advancePhase(state)
-      // 7.23: "On the next turn, at the start of the firing phase, the 2 MU
-      // template is replaced by a 4 MU one." The sweep left standing last turn
-      // moves before anybody shoots.
-      if (state.phase === 'ship-fire') openNovaSweeps(state)
-      // 7.9: "at the beginning of phase 13 just before threshold checks are
-      // rolled, the ship explodes."
-      if (state.phase === 'threshold') openOrderedDetonations(state)
-      if (state.phase === 'move-ships') driftDebris(state)
-      // 17.3 dices "for each turn", so the star gets its roll as the turn
-      // opens — before anyone writes an order they might have written
-      // differently with a FireCon still on the board.
-      if (state.turn !== turnBefore) rollSolarFlares(state)
+      endPhase(state)
       return OK
     }
 
@@ -3311,6 +3244,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'ordnance-vs-ships') {
         return refuse('Ordnance attacks in phase 10')
       }
+      state.resolved['ordnance-vs-ships'] = state.turn
       // 11.7: a marker cannot acquire an attached rider any more than a gun
       // can be aimed at one — the Mothership is the only hull out there.
       const alive = state.ships.filter(
@@ -3453,6 +3387,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
     case 'resolve-point-defence': {
       if (state.phase !== 'point-defence') return refuse('Point defence is phase 9')
+      state.resolved['point-defence'] = state.turn
       // 6.8's bolts are shot at in this phase too, and by mounts that may have
       // nothing else to fire at — so they are resolved whether or not there is
       // a missile marker on the table.
@@ -3681,6 +3616,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
     case 'resolve-damage-control': {
       if (state.phase !== 'damage-control') return refuse('Repairs are made in phase 14')
+      state.resolved['damage-control'] = state.turn
       damageControlPhase(state)
       return OK
     }
@@ -3689,6 +3625,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (state.phase !== 'reactor-explosions') {
         return refuse('A breached core is rolled for in phase 15')
       }
+      state.resolved['reactor-explosions'] = state.turn
       for (const result of reactorExplosionPhase(state)) {
         // 10.3's optional Reactor Breach: the blast is reported by the phase
         // and applied here, because how it meets armour and screens belongs to
@@ -3748,6 +3685,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     // ── Boarding (phase 12) ───────────────────────────────────────────────
     case 'resolve-boarding': {
       if (state.phase !== BOARDING_PHASE) return refuse('Boarding is resolved in phase 12')
+      state.resolved.boarding = state.turn
       for (const ship of state.ships) {
         if (ship.destroyed) continue
         // 12.7: "If a ship jumps away into FTL with enemy boarders on board,
@@ -11260,6 +11198,318 @@ function readySides(state: GameState): Record<SideId, boolean> {
     READY.set(state, map)
   }
   return map
+}
+
+/**
+ * What still has to happen before the current phase can end (2.6).
+ *
+ * Two lists, because the sequence has two kinds of step. Some a phase cannot
+ * go on without — every ship moves in phase 5, every crossed row is rolled in
+ * phase 13, ordnance in flight attacks in phase 10 — and `advance-phase`
+ * refuses while any of these stands. Others are a player's to leave undone —
+ * nobody has to fire — but a console that ends phase 11 with six ships loaded
+ * and silent almost certainly did not mean to, so those are named too and the
+ * console asks before it goes on.
+ *
+ * Every line names the rule, because the refusal it becomes is shown to the
+ * player as it stands.
+ */
+export interface PhaseDebt {
+  required: string[]
+  optional: string[]
+}
+
+const ORDNANCE_CLASSES: ReadonlySet<WeaponClass> = new Set<WeaponClass>([
+  'heavy-missile',
+  'salvo-missile-rack',
+  'salvo-missile-launcher',
+  'antimatter-missile',
+  'plasma-bolt-launcher',
+])
+
+function few(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+function named(ships: readonly { name: string }[]): string {
+  const names = ships.slice(0, 4).map((ship) => ship.name)
+  return ships.length > 4 ? `${names.join(', ')} and ${ships.length - 4} more` : names.join(', ')
+}
+
+/**
+ * Ships that still owe a movement order this turn (3.5).
+ *
+ * Only ships an order would reach: a prize takes none (12.7), a rider is
+ * carried (11.7), a hull on the line is dragged (16.3), a derelict has nobody
+ * to write one (10.3), a ship already committed to a jump holds its course
+ * (11.4), and a spinal mount or an armed Nova Cannon locks the helm (5.23,
+ * 7.23). A ship in orbit takes only a throttle and is not counted either.
+ */
+export function shipsAwaitingOrders(state: GameState): ShipState[] {
+  return state.ships.filter((ship) => {
+    if (ship.destroyed || ship.offTable || ship.captured || ship.carriedBy !== null) return false
+    if (state.deployment && !state.deployment.placed.includes(ship.id)) return false
+    if (!canManoeuvre(ship.dock)) return false
+    if (isDerelict(ship)) return false
+    if (ship.tow?.linked) return false
+    if (ship.ftlWarmupTurn !== null) return false
+    if (ship.orbit) return false
+    if (spinalLockout(ship, state.turn) || novaPoweredDown(state, ship)) return false
+    return ship.order === null && ship.vectorOrders === null
+  })
+}
+
+/**
+ * Ships that have not flown their move this turn (3.1).
+ *
+ * `lastKnown` is stamped with the turn as a ship moves, and a hull on a tow
+ * line is stamped when its tug goes, so the tug is the one listed.
+ */
+export function shipsAwaitingMovement(state: GameState): ShipState[] {
+  return activeShips(state).filter(
+    (ship) =>
+      !ship.captured &&
+      ship.carriedBy === null &&
+      !ship.tow?.linked &&
+      ship.lastKnown?.turn !== state.turn,
+  )
+}
+
+export function phaseDebt(state: GameState): PhaseDebt {
+  const required: string[] = []
+  const optional: string[] = []
+  const done = (phase: Phase): boolean => state.resolved[phase] === state.turn
+
+  switch (state.phase) {
+    case 'orders': {
+      const owed = shipsAwaitingOrders(state)
+      if (owed.length > 0) {
+        required.push(`${few(owed.length, 'ship')} still to write orders (3.5): ${named(owed)}`)
+      }
+      break
+    }
+    case 'move-ships': {
+      const inbound = shipsAwaitingFtlEntry(state)
+      if (inbound.length > 0) {
+        required.push(
+          `${few(inbound.length, 'ship')} inbound from FTL and not yet dropped out (11.5): ${named(inbound)}`,
+        )
+      }
+      const unmoved = shipsAwaitingMovement(state)
+      if (unmoved.length > 0) {
+        required.push(`${few(unmoved.length, 'ship')} not yet moved (3.1): ${named(unmoved)}`)
+      }
+      break
+    }
+    case 'launch-missiles': {
+      const loaded = activeShips(state).filter((ship) =>
+        ship.design.weapons.some(
+          (weapon) =>
+            ORDNANCE_CLASSES.has(weapon.weaponClass) &&
+            !ship.destroyedSystems.has(weapon.id) &&
+            !ship.weaponsFired.has(weapon.id) &&
+            (weapon.ammo === undefined || shotsLeft(ship, weapon.id) > 0),
+        ),
+      )
+      if (loaded.length > 0) {
+        optional.push(`${few(loaded.length, 'ship')} could still launch ordnance (6.1): ${named(loaded)}`)
+      }
+      break
+    }
+    case 'move-fighters':
+    case 'secondary-fighter-moves': {
+      const secondary = state.phase === 'secondary-fighter-moves'
+      const still = state.fighterGroups.filter(
+        (group) =>
+          group.status === 'in-flight' &&
+          group.strength > 0 &&
+          !(secondary ? group.secondaryMovedThisTurn : group.movedThisTurn),
+      )
+      if (still.length > 0) {
+        optional.push(`${few(still.length, 'fighter group')} not yet moved (8.5): ${named(still.map((g) => ({ name: g.label })))}`)
+      }
+      break
+    }
+    case 'point-defence': {
+      const incoming = ordnanceOf(state).filter((marker) => marker.missiles > 0)
+      if (incoming.length > 0 && !done('point-defence')) {
+        required.push(
+          `Point defence has not been resolved against the ${few(incoming.length, 'marker')} in flight (7.10)`,
+        )
+      }
+      break
+    }
+    case 'ordnance-vs-ships': {
+      const incoming = ordnanceOf(state).filter((marker) => marker.missiles > 0)
+      if (incoming.length > 0 && !done('ordnance-vs-ships')) {
+        required.push(`The ${few(incoming.length, 'marker')} in flight have not attacked yet (6.3)`)
+      }
+      break
+    }
+    case 'ship-fire': {
+      const silent = activeShips(state).filter(
+        (ship) =>
+          !ship.hasFiredThisTurn &&
+          !ship.captured &&
+          ship.design.weapons.some(
+            (weapon) => !ship.destroyedSystems.has(weapon.id) && !ship.weaponsFired.has(weapon.id),
+          ),
+      )
+      if (silent.length > 0) {
+        optional.push(`${few(silent.length, 'ship')} have not fired (4.1): ${named(silent)}`)
+      }
+      break
+    }
+    case 'boarding': {
+      const fought = state.ships.filter(
+        (ship) => !ship.destroyed && boardingContinues(ship.side, ship.boarders, ship.captured),
+      )
+      if (fought.length > 0 && !done('boarding')) {
+        required.push(
+          `Boarding actions aboard ${few(fought.length, 'ship')} have not been resolved (12.7): ${named(fought)}`,
+        )
+      }
+      break
+    }
+    case 'threshold': {
+      const owing = shipsAwaitingThreshold(state)
+      if (owing.length > 0) {
+        required.push(`${few(owing.length, 'ship')} owe a threshold check (4.11): ${named(owing)}`)
+      }
+      break
+    }
+    case 'damage-control': {
+      const assigned = activeShips(state).filter((ship) => ship.damageControl.length > 0)
+      if (assigned.length > 0 && !done('damage-control')) {
+        required.push(
+          `Repair parties are assigned aboard ${few(assigned.length, 'ship')} and the repairs have not been rolled (10.4)`,
+        )
+      } else {
+        const idle = activeShips(state).filter(
+          (ship) =>
+            ship.damageControl.length === 0 &&
+            ship.destroyedSystems.size > 0 &&
+            availableDamageControlParties(ship) > 0,
+        )
+        if (idle.length > 0) {
+          optional.push(
+            `${few(idle.length, 'ship')} have damage and parties standing by (10.4): ${named(idle)}`,
+          )
+        }
+      }
+      break
+    }
+    case 'reactor-explosions': {
+      const breached = state.ships.filter(
+        (ship) => !ship.destroyed && ship.core.reactorExplosionPending,
+      )
+      if (breached.length > 0 && !done('reactor-explosions')) {
+        required.push(
+          `${few(breached.length, 'breached core')} not yet rolled for (10.3): ${named(breached)}`,
+        )
+      }
+      break
+    }
+    default:
+      break
+  }
+
+  return { required, optional }
+}
+
+/**
+ * Close the current phase and open the next (2.6).
+ *
+ * Everything the boundary does — mines detonating as movement ends, flak
+ * burning out, wrecked charges going off, the turn's end-of-turn dice — and
+ * then the step itself. `advance-phase` is this behind its guards: nothing
+ * still owed, and the table not still deploying. Exported for tests that
+ * need to walk the sequence without playing every phase of it; the action is
+ * the only door a player or a peer console has.
+ */
+export function endPhase(state: GameState): void {
+  // 16.6 tests where a ship "ends up … at the end of the turn", and against
+  // a target that is itself under way that cannot be answered until both
+  // have moved. So the approach is settled as the movement phase closes,
+  // not as each ship arrives.
+  if (state.phase === 'move-ships') {
+    for (const ship of state.ships) resolveDockingApproach(state, ship)
+    // 6.9: a mine fires on the move that passed it, and "after a mine has
+    // detonated, remove its marker from the table at the end of the
+    // movement phase" — which is here.
+    resolveMines(state)
+  }
+  // 5.16's Blast Markers answer the same question the mines do, but one
+  // phase later: a fighter has a secondary move (phase 6) as well as a
+  // main one, and a barrage that burned out before it would let a wing
+  // fly straight through the shrapnel on the second leg. Ships have
+  // finished moving by here, so their endpoint is settled either way.
+  if (state.phase === 'secondary-fighter-moves') resolveFlak(state)
+  // 7.9: a wreck with charges still aboard "explodes at the end of the
+  // phase in which it was destroyed, at full strength" — whichever phase
+  // that was, which is what a boundary sweep means. Gated with the rest of
+  // 7.9: the blast rolls dice, and it rolls them at a boundary every
+  // battle walks.
+  if (rulesReading(state) >= 9) sweepWreckedCharges(state)
+  // 7.24: a Wave Gun knocked out with its capacitors up puts the charge
+  // through its own hull. Swept at the boundary for the same reason the
+  // debris is: the rule names a threshold roll and a needle beam, and
+  // those reach `destroyedSystems` by different routes. Zeroing the
+  // charge makes the sweep idempotent.
+  for (const ship of state.ships) waveGunBacklash(state, ship)
+  // 5.14: an overload loaded and not fired is ejected by the crew, and
+  // "counts as having fired" — so it is spent either way and next turn's
+  // order is refused. Swept at the boundary with the rest.
+  ejectUnfiredOverloads(state)
+  // 7.20 – 7.22: a cloak crossed off the SSD stops being a cloak. Same
+  // boundary, same reasoning as the Wave Gun above, and gated with the
+  // rest of reading 11 because a cloak that comes down changes the DRM
+  // on every shot at the hull, re-rolls included.
+  if (rulesReading(state) >= 11) {
+    for (const ship of state.ships) cloakBoxSweep(state, ship)
+  }
+  // 17.5: a hull that has just been overkilled may come apart. Swept at the
+  // boundary so that every way of dying reaches it, rather than at the
+  // seven separate places a ship can be destroyed.
+  sweepDebris(state)
+  // 7.23: the arming is spent "for that turn" whether or not the shot came,
+  // so it is swept as the turn ends and not as the firing phase closes — a
+  // hull whose screens came back on in phase 12 would have paid for
+  // nothing.
+  if (state.phase === state.phases[state.phases.length - 1]) {
+    closeNovaArming(state)
+    // 16.3 counts "complete turns" of a held match, and the counter it
+    // reads is cleared at the turn boundary — so the link is advanced
+    // here, on this side of it.
+    closeTowLinks(state)
+    // Both of these throw dice at a boundary every battle walks, so both
+    // are gated: nine roster designs carry regenerative armour and two
+    // carry a charge, and an older journal drew neither.
+    if (rulesReading(state) >= 9) {
+      // 7.9: "if the Antimatter Suicide Charge is not repaired by the end
+      // of the turn roll a die." Phase 14's damage control has already had
+      // its chance by here.
+      rollDamagedCharges(state)
+      // 7.8: "during the End Phase roll a d6 for each point of
+      // Regenerative Armor that has been damaged." 2.6 has no End Phase,
+      // so this is it.
+      regenerateArmourAcrossFleet(state)
+    }
+  }
+  const turnBefore = state.turn
+  advancePhase(state)
+  // 7.23: "On the next turn, at the start of the firing phase, the 2 MU
+  // template is replaced by a 4 MU one." The sweep left standing last turn
+  // moves before anybody shoots.
+  if (state.phase === 'ship-fire') openNovaSweeps(state)
+  // 7.9: "at the beginning of phase 13 just before threshold checks are
+  // rolled, the ship explodes."
+  if (state.phase === 'threshold') openOrderedDetonations(state)
+  if (state.phase === 'move-ships') driftDebris(state)
+  // 17.3 dices "for each turn", so the star gets its roll as the turn
+  // opens — before anyone writes an order they might have written
+  // differently with a FireCon still on the board.
+  if (state.turn !== turnBefore) rollSolarFlares(state)
 }
 
 export function sidesAwaited(state: GameState): SideId[] {

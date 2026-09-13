@@ -204,3 +204,141 @@
     transform: translateY(-4px);
   }
 }
+
+/* ── The menu ─────────────────────────────────────────────────────────────── */
+
+.menu {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--void);
+  display: grid;
+  place-items: center;
+  padding: var(--gap-3);
+}
+
+.menu-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.menu-card {
+  position: relative;
+  width: min(30rem, 100%);
+  padding: var(--gap-3);
+  background: rgba(11, 16, 28, 0.82);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.menu-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--side-a);
+}
+
+.menu-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.menu-sub {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+}
+
+.menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.menu-actions button,
+.menu-actions .file-button {
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.9rem;
+  font-size: var(--text-md);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
+.menu-hint {
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.menu-foot {
+  margin: var(--gap) 0 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+/* ── What the phase still owes ────────────────────────────────────────────── */
+
+/* The list of things that stop the phase ending, or that a player probably
+   did not mean to leave. Red is the rule refusing; amber is the console asking. */
+.phase-debt {
+  margin: 0;
+  padding: var(--gap);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.phase-debt.is-required {
+  border-left-color: var(--damage);
+}
+
+.phase-debt.is-optional {
+  border-left-color: var(--warn);
+}
+
+.phase-debt h4 {
+  margin: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.phase-debt ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink);
+}
+
+.phase-debt.is-required ul {
+  color: var(--damage);
+}
+
+/* Ending a phase with something optional left undone takes two clicks, and
+   the button says what the second one will do. */
+button.end-phase.is-armed {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: var(--on-bright);
+}

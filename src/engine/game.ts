@@ -988,6 +988,13 @@ export interface GameState {
   initiative: InitiativeState | null
   /** 18.1's deployment, or null for a scenario that writes its own positions. */
   deployment: DeploymentState | null
+  /**
+   * The turn on which each of the phases that are resolved as a whole — point
+   * defence, ordnance attacks, boarding, repairs, breached cores — was last
+   * resolved. What lets the sequence refuse to move on past a phase whose one
+   * sweep nobody ran (2.6), and reconstructed from the journal like the rest.
+   */
+  resolved: Partial<Record<Phase, number>>
   log: LogEntry[]
 }
 
@@ -1055,6 +1062,7 @@ export function createGame(opts: GameOptions): GameState {
     terrain: opts.terrain ?? [],
     gates: opts.gates ?? [],
     initiative: null,
+    resolved: {},
     deployment: opts.deployment ?? null,
     log: [],
   }

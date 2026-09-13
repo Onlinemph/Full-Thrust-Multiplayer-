@@ -581,6 +581,20 @@ export function aiActions(
           actions.push({ type: 'plot-accel', shipId: ship.id, accel: best.order.accel })
         }
       }
+      // 2.6 will not leave phase 1 while a ship has no order, and the loop
+      // above has several ways of saying nothing about a ship — a carrier
+      // holding station to launch, a ship in orbit, a plan that came out as
+      // "straight on". Every one of those is an order to hold course, so it
+      // is written down as one, and the phase can end.
+      for (const ship of mine) {
+        if (ship.order !== null) continue
+        const spoken = actions.some(
+          (action) =>
+            (action.type === 'plot-turn' || action.type === 'plot-accel') &&
+            action.shipId === ship.id,
+        )
+        if (!spoken) actions.push({ type: 'plot-accel', shipId: ship.id, accel: 0 })
+      }
       break
 
     case 'launch-missiles':

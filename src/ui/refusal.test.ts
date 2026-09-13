@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clearRefusal, dispatch, readRefusal } from './store'
+import { clearRefusal, currentGame, dispatch, readRefusal } from './store'
 
 /**
  * The refusal the engine already writes, reaching a player (2.6 and the rest).
@@ -20,7 +20,8 @@ describe('a refused order says why', () => {
     expect(readRefusal()?.text).toBe(refused.refused)
 
     // An order that lands takes the notice down.
-    dispatch({ type: 'advance-phase' })
+    const ship = currentGame().ships[0]
+    dispatch({ type: 'plot-accel', shipId: ship.id, accel: 0 })
     expect(readRefusal()).toBeNull()
   })
 

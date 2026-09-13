@@ -41,6 +41,9 @@ const DEFAULT_SETUP: GameSetup = {
   // 10.3 calls them "optional but recommended" and every SSD in the book
   // prints the block, so a new table plays with them unless it says otherwise.
   coreSystems: true,
+  // A 6' × 4' board is a knife fight at these ranges; half again is where
+  // manoeuvre starts to matter. The scenario's own size is still on offer.
+  tableScale: 1.5,
 }
 
 let setup: GameSetup = DEFAULT_SETUP

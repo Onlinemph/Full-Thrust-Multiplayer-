@@ -204,7 +204,14 @@ const BANNABLE_LABELS: Record<(typeof BANNABLE)[number], string> = {
   'wave-gun': 'Wave gun (7.24)',
 }
 
-export function SetupPanel({ onClose }: { onClose: () => void }) {
+export function SetupPanel({
+  onClose,
+  onStarted,
+}: {
+  onClose: () => void
+  /** Called once a battle has actually been started from here. */
+  onStarted?: () => void
+}) {
   const [draft, setDraft] = useState<GameSetup>(() => ({ ...currentSetup() }))
 
   const toggle = (key: keyof GameSetup) =>
@@ -256,6 +263,34 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             The same seed and the same orders give the same battle, every time. Change it for a
             fresh roll of the dice; keep it to replay one.
           </p>
+
+          {/* The scenario writes a 6' × 4' table, which is a knife fight at
+              these ranges. Everything written on it — fleets, planets, gates —
+              scales with it, so a bigger table is the same battle with more
+              room to manoeuvre in, not a different one. */}
+          <label className="code-field">
+            Table
+            <select
+              aria-label="Table size"
+              value={String(draft.tableScale ?? 1)}
+              onChange={(event) =>
+                setDraft((d) => ({ ...d, tableScale: Number(event.target.value) }))
+              }
+            >
+              {(() => {
+                const table = scenarioById(draft.scenarioId)?.table ?? { width: 72, height: 48 }
+                return [
+                  { k: 1, label: 'As written' },
+                  { k: 1.5, label: 'Large' },
+                  { k: 2, label: 'Vast' },
+                ].map(({ k, label }) => (
+                  <option key={k} value={String(k)}>
+                    {label} — {Math.round(table.width * k)} × {Math.round(table.height * k)} MU
+                  </option>
+                ))
+              })()}
+            </select>
+          </label>
         </section>
 
         <section>
@@ -572,6 +607,7 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             onClick={() => {
               newGame(draft)
               onClose()
+              onStarted?.()
             }}
           >
             Start battle

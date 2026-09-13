@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, areaEcmLevelOf, setRulesReading, stealthLevelOf } from './actions'
+import {
+  applyAction,
+  areaEcmLevelOf,
+  endPhase,
+  setRulesReading,
+  stealthLevelOf,
+} from './actions'
 import {
   createGame,
   createShipState,
@@ -35,7 +41,7 @@ const READING_BEFORE = 10
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 /** A hull with one Beam-3, and whatever else the case needs. */
@@ -592,7 +598,7 @@ describe('a cloak that has taken damage (7.20 – 7.22)', () => {
     expect(cloakCapability(ghost.cloak!)).toBe('total')
 
     ghost.destroyedSystems.add('cloaking-field-1')
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(ghost.cloak!.boxesLost).toBe(1)
     expect(cloakCapability(ghost.cloak!)).toBe('partial')
     expect(game.log.some((line) => /runs as a standard cloak/.test(line.text))).toBe(true)
@@ -604,7 +610,7 @@ describe('a cloak that has taken damage (7.20 – 7.22)', () => {
     expect(cloakCapability(ghost.cloak!)).toBe('partial')
 
     ghost.destroyedSystems.add('cloaking-device-1')
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(cloakCapability(ghost.cloak!)).toBe('none')
     expect(game.log.some((line) => /cloak is knocked out/.test(line.text))).toBe(true)
   })
@@ -613,11 +619,11 @@ describe('a cloak that has taken damage (7.20 – 7.22)', () => {
     const game = cloakShip('cloaking-field')
     const ghost = shipOf(game, 'ghost')
     ghost.destroyedSystems.add('cloaking-field-1')
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     const after = ghost.cloak!.boxesLost
     const spoke = () => game.log.filter((line) => /cloak is/.test(line.text)).length
     const said = spoke()
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(ghost.cloak!.boxesLost).toBe(after)
     expect(spoke()).toBe(said)
   })
@@ -626,7 +632,7 @@ describe('a cloak that has taken damage (7.20 – 7.22)', () => {
     const game = cloakShip('cloaking-device', READING_BEFORE)
     const ghost = shipOf(game, 'ghost')
     ghost.destroyedSystems.add('cloaking-device-1')
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     expect(ghost.cloak!.boxesLost).toBe(0)
     expect(cloakCapability(ghost.cloak!)).toBe('partial')
   })

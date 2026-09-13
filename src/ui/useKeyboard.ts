@@ -21,6 +21,8 @@ export interface KeyboardOptions {
   onSelect: (shipId: string | null) => void
   /** Whether a modal is open — shortcuts stand down while one is. */
   suspended?: boolean
+  /** Ending the phase, with whatever asking the console does first. */
+  onEndPhase?: () => void
 }
 
 /** Ships this console may give orders to, in a stable order for cycling. */
@@ -28,7 +30,13 @@ function orderableShips(game: GameState): ShipState[] {
   return game.ships.filter((ship) => !ship.destroyed && !ship.offTable)
 }
 
-export function useKeyboard({ game, selectedId, onSelect, suspended }: KeyboardOptions): void {
+export function useKeyboard({
+  game,
+  selectedId,
+  onSelect,
+  suspended,
+  onEndPhase,
+}: KeyboardOptions): void {
   useEffect(() => {
     if (suspended) return
 
@@ -100,7 +108,10 @@ export function useKeyboard({ game, selectedId, onSelect, suspended }: KeyboardO
         case ' ':
         case 'Enter':
           event.preventDefault()
-          dispatch({ type: 'advance-phase' })
+          // Through the same door the button uses, so a phase with optional
+          // work left is asked about from the keyboard too.
+          if (onEndPhase) onEndPhase()
+          else dispatch({ type: 'advance-phase' })
           break
         case 'u':
           undo()
@@ -112,7 +123,7 @@ export function useKeyboard({ game, selectedId, onSelect, suspended }: KeyboardO
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [game, selectedId, onSelect, suspended])
+  }, [game, selectedId, onSelect, suspended, onEndPhase])
 }
 
 /** The bindings, for the help panel. Kept beside them so they cannot drift. */

@@ -23,6 +23,22 @@
   cursor: grabbing;
 }
 
+/* A vignette under the plot: the middle of the screen is where the battle is,
+   and the eye should be led there. It is a static gradient on the ground, not
+   a shape on the plot, so panning costs it nothing. */
+.plot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.55) 100%);
+  z-index: 1;
+}
+
+.plot svg {
+  z-index: 2;
+}
+
 /* The grid is scale, not decoration: one line every 12 MU, which is the beam
    range band (4.3), so a player can read distance off the table by eye. It is
    drawn inside the table rect rather than across the viewport, because a grid
@@ -43,6 +59,87 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+
+/* ── The sky ──────────────────────────────────────────────────────────────── */
+
+/* Stars are pixels, not MU: a star does not get bigger when the table does.
+   The far field is dimmer and pans less, which is the whole of what makes the
+   void read as deep. */
+.star {
+  fill: #eef2ff;
+}
+
+.star.is-far {
+  fill: #a3aec8;
+}
+
+.star.is-bright {
+  fill: #fff8e6;
+}
+
+.star.is-warm {
+  fill: #ffd9a8;
+}
+
+.star.is-cool {
+  fill: #b9d4ff;
+}
+
+.star-halo,
+.sky-band,
+.sky-wash {
+  pointer-events: none;
+}
+
+.star.is-twinkling {
+  animation-name: twinkle;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.nebula {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star.is-twinkling {
+    animation: none;
+  }
+}
+
+/* The table's edge: a crisp line, which is the rule (3.9), over a soft glow,
+   which is so the eye finds it against the stars. */
+.table-edge {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.table-edge-glow {
+  fill: none;
+  stroke: var(--side-a);
+  stroke-width: 8;
+  opacity: 0.18;
+  filter: blur(5px);
+}
+
+/* The table itself is a shade darker than the void around it, so the playing
+   area reads as a surface and the stars behind it as sky — but only a shade:
+   the sky has to stay visible through it, or the table is a black slab. */
+.table-surface {
+  fill: var(--void);
+  opacity: 0.28;
 }
 
 /* ── Counters ─────────────────────────────────────────────────────────────── */

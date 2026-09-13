@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, setOptionalRules, setRulesReading, weaponModeOf } from './actions'
+import {
+  applyAction,
+  endPhase,
+  setOptionalRules,
+  setRulesReading,
+  weaponModeOf,
+} from './actions'
 import { createGame, createShipState, type GameState, type ShipState } from './game'
 import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import type { Phase, ShipDesign, SystemKind, WeaponDef } from './types'
@@ -20,13 +26,13 @@ const READING_BEFORE = 11
 
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function nextTurn(game: GameState): void {
   const turn = game.turn
   let guard = 60
-  while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.turn === turn && guard-- > 0) endPhase(game)
 }
 
 function design(
@@ -567,7 +573,7 @@ describe('a minesweeper clearing a field (6.10)', () => {
     applyAction(game, { type: 'move-ship', shipId: 'sweeper' })
     // The mines resolve as the movement phase closes (6.9), so the sweep and
     // the detonation are compared on the same side of the boundary.
-    applyAction(game, { type: 'advance-phase' })
+    endPhase(game)
     return game
   }
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyAction, flakMarkers, setRulesReading, type GameAction } from './actions'
+import {
+  applyAction,
+  endPhase,
+  flakMarkers,
+  setRulesReading,
+  type GameAction,
+} from './actions'
 import { CURRENT_RULES_VERSION } from '../data/savedGame'
 import { aiActions } from './ai'
 import {
@@ -39,13 +45,13 @@ import type { Phase, ShipDesign } from './types'
  */
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
-  while (game.phase !== phase && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.phase !== phase && guard-- > 0) endPhase(game)
 }
 
 function nextTurn(game: GameState): void {
   const turn = game.turn
   let guard = 60
-  while (game.turn === turn && guard-- > 0) applyAction(game, { type: 'advance-phase' })
+  while (game.turn === turn && guard-- > 0) endPhase(game)
 }
 
 /**

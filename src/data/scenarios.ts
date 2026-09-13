@@ -859,7 +859,11 @@ function fighterTypeOf(id: string): FighterTypeId {
  * written for two fleets and `zonesFor` returns nothing for anything else,
  * which would otherwise leave a side with no zone to deploy into.
  */
-function deploymentFor(scenario: Scenario, opts: StartOptions): DeploymentState | null {
+function deploymentFor(
+  scenario: Scenario,
+  opts: StartOptions,
+  table: TableSize = scenario.table,
+): DeploymentState | null {
   const battleType =
     opts.battleType === 'none'
       ? undefined
@@ -868,7 +872,7 @@ function deploymentFor(scenario: Scenario, opts: StartOptions): DeploymentState 
   if (scenario.sides.length !== 2) return null
 
   const sides = scenario.sides.map((side) => side.id)
-  const zones = zonesFor(scenario.table, battleType, sides, {
+  const zones = zonesFor(table, battleType, sides, {
     half: scenario.deploymentHalf,
     defenderSideId: scenario.defenderSideId,
     ftlEntryPermitted: scenario.ftlEntryPermitted,
@@ -908,6 +912,13 @@ export interface StartOptions {
    * on and 8.18 rolls at the start of the game, not at the first attack.
    */
   fighterQuality?: boolean
+  /**
+   * Play the table bigger than the scenario wrote it, every written position
+   * scaled with it: the fleets start the same fraction of the way across a
+   * wider gulf, a planet sits where it sat relative to them. Radii — a
+   * planet's, a hyper limit's — are rules distances and do not scale.
+   */
+  tableScale?: number
 }
 
 /**
@@ -944,6 +955,10 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
   // follows and invalidate a saved battle that was fought without it.
   const quality = opts.fighterQuality ? { rng: new Rng(opts.seed ^ 0x818) } : undefined
 
+  const k = opts.tableScale !== undefined && opts.tableScale > 0 ? opts.tableScale : 1
+  const at = (point: Point): Point => ({ x: point.x * k, y: point.y * k })
+  const table = { width: scenario.table.width * k, height: scenario.table.height * k }
+
   const ships = scenario.sides.flatMap((side) => {
     const picked = opts.forceIds?.[side.id]
     const force =
@@ -960,7 +975,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
         id: `${side.id}-${entry.designId}-${index + 1}`,
         side: side.id,
         design,
-        placement: { position: entry.position, facing: entry.facing },
+        placement: { position: at(entry.position), facing: entry.facing },
         velocity: entry.velocity ?? 0,
         name: entry.name ?? `${design.name} ${n}`,
       })
@@ -970,7 +985,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
       // 11.5: an inbound hull is not on the table until it drops out, so it
       // starts off it with its arrival written down.
       if (entry.ftlArrival) {
-        ship.ftlArrival = { ...entry.ftlArrival }
+        ship.ftlArrival = { ...entry.ftlArrival, entryPoint: at(entry.ftlArrival.entryPoint) }
         ship.offTable = true
         ship.ftlTransit = 'entering'
       }
@@ -1022,9 +1037,11 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
 
   const game = createGame({
     seed: opts.seed,
-    table: { ...scenario.table },
-    deployment: deploymentFor(scenario, opts),
-    terrain: scenario.terrain ? scenario.terrain.map((f) => ({ ...f })) : undefined,
+    table,
+    deployment: deploymentFor(scenario, opts, table),
+    terrain: scenario.terrain
+      ? scenario.terrain.map((f) => ({ ...f, position: at(f.position) }))
+      : undefined,
     fighterGroups: ships.flatMap((ship) => embarkedFlights(ship, quality)),
     gunboatSquadrons: ships.flatMap(embarkedSquadrons),
     scenario: scenario.id,
@@ -1041,7 +1058,7 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
         throw new Error(`${scenario.id}: ${gate.def.id} — ${problems.join('; ')}`)
       }
       return {
-        def: { ...gate.def },
+        def: { ...gate.def, position: at(gate.def.position) },
         state: {
           hullMarked: 0,
           ftlFailed: false,
@@ -1057,6 +1074,12 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
   // 11.2's hyper limits describe the system the battle is fought in, so they
   // are stamped on here with the rest of the scenario rather than by whoever
   // happens to build the game.
-  setHyperLimit(game, scenario.hyperLimit)
+  setHyperLimit(
+    game,
+    scenario.hyperLimit && {
+      ...scenario.hyperLimit,
+      zones: scenario.hyperLimit.zones.map((zone) => ({ ...zone, centre: at(zone.centre) })),
+    },
+  )
   return game
 }
