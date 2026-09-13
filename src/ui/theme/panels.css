@@ -584,3 +584,10 @@
   flex: 1;
   min-width: 7rem;
 }
+
+/* 3.5's written order, typed rather than clicked. Monospaced because the
+   notation is a line of shorthand, not prose. */
+.order-entry {
+  width: 10em;
+  font-family: var(--mono, ui-monospace, monospace);
+}

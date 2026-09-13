@@ -60,14 +60,6 @@ export const BYSTANDER_DAMAGE_DICE = 2
 export const COURSE_GAUGE_POINTS = 12
 
 /**
- * How a ship is using its FTL drive this turn. The same three strings as
- * `game.ts`'s `FtlTransit`, so `ship.ftlTransit` passes straight into this
- * module; it is restated here rather than imported because `ftl.ts` sits below
- * `game.ts` in the dependency order.
- */
-export type FtlTransitPhase = 'none' | 'entering' | 'exiting'
-
-/**
  * A ship-sized or larger object, for the proximity tests of 11.4 and 11.5.
  * *"any other ship-sized or larger object, but not fighter groups or missile
  * salvos"* — the exclusion is why fighters and missiles are a separate list.

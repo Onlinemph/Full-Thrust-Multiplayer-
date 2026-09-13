@@ -57,11 +57,6 @@ export function rollD6(count: number, rng: Rng): number[] {
   return out
 }
 
-/** Sum of `count` dice — 3D6 missile damage and the like (6.5). */
-export function sumD6(count: number, rng: Rng): number {
-  return rollD6(count, rng).reduce((a, b) => a + b, 0)
-}
-
 // ---------------------------------------------------------------------------
 // The beam damage table (4.5, 4.7)
 // ---------------------------------------------------------------------------

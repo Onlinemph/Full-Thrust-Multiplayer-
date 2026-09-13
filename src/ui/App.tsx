@@ -52,6 +52,8 @@ import {
   loadGame,
   undo,
   useGame,
+  clearRefusal,
+  useRefusal,
 } from './store'
 
 /**
@@ -116,6 +118,7 @@ export function App() {
 
   return (
     <div className="app">
+      <RefusalNotice />
       <header className="app-bar">
         <h1>Full Thrust</h1>
         <span className="turn-readout num">
@@ -969,4 +972,26 @@ function download(text: string): void {
   link.download = 'full-thrust-battle.json'
   link.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * What the rules just said no to.
+ *
+ * `applyAction` answers every bad order with a sentence naming the rule that
+ * refused it, `dispatch` has always returned that sentence, and until now every
+ * caller in the UI threw it away — so a button that could not do what it said
+ * simply did nothing and the player was left guessing. One notice at the top of
+ * the screen catches all of them, because every click goes through `dispatch`.
+ */
+function RefusalNotice() {
+  const refusal = useRefusal()
+  if (!refusal) return null
+  return (
+    <div className="refusal-notice" role="status" key={refusal.seq}>
+      <span>{refusal.text}</span>
+      <button aria-label="Dismiss" onClick={() => clearRefusal()}>
+        ×
+      </button>
+    </div>
+  )
 }

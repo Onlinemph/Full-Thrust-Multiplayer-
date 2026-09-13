@@ -3,6 +3,14 @@ import { useMemo, useState } from 'react'
 import type { ShipDesign } from '../engine/types'
 import { scenarioById, type Scenario } from '../data/scenarios'
 import { allDesigns } from '../data/ships'
+
+/**
+ * The designs this repository ships as a fleet book (18.2).
+ *
+ * A hull built in the Shipyard is not one of them, which is what a tournament
+ * means by *"no modifications, changes in weapons, etc."*
+ */
+const ROSTER_DESIGN_IDS = new Set(allDesigns().map((design) => design.id))
 import {
   checkFleetTechBase,
   designProblems,
@@ -13,6 +21,8 @@ import type { TechBase } from '../engine/techbase'
 import { designCost, summariseFleet } from '../data/fleetList'
 import { describeFault, validateDesign } from '../data/designPricing'
 import {
+  checkTournamentList,
+  identicalForces,
   IDEAL_FLEET_POINTS_MAX,
   IDEAL_FLEET_POINTS_MIN,
   SMALLEST_INTERESTING_FLEET_POINTS,
@@ -119,6 +129,38 @@ export function FleetPicker({
         ((fault.kind === 'faction-prohibition' || fault.kind === 'faction-design') &&
           factionId !== undefined),
     )
+  const [tournament, setTournament] = useState(false)
+  // 18.2: "only designs given in the Full Thrust Fleet Books" — this roster is
+  // its own book, so what a tournament here can actually check is the second
+  // half of the sentence, "with no modifications, changes in weapons, etc.":
+  // a hull built in the Shipyard rather than taken off the shelf.
+  const tournamentReport = checkTournamentList(
+    picked.map((id, index) => {
+      const found = byId(designs, id)
+      return {
+        id: `${side}-${index}`,
+        designId: id,
+        mass: found?.mass ?? 0,
+        points: found ? designCost(found, cpv) : 0,
+        modified: !ROSTER_DESIGN_IDS.has(id),
+      }
+    }),
+  )
+  // "Even more limiting is a fixed, identical force" — the stricter option,
+  // reported rather than enforced because it is the table's choice.
+  const mirrored = identicalForces(
+    Object.entries(forces).map(([sideId, ids]) =>
+      (ids ?? []).map((id, index) => {
+        const found = byId(designs, id)
+        return {
+          id: `${sideId}-${index}`,
+          designId: id,
+          mass: found?.mass ?? 0,
+          points: found ? designCost(found, cpv) : 0,
+        }
+      }),
+    ),
+  )
   const techReport = checkFleetTechBase(
     techBase,
     picked.map((id) => byId(designs, id)).filter((d): d is ShipDesign => Boolean(d)),
@@ -165,6 +207,47 @@ export function FleetPicker({
           {SIZE_BAND_LABEL[summary.report.sizeBand]}
         </span>
       </div>
+
+      {/* 18.2's two tournament controls, which are a separate question from the
+          composition format: "only designs given in the Full Thrust Fleet
+          Books, with no modifications", and the stricter "a fixed, identical
+          force" every player flies. */}
+      <div className="panel-row">
+        <label>
+          <input
+            type="checkbox"
+            checked={tournament}
+            onChange={(event) => setTournament(event.target.checked)}
+          />{' '}
+          Tournament list (18.2)
+        </label>
+        <span className="spacer" />
+        {tournament ? (
+          <span style={{ color: tournamentReport.legal ? 'var(--screens)' : 'var(--warn)' }}>
+            {tournamentReport.legal
+              ? mirrored
+                ? 'legal, and both fleets are identical'
+                : 'legal; the fleets are not identical'
+              : `${tournamentReport.violations.length} entr${
+                  tournamentReport.violations.length === 1 ? 'y' : 'ies'
+                } a tournament would refuse`}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--ink-dim)' }}>
+            fleet-book designs only, and no modifications
+          </span>
+        )}
+      </div>
+
+      {tournament && tournamentReport.violations.length > 0 ? (
+        <ul className="faults">
+          {tournamentReport.violations.map((finding, i) => (
+            <li key={`t${i}`}>
+              <span className="rule-ref">{finding.rule}</span> {finding.detail}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <CompositionBar breakdown={summary.breakdown} />
 

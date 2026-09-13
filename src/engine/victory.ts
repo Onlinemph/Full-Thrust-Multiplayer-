@@ -12,7 +12,6 @@
  * a fleet can be beaten without a single hull being opened up.
  */
 
-import { hullRowBounds } from './combat'
 import { battleriderRecovery, carryingCapacity } from './ftl'
 import { cpvPoints } from './battles'
 import { currentThrust, hullRowsCompleted, type GameState, type ShipState } from './game'
@@ -206,12 +205,3 @@ export function scoreBattle(
   return { sides: perSide, winner: leaders.length === 1 ? leaders[0].side : null }
 }
 
-/**
- * How much of a hull's track is gone, as a fraction — for the SSD readout and
- * for a computer opponent deciding whether a target is worth more fire.
- */
-export function hullFraction(ship: ShipState): number {
-  const bounds = hullRowBounds(ship.design.hullBoxes, ship.design.hullRows)
-  const total = bounds[bounds.length - 1] ?? ship.design.hullBoxes
-  return total > 0 ? Math.min(1, ship.hullMarked / total) : 0
-}

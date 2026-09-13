@@ -240,9 +240,6 @@ export type CompositionFormat =
   | 'capital-escorted'
   | 'fleet-action'
 
-/** *"No more than 50% of the points"* (18.2), for both the cruiser and capital limits. */
-export const MAX_CLASS_SHARE = 0.5
-
 export interface CompositionLimits {
   format: CompositionFormat
   /**

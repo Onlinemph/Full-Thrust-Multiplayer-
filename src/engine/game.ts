@@ -22,8 +22,6 @@ import { capturedShipDestroyed } from './boarding'
 import {
   beginFighterTurn,
   type FighterGroup,
-  type FighterGroupStatus,
-  type FighterMission,
 } from './fighters'
 import { beginGunboatTurn, type GunboatSquadron } from './gunboats'
 import type { SquadronFormation } from './movement'
@@ -684,12 +682,6 @@ export function createShipState(opts: ShipStateOptions): ShipState {
 // ---------------------------------------------------------------------------
 // Fighter groups, ordnance markers and terrain
 // ---------------------------------------------------------------------------
-
-/** Where a fighter or gunboat group is in its life cycle (8.2, 8.13). */
-export type FighterStatus = FighterGroupStatus
-
-/** A group's standing orders for the turn (8.6). */
-export type FighterRole = FighterMission
 
 /**
  * A fighter or gunboat group in play (8, 9).
@@ -1480,11 +1472,6 @@ export function shipsAwaitingDeployment(state: GameState): ShipState[] {
   return state.ships.filter(
     (ship) => !placed.has(ship.id) && !ship.destroyed && !ship.offTable,
   )
-}
-
-/** Whether this ship has been put on the table by 18.1's procedure. */
-export function isDeployed(state: GameState, shipId: string): boolean {
-  return state.deployment?.placed.includes(shipId) ?? false
 }
 
 /** Ships in the order phase 5 moves them (2.6). */

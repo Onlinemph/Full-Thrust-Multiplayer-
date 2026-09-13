@@ -5,6 +5,7 @@ import {
   applyOrder,
   driveFromDef,
   formatOrder,
+  parseOrder,
   standardTurnAllowance,
   thrustBudget,
   validateOrder,
@@ -105,6 +106,8 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
   /* 7.20 makes the player commit to a number of turns before switching the
      cloak on, so the count has to be chosen first and is local to the form. */
   const [cloakTurns, setCloakTurns] = useState(3)
+  const [typed, setTyped] = useState('')
+  const [typedError, setTypedError] = useState<string | null>(null)
   const order = ship.order ?? BLANK
   const movement = movementStateOf(ship)
   const budget = thrustBudget(order, movement.drive)
@@ -189,6 +192,60 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
       <div className="order-notation" aria-live="polite">
         {orbitBody ? 'carried round the track (17.8)' : formatOrder(order, ship.velocity)}
       </div>
+
+      {/* 3.5's written order, typed rather than clicked. The notation is what a
+          Full Thrust player already knows — "8P2+4: 12" is a ship at velocity 8
+          turning two points to port, adding four thrust and ending at 12 — and
+          `parseOrder` has been able to read it since the module was written
+          without any way for a player to enter one. */}
+      {!orbitBody && editable ? (
+        <div className="panel-row">
+          <input
+            aria-label="Write the order"
+            className="order-entry"
+            placeholder="8P2+4: 12"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              const parsed = parseOrder(typed)
+              if (!parsed) {
+                setTypedError('Not an order: try 8P2+4: 12, or S1-2, or +3 ET')
+                return
+              }
+              setTypedError(null)
+              setTyped('')
+              // Clear whatever was plotted before writing the new line, so a
+              // typed order replaces the clicked one rather than adding to it.
+              dispatch({ type: 'plot-turn', shipId: ship.id, direction: 'port', points: 0 })
+              if (parsed.order.turn) {
+                dispatch({
+                  type: 'plot-turn',
+                  shipId: ship.id,
+                  direction: parsed.order.turn.direction,
+                  points: parsed.order.turn.points,
+                })
+              }
+              if (parsed.order.secondTurn) {
+                dispatch({
+                  type: 'plot-second-turn',
+                  shipId: ship.id,
+                  direction: parsed.order.secondTurn.direction,
+                  points: parsed.order.secondTurn.points,
+                })
+              }
+              dispatch({ type: 'plot-accel', shipId: ship.id, accel: parsed.order.accel })
+              if (parsed.order.emergencyThrust === true) {
+                dispatch({ type: 'plot-emergency-thrust', shipId: ship.id, on: true })
+              }
+            }}
+          />
+          <span className="spacer" />
+          <span style={{ color: typedError ? 'var(--warn)' : 'var(--ink-dim)' }}>
+            {typedError ?? 'write it as you would on paper, then Enter (3.5)'}
+          </span>
+        </div>
+      ) : null}
 
       {/* One pip per thrust point, filled as it is spent. The heavier edge is
           the half-rating mark: turning may use at most half the drive (3.2). */}

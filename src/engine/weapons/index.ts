@@ -36,11 +36,6 @@ export function specFor(weapon: WeaponDef): WeaponSpec | undefined {
   return WEAPON_SPECS[weapon.weaponClass]
 }
 
-/** Whether the engine can resolve this weapon's fire at all. */
-export function isImplemented(weapon: WeaponDef): boolean {
-  return specFor(weapon) !== undefined
-}
-
 /**
  * Resolve one mount's fire, or say why it did not.
  *

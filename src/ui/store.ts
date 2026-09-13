@@ -4,8 +4,6 @@ import {
   actionSide,
   applyAction,
   clearReady,
-  everyoneReady,
-  sidesAwaited,
   undoableInMatch,
   type ActionOutcome,
   type GameAction,
@@ -58,9 +56,6 @@ function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
-
-/** For components watching something other than the game itself. */
-export const subscribeStore = subscribe
 
 // ---------------------------------------------------------------------------
 // Persistence
@@ -233,16 +228,66 @@ export function dispatch(action: GameAction): ActionOutcome {
     // pass untouched. Sides the computer commands are driven from the creator's
     // console, which is the other exception.
     if (side !== null && side !== matchSide && !(setup.aiSides ?? []).includes(side)) {
-      return { refused: 'That fleet is not yours to command' }
+      const denied: ActionOutcome = { refused: 'That fleet is not yours to command' }
+      noteRefusal(denied)
+      emit()
+      return denied
     }
   }
 
   const outcome = applyJournaled(action)
+  // A refused action changes nothing, so there is nothing to send, nothing to
+  // save and no AI turn to run — but there is something to say.
+  noteRefusal(outcome)
+  if (outcome.refused === undefined) refusal = null
   net?.onAction(action, journal.length)
   runAi()
   autosave()
   emit()
   return outcome
+}
+
+// ---------------------------------------------------------------------------
+// Refusals
+// ---------------------------------------------------------------------------
+
+/**
+ * The last refusal, for the panel that shows it.
+ *
+ * `applyAction` has always answered a bad order with a sentence naming the rule
+ * that refused it — *"a short-range tube may not be fired overloaded (5.14)"* —
+ * and `dispatch` has always returned that sentence to a caller that threw it
+ * away. Every button in the UI dispatches, so catching it here rather than at
+ * a hundred call sites is what makes the whole engine's vocabulary reachable:
+ * a click that does nothing now says why.
+ *
+ * The counter is what makes two identical refusals in a row visible as two —
+ * a player who clicks the same dead button twice should see it flash twice.
+ */
+let refusal: { text: string; seq: number } | null = null
+let refusalSeq = 0
+
+function noteRefusal(outcome: ActionOutcome): void {
+  if (outcome.refused === undefined) return
+  refusalSeq += 1
+  refusal = { text: outcome.refused, seq: refusalSeq }
+}
+
+/** Take the notice down — the player has read it, or acted since. */
+export function clearRefusal(): void {
+  if (refusal === null) return
+  refusal = null
+  emit()
+}
+
+/** The current refusal, for a test or a component that is not a hook. */
+export function readRefusal(): { text: string; seq: number } | null {
+  return refusal
+}
+
+export function useRefusal(): { text: string; seq: number } | null {
+  useGameVersion()
+  return refusal
 }
 
 /**
@@ -366,11 +411,6 @@ export function currentGame(): GameState {
   return preview ?? game
 }
 
-/** The live battle, whatever the scrubber is showing. */
-export function liveGame(): GameState {
-  return game
-}
-
 export function currentSetup(): GameSetup {
   return setup
 }
@@ -413,18 +453,6 @@ export function stopPreview(): void {
   if (preview === null) return
   preview = null
   emit()
-}
-
-export function isPreviewing(): boolean {
-  return preview !== null
-}
-
-export function awaitingSides(): string[] {
-  return sidesAwaited(game)
-}
-
-export function phaseClosed(): boolean {
-  return everyoneReady(game)
 }
 
 /**

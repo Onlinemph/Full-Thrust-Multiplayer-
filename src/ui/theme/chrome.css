@@ -171,3 +171,36 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+
+/* ── What the rules refused ───────────────────────────────────────────────── */
+
+/* A refusal is information, not an error: the rulebook said no and named the
+   section. It sits above the bar rather than over the table, so it never
+   covers the thing the player was trying to click. */
+.refusal-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.35rem var(--gap-2);
+  border-bottom: 1px solid var(--warn);
+  background: var(--panel-2);
+  color: var(--warn);
+  font-size: var(--text-sm);
+  animation: refusal-in 140ms ease-out;
+}
+
+.refusal-notice button {
+  margin-left: auto;
+  padding: 0 0.4em;
+  border: none;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+@keyframes refusal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

@@ -37,29 +37,6 @@ const EPSILON = 1e-9
 // Declaring a special move (16.2, 16.6, 16.7)
 // ---------------------------------------------------------------------------
 
-/**
- * The special moves that have to be written down before anything moves.
- *
- * 16.2: *"the player simply writes 'Roll' in the movement orders for that
- * turn"*. 16.7: *"writes as part of movement orders that the ship is going to
- * attempt to ram"*. 16.6 requires the approach to be *"plotted"*. All three are
- * commitments made in phase 1 and paid for in phase 5, and none of them fit in
- * `MovementOrder`, which carries a turn, an acceleration and an emergency-thrust
- * flag and nothing else. This is the shape they should take alongside it.
- */
-export interface SpecialMoveOrder {
-  /** 16.2 — roll 180° about the long axis, or roll back upright. */
-  roll?: boolean
-  /** 16.7 — the ship this one intends to ram. */
-  ram?: { targetId: string }
-  /** 16.6 — the ship or starbase this one is closing on to dock. */
-  dock?: { targetId: string }
-  /** 16.6 — *"one full turn is also required to 'cast off' and undock"*. */
-  castOff?: boolean
-  /** 16.3 — the hull this one is establishing a tow link with. */
-  tow?: { loadId: string }
-}
-
 // ---------------------------------------------------------------------------
 // 16.1 Thrust 0 drives
 // ---------------------------------------------------------------------------

@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { applyOrder, driveFromDef, type MovementState } from '../engine/movement'
+import {
+  applyOrder,
+  arrangeTouchingShips,
+  driveFromDef,
+  type MovementState,
+} from '../engine/movement'
+
+/**
+ * How far apart two counters have to be before they stop reading as one ship.
+ *
+ * 3.8 gives no number — *"arranged as closely as possible"* is a table
+ * instruction about physical models — so this is the smallest counter's
+ * diameter, which is what "touching" means on the plot.
+ */
+const TOUCHING_SEPARATION = 1.6
 import { stationaryCollisionRisk } from '../engine/terrain'
 import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
@@ -282,6 +296,23 @@ export function MapView({
    * far cheaper than the bug that memoising it caused.
    */
   const vector = optional(game).movementSystem === 'vector'
+
+  // 3.8: "if two ship models would actually be touching at the end of all
+  // movement, they should simply be arranged as closely as possible." Purely a
+  // drawing nicety — ranges are measured from the centre of the model (4.2) and
+  // the engine's positions are untouched — but two counters in the same square
+  // read as one ship, and the top one takes every click.
+  const drawnAt = new Map(
+    arrangeTouchingShips(
+      game.ships
+        .filter((ship) => visible(ship, viewingSide))
+        .map((ship) => ({
+          id: ship.id,
+          placement: { ...ship.placement, position: riderOffset(game, ship) },
+        })),
+      TOUCHING_SEPARATION,
+    ).map((placed) => [placed.id, placed.position] as const),
+  )
 
   const tracks = game.ships
     .filter((ship) => !ship.destroyed && !ship.offTable && (vector ? ship.vectorOrders : ship.order))
@@ -630,7 +661,7 @@ export function MapView({
             .map((ship) => (
               <Counter
                 key={ship.id}
-                position={riderOffset(game, ship)}
+                position={drawnAt.get(ship.id) ?? riderOffset(game, ship)}
                 facing={ship.placement.facing}
                 side={SIDE_CLASS[ship.side] ?? 'c'}
                 mass={ship.design.mass}

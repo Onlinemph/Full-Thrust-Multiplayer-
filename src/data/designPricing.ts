@@ -95,10 +95,6 @@ export function ftlMass(mass: number): number {
   return 0.1 * mass
 }
 
-export function ftlPoints(mass: number, advanced: boolean): number {
-  return ftlMass(mass) * (advanced ? 3 : 2)
-}
-
 /** Atmospheric streamlining: 5% partial, 10% full, and free in points (13.11). */
 export function streamliningMass(mass: number, kind: ShipDesign['streamlining']): number {
   if (kind === 'none') return 0

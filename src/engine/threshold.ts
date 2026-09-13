@@ -34,6 +34,7 @@ import {
   type OngoingEffect,
   type ShipState,
 } from './game'
+import { ANTIMATTER_CHARGE_THRESHOLD_DRM } from './defences'
 import type { SystemKind } from './types'
 
 // ---------------------------------------------------------------------------
@@ -115,7 +116,10 @@ export const SYSTEM_DAMAGE_BOXES: Partial<Record<SystemKind, number>> = {
 export const CORE_SYSTEM_DRM = -1
 
 const SYSTEM_DRM: Partial<Record<SystemKind, number>> = {
-  'antimatter-charge': CORE_SYSTEM_DRM,
+  // 7.9 states the charge's own modifier — *"a -1 DRM whenever they take
+  // threshold tests (like Core Systems)"* — and `defences.ts` owns section 7,
+  // so the number comes from there rather than being written twice.
+  'antimatter-charge': ANTIMATTER_CHARGE_THRESHOLD_DRM,
 }
 
 /**

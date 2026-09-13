@@ -37,17 +37,6 @@ export function turnCourse(course: Course, points: number): Course {
   return normaliseCourse(course + points)
 }
 
-/**
- * The shortest turn from one course to another, in clock points. Positive is
- * to starboard, negative to port; the result is in −6..6.
- */
-export function courseDelta(from: Course, to: Course): number {
-  let delta = (to - from) % 12
-  if (delta > 6) delta -= 12
-  if (delta < -6) delta += 12
-  return delta
-}
-
 /** The unit vector a ship on this course travels along. */
 export function courseVector(course: Course): Point {
   const radians = (courseToDegrees(course) * Math.PI) / 180

@@ -92,18 +92,6 @@ export type TechCategory =
   | 'gunboats'
   | 'secondary'
 
-export const TECH_CATEGORY_ORDER: readonly TechCategory[] = [
-  'primary',
-  'defensive',
-  'targeting',
-  'direct-fire',
-  'ordnance',
-  'spinal',
-  'fighters',
-  'gunboats',
-  'secondary',
-]
-
 export const TECH_CATEGORY_LABELS: Record<TechCategory, string> = {
   primary: 'Primary ship systems',
   defensive: 'Defensive systems',

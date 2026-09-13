@@ -887,9 +887,6 @@ export function pulserSetting(variant: WeaponVariant): PulserSetting {
   return 'medium'
 }
 
-/** 5.21: *"In PDS mode the Pulser delivers a single dice of point defense fire."* */
-export const PULSER_PD_DICE = 1
-
 /**
  * Whether a Pulser may put up point defence into this arc (5.21).
  *

@@ -99,13 +99,6 @@ export function fireConCapacity(standard: number, advanced: number): number {
 /** The three things 5.2 spends a FireCon on, each *per phase*. */
 export type FireConTask = 'ship-weapons' | 'needle-beam-system' | 'missile-launch'
 
-/** What each FireCon task covers (5.2), for the UI and the rules log. */
-export const FIRECON_TASKS: Record<FireConTask, string> = {
-  'ship-weapons': 'Firing ship weapons (not point defense) at a single ship or fighter group',
-  'needle-beam-system': 'Firing Needle Beam weapons against a single ship system',
-  'missile-launch': 'Launching Salvo or Heavy Missiles',
-}
-
 // ---------------------------------------------------------------------------
 // Shared plumbing
 // ---------------------------------------------------------------------------

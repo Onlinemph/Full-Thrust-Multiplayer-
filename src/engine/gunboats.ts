@@ -331,6 +331,10 @@ export interface GunboatModifier {
   notes: string
 }
 
+/** 9.2: *"Every level of ECM reduces the lock-on range by 1 MU"*. */
+export const ECM_GUNBOAT_LOCK_ON_PENALTY_MU = 1
+export const MAX_GUNBOAT_ECM_LEVELS = 3
+
 export const GUNBOAT_MODIFIERS: Record<GunboatModifierId, GunboatModifier> = {
   ftl: {
     id: 'ftl',
@@ -350,13 +354,11 @@ export const GUNBOAT_MODIFIERS: Record<GunboatModifierId, GunboatModifier> = {
     // 14.8: "+3 points each per level of ECM (3 levels max) for the entire
     // squadron", so one level over six boats is 18 — priced per level below.
     pointsPerSquadron: 18,
-    notes: 'Every level of ECM takes 1 MU off the lock-on range of missiles and fighters (9.2)',
+    notes:
+      `Every level of ECM takes ${ECM_GUNBOAT_LOCK_ON_PENALTY_MU} MU off the lock-on range of ` +
+      `missiles and fighters, to a maximum of ${MAX_GUNBOAT_ECM_LEVELS} levels (9.2)`,
   },
 }
-
-/** 9.2: *"Every level of ECM reduces the lock-on range by 1 MU"*. */
-export const ECM_GUNBOAT_LOCK_ON_PENALTY_MU = 1
-export const MAX_GUNBOAT_ECM_LEVELS = 3
 
 export type GunboatStatus = 'aboard' | 'in-flight' | 'destroyed'
 

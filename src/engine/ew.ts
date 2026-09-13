@@ -835,13 +835,6 @@ export interface NovaPowerDown {
   screensFunction: boolean
 }
 
-export const NOVA_POWER_DOWN: NovaPowerDown = {
-  mayApplyThrust: false,
-  mayChangeCourse: false,
-  mayFireOtherWeapons: false,
-  screensFunction: false,
-}
-
 /** Note the Nova Cannon in this turn's orders (7.23, phase 1). */
 export function armNovaCannon(state: NovaCannonState): NovaCannonState {
   return { ...state, armed: true }

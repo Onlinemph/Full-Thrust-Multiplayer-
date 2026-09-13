@@ -908,18 +908,6 @@ export function moveSquadron(squadron: Squadron, order: MovementOrder): Squadron
 // ---------------------------------------------------------------------------
 
 /**
- * Ships never collide (3.8): "the risk of an accidental collision between two
- * ships is incalculably small, and is therefore ignored for all game purposes
- * ... Ships can freely move 'through' both friendly and enemy ships and fighter
- * groups."
- *
- * Exported as a constant rather than left implicit so that a caller reaching
- * for collision handling finds the rule instead of inventing one. Terrain is
- * section 17 and is not implemented (see `SOURCES.md`).
- */
-export const SHIP_COLLISIONS_IGNORED = true
-
-/**
  * Tidy up ships that finished movement on top of each other (3.8): "If two ship
  * models would actually be touching at the end of all movement, they should
  * simply be arranged as closely as possible."

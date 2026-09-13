@@ -22,7 +22,6 @@ import {
   courseVector,
   distance,
   incomingArc,
-  moveShip,
   rangeBand,
   REAR_ARCS,
   BEAM_RANGE_BAND,
@@ -34,6 +33,7 @@ import {
   validateOrder,
   type MovementResult,
   type MovementState,
+  validateSquadron,
 } from './movement'
 import {
   availableFireCons,
@@ -73,7 +73,7 @@ import {
   stationaryCollisionRisk,
   CLOUD_SAFE_VELOCITY,
 } from './terrain'
-import { arcsWhenInverted } from './specialmoves'
+import { arcsWhenInverted, coursesMatched } from './specialmoves'
 import {
   antiShipPdMounts,
   deployingSide,
@@ -483,6 +483,51 @@ export function aiActions(
         }
         actions.push({ type: 'detach-hull', shipId: rider.id })
       }
+      // 16.3: a hull that cannot move is worth more on a line than adrift.
+      // The link is begun in phase 1 and takes a whole turn to make, so the
+      // question is asked before anything is plotted — and 16.3's match test
+      // is strict enough that it only ever finds a pair that is already
+      // station-keeping, which is exactly when a tow is the right idea.
+      for (const load of mine) {
+        if (load.tow !== null || load.carriedBy !== null) continue
+        if (currentThrust(load) > 0) continue
+        const tug = mine.find(
+          (other) =>
+            other.id !== load.id &&
+            other.tow === null &&
+            other.carriedBy === null &&
+            currentThrust(other) > 0 &&
+            !game.ships.some((third) => third.tow?.tugId === other.id) &&
+            coursesMatched(
+              {
+                position: other.placement.position,
+                facing: other.placement.facing,
+                velocity: other.velocity,
+              },
+              {
+                position: load.placement.position,
+                facing: load.placement.facing,
+                velocity: load.velocity,
+              },
+            ).matched,
+        )
+        if (tug) actions.push({ type: 'begin-tow', tugId: tug.id, loadId: load.id })
+      }
+
+      // 3.7: "a squadron is two to four ships in line ahead, line abreast,
+      // wedge, or diamond formation, and moves on a single order." Formed at
+      // the start of the turn and before any course is written, which is why
+      // it comes before the loop below — a ship that joins a squadron flies
+      // the leader's order and plots none of its own.
+      for (const group of proposeSquadrons(game, side)) {
+        actions.push({
+          type: 'form-squadron',
+          squadronId: group.id,
+          formation: 'line-ahead',
+          shipIds: group.shipIds,
+        })
+      }
+
       for (const ship of mine) {
         // 7.23: arming the Nova Cannon costs the whole ship for a turn, so it
         // is decided before the course is, and it tears up any course written.
@@ -872,25 +917,84 @@ function antiShipPointDefence(game: GameState, ship: ShipState): GameAction[] {
   }))
 }
 
-
-
-/**
- * Where a ship would end up under an order — exported because the UI draws the
- * computer's intentions when a player asks to see them, and because it is the
- * one piece of this module worth testing directly.
- */
-export function projectedPosition(ship: ShipState, order: MovementOrder): Point {
-  const thrust = currentThrust(ship)
-  const velocity = Math.max(0, ship.velocity + Math.max(-thrust, Math.min(thrust, order.accel)))
-  const turn = order.turn
-    ? order.turn.points * (order.turn.direction === 'starboard' ? 1 : -1)
-    : 0
-  return moveShip(ship.placement.position, ship.placement.facing, velocity, turn).position
-}
-
 // ---------------------------------------------------------------------------
 // Small craft (8, 9)
 // ---------------------------------------------------------------------------
+
+/**
+ * Squadrons worth forming this turn (3.7).
+ *
+ * *"A squadron is two to four ships ... and moves on a single order"*, which is
+ * worth having when the ships are already flying together: a line that keeps
+ * station concentrates its fire and turns as one. It is worth nothing at all
+ * when they are scattered, and 3.7 will not have it — *"squadrons cannot mix
+ * ships with standard and Advanced Drives"* — so the grouping is by drive type
+ * and by proximity, and `validateSquadron` gets the last word.
+ *
+ * Ships already in a squadron are left alone: re-forming one every turn would
+ * churn the journal for nothing, and 3.7's straggler clause already handles a
+ * member that falls behind.
+ */
+function proposeSquadrons(
+  game: GameState,
+  side: string,
+): Array<{ id: string; shipIds: string[] }> {
+  const free = game.ships.filter(
+    (ship) =>
+      ship.side === side &&
+      !ship.destroyed &&
+      !ship.offTable &&
+      ship.squadronId === null &&
+      ship.carriedBy === null &&
+      ship.tow === null &&
+      ship.orbit === null &&
+      currentThrust(ship) > 0,
+  )
+  if (free.length < 2) return []
+
+  const groups: Array<{ id: string; shipIds: string[] }> = []
+  const taken = new Set<string>()
+  for (const lead of free) {
+    if (taken.has(lead.id)) continue
+    const members = [lead]
+    for (const other of free) {
+      if (members.length >= SQUADRON_MAX) break
+      if (other.id === lead.id || taken.has(other.id)) continue
+      if (other.design.drive.advanced !== lead.design.drive.advanced) continue
+      if (distance(lead.placement.position, other.placement.position) > SQUADRON_FORM_RANGE) {
+        continue
+      }
+      members.push(other)
+    }
+    if (members.length < 2) continue
+    const check = validateSquadron({
+      id: `sq-${side}-${lead.id}`,
+      formation: 'line-ahead',
+      members: members.map((ship) => ({
+        id: ship.id,
+        placement: ship.placement,
+        drive: { ...driveFromDef(ship.design.drive), hits: ship.driveHits },
+      })),
+      velocity: lead.velocity,
+    })
+    if (!check.legal) continue
+    for (const ship of members) taken.add(ship.id)
+    groups.push({ id: `sq-${side}-${lead.id}`, shipIds: members.map((ship) => ship.id) })
+  }
+  return groups
+}
+
+/** 3.7: "two to four ships" outside an escort ring. */
+const SQUADRON_MAX = 4
+
+/**
+ * How close two hulls have to be before the computer flies them as one (3.7).
+ *
+ * READING. 3.7 gives no distance — a squadron is a formation the players agree
+ * on. Twelve MU is one standard turn's worth of separation: close enough that a
+ * single order suits them all, far enough that a line of four is not a stack.
+ */
+const SQUADRON_FORM_RANGE = 12
 
 /**
  * How the computer flies its wings and its gunboat squadrons.

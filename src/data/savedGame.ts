@@ -26,7 +26,7 @@ import { validateDesign } from './designPricing'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
 import type { TechBase } from '../engine/techbase'
 import type { BattleType } from '../engine/battles'
-import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
+import { designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
 import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scenario } from './scenarios'
 
 /**
@@ -444,7 +444,3 @@ export function parseSavedGame(text: string): SavedGame | string {
   return saved
 }
 
-/** Every design available to a force picker, canon and embedded alike. */
-export function availableDesigns(): ShipDesign[] {
-  return allDesigns()
-}
