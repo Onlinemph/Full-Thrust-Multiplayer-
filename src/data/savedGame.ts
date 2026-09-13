@@ -52,8 +52,13 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             journal already rolled for, and regeneration and the
  *             unrepaired-charge roll each throw dice at the turn boundary in
  *             a path every battle walks.
+ *  10  7.12 — the dual-purpose mounts join phase 9. "Beam-1 systems, K-1 guns
+ *             and other small weapons are dual purpose", and the mount list
+ *             asked for a Beam-1 and nothing else, so a Gatling, a Twin
+ *             Particle Array, a Meson Projector, a Phaser, an EMP-1, a Pulser
+ *             and a K-1 all sat out the phase.
  */
-export const CURRENT_RULES_VERSION = 9
+export const CURRENT_RULES_VERSION = 10
 
 export interface GameSetup {
   scenarioId: string

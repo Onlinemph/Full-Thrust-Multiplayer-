@@ -266,12 +266,16 @@ import {
   isOrdnance,
   maxRangeOf,
   needsFireCon,
+  pointDefenceModeFor,
   rollsBeamDice,
   type WeaponResult,
 } from './weapons'
 import {
   canMountFlak,
   flakBarrageDice,
+  kGunCanPointDefend,
+  pulserCanPointDefend,
+  K_GUN_PD_DRM,
   flakCatchesPath,
   flakCatchesPoint,
   isInSpinalArc,
@@ -2527,7 +2531,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const activation = openFiringActivation(state, ship)
       if (activation) return activation
 
-      const mount = pdMountsOf(ship).find((candidate) => candidate.id === action.systemId)
+      const mount = pdMountsOf(ship, rulesReading(state)).find((candidate) => candidate.id === action.systemId)
       if (!mount) {
         // 2.6: "any system used for point defense ... cannot be used again in
         // that turn against a ship." A mount that fired in phase 9 is gone
@@ -3155,7 +3159,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const ship = shipById(state, action.shipId)
       if (!ship) return refuse('No such ship')
       if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
-      const mount = pdMountsOf(ship).find((candidate) => candidate.id === action.systemId)
+      const mount = pdMountsOf(ship, rulesReading(state)).find((candidate) => candidate.id === action.systemId)
       if (!mount) {
         return refuse(`${ship.name} has no point-defence mount that can fire this turn`)
       }
@@ -3198,7 +3202,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (isOutOfControl(ship, state.turn)) continue
         const ftlStage = ftlStageOf(ship, state.turn)
         if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
-        const mounts = pdMountsOf(ship)
+        const mounts = pdMountsOf(ship, rulesReading(state))
         if (mounts.length === 0) continue
 
         // A marker is a threat to this ship if it is close enough to be worth
@@ -4119,7 +4123,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // the next. 8.8 lets a player split mounts between groups; the engine
         // takes them in the order they declared, which is the order a player
         // sees them arrive.
-        const mounts = pdMountsOf(ship)
+        const mounts = pdMountsOf(ship, rulesReading(state))
           .map((mount): AntiFighterMount | null => {
             if (mount.kind === 'pds' || mount.kind === 'ads') return 'pds'
             if (mount.kind === 'beam-1') return 'beam-1'
@@ -4147,7 +4151,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           })
         }
         // 2.6: a mount that fires as point defence has fired for the turn.
-        for (const mount of pdMountsOf(ship).slice(0, taken)) {
+        for (const mount of pdMountsOf(ship, rulesReading(state)).slice(0, taken)) {
           markWeaponFired(ship, mount.id, state.phase)
         }
       }
@@ -6989,11 +6993,25 @@ function spinalLockout(ship: ShipState, turn: number): boolean {
   )
 }
 
-/** The point-defence mounts on this hull that could still fire (phase 9). */
-export function pointDefenceMounts(ship: ShipState): Array<{ id: string; label: string }> {
-  return pdMountsOf(ship).map((mount) => ({
+/**
+ * The point-defence mounts on this hull that could still fire (phase 9).
+ *
+ * Takes the state because 7.12's dual-purpose guns are gated: what counts as a
+ * point-defence mount depends on the reading the battle is stamped with, and a
+ * panel offering a Gatling the handler would not accept is worse than not
+ * offering it.
+ */
+export function pointDefenceMounts(
+  state: GameState,
+  ship: ShipState,
+): Array<{ id: string; label: string }> {
+  const named = new Map<string, string>([
+    ...ship.design.systems.map((system) => [system.id, system.label] as const),
+    ...ship.design.weapons.map((weapon) => [weapon.id, weapon.label] as const),
+  ])
+  return pdMountsOf(ship, rulesReading(state)).map((mount) => ({
     id: mount.id,
-    label: ship.design.systems.find((system) => system.id === mount.id)?.label ?? mount.id,
+    label: named.get(mount.id) ?? mount.id,
   }))
 }
 
@@ -8124,7 +8142,7 @@ function resolveBoltDefence(state: GameState): void {
       const ftlStage = ftlStageOf(ship, state.turn)
       if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
       if (distance(ship.placement.position, bolt.position) > PDS_RANGE) continue
-      for (const mount of pdMountsOf(ship)) {
+      for (const mount of pdMountsOf(ship, rulesReading(state))) {
         if (!canEngagePlasmaBolt(mount.mode)) continue
         if (mount.kind !== 'pds' && mount.kind !== 'ads' && mount.kind !== 'scattergun') continue
         defences.push({
@@ -8259,7 +8277,7 @@ function projectOrdnance(state: GameState): void {
  * table. Both spend the mount for the turn, which is why the ids stay the ids
  * the rest of the engine knows them by.
  */
-function pdMountsOf(ship: ShipState): PdMount[] {
+function pdMountsOf(ship: ShipState, reading = 1): PdMount[] {
   const kinds: Partial<Record<string, PdMountKind>> = {
     pds: 'pds',
     ads: 'ads',
@@ -8282,17 +8300,54 @@ function pdMountsOf(ship: ShipState): PdMount[] {
     })
   }
   for (const weapon of ship.design.weapons) {
-    if (weapon.weaponClass !== 'beam' || weapon.rating !== 1) continue
     if (ship.destroyedSystems.has(weapon.id)) continue
     if (!canWeaponFire(ship, weapon.id)) continue
-    mounts.push({
-      id: weapon.id,
-      kind: 'beam-1',
-      arcs: weaponArcs(ship, weapon),
-      mode: 'beam-1',
-    })
+    const mount = dualPurposeMount(ship, weapon, reading)
+    if (mount) mounts.push(mount)
   }
   return mounts
+}
+
+/**
+ * A gun that can also point-defend (5.4, 5.8, 5.10 – 5.12, 5.16, 5.21, 7.12).
+ *
+ * 7.12 states the class rather than a list: *"Beam-1 systems, K-1 guns and
+ * other small weapons are dual purpose"*, and the family sections name the
+ * rest — every Gatling Battery, Twin Particle Array, Meson Projector and
+ * Phaser, an EMP-1 (5.4), and the Pulser (5.21). `beams.pointDefenceModeFor`
+ * has always known which table each reads and `kinetics` has always had the
+ * two arc tests; the mount list asked for a Beam-1 and nothing else, so four
+ * weapon families were quietly absent from phase 9 on every ship that had one.
+ *
+ * The arcs are the mount's own — 5.10, 5.11, 5.12 and 5.21 all say point
+ * defence is *"limited to the fire arcs of the weapon mount"* — except that
+ * 7.12 lets any of them fire into the aft arc, which is why `weaponArcs` is
+ * read straight rather than through `aftArcBlocked`. A K-1 is the exception
+ * the other way: `kGunCanPointDefend` refuses the aft arc for it alone.
+ */
+function dualPurposeMount(ship: ShipState, weapon: WeaponDef, reading: number): PdMount | null {
+  if (weapon.weaponClass === 'beam' && weapon.rating === 1) {
+    return { id: weapon.id, kind: 'beam-1', arcs: weaponArcs(ship, weapon), mode: 'beam-1' }
+  }
+  // Everything else here is a new mount in an existing phase, so it draws dice
+  // an older journal never drew.
+  if (reading < 10) return null
+
+  const arcs = weaponArcs(ship, weapon)
+  if (weapon.weaponClass === 'k-gun') {
+    // 5.16: a K-1 fires one PDS die at −1, and not into the drive plume.
+    const bearing = arcs.filter((arc) => kGunCanPointDefend(weapon, arc))
+    if (bearing.length === 0) return null
+    return { id: weapon.id, kind: 'dual-purpose', arcs: bearing, mode: 'pds', drm: K_GUN_PD_DRM }
+  }
+  if (weapon.weaponClass === 'pulser') {
+    const bearing = arcs.filter((arc) => pulserCanPointDefend(weapon, arc))
+    if (bearing.length === 0) return null
+    return { id: weapon.id, kind: 'dual-purpose', arcs: bearing, mode: 'pds' }
+  }
+  const mode = pointDefenceModeFor(weapon)
+  if (!mode) return null
+  return { id: weapon.id, kind: 'dual-purpose', arcs, mode }
 }
 
 const ALL_ARCS = ['F', 'FS', 'AS', 'A', 'AP', 'FP'] as const
@@ -9539,7 +9594,7 @@ export function antiShipPdMounts(
     target.placement.position,
   )
   const labels = new Map(shooter.design.systems.map((system) => [system.id, system.label]))
-  return pdMountsOf(shooter)
+  return pdMountsOf(shooter, rulesReading(state))
     .filter(
       (mount) => (mount.kind === 'pds' || mount.kind === 'ads') && mount.arcs.includes(arc),
     )

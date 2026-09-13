@@ -133,4 +133,13 @@ export function isAreaEffect(weapon: WeaponDef): boolean {
   return AREA_EFFECT_CLASSES.has(weapon.weaponClass)
 }
 
+/**
+ * The point-defence table this mount reads, or null when it may not
+ * point-defend at all (5.4, 5.8, 5.10 – 5.12, 7.12).
+ *
+ * Re-exported here because the registry is the only thing outside `weapons/`
+ * anything imports, and phase 9 has to ask the question per mount.
+ */
+export { pointDefenceModeFor, canPointDefend } from './beams'
+
 export type { FiringContext, WeaponResult, WeaponSpec } from './contract'

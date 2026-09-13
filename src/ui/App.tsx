@@ -718,7 +718,7 @@ function PhaseControls({
             (viewingSide === null || ship.side === viewingSide) &&
             markers.some((marker) => marker.side !== ship.side),
         )
-        .map((ship) => ({ ship, mounts: pointDefenceMounts(ship) }))
+        .map((ship) => ({ ship, mounts: pointDefenceMounts(game, ship) }))
         .filter(({ mounts }) => mounts.length > 0)
       return (
         <div className="panel">
