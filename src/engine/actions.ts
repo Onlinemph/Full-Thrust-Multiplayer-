@@ -22,6 +22,7 @@ import {
   assignDamageControl,
   assignFireCon,
   availableDamageControlParties,
+  damageControlParties,
   availableFireCons,
   canWeaponFire,
   currentThrust,
@@ -275,6 +276,12 @@ import {
   type WeaponResult,
 } from './weapons'
 import {
+  canUseTransporters,
+  fireTransporterBeam,
+  COMMANDO_RAID_FORBIDDEN,
+  type BeamWeaponDef,
+} from './weapons/beams'
+import {
   canFireOverloaded,
   canMountFlak,
   flakBarrageDice,
@@ -346,7 +353,11 @@ import {
   thresholdPhase,
 } from './threshold'
 import {
+  directFireKills,
+  ftlTransitDestroys,
   launchGunboatSquadron,
+  pointDefenceAgainstGunboats,
+  type GunboatPdMount,
   moveGunboatSquadron,
   recoverGunboatSquadron,
   resolveGunboatAttack,
@@ -675,6 +686,15 @@ export type GameAction =
       facing?: Course
     }
   | { type: 'gunboat-attack'; squadronId: string; targetId: string }
+  | { type: 'fire-at-gunboats'; shipId: string; weaponId: string; squadronId: string }
+  | {
+      type: 'commando-raid'
+      shipId: string
+      weaponId: string
+      targetId: string
+      systemId: string
+    }
+  | { type: 'gunboat-ftl-exit'; squadronId: string }
   | { type: 'recover-gunboats'; squadronId: string; carrierId: string }
 
   // Boarding (phase 12)
@@ -1790,6 +1810,17 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // line at everything in the template's path. Fired at a named ship
       // through here it was a free 6D6 with no arming, no power-down and no
       // template — the three things that make it the weapon it is.
+      // 5.9: "If a ship runs out of Damage Control Parties and Marines, it may
+      // no longer use transporters." A transporter beam does no damage — every
+      // hit is a person put aboard — so a ship with nobody left to send is
+      // firing an empty pad.
+      if (
+        weapon.weaponClass === 'transporter' &&
+        rulesReading(state) >= 13 &&
+        !canUseTransporters(ship.marinesAboard, damageControlParties(ship))
+      ) {
+        return refuse(`${ship.name} has no parties left to transport (5.9)`)
+      }
       if (weapon.weaponClass === 'nova-cannon' && rulesReading(state) >= 7) {
         return refuse(`${weapon.label} is armed in orders and fires down the bow line (7.23)`)
       }
@@ -2075,7 +2106,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // Marines or a Damage Control Party over to the enemy ship"; 5.18: "two
       // 'Marine' markers are placed on the enemy ship". Landing them is where
       // the source stops — see the boarding phase.
-      landBoarders(state, ship, target, applied.boarders ?? 0)
+      const sent = applied.boarders ?? 0
+      // 5.9: the parties that went over came off this ship. Marines first —
+      // they are what a boarding action is for — and Damage Control Parties
+      // after, which is what eventually empties the pad.
+      if (sent > 0 && weapon.weaponClass === 'transporter' && rulesReading(state) >= 13) {
+        const marines = Math.min(ship.marinesAboard, sent)
+        ship.marinesAboard -= marines
+        ship.partiesTransported += sent - marines
+      }
+      landBoarders(state, ship, target, sent)
 
       pushLog(state, {
         kind: applied.hullDamage > 0 ? 'damage' : 'fire',
@@ -3417,6 +3457,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // nothing else to fire at — so they are resolved whether or not there is
       // a missile marker on the table.
       resolveBoltDefence(state)
+      // 9.1's own table: a PDS scores on a six, a scattergun reads a beam die.
+      resolveGunboatDefence(state)
       const markers = ordnanceOf(state)
       if (markers.length === 0) return OK
       // Who each marker will take when phase 10 comes, worked out once for the
@@ -4996,6 +5038,229 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
           ? `${ship.name}'s ${weapon.label} finds ${flight.label} evading: automatic miss (8.6)`
           : `${ship.name}'s ${weapon.label} at ${flight.label}: ${result.kills} killed`,
         dice: result.rolls,
+      })
+      return OK
+    }
+
+    /**
+     * A ship's guns against a squadron (9.1).
+     *
+     * *"Direct Fire Anti-ship weapons may fire at gunboats normally, with each
+     * HIT destroying ONE gunboat. In the case of weapons that do multiple
+     * points of damage (Grasers or Pulse Torps for example) do not roll
+     * damage."*
+     *
+     * So the mount fires as it normally would and what comes back is read as a
+     * kill count instead of a damage total — which is why the shot goes
+     * through `fireWeapon` and not through a fighter-style flat die: a Beam-3
+     * at close range really does throw three dice at a squadron, and 9.1 says
+     * every one that lands takes a boat.
+     */
+    case 'fire-at-gunboats': {
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      if (squadron.side === ship.side) return refuse('A ship does not shoot its own gunboats')
+      if (squadron.status !== 'in-flight') return refuse(`${squadron.label} is not on the table`)
+      if (isOutOfControl(ship, state.turn)) {
+        return refuse(`${ship.name} is out of control and cannot fire (10.3)`)
+      }
+      if (ftlStageOf(ship, state.turn) !== null) {
+        return refuse(`${ship.name} is entering hyperspace and cannot fire (11.4)`)
+      }
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That weapon is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
+      const arc = arcTo(ship.placement.position, ship.placement.facing, squadron.position)
+      if (!weaponArcs(ship, weapon).includes(arc)) {
+        return refuse(`${weapon.label} does not bear on ${squadron.label}`)
+      }
+      if (aftArcBlocked(state, ship, arc)) {
+        return refuse(`${ship.name} cannot fire through its own drive plume (4.2)`)
+      }
+      const gunRange = distance(ship.placement.position, squadron.position)
+      if (gunRange > maxRangeOf(weapon)) {
+        return refuse(`${squadron.label} is out of ${weapon.label}'s reach`)
+      }
+      const gunActivation = openFiringActivation(state, ship)
+      if (gunActivation) return gunActivation
+      if (needsFireCon(weapon) && !assignFireCon(ship, squadron.id, state.phase)) {
+        return refuse(`No FireCon left to hold ${squadron.label} (4.4)`)
+      }
+      claimFiringActivation(state, ship)
+
+      // A gunboat carries no screens and no armour, so the shot meets nothing:
+      // what comes back is hits, and 9.1 turns each into a dead boat.
+      const fired = fireWeapon(weapon, {
+        range: gunRange,
+        arc,
+        targetScreens: 0,
+        rearArc: false,
+        rng: state.rng,
+        drm: 0,
+      })
+      markWeaponFired(ship, weapon.id, state.phase)
+      if ('refused' in fired) {
+        pushLog(state, {
+          kind: 'fire',
+          shipId: ship.id,
+          side: ship.side,
+          text: `${ship.name}: ${weapon.label} holds fire — ${fired.refused}`,
+        })
+        return OK
+      }
+      // "do not roll damage": every point that landed is one hit, whichever
+      // side of the armour it would have gone.
+      const hits = fired.normalDamage + fired.penetratingDamage
+      const result = directFireKills(squadron, hits, state.rng)
+      writeSquadron(squadron, result.squadron)
+      pushLog(state, {
+        kind: result.killed > 0 ? 'damage' : 'fire',
+        shipId: ship.id,
+        side: ship.side,
+        dice: fired.dice,
+        text: `${ship.name}'s ${weapon.label} at ${squadron.label}: ${result.killed} gunboat${
+          result.killed === 1 ? '' : 's'
+        } destroyed (9.1)`,
+      })
+      if (result.squadron.status === 'destroyed') {
+        pushLog(state, {
+          kind: 'destroyed',
+          side: squadron.side,
+          text: `${squadron.label} is wiped out`,
+        })
+      }
+      return OK
+    }
+
+    /**
+     * A Marine commando raid through a Transporter Beam (5.9).
+     *
+     * *"Any ONE hit from each Transporter Beam sends over ONE Marine Boarding
+     * Party ... instead of attempting to capture the ship they can attempt to
+     * destroy a single system."* Its own action rather than a mode on
+     * `fire-weapon`, because it needs the system named before the dice are
+     * thrown and because what comes back is a raid rather than damage.
+     *
+     * *"ONLY Marines may be used for such actions"* — a Damage Control Party
+     * will board a ship but will not go system-hunting.
+     */
+    case 'commando-raid': {
+      if (state.phase !== 'ship-fire') return refuse('Transporters fire in phase 11 (5.9)')
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      const weapon = ship.design.weapons.find((w) => w.id === action.weaponId)
+      if (!weapon) return refuse('No such weapon')
+      if (weapon.weaponClass !== 'transporter') return refuse(`${weapon.label} is not a transporter`)
+      if (ship.destroyedSystems.has(weapon.id)) return refuse('That transporter is knocked out')
+      if (!canWeaponFire(ship, weapon.id)) return refuse(`${weapon.label} has already fired this turn`)
+      if (!canUseTransporters(ship.marinesAboard, damageControlParties(ship), 'commando-raid')) {
+        return refuse(`${ship.name} has no Marines left to send (5.9)`)
+      }
+      if (COMMANDO_RAID_FORBIDDEN.includes(action.systemId)) {
+        return refuse('Marines may not be sent against a Core or protected system (5.9)')
+      }
+      const raidTarget = shipById(state, action.targetId)
+      if (!raidTarget) return refuse('No such target')
+      if (raidTarget.destroyed || raidTarget.offTable) return refuse('Target is out of the battle')
+      if (raidTarget.side === ship.side) return refuse('That is a friendly ship')
+      const raidSystem = raidTarget.design.systems.find((system) => system.id === action.systemId)
+      if (!raidSystem) return refuse('No such system aboard the target')
+      if (COMMANDO_RAID_FORBIDDEN.includes(raidSystem.kind)) {
+        return refuse('Marines may not be sent against a Core or protected system (5.9)')
+      }
+      if (raidTarget.destroyedSystems.has(raidSystem.id)) {
+        return refuse(`${raidSystem.label} is already crossed off`)
+      }
+      const raidArc = arcTo(
+        ship.placement.position,
+        ship.placement.facing,
+        raidTarget.placement.position,
+      )
+      if (!weaponArcs(ship, weapon).includes(raidArc)) return refuse('Target is not in that arc')
+      const raidRange = distance(ship.placement.position, raidTarget.placement.position)
+      if (raidRange > maxRangeOf(weapon)) return refuse(`${raidTarget.name} is out of reach`)
+      const raidActivation = openFiringActivation(state, ship)
+      if (raidActivation) return raidActivation
+      if (!assignFireCon(ship, raidTarget.id, state.phase)) {
+        if (!engagedTargets(ship, state.phase).includes(raidTarget.id)) {
+          return refuse('No FireCon available')
+        }
+      }
+      claimFiringActivation(state, ship)
+
+      const umbrella = screenUmbrella(state, raidTarget, ship.placement.position)
+      const fired = fireTransporterBeam(weapon as BeamWeaponDef, {
+        range: raidRange,
+        arc: raidArc,
+        targetScreens: Math.min(2, umbrella.level) as ScreenLevel,
+        advancedScreens: umbrella.advancedLevel > 0,
+        areaScreen: umbrella.suppressRerolls,
+        rearArc: false,
+        drm: 0,
+        transporterMode: 'commando-raid',
+        needleTarget: raidSystem.id,
+        rng: state.rng,
+      })
+      markWeaponFired(ship, weapon.id, state.phase)
+      if (!fired) return refuse(`${weapon.label} cannot make that raid`)
+
+      // 5.9's raid spends a Marine party on every result but the 1, and the
+      // party comes home only on the outcomes that say so.
+      if (fired.raid?.marinesSent) {
+        ship.marinesAboard = Math.max(0, ship.marinesAboard - 1)
+        if (!fired.raid.marinesLost) ship.marinesAboard += 1
+      }
+      if (fired.raid?.systemDestroyed) destroySystem(raidTarget, raidSystem.id)
+      pushLog(state, {
+        kind: fired.raid?.systemDestroyed ? 'damage' : 'fire',
+        shipId: ship.id,
+        targetId: raidTarget.id,
+        side: ship.side,
+        dice: fired.result.dice,
+        text: `${ship.name} raids ${raidTarget.name}'s ${raidSystem.label}: ${fired.result.detail}`,
+      })
+      return OK
+    }
+
+    /**
+     * An FTL gunboat jumping out (9.1, 9.2).
+     *
+     * *"if there is a ship, planet, asteroid or other object sufficient to
+     * cause distortion where the Gunboat engages its FTL, the gunboat is
+     * destroyed"* — 6 MU, and everything on the table counts, the squadron's
+     * own fleet included.
+     */
+    case 'gunboat-ftl-exit': {
+      const squadron = squadronById(state, action.squadronId)
+      if (!squadron) return refuse('No such squadron')
+      if (squadron.status !== 'in-flight') return refuse(`${squadron.label} is not on the table`)
+      if (!squadron.modifiers.includes('ftl')) {
+        return refuse(`${squadron.label} has no FTL drive (9.2)`)
+      }
+      const massive = [
+        ...state.ships
+          .filter((other) => !other.destroyed && !other.offTable)
+          .map((other) => other.placement.position),
+        ...state.terrain.map((feature) => feature.position),
+      ]
+      const wrecked = ftlTransitDestroys(squadron.position, massive)
+      writeSquadron(squadron, {
+        ...squadron,
+        status: 'destroyed',
+        boats: wrecked ? [] : squadron.boats,
+      })
+      pushLog(state, {
+        kind: wrecked ? 'destroyed' : 'note',
+        side: squadron.side,
+        text: wrecked
+          ? `${squadron.label} engages FTL too close to a hull and is destroyed (9.1)`
+          : `${squadron.label} jumps out`,
       })
       return OK
     }
@@ -8676,6 +8941,65 @@ function resolveBoltDefence(state: GameState): void {
   }
   setBolts(state, surviving)
   projectBolts(state)
+}
+
+/**
+ * Point defence against a gunboat squadron — **phase 9** (9.1).
+ *
+ * *"Gunboats are well armored against lighter PDS type weapons. PDS weapons
+ * engage gunboats like Plasma Bolts only scoring one hit on a 6."* And the one
+ * exception: *"Scatterguns/Interceptor Pods cause 1 BD\* of hits"*.
+ *
+ * Beside `resolveBoltDefence` and for the same reason: the rule is its own
+ * table rather than a marker on the allocation sheet, and the mounts that fire
+ * it may have nothing else to shoot at this phase.
+ */
+function resolveGunboatDefence(state: GameState): void {
+  if (rulesReading(state) < 13) return
+  const squadrons = state.gunboatSquadrons.filter(
+    (squadron) => squadron.status === 'in-flight' && squadron.boats.length > 0,
+  )
+  if (squadrons.length === 0) return
+
+  for (const squadron of squadrons) {
+    const mounts: GunboatPdMount[] = []
+    for (const ship of state.ships) {
+      if (ship.destroyed || ship.offTable || ship.side === squadron.side) continue
+      if (isOutOfControl(ship, state.turn)) continue
+      const ftlStage = ftlStageOf(ship, state.turn)
+      if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
+      if (distance(ship.placement.position, squadron.position) > PDS_RANGE) continue
+      for (const mount of pdMountsOf(ship, rulesReading(state))) {
+        if (mount.kind === 'scattergun') {
+          mounts.push('scattergun')
+        } else if (mount.kind === 'pds' || mount.kind === 'ads') {
+          mounts.push('pds')
+        } else {
+          continue
+        }
+        markWeaponFired(ship, mount.id, state.phase)
+      }
+    }
+    if (mounts.length === 0) continue
+
+    const result = pointDefenceAgainstGunboats(squadron, mounts, state.rng)
+    writeSquadron(squadron, result.squadron)
+    pushLog(state, {
+      kind: 'point-defence',
+      side: squadron.side,
+      dice: result.rolls,
+      text: `${squadron.label} under point defence: ${result.killed} gunboat${
+        result.killed === 1 ? '' : 's'
+      } destroyed (9.1)`,
+    })
+    if (result.squadron.status === 'destroyed') {
+      pushLog(state, {
+        kind: 'destroyed',
+        side: squadron.side,
+        text: `${squadron.label} is wiped out`,
+      })
+    }
+  }
 }
 
 /**

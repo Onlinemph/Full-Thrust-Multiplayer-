@@ -19,6 +19,7 @@
  */
 
 import {
+  emptyTechBase,
   EXAMPLE_FACTIONS,
   validateDesignAgainstTechBase,
   validateTechBase,
@@ -27,8 +28,11 @@ import {
 } from '../engine/techbase'
 import type { ShipDesign } from '../engine/types'
 
-/** What a side is playing under. `unrestricted` is every battle before now. */
-export type TechBaseChoice = 'unrestricted' | ExampleFactionId
+/**
+ * What a side is playing under. `unrestricted` is every battle before now, and
+ * `custom` is a base the table built itself out of 15.1 and 15.8.
+ */
+export type TechBaseChoice = 'unrestricted' | 'custom' | ExampleFactionId
 
 export interface TechBaseOption {
   id: TechBaseChoice
@@ -42,6 +46,13 @@ export const TECH_BASE_OPTIONS: readonly TechBaseOption[] = [
     id: 'unrestricted',
     label: 'No tech base',
     detail: 'Anything in the catalogue. How Full Thrust plays when nobody is counting choices.',
+  },
+  {
+    id: 'custom',
+    label: 'Build one',
+    detail:
+      'Spend technology choices out of section 15.1 and 15.8 and see what the fleet you have ' +
+      'chosen could not have been built from.',
   },
   {
     id: 'new-anglian-confederation',
@@ -59,9 +70,19 @@ export const TECH_BASE_OPTIONS: readonly TechBaseOption[] = [
   },
 ]
 
-/** The base a choice names, or null for an unrestricted side. */
-export function techBaseFor(choice: TechBaseChoice | undefined): TechBase | null {
+/**
+ * The base a choice names, or null for an unrestricted side.
+ *
+ * `custom` is whatever the table built; an empty custom base is a real base —
+ * it fields only the universal entries — so it is not folded back into
+ * `unrestricted`, which is the absence of a base rather than a poor one.
+ */
+export function techBaseFor(
+  choice: TechBaseChoice | undefined,
+  custom?: TechBase | null,
+): TechBase | null {
   if (!choice || choice === 'unrestricted') return null
+  if (choice === 'custom') return custom ?? emptyTechBase('this table')
   return EXAMPLE_FACTIONS[choice].base
 }
 
@@ -78,15 +99,20 @@ export function techBaseLabel(choice: TechBaseChoice | undefined): string {
 export function designProblems(
   choice: TechBaseChoice | undefined,
   design: ShipDesign,
+  custom?: TechBase | null,
 ): readonly string[] {
-  const base = techBaseFor(choice)
+  const base = techBaseFor(choice, custom)
   if (!base) return []
   return validateDesignAgainstTechBase(base, design)
 }
 
 /** Whether the base can field the design at all. */
-export function canField(choice: TechBaseChoice | undefined, design: ShipDesign): boolean {
-  return designProblems(choice, design).length === 0
+export function canField(
+  choice: TechBaseChoice | undefined,
+  design: ShipDesign,
+  custom?: TechBase | null,
+): boolean {
+  return designProblems(choice, design, custom).length === 0
 }
 
 export interface FleetTechReport {
@@ -111,9 +137,10 @@ export interface FleetTechReport {
 export function checkFleetTechBase(
   choice: TechBaseChoice | undefined,
   designs: readonly ShipDesign[],
+  custom?: TechBase | null,
 ): FleetTechReport {
   const picked: TechBaseChoice = choice ?? 'unrestricted'
-  const base = techBaseFor(picked)
+  const base = techBaseFor(picked, custom)
   if (!base) {
     return {
       choice: picked,

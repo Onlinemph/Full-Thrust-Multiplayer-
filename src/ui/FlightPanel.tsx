@@ -246,6 +246,20 @@ export function FlightPanel({
                 </button>
               ) : null}
 
+              {/* 9.2's FTL modification, and the risk 9.1 attaches to it: "if
+                  there is a ship, planet, asteroid or other object sufficient
+                  to cause distortion where the Gunboat engages its FTL, the
+                  gunboat is destroyed". Six MU, and the squadron's own fleet
+                  counts. */}
+              {squadron.status === 'in-flight' && squadron.modifiers.includes('ftl') ? (
+                <button
+                  title="Jump out — destroyed if anything is within 6 MU (9.1)"
+                  onClick={() => dispatch({ type: 'gunboat-ftl-exit', squadronId: squadron.id })}
+                >
+                  Jump out
+                </button>
+              ) : null}
+
               <span className={`flight-status is-${squadron.status}`}>
                 {squadron.status === 'aboard'
                   ? 'on the rack'

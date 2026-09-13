@@ -4,6 +4,7 @@ import { scenarioById, SCENARIOS } from '../data/scenarios'
 import type { GameSetup } from '../data/savedGame'
 import { BATTLE_TYPE_LABELS, type BattleType } from '../engine/battles'
 import { TECH_BASE_OPTIONS, type TechBaseChoice } from '../data/techBaseCheck'
+import { TechBasePanel } from './TechBasePanel'
 import { FACTIONS, factionById, factionTraitCoverage } from '../data/factions'
 import { FleetPicker } from './FleetPicker'
 import { currentSetup, newGame } from './store'
@@ -424,6 +425,17 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
                   </option>
                 ))}
               </select>
+              {draft.techBases?.[side.id] === 'custom' ? (
+                <TechBasePanel
+                  base={draft.customTechBases?.[side.id]}
+                  onChange={(base) =>
+                    setDraft((d) => ({
+                      ...d,
+                      customTechBases: { ...d.customTechBases, [side.id]: base },
+                    }))
+                  }
+                />
+              ) : null}
             </label>
           ))}
         </section>
@@ -457,6 +469,7 @@ export function SetupPanel({ onClose }: { onClose: () => void }) {
             scenarioId={draft.scenarioId}
             forces={draft.forces ?? {}}
             techBases={draft.techBases ?? {}}
+            customTechBases={draft.customTechBases ?? {}}
             cpv={Boolean(draft.cpv)}
             bannedSystems={draft.bannedSystems}
             factions={draft.factions ?? {}}

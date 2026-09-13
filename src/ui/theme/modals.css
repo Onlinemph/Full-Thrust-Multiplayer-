@@ -368,3 +368,31 @@
 .rule-toggle.is-not-yet:hover {
   background: none;
 }
+
+/* ── The tech base builder (15) ───────────────────────────────────────────── */
+
+.tech-base-panel {
+  margin-top: var(--gap);
+  padding: var(--gap-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.tech-base-panel section {
+  margin-top: var(--gap-2);
+}
+
+.tech-base-panel h4 {
+  margin: 0 0 var(--gap) 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* Bought with a technology choice, as against held for free (15.1). */
+.tech-base-panel .system-chip.is-fitted {
+  border-color: var(--screens);
+  color: var(--screens);
+}

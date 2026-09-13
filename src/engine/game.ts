@@ -529,6 +529,17 @@ export interface ShipState {
    */
   marinesAboard: number
   /**
+   * Damage Control Parties sent away through a Transporter Beam (5.9).
+   *
+   * *"Every hit generated allows the player to send one unit of Marines or a
+   * Damage Control Party over to the enemy ship"* — a party that has gone
+   * aboard someone else is not aboard this ship, and *"if a ship runs out of
+   * Damage Control Parties and Marines, it may no longer use transporters"*.
+   * Kept as a count away rather than a count aboard, because the parties
+   * aboard are derived from surviving crew factors and cannot be written down.
+   */
+  partiesTransported: number
+  /**
    * Carried by a boarding action (12.7): *"it is considered captured"*. An
    * intact hull under someone else's flag, which is not the same as a
    * destroyed one — 18.3 scores it differently and it can be sailed away.
@@ -663,6 +674,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     ongoing: [],
     boarders: [],
     marinesAboard: opts.design.marineParties,
+    partiesTransported: 0,
     captured: false,
     capturedBy: null,
     hullHitByWeapons: false,
@@ -1879,7 +1891,9 @@ export function damageControlParties(ship: ShipState): number {
     listed.length > 0
       ? listed.filter((s) => !ship.destroyedSystems.has(s.id)).length
       : ship.design.additionalDamageControlParties
-  return survivingCrewFactors(ship) + bought
+  // 5.9: a party transported over to an enemy ship is aboard that ship, not
+  // this one, and it does not come back to fight fires.
+  return Math.max(0, survivingCrewFactors(ship) + bought - ship.partiesTransported)
 }
 
 /** Parties not yet assigned to a repair this turn (10.4). */

@@ -6,6 +6,8 @@ import {
   techBaseLabel,
   type TechBaseChoice,
 } from '../data/techBaseCheck'
+import { emptyTechBase, type TechBase } from '../engine/techbase'
+import { TechBasePanel } from './TechBasePanel'
 import { FACTIONS, factionById } from '../data/factions'
 import {
   describeFault,
@@ -79,6 +81,7 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
      faults because it is a different kind of no: a fault means the hull cannot
      fly, a tech-base refusal means this empire cannot build it. */
   const [techBase, setTechBase] = useState<TechBaseChoice>('unrestricted')
+  const [customBase, setCustomBase] = useState<TechBase>(() => emptyTechBase('this table'))
   /* The campaign supplement's factions, which are a different question from
      section 15's tech base: a tech base is a list of technologies an empire
      bought, a faction is a set of traits it flies under. A hull can be legal
@@ -91,7 +94,7 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
     clanId: clanId || undefined,
   })
   const faction = factionId ? factionById(factionId) : undefined
-  const offBase = designProblems(techBase, design)
+  const offBase = designProblems(techBase, design, customBase)
 
   /** Any edit that changes mass has to re-derive the hull box count with it. */
   const edit = (patch: Partial<ShipDesign>) =>
@@ -193,6 +196,15 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
             <span style={{ color: 'var(--screens)' }}>Buildable under section 15.</span>
           ) : null}
         </div>
+
+        {/* 15: "a number of choices as determined by their player group, which
+            they can spend on technologies from the lists below". Spending them
+            here rather than only in the setup panel is the point — this is
+            where a designer finds out that the hull they just drew needs one
+            more choice than the empire bought. */}
+        {techBase === 'custom' ? (
+          <TechBasePanel base={customBase} onChange={setCustomBase} />
+        ) : null}
 
         {offBase.length > 0 ? (
           <div className="tech-report">

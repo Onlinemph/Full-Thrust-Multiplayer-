@@ -9,6 +9,7 @@ import {
   techBaseLabel,
   type TechBaseChoice,
 } from '../data/techBaseCheck'
+import type { TechBase } from '../engine/techbase'
 import { designCost, summariseFleet } from '../data/fleetList'
 import { describeFault, validateDesign } from '../data/designPricing'
 import {
@@ -37,6 +38,8 @@ export interface FleetPickerProps {
   forces: Partial<Record<string, string[]>>
   /** The tech base each side plays under (15). Absent means unrestricted. */
   techBases?: Partial<Record<string, TechBaseChoice>>
+  /** The base a side that picked `custom` built (15.1, 15.8), by side id. */
+  customTechBases?: Partial<Record<string, TechBase>>
   /** 18.3: price the fleet in Combat Points Value rather than printed points. */
   cpv?: boolean
   /**
@@ -66,6 +69,7 @@ export function FleetPicker({
   scenarioId,
   forces,
   techBases,
+  customTechBases,
   cpv = false,
   bannedSystems,
   factions,
@@ -98,6 +102,7 @@ export function FleetPicker({
   // 15: what this side's tech base could not have built. Advisory, because the
   // roster predates the tech base and both example factions refuse armour.
   const techBase = techBases?.[side]
+  const customBase = customTechBases?.[side]
   // The campaign supplement's own refusals, which are a separate question from
   // section 15's: a hull can be legal under a tech base and barred by the
   // faction flying it.
@@ -117,6 +122,7 @@ export function FleetPicker({
   const techReport = checkFleetTechBase(
     techBase,
     picked.map((id) => byId(designs, id)).filter((d): d is ShipDesign => Boolean(d)),
+    customBase,
   )
 
   return (
@@ -233,7 +239,7 @@ export function FleetPicker({
             <div className="design-list">
               {available.map((design) => {
                 const problems = [
-                  ...designProblems(techBase, design),
+                  ...designProblems(techBase, design, customBase),
                   ...pickFaults(design).map(describeFault),
                 ]
                 return (

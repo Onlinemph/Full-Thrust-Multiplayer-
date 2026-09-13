@@ -18,6 +18,12 @@ import {
 } from '../engine/terrain'
 import { currentThrust } from '../engine/game'
 import {
+  isDerelict,
+  isPermanentlyOutOfControl,
+  lifeSupportFailsOnTurn,
+  outOfControlTurnsRemaining,
+} from '../engine/threshold'
+import {
   antimatterChargesAboard,
   areaEcmLevelOf,
   describeWeaponMode,
@@ -721,6 +727,36 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         <div className="panel-row">
           <span style={{ color: 'var(--warn)' }}>
             Disorientated by the jump point — out of control until next turn (11.10)
+          </span>
+        </div>
+      ) : null}
+
+      {/* 10.3's two clocks. A bridge hit is "1D6 turns out of control" and a
+          life support hit is "the crew will be lost in 1D6 turns" — both are
+          counts the player has to plan around, and neither was ever shown. */}
+      {outOfControlTurnsRemaining(ship, game.turn) !== null ? (
+        <div className="panel-row">
+          <span style={{ color: 'var(--warn)' }}>
+            Out of control for {outOfControlTurnsRemaining(ship, game.turn)} more turn
+            {outOfControlTurnsRemaining(ship, game.turn) === 1 ? '' : 's'} (10.3)
+          </span>
+        </div>
+      ) : isPermanentlyOutOfControl(ship) ? (
+        <div className="panel-row">
+          <span style={{ color: 'var(--damage)' }}>
+            Bridge gone: out of control for the rest of the battle (10.3)
+          </span>
+        </div>
+      ) : null}
+
+      {isDerelict(ship) ? (
+        <div className="panel-row">
+          <span style={{ color: 'var(--damage)' }}>Derelict — the crew is gone (10.3)</span>
+        </div>
+      ) : lifeSupportFailsOnTurn(ship) !== null ? (
+        <div className="panel-row">
+          <span style={{ color: 'var(--warn)' }}>
+            Life support failing: the crew is lost on turn {lifeSupportFailsOnTurn(ship)} (10.3)
           </span>
         </div>
       ) : null}

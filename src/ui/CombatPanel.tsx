@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
 import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
@@ -11,6 +12,7 @@ import {
 } from '../engine/actions'
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
 import { PLASMA_BOLT_RANGE } from '../engine/ordnance'
+import { COMMANDO_RAID_FORBIDDEN } from '../engine/weapons/beams'
 import type { Arc, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
@@ -55,6 +57,12 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
   // 4.2's optional exception: a ship that spent no thrust at all may shoot
   // through its own drive plume this turn.
   const aftOpen = optional(game).aftArcFire === true && ship.thrustUsed === 0
+  // 5.9: the transporters that could mount a commando raid, and the system
+  // each target is currently lined up for.
+  const raiders = ship.design.weapons.filter(
+    (weapon) => weapon.weaponClass === 'transporter' && !ship.destroyedSystems.has(weapon.id),
+  )
+  const [raidSystems, setRaidSystems] = useState<Record<string, string>>({})
 
   // 11.9: an artificial gate is a structure with hull boxes, and knocking
   // them off takes its transfer mass down with them. A natural one "cannot be
@@ -313,6 +321,60 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                 </div>
               ) : null}
 
+              {/* 5.9's commando raid: "instead of attempting to capture the
+                  ship they can attempt to destroy a single system". ONLY
+                  Marines, never a Damage Control Party, and never against a
+                  Core system or an antimatter charge. */}
+              {raiders.length > 0 && ship.marinesAboard > 0 ? (
+                <div className="panel-row">
+                  <span>Commando raid</span>
+                  <span className="spacer" />
+                  <select
+                    aria-label={`System to raid aboard ${target.name}`}
+                    value={raidSystems[target.id] ?? ''}
+                    onChange={(event) =>
+                      setRaidSystems((current) => ({ ...current, [target.id]: event.target.value }))
+                    }
+                  >
+                    <option value="">pick a system…</option>
+                    {target.design.systems
+                      .filter(
+                        (system) =>
+                          !target.destroyedSystems.has(system.id) &&
+                          !COMMANDO_RAID_FORBIDDEN.includes(system.kind),
+                      )
+                      .map((system) => (
+                        <option key={system.id} value={system.id}>
+                          {system.label}
+                        </option>
+                      ))}
+                  </select>
+                  {raiders.map((weapon) => (
+                    <button
+                      key={`raid-${weapon.id}`}
+                      disabled={
+                        !raidSystems[target.id] ||
+                        !canWeaponFire(ship, weapon.id) ||
+                        range > maxRangeOf(weapon) ||
+                        !weapon.arcs.includes(arc)
+                      }
+                      title={`${weapon.label}: one Marine party against one system (5.9)`}
+                      onClick={() =>
+                        dispatch({
+                          type: 'commando-raid',
+                          shipId: ship.id,
+                          weaponId: weapon.id,
+                          targetId: target.id,
+                          systemId: raidSystems[target.id] ?? '',
+                        })
+                      }
+                    >
+                      {weapon.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               {/* 6.8's optional shaped charge: the launcher used as a gun,
                   1D3 a class, SAP, and Standard Screens do nothing to it. Its
                   own row because it spends the launcher's every-other-turn
@@ -377,6 +439,58 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                   ))}
                 </div>
               )}
+            </div>
+          )
+        })}
+
+      {/* 9.1: "Direct Fire Anti-ship weapons may fire at gunboats normally,
+          with each HIT destroying ONE gunboat. In the case of weapons that do
+          multiple points of damage ... do not roll damage." So a Beam-3 at
+          close range really does kill three boats. */}
+      {game.gunboatSquadrons
+        .filter(
+          (squadron) =>
+            squadron.side !== ship.side &&
+            squadron.status === 'in-flight' &&
+            squadron.boats.length > 0,
+        )
+        .map((squadron) => {
+          const range = distance(ship.placement.position, squadron.position)
+          const arc = arcTo(ship.placement.position, ship.placement.facing, squadron.position)
+          const reach = ship.design.weapons.map((weapon) =>
+            reachOf(ship, weapon, range, arc, aftOpen),
+          )
+          if (reach.every((r) => r.blocked !== null)) return null
+          return (
+            <div key={squadron.id} className="target-block">
+              <div className="panel-row">
+                <span>{squadron.label}</span>
+                <span className="spacer" />
+                <span style={{ color: 'var(--ink-dim)' }}>{squadron.boats.length} boats</span>
+                <span className="num">{range.toFixed(1)} MU</span>
+                <span className="num arcs">{arc}</span>
+              </div>
+              <div className="ssd-systems">
+                {reach.map(({ weapon, blocked, dice }) => (
+                  <button
+                    key={weapon.id}
+                    className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
+                    disabled={blocked !== null}
+                    title={blocked ?? `${dice}D6, and every hit kills a boat (9.1)`}
+                    onClick={() =>
+                      dispatch({
+                        type: 'fire-at-gunboats',
+                        shipId: ship.id,
+                        weaponId: weapon.id,
+                        squadronId: squadron.id,
+                      })
+                    }
+                  >
+                    {weapon.label}
+                    {blocked ? null : <span className="num">{dice}D6</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           )
         })}

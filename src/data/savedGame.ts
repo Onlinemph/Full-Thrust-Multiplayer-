@@ -24,6 +24,7 @@ import { pushLog, type GameState } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { validateDesign } from './designPricing'
 import { checkFleetTechBase, type TechBaseChoice } from './techBaseCheck'
+import type { TechBase } from '../engine/techbase'
 import type { BattleType } from '../engine/battles'
 import { allDesigns, designById, setEmbeddedDesigns, SHIP_DESIGNS } from './ships'
 import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scenario } from './scenarios'
@@ -70,8 +71,11 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             overload (a different table line, a confirmation die, and a
  *             tube that can blow itself off the SSD), the Variable Strength
  *             tube's line, and the Fusion Array's mode.
+ *  13  5.9, 9.1 — a transporter with nobody left to send is refused, phase 9
+ *             puts point defence on a gunboat squadron, and 9.1's own
+ *             anti-ship table takes one boat a hit.
  */
-export const CURRENT_RULES_VERSION = 12
+export const CURRENT_RULES_VERSION = 13
 
 export interface GameSetup {
   scenarioId: string
@@ -151,6 +155,14 @@ export interface GameSetup {
   techBases?: Partial<Record<string, TechBaseChoice>>
 
   /**
+   * The base a side that picked `custom` actually built (15.1, 15.8), by side
+   * id. Plain data — a name, a list of entry ids and a limit — so it saves and
+   * loads with everything else, and a side whose choice is not `custom`
+   * ignores whatever is here.
+   */
+  customTechBases?: Partial<Record<string, TechBase>>
+
+  /**
    * A force chosen for a side, replacing the scenario's own (18.2). Stored as
    * design ids in deployment order; `startScenario` places them on the
    * scenario's own stations, so a picked fleet deploys where the scenario says
@@ -227,6 +239,7 @@ export function buildGame(setup: GameSetup): GameState {
     const report = checkFleetTechBase(
       choice,
       game.ships.filter((ship) => ship.side === side.id).map((ship) => ship.design),
+      setup.customTechBases?.[side.id],
     )
     pushLog(game, {
       kind: 'note',
