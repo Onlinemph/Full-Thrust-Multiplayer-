@@ -59,6 +59,16 @@ export interface FiringContext {
    * rather than the range from the ship, which has moved on since.
    */
   novaStage?: 1 | 2 | 3
+  /**
+   * 7.16: the target is under an area screen that takes its effective level to
+   * three. The beam family asks it as `areaScreen && targetScreens >= 2`, which
+   * is what switches the (P) re-roll off and takes a plasma cannon to −3.
+   *
+   * Here beside `needleTarget` for the same reason those are: `fireWeapon`
+   * dispatches through this type, so the caller cannot know which resolver it
+   * is about to reach.
+   */
+  areaScreen?: boolean
   rng: Rng
 }
 

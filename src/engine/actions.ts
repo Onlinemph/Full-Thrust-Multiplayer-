@@ -225,6 +225,7 @@ import {
   type AntiFighterMount,
   type CarrierFlightState,
   FIGHTER_ATTACK_RANGE,
+  MISSILE_FIGHTER_RANGE,
   type FighterGroup,
   type RearmResult,
 } from './fighters'
@@ -235,6 +236,7 @@ import {
   stealthScanState,
   pointDefenceOptions,
   regenerateArmour,
+  screenEffect,
   rollAntimatterChargeBlast,
   rollAntimatterChargeSelfDamage,
   rollUnrepairedChargeDetonation,
@@ -255,7 +257,9 @@ import {
   ADS_SHORT_RANGE,
   ANTIMATTER_MISSILE_HITS_TO_KILL,
   rollPointDefenceDice,
+  type AreaScreenCover,
   type PdTargetKind,
+  type ScreenEffect,
   type PdThreat,
   type StealthLevel,
 } from './defences'
@@ -294,6 +298,9 @@ import {
 } from './weapons/kinetics'
 import {
   acquireMissileTargets,
+  MISSILE_ATTACK_RADIUS,
+  VECTOR_MISSILE_ATTACK_RADIUS,
+  type SeekerTarget,
   canEngagePlasmaBolt,
   layMines,
   minesTriggeredBy,
@@ -344,7 +351,12 @@ import {
   cancelCloakOrder,
   cloakCapability,
   cloakEndOfMovement,
+  aggregateEcmLevel,
+  applyCloakDamage,
+  areaEcmBlocks,
   cloakMode,
+  ecmSensorRange,
+  lockOnRange,
   cloakStartOfMovement,
   createNovaCannonState,
   ewFireEffect,
@@ -460,6 +472,7 @@ export type GameAction =
    * mode"*.
    */
   | { type: 'set-active-scan'; shipId: string; on: boolean }
+  | { type: 'set-area-ecm'; shipId: string; on: boolean }
   /** 17.11 — this turn's deceleration in orbit is meant as a landing. */
   | { type: 'plot-landing'; shipId: string; on: boolean }
   /**
@@ -1085,6 +1098,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // those reach `destroyedSystems` by different routes. Zeroing the
       // charge makes the sweep idempotent.
       for (const ship of state.ships) waveGunBacklash(state, ship)
+      // 7.20 – 7.22: a cloak crossed off the SSD stops being a cloak. Same
+      // boundary, same reasoning as the Wave Gun above, and gated with the
+      // rest of reading 11 because a cloak that comes down changes the DRM
+      // on every shot at the hull, re-rolls included.
+      if (rulesReading(state) >= 11) {
+        for (const ship of state.ships) cloakBoxSweep(state, ship)
+      }
       // 17.5: a hull that has just been overkilled may come apart. Swept at the
       // boundary so that every way of dying reaches it, rather than at the
       // seven separate places a ship can be destroyed.
@@ -1714,14 +1734,24 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // 7.4: a Stealth-2 ship running passive "may only target units out to 24
       // MU". Going active lifts it and costs a level of stealth, which is the
       // whole trade — and the trade is only real if the limit is.
-      const reach = targetingRangeOf(ship)
+      const scanReach = targetingRangeOf(ship)
+      // 7.18: ECM also *"reduces the range at which enemy sensors can detect
+      // the ship"*, 6 MU a level, and 7.19's area cover counts towards the
+      // same aggregate. So what the FireCon reaches is the shorter of what the
+      // shooter is running and what the target lets it see.
+      const targetEw = ewDefencesOf(state, target)
+      const jamming = aggregateEcmLevel(targetEw.ecmLevel ?? 0, targetEw.areaEcmLevel ?? 0)
+      const reach =
+        rulesReading(state) >= 11 ? ecmSensorRange(scanReach, jamming) : scanReach
       const toTarget = distance(ship.placement.position, target.placement.position)
       // Gated, because a refusal is a change to the dice: a shot an older
       // journal rolled for and this one turns away takes its whole volley out
       // of the stream and every roll after it moves up.
       if (rulesReading(state) >= 9 && toTarget > reach) {
         return refuse(
-          `${ship.name} is running passive and cannot target past ${reach} MU — go active (7.4)`,
+          reach < scanReach
+            ? `${target.name} is jamming ${ship.name}'s sensors past ${reach} MU (7.18)`
+            : `${ship.name} is running passive and cannot target past ${reach} MU — go active (7.4)`,
         )
       }
 
@@ -1802,6 +1832,19 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
       // 4.4: each FireCon engages one target. A weapon may join a target the
       // ship is already engaging for free; a new target costs a FireCon.
+      // 7.19: the emitter's own FireCons are down while it jams. The
+      // short-range fire controls listed in `AREA_ECM_EXEMPT_FIRECONS` are
+      // exempt, and none of them reaches `fire-weapon` — a PDS, ADS,
+      // Scattergun, Grapeshot or ADFC fires through phase 9.
+      if (
+        rulesReading(state) >= 11 &&
+        needsFireCon(weapon) &&
+        areaEcmBlocks('firecon') &&
+        !ship.areaEcmOff &&
+        areaEcmLevelOf(ship) > 0
+      ) {
+        return refuse(`${ship.name} is running Area ECM and cannot use its own FireCons (7.19)`)
+      }
       if (needsFireCon(weapon) && !engagedTargets(ship, state.phase).includes(target.id)) {
         if (!assignFireCon(ship, target.id, state.phase)) return refuse('No FireCon available')
       }
@@ -1875,13 +1918,31 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return OK
       }
 
+      // 7.2, 7.3, 7.16 in one place. Gated: an umbrella changes how many dice
+      // a beam scores and whether a (P) weapon re-rolls, and no design could
+      // carry one before this reading.
+      const umbrella =
+        rulesReading(state) >= 11
+          ? screenUmbrella(state, target, ship.placement.position)
+          : {
+              level: screensAgainst(state, target, ship.placement.position),
+              advancedLevel: target.design.screens.advanced
+                ? screensAgainst(state, target, ship.placement.position)
+                : 0,
+              suppressRerolls: false,
+            }
       const result = fireWeapon(weapon, {
         range: rangeToUse,
         arc,
         // 17.2 rule 3: a cloud is worth one screen level against a beam or a
         // graser, capped at 2 — which is why it is worth least to the ship
         // that needed it least.
-        targetScreens: dust ? dust.screens : screensAgainst(state, target, ship.placement.position),
+        // 7.16's umbrella stacks on the ship's own screens, capped at three,
+        // and the 4.7 table stops at two — a level-3 umbrella reads as level 2
+        // and pays its extra dividend by switching the (P) re-roll off below.
+        targetScreens: dust
+          ? dust.screens
+          : (Math.min(2, umbrella.level) as ScreenLevel),
         rearArc: isRearArcAttack(
           target.placement.position,
           target.placement.facing,
@@ -1903,7 +1964,16 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // pulse torpedo, a submunition pack or an MKP — a ship that paid half
         // again for the better screen got exactly the worse one — and a
         // Gravitic Gun read its target's velocity as zero.
-        advancedScreens: target.design.screens.advanced,
+        // 7.3: an advanced screen is the only screen a projectile weapon feels,
+        // and 7.16's umbrella may be advanced for a ship whose own screens are
+        // not — an advanced area screen's levels are advanced levels for
+        // everything under it.
+        advancedScreens: umbrella.advancedLevel > 0,
+        // 7.16: "in the case of ships with level two screens being protected by
+        // an area screen weapons that would normally penetrate do not get their
+        // re-rolls". The resolvers ask this as `areaScreen && targetScreens >= 2`,
+        // which is exactly the level-3 case and nothing else.
+        areaScreen: umbrella.suppressRerolls,
         targetVelocity: target.velocity,
         // 5.23's PSP scales its damage dice on the target's mass, so this one
         // changes how many dice a shot throws and is stamped: an older battle
@@ -3046,7 +3116,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       )
       const acquired = acquireMissileTargets(
         ordnanceOf(state),
-        alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
+        alive.map((ship) => seekerTargetOf(state, ship)),
       )
       setOrdnance(state, acquired.markers)
 
@@ -3901,7 +3971,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         return refuse(`${target.name} has no system ${action.systemId}`)
       }
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
       const blocking = screenInTheWay(state, flight, target.id)
       if (blocking) {
@@ -4003,7 +4076,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (target.side === flight.side) return refuse('A group does not strafe its own fleet')
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
       // The interceptor has to be close enough to be doing the intercepting.
       const reach = canDeclareAttack(interceptor, flight.position, { kind: 'fighter' })
@@ -4078,7 +4154,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (target.side === flight.side) return refuse('A group does not attack its own fleet')
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
       flight.targetId = target.id
       pushLog(state, {
@@ -4247,7 +4326,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (target.side === flight.side) return refuse('A group does not board its own fleet')
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
 
       const carrier = flight.carrierId ? shipById(state, flight.carrierId) : undefined
@@ -4333,7 +4415,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (target.side === flight.side) return refuse('A group does not strafe its own fleet')
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
       if (!fighterMoraleHolds(state, flight)) return OK
 
@@ -4533,7 +4618,10 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (target.destroyed || target.offTable) return refuse('Target is out of the battle')
       if (target.side === flight.side) return refuse('A group does not strafe its own fleet')
 
-      const allowed = canDeclareAttack(flight, target.placement.position, { kind: 'ship' })
+      const allowed = canDeclareAttack(flight, target.placement.position, {
+        kind: 'ship',
+        lockOn: fighterLockOnRange(state, target),
+      })
       if (!allowed.allowed) return refuse(`${flight.label}: ${allowed.reason}`)
       // 8.6: the screen has to be gone through first.
       const blocking = screenInTheWay(state, flight, target.id)
@@ -4784,6 +4872,30 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         // Written orders are the one secret in an open-book game (2.6).
         visibleTo: [ship.side],
         text: `${ship.name} will cloak for ${turns} turn${turns === 1 ? '' : 's'} (7.20)`,
+      })
+      return OK
+    }
+
+    case 'set-area-ecm': {
+      // 7.19: *"When Area ECM is turned on, the carrying ship cannot use its
+      // own FireCon systems."* The switch is the whole rule — the cover it
+      // gives friends within 6 MU is paid for by the emitter's own guns going
+      // quiet, so a ship that wants to shoot this turn shuts it down first.
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (ship.destroyed || ship.offTable) return refuse('Ship is out of the battle')
+      if (areaEcmLevelOf(ship) <= 0) {
+        return refuse(`${ship.name} has no Area ECM to switch (7.19)`)
+      }
+      if (ship.areaEcmOff !== action.on) return OK
+      ship.areaEcmOff = !action.on
+      pushLog(state, {
+        kind: 'orders',
+        shipId: ship.id,
+        side: ship.side,
+        text: action.on
+          ? `${ship.name} turns Area ECM on: friends within 6 MU are covered, its own FireCons are not (7.19)`
+          : `${ship.name} shuts Area ECM down and can shoot again (7.19)`,
       })
       return OK
     }
@@ -6934,6 +7046,51 @@ function waveGunBacklash(state: GameState, ship: ShipState): void {
     if (ship.destroyed) {
       pushLog(state, { kind: 'destroyed', shipId: ship.id, text: `${ship.name} is destroyed` })
     }
+  }
+}
+
+/**
+ * Cloak boxes crossed off the SSD, carried into the cloak's own state
+ * (7.20 – 7.22).
+ *
+ * The Cloaking Field's two boxes are the reason the rule bothers: *"If one of
+ * its damage boxes has been checked off for any reason the cloak operates as a
+ * standard cloak"*, and a Tuffley Cloak *"does not have a 'damaged level'"* —
+ * one box and it is gone. Swept at the phase boundary alongside the Wave Gun
+ * backlash and for the same reason: a threshold roll, a needle beam and a
+ * boarding party all reach `destroyedSystems` by different routes. Counting
+ * the crossed-off boxes rather than adding to a running total makes it
+ * idempotent.
+ */
+function cloakBoxSweep(state: GameState, ship: ShipState): void {
+  const cloak = ship.cloak
+  if (!cloak) return
+  const lost = ship.design.systems.filter(
+    (system) => system.kind === cloak.kind && ship.destroyedSystems.has(system.id),
+  ).length
+  if (lost <= cloak.boxesLost) return
+  const wasCloaked = ship.cloaked
+  const after = applyCloakDamage(cloak, lost - cloak.boxesLost)
+  ship.cloak = after
+  ship.cloaked = cloakMode(after) !== 'none'
+  // What it could still do if switched on, not what it happens to be doing:
+  // `cloakMode` reads 'none' for any cloak that is simply off.
+  pushLog(state, {
+    kind: 'note',
+    shipId: ship.id,
+    side: ship.side,
+    text:
+      cloakCapability(after) === 'none'
+        ? `${ship.name}'s cloak is knocked out (7.20)`
+        : `${ship.name}'s cloak is damaged and runs as a standard cloak (7.21)`,
+  })
+  if (wasCloaked && !ship.cloaked) {
+    pushLog(state, {
+      kind: 'note',
+      shipId: ship.id,
+      side: ship.side,
+      text: `${ship.name} decloaks`,
+    })
   }
 }
 
@@ -9601,6 +9758,11 @@ export function antiShipPdMounts(
     .map((mount) => ({ id: mount.id, label: labels.get(mount.id) ?? mount.id }))
 }
 
+/** Levels of Area ECM this ship can still put out (7.19). */
+export function areaEcmLevelOf(ship: ShipState): number {
+  return operationalCount(ship, 'area-ecm')
+}
+
 export function stealthLevelOf(ship: ShipState): StealthLevel {
   if (ship.cloaked) return 0
   const built = Math.min(2, operationalCount(ship, 'stealth-hull')) as StealthLevel
@@ -9646,6 +9808,9 @@ function ewDefencesOf(state: GameState, target: ShipState): EwDefences {
         !ship.destroyed &&
         !ship.offTable &&
         !ship.cloaked &&
+        // 7.19 is a switch, and an emitter that has been shut down so its own
+        // guns can fire is covering nobody.
+        !(rulesReading(state) >= 11 && ship.areaEcmOff) &&
         distance(ship.placement.position, target.placement.position) <= AREA_ECM_RADIUS,
     )
     .reduce((best, ship) => Math.max(best, operationalCount(ship, 'area-ecm')), 0)
@@ -9679,13 +9844,58 @@ function ewDefencesOf(state: GameState, target: ShipState): EwDefences {
  * will settle it in phase 10 gives the same answer without touching a die or
  * a marker.
  */
+/**
+ * A hull as the seeker sees it (6.3, 7.4).
+ *
+ * Stealth *"also applies to missile lock-on range"* (7.4) and 6.3's optional
+ * vector rule halves the radius, and both belong to the target rather than to
+ * the marker. Reading 11 or later: a marker that no longer acquires never
+ * rolls its lock-on d6 or its damage dice in phase 10, so an older battle has
+ * to keep finding the hulls it found the first time.
+ */
+function seekerTargetOf(state: GameState, ship: ShipState): SeekerTarget {
+  const seen: SeekerTarget = {
+    id: ship.id,
+    owner: ship.side,
+    position: ship.placement.position,
+  }
+  if (rulesReading(state) < 11) return seen
+  seen.stealth = stealthLevelOf(ship)
+  seen.vectorMovement = optional(state).movementSystem === 'vector'
+  seen.lockOn = lockOnRange(
+    'missile',
+    ewDefencesOf(state, ship),
+    seen.vectorMovement ? VECTOR_MISSILE_ATTACK_RADIUS : MISSILE_ATTACK_RADIUS,
+  )
+  return seen
+}
+
+/**
+ * How far a fighter group can still declare an attack (8.7, 7.17 – 7.20).
+ *
+ * 8.7's 6 MU (and 8.15's 12 MU for a Missile Fighter's salvo) is the base the
+ * electronic-warfare stack works on: *"this would reduce fighter/missile
+ * lock-on range to 2 MU"* against three levels of ECM, and 7.20 stops a lock
+ * altogether. Stealth is left out on purpose — 7.4 extends its band shrinkage
+ * to *"missile lock-on range"* and says nothing about fighters.
+ */
+function fighterLockOnRange(
+  state: GameState,
+  target: ShipState,
+  payloadAttack = false,
+): number | null {
+  const base = payloadAttack ? MISSILE_FIGHTER_RANGE : FIGHTER_ATTACK_RANGE
+  if (rulesReading(state) < 11) return base
+  return lockOnRange('fighter', ewDefencesOf(state, target), base)
+}
+
 function prospectiveMissileTargets(state: GameState): Map<string, string> {
   const alive = state.ships.filter(
     (ship) => !ship.destroyed && !ship.offTable && ship.carriedBy === null,
   )
   const acquired = acquireMissileTargets(
     ordnanceOf(state).map((marker) => ({ ...marker })),
-    alive.map((ship) => ({ id: ship.id, owner: ship.side, position: ship.placement.position })),
+    alive.map((ship) => seekerTargetOf(state, ship)),
   )
   return new Map(acquired.acquisitions.map((hit) => [hit.markerId, hit.targetShipId]))
 }
@@ -10039,6 +10249,47 @@ function recoveredThisTurn(state: GameState, ship: ShipState): boolean {
  * cap belong to `defences.ts`, which owns 7.2; counting the surviving
  * generators off a ShipState is the part that belongs here.
  */
+/**
+ * The umbrella over this ship at the moment of a shot (7.2, 7.3, 7.16).
+ *
+ * 7.16: *"An area screen counts as one additional level of screen for the
+ * generating ship and any ship inside it's 6mu 'bubble' and will 'stack' with
+ * any screens those ships have up to a maximum of three."* — and *"the 'bubble'
+ * will not affect any fire coming from inside the 6mu radius"*, which is why
+ * the shot's origin is an argument rather than an afterthought.
+ *
+ * `defences.screenEffect` has always done this arithmetic and nothing called
+ * it, because nothing could: `ScreenDef.area` had no way onto a design.
+ */
+function screenUmbrella(state: GameState, target: ShipState, from: Point): ScreenEffect {
+  // 7.23 and 7.24 take a ship's own screens away before anything is counted —
+  // a Nova Cannon armed this turn switches them all off, and a Wave Gun that
+  // fired opens the bow arcs. An umbrella is somebody else's generator and is
+  // untouched by either, so only the ship's own level is zeroed here.
+  const own = screensAgainst(state, target, from)
+  const projectors: AreaScreenCover[] = []
+  for (const ship of state.ships) {
+    if (ship.side !== target.side || ship.destroyed || ship.offTable) continue
+    const area = ship.design.screens.area
+    if (!area) continue
+    // A projector with its generators shot away projects nothing.
+    if (effectiveScreenLevel(ship) <= 0 && ship.design.screens.level > 0) continue
+    projectors.push({
+      generatorId: ship.id,
+      position: ship.placement.position,
+      level: area.level ?? 1,
+      advanced: area.advanced,
+    })
+  }
+  return screenEffect({
+    screens: { ...target.design.screens, level: own },
+    operationalGenerators: own,
+    areaScreens: projectors,
+    position: target.placement.position,
+    attacker: from,
+  })
+}
+
 /**
  * The screen level a shot at this ship actually meets (4.7, 7.23).
  *

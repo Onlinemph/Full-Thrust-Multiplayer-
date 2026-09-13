@@ -234,6 +234,13 @@ export interface ShipState {
    */
   activeScan: boolean
   /**
+   * 7.19: the ship's Area ECM emitter has been switched off. It defaults to on
+   * — covering the squadron is what the system is for — but *"when Area ECM is
+   * turned on, the carrying ship cannot use its own FireCon systems"*, so a
+   * ship that wants to shoot has to be able to shut it down.
+   */
+  areaEcmOff: boolean
+  /**
    * 7.9: the turn a *"detonate"* order was written in, or null. The order is
    * good for that turn only — *"at the beginning of phase 13 ... the ship
    * explodes"* — so a turn stamp says both whether it stands and when.
@@ -598,6 +605,7 @@ export function createShipState(opts: ShipStateOptions): ShipState {
     thrustUsed: 0,
     layingMines: false,
     activeScan: false,
+    areaEcmOff: false,
     detonateOrderedTurn: null,
     landing: false,
     ftlTransit: 'none',

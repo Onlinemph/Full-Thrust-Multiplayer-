@@ -28,6 +28,7 @@ import {
   type Rng,
   type ScreenLevel,
 } from '../dice'
+import { advancedScreenDamageDie } from '../defences'
 import { beamDiceAtRange, bearing, courseToDegrees, distance, rangeBand } from '../geometry'
 import type {
   Arc,
@@ -385,7 +386,7 @@ export function fireVariablePulseTorpedo(
 
   if (setting === 'long') {
     const roll = d3(ctx.rng)
-    const damage = Math.max(0, roll.value - screens)
+    const damage = advancedScreenDamageDie(roll.value, screens)
     return {
       normalDamage: damage,
       penetratingDamage: 0,
@@ -397,7 +398,7 @@ export function fireVariablePulseTorpedo(
 
   const bonus = setting === 'short' ? 2 : 0
   const damageDie = d6(ctx.rng)
-  const damage = Math.max(0, damageDie + bonus - screens)
+  const damage = advancedScreenDamageDie(damageDie + bonus, screens)
   return {
     normalDamage: damage,
     penetratingDamage: 0,

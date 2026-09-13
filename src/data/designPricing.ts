@@ -54,6 +54,7 @@ import {
   HULL_POINTS_PER_BOX,
   type ArmourDef,
   type HullClass,
+  type ScreenDef,
   type HullRows,
   type ShipDesign,
   type SystemKind,
@@ -96,6 +97,25 @@ export function screenMass(mass: number, level: number, advanced: boolean): numb
 
 export function screenPoints(mass: number, level: number, advanced: boolean): number {
   return screenMass(mass, level, advanced) * (advanced ? 4 : 3)
+}
+
+/**
+ * An area screen projector's mass (7.16).
+ *
+ * *"20% of the generating ship's mass per level (minimum 15) for a standard
+ * area screen, 30% per level (minimum 20) for an advanced one, max level 2."*
+ * The minimum is what stops a frigate throwing an umbrella over a battle line.
+ */
+export function areaScreenMass(mass: number, area: ScreenDef['area']): number {
+  if (!area) return 0
+  const level = area.level ?? 1
+  const share = (area.advanced ? 0.3 : 0.2) * mass * level
+  return Math.max(area.advanced ? 20 : 15, share)
+}
+
+/** 7.16: 3.5 points per mass, whichever kind. */
+export function areaScreenPoints(mass: number, area: ScreenDef['area']): number {
+  return areaScreenMass(mass, area) * 3.5
 }
 
 /**
@@ -281,6 +301,7 @@ export function priceDesign(design: ShipDesign): DesignCost {
     streamliningMass(m, design.streamlining) +
     armourMass(design.armour) +
     screenMass(m, design.screens.level, design.screens.advanced) +
+    areaScreenMass(m, design.screens.area) +
     design.weapons.reduce((sum, w) => sum + w.mass, 0) +
     design.turrets.reduce((sum, t) => sum + t.mass, 0) +
     // 6.6: the mass set aside for Salvo Missile loads, which is what an SML
@@ -295,6 +316,7 @@ export function priceDesign(design: ShipDesign): DesignCost {
     ftlPackagePoints(design) +
     armourPoints(design.armour) +
     screenPoints(m, design.screens.level, design.screens.advanced) +
+    areaScreenPoints(m, design.screens.area) +
     design.weapons.reduce((sum, w) => sum + w.points, 0) +
     design.turrets.reduce((sum, t) => sum + t.points, 0) +
     (design.magazines ?? []).reduce((sum, m) => sum + m.points, 0) +

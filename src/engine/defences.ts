@@ -20,7 +20,6 @@
  */
 
 import {
-  beamDamage,
   d6,
   pointDefenceKills,
   rollBeamVolley,
@@ -161,86 +160,6 @@ export function screenEffect(input: ScreenInput): ScreenEffect {
 }
 
 /**
- * How a weapon's dice meet screens (4.7, 7.2, 7.3, 5.5).
- *
- * - `beam` — beams, grasers, fighters: the 4.7 table, against either screen type.
- * - `combined-die` — SMPs *"and similar weapons that ignore Standard Screens and
- *   roll a combined hit and damage D6"*: read on the 4.7 table, but only against
- *   *advanced* screens (7.3).
- * - `damage-dice` — pulse torpedoes and missiles: ignore standard screens, and
- *   subtract the advanced level from each damage die (7.3).
- * - `plasma` — 5.5: *"1d6-2 (plus an additional -1 per level of screen)"* hits.
- * - `none` — ignores screens entirely, e.g. scattergun direct fire (7.14).
- */
-export type ScreenInteraction = 'beam' | 'combined-die' | 'damage-dice' | 'plasma' | 'none'
-
-export interface ScreenProtection {
-  /**
-   * Level to read `dice.beamDamage` with. The 4.7 table stops at 2 and 7.16
-   * does not extend it, so a level-3 umbrella reads as level 2 and pays its
-   * extra dividend in `suppressRerolls` instead.
-   */
-  beamTableLevel: ScreenLevel
-  /** Subtracted from each of the weapon's own damage dice (7.3). */
-  perDieDrm: number
-  /** Hits subtracted from each plasma die (5.5, 7.16). */
-  plasmaDrm: number
-  /** 7.16: no (P) re-rolls against a level-3 umbrella. */
-  suppressRerolls: boolean
-}
-
-/**
- * What the target's screens do to one weapon (4.7, 7.3, 7.16).
- *
- * 7.16 prints *"Plasma weapons would be at -3 on their die rolls"* against a
- * level-3 umbrella, which is exactly 5.5's −1 per level carried up to 3; the
- * trailing *"in addition to any shields the target ship mounts"* is read as
- * *the area screen's level counts alongside the ship's own*, not as a second −3
- * on top, because stacking would put plasma at −6 and contradict the −3 the
- * same sentence names.
- */
-export function screenProtection(
-  interaction: ScreenInteraction,
-  effect: ScreenEffect,
-): ScreenProtection {
-  const none: ScreenProtection = {
-    beamTableLevel: 0,
-    perDieDrm: 0,
-    plasmaDrm: 0,
-    suppressRerolls: false,
-  }
-  switch (interaction) {
-    case 'none':
-      return none
-    case 'beam':
-      return {
-        beamTableLevel: Math.min(MAX_SCREEN_LEVEL, effect.level) as ScreenLevel,
-        perDieDrm: 0,
-        plasmaDrm: 0,
-        suppressRerolls: effect.suppressRerolls,
-      }
-    case 'combined-die':
-      // 7.3: only advanced screens touch these at all, and then "as if they
-      // were beams" — which is the same table, read at the advanced level.
-      return {
-        beamTableLevel: Math.min(MAX_SCREEN_LEVEL, effect.advancedLevel) as ScreenLevel,
-        perDieDrm: 0,
-        plasmaDrm: 0,
-        suppressRerolls: effect.advancedLevel >= MAX_UMBRELLA_LEVEL,
-      }
-    case 'damage-dice':
-      return { ...none, perDieDrm: effect.advancedLevel }
-    case 'plasma':
-      return {
-        beamTableLevel: 0,
-        perDieDrm: 0,
-        plasmaDrm: effect.level,
-        suppressRerolls: effect.suppressRerolls,
-      }
-  }
-}
-
-/**
  * Apply an advanced screen to one damage die of ordnance (7.3).
  *
  * *"Negative damage is treated as zero; the target ship cannot regain damage
@@ -249,17 +168,6 @@ export function screenProtection(
  */
 export function advancedScreenDamageDie(face: number, advancedLevel: number): number {
   return Math.max(0, face - advancedLevel)
-}
-
-/**
- * A combined hit-and-damage die (an SMP and the like) against advanced screens
- * (7.3): *"Against level-1 Advanced Screens a roll of 5 inflicts 1 damage point,
- * and a roll of 6 inflicts 2. Against level-2 Advanced Screens a roll of 5 or 6
- * inflicts 1 damage point."* — the 4.7 table verbatim, so `dice.beamDamage` is
- * the implementation.
- */
-export function combinedDieDamage(face: number, advancedLevel: ScreenLevel): number {
-  return beamDamage(face, advancedLevel)
 }
 
 // ---------------------------------------------------------------------------
@@ -277,11 +185,6 @@ export const STEALTH_BAND_SCALE: Record<StealthLevel, number> = {
   0: 1,
   1: 5 / 6,
   2: 2 / 3,
-}
-
-/** The range bracket an attacker actually gets against a stealthy target (7.4). */
-export function stealthBandSize(bandSize: number, level: StealthLevel): number {
-  return bandSize * STEALTH_BAND_SCALE[level]
 }
 
 /**

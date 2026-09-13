@@ -103,8 +103,14 @@ export interface ScreenDef {
   generators: number
   /** Advanced screens also blunt ordnance damage (7.3). */
   advanced: boolean
-  /** Area screens protect nearby friendly ships (7.16). */
-  area?: { advanced: boolean }
+  /**
+   * Area screens protect nearby friendly ships (7.16).
+   *
+   * 7.16's mass line prices them *"per level (max of 2)"* while its opening
+   * sentence describes the level-1 case, so a projector built at level *n*
+   * contributes *n* to the umbrella. Absent `level` reads as 1.
+   */
+  area?: { advanced: boolean; level?: 1 | 2 }
 }
 
 // ---------------------------------------------------------------------------

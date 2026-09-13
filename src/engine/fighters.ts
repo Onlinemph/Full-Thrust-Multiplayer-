@@ -1638,7 +1638,16 @@ export type FighterTargetKind = 'ship' | 'fighter' | 'missile'
 export function canDeclareAttack(
   group: FighterGroup,
   target: Point,
-  opts: { kind: FighterTargetKind; payloadAttack?: boolean } = { kind: 'ship' },
+  opts: {
+    kind: FighterTargetKind
+    payloadAttack?: boolean
+    /**
+     * The reach electronic warfare leaves this group against this target
+     * (7.17 – 7.20), in place of the printed 6 or 12 MU; `null` is 7.20's
+     * *"Missiles and fighters will not lock at all"*.
+     */
+    lockOn?: number | null
+  } = { kind: 'ship' },
 ): FlightOperationCheck {
   if (group.status !== 'in-flight' || isDestroyed(group)) {
     return { allowed: false, reason: 'group is not in flight (8.7)' }
@@ -1648,8 +1657,12 @@ export function canDeclareAttack(
   }
   const profile = groupProfile(group)
   const payloadAttack = opts.payloadAttack ?? false
-  const range =
+  const printed =
     payloadAttack && profile.payload === 'salvo-missile' ? MISSILE_FIGHTER_RANGE : FIGHTER_ATTACK_RANGE
+  if (opts.lockOn === null) {
+    return { allowed: false, reason: 'nothing can lock on that target (7.20)' }
+  }
+  const range = opts.lockOn ?? printed
   const measured = distance(group.position, target)
   if (measured > range + 1e-9) {
     return { allowed: false, reason: `target is ${measured.toFixed(1)} MU away, beyond ${range} MU (8.7)` }

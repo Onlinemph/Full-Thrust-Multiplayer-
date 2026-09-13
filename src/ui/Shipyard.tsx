@@ -385,6 +385,38 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
               />
             </label>
 
+            {/* 7.16: "An area screen counts as one additional level of screen
+                for the generating ship and any ship inside it's 6mu 'bubble'."
+                20% of the hull per level, minimum 15, and 30%/20 advanced —
+                which is why only a big ship can throw one. */}
+            <label className="code-field">
+              Area screen{' '}
+              <span className="num">{design.screens.area ? design.screens.area.level ?? 1 : 0}</span>
+              <input
+                type="range"
+                min={0}
+                max={2}
+                value={design.screens.area ? design.screens.area.level ?? 1 : 0}
+                onChange={(event) => {
+                  const level = Number(event.target.value) as 0 | 1 | 2
+                  edit({
+                    screens: {
+                      ...design.screens,
+                      area:
+                        level === 0
+                          ? undefined
+                          : { advanced: design.screens.advanced, level },
+                    },
+                  })
+                }}
+              />
+              <span className="rule-detail">
+                {design.screens.area
+                  ? `a 6 MU umbrella over the squadron, stacking to 3 (7.16)`
+                  : 'none'}
+              </span>
+            </label>
+
             <label className="code-field">
               Armour <span className="num">{design.armour.layers[0] ?? 0}</span>
               <input

@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { Rng, beamDamage, rollBeamVolley } from './dice'
+import { Rng, beamDamage, rollBeamVolley, type ScreenLevel } from './dice'
 import {
   ALL_ARCS,
   AREA_RADIUS,
@@ -21,10 +21,10 @@ import {
   applyArmourDamage,
   armourPoints,
   armourPointsPerMass,
-  combinedDieDamage,
   combinedStealthLevel,
   coveringAreaScreens,
   effectiveScreenLevel,
+  MAX_SCREEN_LEVEL,
   pdMayEngageShip,
   pointDefenceOptions,
   regenerateArmour,
@@ -37,8 +37,6 @@ import {
   rollUnrepairedChargeDetonation,
   salvoMissilesThrough,
   screenEffect,
-  screenProtection,
-  stealthBandSize,
   stealthHullLevel,
   stealthMaxRange,
   stealthScanState,
@@ -153,19 +151,16 @@ describe('7.2 defensive screens', () => {
     // and 6, and the further re-roll is 3 ... the 4 inflicts 1 damage point and
     // the 6 another 2 for a total of 5."
     const rng = new ScriptedRng([2, 3, 3, 4, 6, 4, 6, 6, 3])
-    const protection = screenProtection(
-      'beam',
-      screenEffect({
-        screens: screens(2, 2),
-        operationalGenerators: 2,
-        position: at(0),
-        attacker: at(10),
-      }),
-    )
-    expect(protection.beamTableLevel).toBe(2)
-    expect(protection.suppressRerolls).toBe(false)
+    const effect = screenEffect({
+      screens: screens(2, 2),
+      operationalGenerators: 2,
+      position: at(0),
+      attacker: at(10),
+    })
+    expect(effect.level).toBe(2)
+    expect(effect.suppressRerolls).toBe(false)
 
-    const volley = rollBeamVolley(6, protection.beamTableLevel, rng)
+    const volley = rollBeamVolley(6, effect.level as ScreenLevel, rng)
     expect(volley.normalDamage).toBe(2)
     expect(volley.penetratingDamage).toBe(3)
     expect(volley.normalDamage + volley.penetratingDamage).toBe(5)
@@ -180,14 +175,12 @@ describe('7.2 defensive screens', () => {
       position: at(0),
       attacker: at(10),
     })
-    expect(screenProtection('damage-dice', effect).perDieDrm).toBe(0)
-    expect(screenProtection('combined-die', effect).beamTableLevel).toBe(0)
-    expect(screenProtection('none', effect)).toEqual({
-      beamTableLevel: 0,
-      perDieDrm: 0,
-      plasmaDrm: 0,
-      suppressRerolls: false,
-    })
+    // Plain screens are not advanced screens, so ordnance meets nothing: the
+    // per-die subtraction of 7.3 and the combined-die table both read
+    // `advancedLevel`, which is zero here however high `level` climbs.
+    expect(effect.level).toBe(2)
+    expect(effect.advancedLevel).toBe(0)
+    expect(advancedScreenDamageDie(4, effect.advancedLevel)).toBe(4)
   })
 
   it('prices screens at 5% of hull mass per level and 3 points per mass (7.2)', () => {
@@ -213,18 +206,17 @@ describe('7.3 advanced screens', () => {
     // "Against level-1 Advanced Screens a roll of 5 inflicts 1 damage point,
     // and a roll of 6 inflicts 2. Against level-2 Advanced Screens a roll of 5
     // or 6 inflicts 1 damage point."
-    expect(combinedDieDamage(4, 1)).toBe(0)
-    expect(combinedDieDamage(5, 1)).toBe(1)
-    expect(combinedDieDamage(6, 1)).toBe(2)
-    expect(combinedDieDamage(5, 2)).toBe(1)
-    expect(combinedDieDamage(6, 2)).toBe(1)
-    // and is the same table the beam dice read (4.7)
-    expect(combinedDieDamage(6, 1)).toBe(beamDamage(6, 1))
+    // The 4.7 table is the implementation, read at the *advanced* level.
+    expect(beamDamage(4, advanced(1).advancedLevel as ScreenLevel)).toBe(0)
+    expect(beamDamage(5, advanced(1).advancedLevel as ScreenLevel)).toBe(1)
+    expect(beamDamage(6, advanced(1).advancedLevel as ScreenLevel)).toBe(2)
+    expect(beamDamage(5, advanced(2).advancedLevel as ScreenLevel)).toBe(1)
+    expect(beamDamage(6, advanced(2).advancedLevel as ScreenLevel)).toBe(1)
   })
 
   it('subtracts the advanced level from each ordnance damage die (7.3)', () => {
-    expect(screenProtection('damage-dice', advanced(1)).perDieDrm).toBe(1)
-    expect(screenProtection('damage-dice', advanced(2)).perDieDrm).toBe(2)
+    expect(advanced(1).advancedLevel).toBe(1)
+    expect(advanced(2).advancedLevel).toBe(2)
     expect(advancedScreenDamageDie(4, 1)).toBe(3)
     expect(advancedScreenDamageDie(4, 2)).toBe(2)
   })
@@ -240,8 +232,8 @@ describe('7.3 advanced screens', () => {
   it('still reads beams off the ordinary table (7.3)', () => {
     // "Beams, Grasers, fighters ... are affected in the same way when attacking
     // a ship with Advanced Screens."
-    expect(screenProtection('beam', advanced(2)).beamTableLevel).toBe(2)
-    expect(screenProtection('beam', advanced(1)).beamTableLevel).toBe(1)
+    expect(advanced(2).level).toBe(2)
+    expect(advanced(1).level).toBe(1)
   })
 
   it('prices advanced screens at 7.5% per level and 4 points per mass (7.3)', () => {
@@ -274,7 +266,7 @@ describe('7.16 area screens', () => {
       attacker: at(40),
     })
     expect(effect.level).toBe(2)
-    expect(screenProtection('beam', effect).beamTableLevel).toBe(2)
+    expect(effect.suppressRerolls).toBe(false)
   })
 
   it('covers the generating ship itself and stops at 6 MU', () => {
@@ -304,11 +296,10 @@ describe('7.16 area screens', () => {
       attacker: at(40),
     })
     expect(effect.level).toBe(3) // capped, not 4
-    const protection = screenProtection('beam', effect)
     // "weapons that would normally penetrate do not get their re-rolls"
-    expect(protection.suppressRerolls).toBe(true)
+    expect(effect.suppressRerolls).toBe(true)
     // the 4.7 table stops at 2, so a level-3 umbrella still reads as level 2
-    expect(protection.beamTableLevel).toBe(2)
+    expect(Math.min(MAX_SCREEN_LEVEL, effect.level)).toBe(2)
   })
 
   it('puts plasma weapons at −3 against a level-3 umbrella (7.16, 5.5)', () => {
@@ -319,16 +310,15 @@ describe('7.16 area screens', () => {
       position: at(3),
       attacker: at(40),
     })
+    // 5.5 is −1 per level, so the umbrella's third level is the printed −3.
     expect(effect.level).toBe(3)
-    expect(screenProtection('plasma', effect).plasmaDrm).toBe(3)
-    // and −1 per level below that, per 5.5
     const unscreened = screenEffect({
       screens: screens(0, 0),
       operationalGenerators: 0,
       position: at(3),
       attacker: at(40),
     })
-    expect(screenProtection('plasma', unscreened).plasmaDrm).toBe(0)
+    expect(unscreened.level).toBe(0)
   })
 
   it('lets an advanced umbrella blunt ordnance for a ship with plain screens', () => {
@@ -342,7 +332,7 @@ describe('7.16 area screens', () => {
     expect(effect.level).toBe(3)
     // only the umbrella's two levels are advanced; the frigate's own is not
     expect(effect.advancedLevel).toBe(2)
-    expect(screenProtection('damage-dice', effect).perDieDrm).toBe(2)
+    expect(advancedScreenDamageDie(6, effect.advancedLevel)).toBe(4)
   })
 
   it('prices area screens as printed (7.16)', () => {
@@ -362,17 +352,18 @@ describe('7.16 area screens', () => {
 
 describe('7.4 stealth hull', () => {
   it('reproduces the printed range-bracket table', () => {
-    // 12 → 10 → 8, 9 → 7.5 → 6, 6 → 5 → 4, 4 → 3.33 → 2.66
-    expect(stealthBandSize(12, 1)).toBe(10)
-    expect(stealthBandSize(12, 2)).toBe(8)
-    expect(stealthBandSize(9, 1)).toBe(7.5)
-    expect(stealthBandSize(9, 2)).toBe(6)
-    expect(stealthBandSize(6, 1)).toBe(5)
-    expect(stealthBandSize(6, 2)).toBe(4)
+    // 12 → 10 → 8, 9 → 7.5 → 6, 6 → 5 → 4, 4 → 3.33 → 2.66. A band and a total
+    // reach scale by the same two factors, which is why one function does both.
+    expect(stealthMaxRange(12, 1)).toBe(10)
+    expect(stealthMaxRange(12, 2)).toBe(8)
+    expect(stealthMaxRange(9, 1)).toBe(7.5)
+    expect(stealthMaxRange(9, 2)).toBe(6)
+    expect(stealthMaxRange(6, 1)).toBe(5)
+    expect(stealthMaxRange(6, 2)).toBe(4)
     // The book prints 3.33 and 2.66 — 4 x 5/6 and 4 x 2/3 truncated, not rounded.
-    expect(stealthBandSize(4, 1)).toBeCloseTo(10 / 3, 10)
-    expect(stealthBandSize(4, 2)).toBeCloseTo(8 / 3, 10)
-    expect(stealthBandSize(12, 0)).toBe(12)
+    expect(stealthMaxRange(4, 1)).toBeCloseTo(10 / 3, 10)
+    expect(stealthMaxRange(4, 2)).toBeCloseTo(8 / 3, 10)
+    expect(stealthMaxRange(12, 0)).toBe(12)
   })
 
   it('reproduces the worked example: a class-3 beam loses 36 MU down to 30 and 24', () => {

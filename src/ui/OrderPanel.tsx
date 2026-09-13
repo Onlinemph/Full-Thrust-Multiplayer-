@@ -19,6 +19,7 @@ import {
 import { currentThrust } from '../engine/game'
 import {
   antimatterChargesAboard,
+  areaEcmLevelOf,
   carriedHulls,
   isJumpPointDisoriented,
   novaArmedOn,
@@ -476,6 +477,31 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
             {ship.activeScan
               ? 'Stealth-1 while it lasts, and 54 MU of FireCon (7.4)'
               : 'passive: Stealth-2, and nothing beyond 24 MU (7.4)'}
+          </span>
+        </div>
+      ) : null}
+
+      {/* 7.19: "When Area ECM is turned on, the carrying ship cannot use its
+          own FireCon systems." So the emitter is a switch, and the ship that
+          wants to shoot this turn has to throw it. */}
+      {areaEcmLevelOf(ship) > 0 ? (
+        <div className="panel-row">
+          <label>
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={!ship.areaEcmOff}
+              onChange={(event) =>
+                dispatch({ type: 'set-area-ecm', shipId: ship.id, on: event.target.checked })
+              }
+            />{' '}
+            Area ECM
+          </label>
+          <span className="spacer" />
+          <span style={{ color: ship.areaEcmOff ? 'var(--ink-dim)' : 'var(--warn)' }}>
+            {ship.areaEcmOff
+              ? 'off: nobody is covered, the guns are free (7.19)'
+              : 'friends within 6 MU covered; its own FireCons are down (7.19)'}
           </span>
         </div>
       ) : null}

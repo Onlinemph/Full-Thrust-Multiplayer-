@@ -57,8 +57,16 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             asked for a Beam-1 and nothing else, so a Gatling, a Twin
  *             Particle Array, a Meson Projector, a Phaser, an EMP-1, a Pulser
  *             and a K-1 all sat out the phase.
+ *  11  7.4, 7.16, 7.18 – 7.22 — screens and electronic warfare reach the
+ *             table. An area screen's umbrella now covers its neighbours,
+ *             stealth and ECM shorten missile and fighter lock-on as well as
+ *             sensor range, an Area ECM emitter's own FireCons go quiet while
+ *             it jams, and a cloak crossed off the SSD stops being a cloak.
+ *             Every one of them deletes or adds dice: a marker that no longer
+ *             acquires never rolls in phase 10, and a shot refused for range
+ *             takes its whole volley out of the stream.
  */
-export const CURRENT_RULES_VERSION = 10
+export const CURRENT_RULES_VERSION = 11
 
 export interface GameSetup {
   scenarioId: string

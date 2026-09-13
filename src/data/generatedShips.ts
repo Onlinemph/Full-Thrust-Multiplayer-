@@ -1810,6 +1810,41 @@ export const SOL_MARINES_COMMAND: ShipDesign = {
   points: 453,
 }
 
+export const SOL_MARINES_AEGIS: ShipDesign = {
+  id: "sol-marines-aegis",
+  name: "Anzio-class Screen Ship",
+  faction: "Sol-Federation Marine Corps",
+  group: "cruiser",
+  mass: 90,
+  hullClass: "average",
+  hullRows: 4,
+  hullBoxes: 27,
+  drive: { thrust: 3, advanced: false },
+  ftl: "standard",
+  streamlining: "none",
+  armour: { layers: [5], regenerative: false },
+  screens: { level: 1, generators: 1, advanced: false, area: { advanced: false, level: 1 } },
+  weapons: [
+    {"id": "w1", "label": "Pulser", "weaponClass": "pulser", "rating": 1, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 3, "points": 15},
+    {"id": "w2", "label": "Pulser", "weaponClass": "pulser", "rating": 1, "variant": "standard", "arcs": ["FS", "AS", "A"], "mass": 3, "points": 15},
+  ],
+  turrets: [], 
+  systems: [
+    {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
+    {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
+    {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
+    {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
+  ],
+  fighterBays: [],
+  gunboats: [],
+  additionalDamageControlParties: 0,
+  marineParties: 2,
+  points: 250,
+}
+
 export const SOL_MARINES_TENDER: ShipDesign = {
   id: "sol-marines-tender",
   name: "Tarawa-class Gunboat Tender",
@@ -3432,6 +3467,7 @@ export const GENERATED_DESIGNS: ShipDesign[] = [
   SOL_MARINES_CRUISER,
   SOL_MARINES_GUNBOAT_CRUISER,
   SOL_MARINES_COMMAND,
+  SOL_MARINES_AEGIS,
   SOL_MARINES_TENDER,
   GOLIATH_MONITOR,
   GOLIATH_CRUISER,

@@ -29,6 +29,7 @@ import {
   type Rng,
   type ScreenLevel,
 } from './dice'
+import { advancedScreenDamageDie, stealthMaxRange, type StealthLevel } from './defences'
 import { arcTo, bearing, bearsOn, distance, incomingArc, normaliseCourse } from './geometry'
 import type { Arc, Course, Point, WeaponClass, WeaponVariant } from './types'
 import type { WeaponResult, WeaponSpec, WeaponSpecTable } from './weapons/contract'
@@ -688,6 +689,19 @@ export interface SeekerTarget {
    * cinematic movement ships"*, so the radius belongs to the target.
    */
   vectorMovement?: boolean
+  /**
+   * 7.4: *"The reduction of effective range also applies to missile lock-on
+   * range."* A Stealth-1 hull is found only inside 5 MU, a Stealth-2 hull only
+   * inside 4 — and 3 MU shrinks the same way under vector movement.
+   */
+  stealth?: StealthLevel
+  /**
+   * The radius electronic warfare leaves for a seeker (7.17 – 7.20), before
+   * stealth scales it: a Holofield takes 1 MU, each ECM level takes 1 MU, and
+   * `null` is 7.20's *"Missiles and fighters will not lock at all"*. Left
+   * undefined the plain 6 MU (or 3 under vector) stands.
+   */
+  lockOn?: number | null
 }
 
 export interface Acquisition {
@@ -706,9 +720,20 @@ export interface AcquisitionResult {
   detail: string[]
 }
 
-/** The radius within which this target may be attacked (6.3). */
-export function attackRadiusFor(target: SeekerTarget): number {
-  return target.vectorMovement ? VECTOR_MISSILE_ATTACK_RADIUS : MISSILE_ATTACK_RADIUS
+/**
+ * The radius within which this target may be attacked (6.3, 7.4, 7.17 – 7.20),
+ * or `null` when no seeker can lock on it at all.
+ *
+ * The order matters and follows the direct-fire stack: electronic warfare
+ * subtracts its MU from the plain radius first, and stealth scales what is
+ * left, so a Holofield ship is found at 5 MU and a Stealth-1 Holofield ship at
+ * 4.17.
+ */
+export function attackRadiusFor(target: SeekerTarget): number | null {
+  const base = target.vectorMovement ? VECTOR_MISSILE_ATTACK_RADIUS : MISSILE_ATTACK_RADIUS
+  const afterEw = target.lockOn === undefined ? base : target.lockOn
+  if (afterEw === null) return null
+  return stealthMaxRange(afterEw, target.stealth ?? 0)
 }
 
 /**
@@ -748,8 +773,10 @@ export function acquireMissileTargets(
     let best: { target: SeekerTarget; range: number } | null = null
     for (const target of targets) {
       if (!hostile(marker, target)) continue
+      const radius = attackRadiusFor(target)
+      if (radius === null) continue
       const range = distance(marker.position, target.position)
-      if (range > attackRadiusFor(target)) continue
+      if (range > radius) continue
       if (!best || range < best.range) best = { target, range }
     }
     if (best) {
@@ -1236,7 +1263,7 @@ export function resolveAntimatterRackExplosion(
       dice: [face],
       // The rack blast is the same antimatter fire as the warhead, so screens
       // blunt it the same way (6.6).
-      damage: Math.max(0, face - target.screens.level),
+      damage: advancedScreenDamageDie(face, target.screens.level),
       destroyed: target.kind === 'ordnance' || target.kind === 'gunboat',
     })
   }

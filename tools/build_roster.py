@@ -289,6 +289,13 @@ def solve_mass(d):
         frac += 0.05 if d['stream'] == 'partial' else 0.1
     if d.get('screens'):
         frac += (0.075 if d.get('advScreens') else 0.05) * d['screens']
+    # 7.16: 20% of the *generating* ship's mass per level, 30% advanced, with a
+    # floor of 15 (20 advanced). Every hull that carries one here is big enough
+    # that the fraction clears the floor, so it stays proportional and the
+    # fixed point still solves; `check_design` re-prices it against
+    # designPricing.areaScreenMass and would catch a hull that did not.
+    if d.get('areaScreens'):
+        frac += (0.3 if d.get('areaAdv') else 0.2) * d['areaScreens']
     flat = sum(d.get('armour', [])) + spare + magazine_mass(d)
     for wc, rating, arcs in [(w[0], w[1], w[2]) for w in d.get('weapons', [])]:
         flat += WEAPONS[wc][rating][len(arcs)][0]
@@ -354,6 +361,11 @@ def price(d):
     if d.get('screens'):
         adv = d.get('advScreens'); per = (0.075 if adv else 0.05) * d['mass']
         sm = per * d['screens']; mass += sm; pts += sm * (4 if adv else 3)
+    if d.get('areaScreens'):
+        aadv = d.get('areaAdv')
+        am = max(20 if aadv else 15,
+                 (0.3 if aadv else 0.2) * d['mass'] * d['areaScreens'])
+        mass += am; pts += am * 3.5
     mag_mass = magazine_mass(d)
     if mag_mass:
         mass += mag_mass
@@ -786,6 +798,18 @@ DESIGNS = [
        group='capital', mass=176, hull='strong', rows=4, thrust=4, armour=[5], screens=2,
        weapons=[('pulser',1,F3), ('pulser',1,A3), ('pulser',1,P3), ('pulser',1,S3), ('beam',1,ALL6)],
        systems=[('firecon',3),('pds',4),('ads6',2),('advanced-adfc',2)], marines=4),
+  # 7.16 made literal: *"the ship generating the screen and any other ships
+  # within 6mu of it will be protected"*, one level higher against anything
+  # shooting from outside the bubble, and a level-2 escort under it reaches 3,
+  # where penetrating weapons stop getting their re-rolls. The umbrella costs
+  # 20% of the hull it is generated from, which is why this one carries almost
+  # nothing else: an average frame, thrust 3, a single screen of its own and
+  # four PDS to keep leakers off. It is not a warship, it is cover.
+  dict(id='sol-marines-aegis', name='Anzio-class Screen Ship', faction='Sol-Federation Marine Corps',
+       group='cruiser', mass=90, hull='average', rows=4, thrust=3, armour=[3], screens=1,
+       areaScreens=1,
+       weapons=[('pulser',1,P3), ('pulser',1,S3)],
+       systems=[('firecon',1),('pds',4),('adfc',1)], marines=2),
   # Eighteen gunboats — the fleet's offensive weight, all of it. Three racks
   # and a bay is 78 mass of carriage, and under a 65% fraction load that is
   # what makes the hull 292. The broadside pulsers are for leakers, not for
@@ -1217,7 +1241,10 @@ def design_ts(r):
              *([f"  mothershipId: {ts(d['mothership'])},"] if d.get('mothership') else []),
              f"  streamlining: {ts(d.get('stream') or 'none')},",
              f"  armour: {{ layers: {ts(d.get('armour', []))}, regenerative: {str(bool(d.get('regen'))).lower()} }},",
-             f"  screens: {{ level: {d.get('screens', 0)}, generators: {d.get('screens', 0)}, advanced: {str(bool(d.get('advScreens'))).lower()} }},",
+             f"  screens: {{ level: {d.get('screens', 0)}, generators: {d.get('screens', 0)}, advanced: {str(bool(d.get('advScreens'))).lower()}"
+             + (f", area: {{ advanced: {str(bool(d.get('areaAdv'))).lower()}, level: {d['areaScreens']} }}"
+                if d.get('areaScreens') else "")
+             + " },",
              "  weapons: [",
              *[f"    {ts(w)}," for w in r['weapons']],
              "  ],", "  turrets: [], ",
