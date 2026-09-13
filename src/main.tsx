@@ -7,6 +7,7 @@ import './ui/theme/panels.css'
 import './ui/theme/chrome.css'
 import './ui/theme/modals.css'
 import { App } from './ui/App'
+import { SsdSprite } from './ui/ssd/Glyph'
 
 /**
  * Entry point. The rules engine runs in the browser and there is no server, so
@@ -18,6 +19,9 @@ if (!container) throw new Error('#root is missing from index.html')
 
 createRoot(container).render(
   <StrictMode>
+    {/* The SSD symbol definitions, mounted once for the whole app: every ship
+        drawn anywhere refers to these rather than carrying a copy. */}
+    <SsdSprite />
     <App />
   </StrictMode>,
 )

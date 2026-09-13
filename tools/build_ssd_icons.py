@@ -67,20 +67,44 @@ STROKE = {
 }
 
 
-def recolour(el):
+# Shapes whose default fill is black. SVG fills every one of these with black
+# unless told otherwise, which on paper is ink and on a dark sheet is a black
+# hole — and a surprising amount of the sheet relies on that default: the star
+# in a crew box, the two lobes of a Point Defence System, the dot under a
+# defensive screen.
+INK_BY_DEFAULT = {'path', 'circle', 'rect', 'polygon', 'ellipse'}
+# A polyline is a stroked squiggle. Filling one closes it across the ends,
+# which is never what the drawing meant.
+NEVER_FILLED = {'polyline', 'line'}
+
+
+def recolour(el, inherited_fill=None):
     """Map the sheet's print palette onto the app's theme, in place."""
     f = el.get('fill')
     if f is not None and f in FILL:
-        el.set('fill', FILL[f])
+        f = FILL[f]
+        el.set('fill', f)
     s = el.get('stroke')
     if s is not None and s in STROKE:
         el.set('stroke', STROKE[s])
-    # SVG's default fill is black. A <text> with no fill is invisible ink on
-    # paper and invisible full stop on a dark panel, so it is made explicit.
-    if el.tag == NS + 'text' and el.get('fill') is None:
-        el.set('fill', 'currentColor')
+
+    tag = el.tag.replace(NS, '')
+    effective = f if f is not None else inherited_fill
+    if effective is None:
+        if tag in INK_BY_DEFAULT:
+            el.set('fill', 'currentColor')
+            effective = 'currentColor'
+        elif tag in NEVER_FILLED:
+            el.set('fill', 'none')
+            effective = 'none'
+        # SVG's default fill is black. A <text> with no fill is invisible ink on
+        # paper and invisible full stop on a dark panel, so it is made explicit.
+        elif tag == 'text':
+            el.set('fill', 'currentColor')
+            effective = 'currentColor'
+
     for child in el:
-        recolour(child)
+        recolour(child, effective)
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +121,44 @@ RUN_TOGETHER = {
     'Salvomissile': 'Salvo missile',
     'occupiedsample': 'occupied sample',
 }
+
+
+# Seven symbols print a number that is a *sample*, not part of the symbol: the
+# sheet's Main Drive says 6 and its Cargo Hold says 1 because it had to say
+# something. Every other number on the sheet — the 3 in a Class-3 Beam — is the
+# symbol's own identity and must not be touched, which is why these are named
+# rather than found by looking for digits.
+VARIABLE_NUMBER = {
+    'main-drive': 'thrust rating',
+    'main-drive-advanced': 'thrust rating',
+    'boat-bay': 'craft carried',
+    'tender-bay': 'craft carried',
+    'cargo-hold': 'mass carried',
+    'passenger-berth': 'passengers carried',
+    'troop-berth': 'troops carried',
+}
+
+
+def number_slot(sym, semantic_id):
+    """Where a symbol's sample number sits, so the app can print the real one.
+
+    The sample itself is marked `ssd-sample` and hidden by CSS. Coordinates are
+    in the symbol's own viewBox, so drawing over it means nesting an <svg> with
+    the same viewBox rather than working out the scale by hand.
+    """
+    if semantic_id not in VARIABLE_NUMBER:
+        return None
+    for el in sym.iter(NS + 'text'):
+        if not ''.join(el.itertext()).strip().isdigit():
+            continue
+        el.set('class', 'ssd-sample')
+        return {
+            'x': float(el.get('x', 0)),
+            'y': float(el.get('y', 0)),
+            'size': float(el.get('font-size', 100)),
+            'means': VARIABLE_NUMBER[semantic_id],
+        }
+    return None
 
 
 def slug(label: str) -> str:
@@ -192,22 +254,28 @@ def main() -> int:
         new_id = rename.get(sid, sid)
         sym.set('id', f'ssd-{new_id}' if sid in rename else sid)
         recolour(sym)
+        slot = number_slot(sym, new_id)
         markup = ET.tostring(sym, encoding='unicode')
         out_parts.append(markup)
 
         entry = by_icon.get(sid)
         if entry is not None:
-            vb = [float(v) for v in re.split(r'[,\s]+', sym.get('viewBox').strip())]
-            icons.append(
-                {
-                    'id': new_id,
-                    'label': tidy_label(entry['label']),
-                    'section': entry['section'],
-                    # Natural aspect, so a layout can give a wide symbol like
-                    # "Core systems" (3:1) a wide box instead of squashing it.
-                    'aspect': round(vb[2] / vb[3], 4) if vb[3] else 1.0,
-                }
-            )
+            raw_vb = sym.get('viewBox').strip()
+            vb = [float(v) for v in re.split(r'[,\s]+', raw_vb)]
+            icon = {
+                'id': new_id,
+                'label': tidy_label(entry['label']),
+                'section': entry['section'],
+                # Natural aspect, so a layout can give a wide symbol like
+                # "Core systems" (3:1) a wide box instead of squashing it.
+                'aspect': round(vb[2] / vb[3], 4) if vb[3] else 1.0,
+                # Carried through so the app can nest an <svg> in the symbol's
+                # own coordinates and draw on top of it.
+                'viewBox': ' '.join(str(round(v, 2)) for v in vb),
+            }
+            if slot is not None:
+                icon['numberSlot'] = slot
+            icons.append(icon)
 
     sprite = ''.join(out_parts)
 
@@ -248,6 +316,14 @@ def main() -> int:
         + '  section: string\n'
         + '  /** Width over height of the symbol as drawn. */\n'
         + '  aspect: number\n'
+        + "  /** The symbol's own coordinate system, for drawing on top of it. */\n"
+        + '  viewBox: string\n'
+        + '  /**\n'
+        + '   * Where the sheet printed a sample number, for the seven symbols whose\n'
+        + '   * number is the ship\'s rather than the symbol\'s. The sample itself is\n'
+        + '   * marked `ssd-sample` and hidden; draw the real value here instead.\n'
+        + '   */\n'
+        + '  numberSlot?: { x: number; y: number; size: number; means: string }\n'
         + '}\n\n'
         + 'export const SSD_ICONS: readonly SsdIcon[] = '
         + json.dumps(icons, indent=1, ensure_ascii=False)

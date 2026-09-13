@@ -35,6 +35,21 @@
   --ordnance: #ff8fc4; /* missiles and their markers                   */
   --fighters: #7dff9e; /* fighter groups and their CEF                 */
 
+  /* The SSD sheet. The symbol sheet is drawn for paper — black ink, white
+     holes — and the recolouring in tools/build_ssd_icons.py rewrites those two
+     into `currentColor` and `--ssd-paper`. So `--ssd-paper` is not white: it is
+     whatever the symbol is sitting on, and a symbol drawn over the wrong ground
+     shows its holes filled in.
+
+     `--ssd-regen` carries the one meaning the sheet spends a colour on: a
+     regenerative armour box that is down now and will knit back between turns
+     (7.8). That is degraded-but-temporary, which is what --warn already means
+     everywhere else on the sheet, so it borrows it rather than inventing a
+     second amber. */
+  --ssd-paper: #0b101c;
+  --ssd-dim: #5d6a86;
+  --ssd-regen: #ffb020;
+
   /* ══ 2. GROUND AND SURFACES ═══════════════════════════════════════════════
      Four steps and no more. A panel is a well cut into the ground, not a card
      floating above it, so the ramp runs darker-than-ground, not lighter. */

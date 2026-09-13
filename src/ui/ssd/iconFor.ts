@@ -253,6 +253,39 @@ export function iconForSystem(kind: SystemKind): IconId | null {
   return id === null ? null : known(id)
 }
 
+/**
+ * The symbol for a hangar bay, told apart by what is in it (8.15, 13.12).
+ *
+ * The sheet draws fourteen bays because a carrier's punch is the wing rather
+ * than the bay, and a player looking at a hull wants to know whether the thing
+ * launching at them is an interceptor screen or a torpedo strike. 8.15's Light
+ * modification has its own three symbols; the rest of the modifications change
+ * the fighter and not the bay.
+ */
+export function iconForFighterBay(typeId: string, modifiers: readonly string[] = []): IconId {
+  const light = modifiers.includes('light')
+  if (light) {
+    const lit = known(
+      typeId === 'attack'
+        ? 'hangar-bay-light-attack-fighter'
+        : typeId === 'interceptor'
+          ? 'hangar-bay-light-interceptor'
+          : 'hangar-bay-light-fighter',
+    )
+    if (lit !== null) return lit
+  }
+  const named = known(
+    typeId === 'assault-shuttle'
+      ? 'hangar-bay-assault-shuttles'
+      : typeId === 'interceptor'
+        ? 'hangar-bay-interceptor'
+        : `hangar-bay-${typeId}-fighter`,
+  )
+  // An unknown fighter type is still carried in a bay, and a plain bay is the
+  // true thing to draw rather than a guess at which one.
+  return named ?? 'hangar-bay'
+}
+
 /** The screen symbol for a hull's screens as built (7.2, 7.3, 7.16). */
 export function iconForScreen(
   screens: ShipDesign['screens'],

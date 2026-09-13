@@ -47,10 +47,12 @@
 
 /* ── Counters ─────────────────────────────────────────────────────────────── */
 
-/* A ship counter is an arrowhead, because the one thing a player must read off
-   it at a glance is which way the bow points. Size tracks hull mass so a
-   superdreadnought is visibly not a corvette, but the range is compressed:
-   a 300-mass hull is four times a 20-mass hull on the table, not fifteen. */
+/* A ship counter is the hull off the ship's own sheet, shrunk. Size tracks hull
+   mass so a superdreadnought is visibly not a corvette, but the range is
+   compressed: a 300-mass hull is four times a 20-mass hull on the table, not
+   fifteen. The outline is drawn in a thousand-unit box and scaled down by the
+   group transform, so every stroke inside it has to opt out of being scaled
+   with it or it would vanish. */
 .counter {
   cursor: pointer;
   transition: filter 120ms ease;
@@ -59,6 +61,27 @@
 .counter .hull {
   stroke-width: 1.5;
   stroke: var(--on-bright);
+  vector-effect: non-scaling-stroke;
+}
+
+/* The forward part of the hull, filled in. Which way the bow points is the one
+   thing that must survive being shrunk to forty pixels (3.1, 4.2, 4.10), and a
+   rounded prow on its own does not say it. */
+.counter-bow {
+  fill: var(--on-bright);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 5.23's barrel. The only fitting that changes the shape of the ship carrying
+   it, so the only one worth drawing at counter size. */
+.counter-spinal {
+  stroke: var(--on-bright);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .counter.side-a .hull {
@@ -89,6 +112,15 @@
   fill: none;
   stroke: currentColor;
   stroke-dasharray: 3 3;
+}
+
+.counter.is-cloaked .counter-bow {
+  fill: currentColor;
+  opacity: 0.35;
+}
+
+.counter.is-cloaked .counter-spinal {
+  stroke: currentColor;
 }
 
 /* 16.2's marker beside the model: a bar across the beam of a rolled ship,

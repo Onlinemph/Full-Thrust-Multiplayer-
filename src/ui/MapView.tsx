@@ -664,7 +664,7 @@ export function MapView({
                 position={drawnAt.get(ship.id) ?? riderOffset(game, ship)}
                 facing={ship.placement.facing}
                 side={SIDE_CLASS[ship.side] ?? 'c'}
-                mass={ship.design.mass}
+                design={ship.design}
                 label={ship.name}
                 selected={ship.id === selectedId}
                 destroyed={ship.destroyed}

@@ -81,89 +81,157 @@
   font-weight: 700;
 }
 
-/* ── Hull track ───────────────────────────────────────────────────────────── */
+/* ── The plan ─────────────────────────────────────────────────────────────── */
 
-/* One row per hull row. The gap BETWEEN rows is wider than the gap between
-   boxes, because that gap is the threshold point — the whole reason the track
-   is drawn in rows at all. */
-.hull-track {
-  display: grid;
-  gap: 5px;
+/* The sheet's 176 symbol definitions, mounted once. Zero-sized rather than
+   `display: none`, which makes some browsers drop the definitions inside — and
+   a symbol whose definition has been dropped draws nothing, silently. */
+.ssd-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
-.hull-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: center;
+/* The ship itself. Height is capped rather than left to the aspect ratio: a
+   frigate is a long thin thing, and a long thin thing given the full width of
+   a panel is taller than the panel. */
+.ssd-plan {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 44vh;
+  margin: 0 auto;
+  color: var(--hull);
 }
 
-.hull-row .row-label {
-  width: 1.4em;
+.ssd-hull {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 3;
+}
+
+/* 5.23: a gun with a ship built around it, drawn running the length of the
+   keel because that is the only direction it can fire. */
+.ssd-spinal {
+  stroke: var(--line);
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+/* One symbol. `currentColor` is what the recoloured sheet draws its ink in, so
+   the state of a mounting is a colour on its group and nothing else. */
+.ssd-mount {
+  color: var(--hull);
+}
+
+/* Already fired this turn — in Full Thrust, once is all (2.6). */
+.ssd-mount.is-fired {
   color: var(--ink-faint);
-  text-align: right;
-  margin-right: 0.3em;
 }
 
-/* The threshold number this row will be checked at, if it is the next to go
-   (4.11): 6, then 5+, then 4+. Shown so the player can see what the next hit
-   costs without counting rows. */
-.hull-row .row-threshold {
-  margin-left: 0.4em;
+/* Half its rating, or some of them gone: still there, still working. */
+.ssd-mount.is-degraded {
   color: var(--warn);
+}
+
+/* Knocked out by a threshold check (4.11), and crossed off where it sat. */
+.ssd-mount.is-destroyed {
+  color: var(--damage);
+  opacity: 0.75;
+}
+
+.ssd-strike {
+  stroke: var(--damage);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* The number the ship's own copy of a symbol carries: a drive's thrust, a
+   hold's mass. The sheet's printed sample is hidden and this replaces it, in
+   the same place and at the same size. */
+.ssd-sample {
+  display: none;
+}
+
+.ssd-value {
+  fill: currentColor;
+  font-family: var(--font-mono);
   font-weight: 700;
 }
 
-.box {
-  width: 11px;
-  height: 11px;
-  border: 1px solid var(--armour);
-  border-radius: 1px;
-  background: transparent;
-  flex: none;
-  position: relative;
+/* ── Arc rose ─────────────────────────────────────────────────────────────── */
+
+/* Which way a mounting bears (4.2). Backed in the panel colour so it reads
+   over whatever part of the symbol it overlaps. */
+.ssd-rose-back {
+  fill: var(--panel);
 }
 
-.box.is-hull {
-  border-color: var(--hull);
+.ssd-rose-arc {
+  fill: currentColor;
+  opacity: 0.7;
 }
 
-/* A marked box gets a line through it, exactly as it would on paper. */
-.box.is-marked {
-  border-color: var(--damage);
+.ssd-rose-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.5;
 }
 
-.box.is-marked::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  background: linear-gradient(
-    to bottom right,
-    transparent calc(50% - 1px),
-    var(--damage) calc(50% - 1px),
-    var(--damage) calc(50% + 1px),
-    transparent calc(50% + 1px)
-  );
+/* ── Damage tracks ────────────────────────────────────────────────────────── */
+
+/* Armour above, hull below, drawn in the sheet's own boxes. The gap between
+   rows is the threshold point (4.11) — the whole reason the track is in rows. */
+.ssd-tracks {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--hull);
 }
 
-/* Armour is drawn as circles, because the rulebook draws it as circles and
-   calls them boxes anyway (4.8). */
-.box.is-armour {
-  border-radius: 50%;
-  border-color: var(--armour);
+.ssd-tracks .ssd-glyph.is-marked {
+  color: var(--damage);
 }
 
-.box.is-regen {
-  border-style: dashed;
+.ssd-track-label {
+  fill: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  text-anchor: end;
+  dominant-baseline: middle;
 }
 
-/* 7.8: a regenerative box that rolled a 1 "cannot regenerate further this
-   battle". Drawn solid, because it has stopped being regenerative armour and
-   is now just a hole. */
-.box.is-regen.is-burnt {
-  border-style: solid;
-  border-color: var(--warn);
-  opacity: 0.55;
+/* What the next check will need, if this is the row about to be crossed:
+   6, then 5+, then 4+. Shown so a player can see what the next hit costs
+   without counting rows. */
+.ssd-threshold-in {
+  fill: var(--ink-faint);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.ssd-threshold {
+  fill: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  dominant-baseline: middle;
+}
+
+/* ── Crew ─────────────────────────────────────────────────────────────────── */
+
+.ssd-crew {
+  display: flex;
+  gap: var(--gap-2);
+  color: var(--ink-dim);
+}
+
+.ssd-crew .is-redacted {
+  color: var(--ink-faint);
+  font-style: italic;
 }
 
 /* ── Systems ──────────────────────────────────────────────────────────────── */

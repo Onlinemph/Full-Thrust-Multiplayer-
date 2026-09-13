@@ -1,12 +1,21 @@
 import { courseToDegrees } from '../engine/geometry'
-import type { Course, Point } from '../engine/types'
+import type { Course, Point, ShipDesign } from '../engine/types'
+import { COUNTER_EXTENT, counterSilhouette } from './ssd/layout'
 
 /**
  * A ship counter on the plotting surface.
  *
- * An arrowhead, because the one thing a player must read off a counter at a
- * glance is which way the bow points — every course change, every fire arc and
- * the rear-arc rule all hang off it (3.1, 4.2, 4.10).
+ * The same hull as the ship's own sheet, at a twentieth of the size. Not a
+ * likeness of it and not a second drawing of the same idea: `counterSilhouette`
+ * runs the same layout the sheet does and hands back the same outline, so a
+ * ship that reads as a long streamlined needle on paper reads as one on the
+ * table, and a starbase reads as the octagon it is drawn as.
+ *
+ * Almost nothing survives being shrunk to forty pixels, so almost nothing is
+ * kept: the outline, the bow filled in — because which way the bow points is
+ * the one thing a player must never have to guess (3.1, 4.2, 4.10) — and a
+ * spinal mount's barrel, which is the only fitting that changes the shape of
+ * the ship carrying it.
  *
  * Presentational and prop-driven: it knows nothing about game state, so the
  * map, the fleet picker and the designer can all draw the same counter.
@@ -15,8 +24,8 @@ export interface CounterProps {
   position: Point
   facing: Course
   side: 'a' | 'b' | 'c'
-  /** Hull mass, which sets the counter's size (2.3). */
-  mass: number
+  /** The hull. Its mass sets the counter's size (2.3), its build the shape. */
+  design: ShipDesign
   label?: string
   selected?: boolean
   destroyed?: boolean
@@ -55,7 +64,7 @@ export function Counter({
   position,
   facing,
   side,
-  mass,
+  design,
   label,
   selected = false,
   destroyed = false,
@@ -65,9 +74,11 @@ export function Counter({
   art,
   onClick,
 }: CounterProps) {
-  const r = counterRadius(mass) * scale
+  const r = counterRadius(design.mass) * scale
   const x = position.x * scale
   const y = position.y * scale
+  const silhouette = counterSilhouette(design)
+  const shrink = r / COUNTER_EXTENT
 
   const classes = ['counter', `side-${side}`]
   if (selected) classes.push('is-selected')
@@ -98,15 +109,19 @@ export function Counter({
           preserveAspectRatio="xMidYMid meet"
         />
       ) : (
-        /* An arrowhead with a notched tail, so the bow is unambiguous even at
-           the smallest counter size. Drawn nose-up; the group rotates it. */
-        <path
-          className="hull"
-          d={`M 0 ${(-r).toFixed(2)}
-              L ${(r * 0.72).toFixed(2)} ${(r * 0.85).toFixed(2)}
-              L 0 ${(r * 0.42).toFixed(2)}
-              L ${(-r * 0.72).toFixed(2)} ${(r * 0.85).toFixed(2)} Z`}
-        />
+        <g transform={`scale(${shrink.toFixed(5)})`}>
+          <path className="hull" d={silhouette.path} />
+          {silhouette.bow !== '' ? <path className="counter-bow" d={silhouette.bow} /> : null}
+          {silhouette.spine !== null ? (
+            <line
+              className="counter-spinal"
+              x1={0}
+              y1={silhouette.spine.y1}
+              x2={0}
+              y2={silhouette.spine.y2}
+            />
+          ) : null}
+        </g>
       )}
       {inverted ? (
         /* A bar across the beam. It rotates with the hull on purpose: the bar

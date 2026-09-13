@@ -1,16 +1,27 @@
-import { hullRowBounds } from '../engine/combat'
-import { thresholdTarget } from '../engine/dice'
+import { useMemo } from 'react'
+
 import { crewFactors } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
+import { HullPlan } from './ssd/HullPlan'
+import { Tracks, hullRows } from './ssd/Tracks'
+import { planShip } from './ssd/layout'
 
 /**
  * The Ship System Status Display.
  *
  * On the table this is a printed sheet you cross boxes off with a chinagraph
- * pencil, and it stays that on screen: boxes stay boxes, a marked box gets a
- * line through it, and the hull stays in rows — because the row boundary IS
- * the threshold point (4.11), and how close the next one is is the single most
- * important thing a captain reads off their own sheet.
+ * pencil, and it stays that on screen. Two halves, and they answer different
+ * questions.
+ *
+ * The plan is the ship: the hull outline its build implies, with every weapon
+ * and fitting drawn in the sheet's own symbol and sitting where it is bolted.
+ * A bow battery is at the bow, a port broadside runs down the port side, an
+ * all-round mount is on the keel, the drive is the stern. Where a symbol is
+ * says what it can shoot at, which is the question a player actually has, and
+ * the old list of text chips could not answer it at all.
+ *
+ * The tracks are the damage: armour above, hull below, kept in rows because
+ * the row boundary IS the threshold point (4.11).
  *
  * Prop-driven rather than store-driven, so the same component renders a live
  * ship, an enemy's partial dossier, and a design in the shipyard.
@@ -54,37 +65,31 @@ const PRISTINE: SsdDamage = {
 }
 
 /**
- * Row sizes for a hull track (2.4).
- *
- * Derived from `hullRowBounds` rather than computed here, and that matters more
- * than it looks: the row boundary IS the threshold point (4.11), so a form that
- * drew the rows one way while the engine checked them another would show the
- * player the wrong number for the next check — the single number they plan
- * around. One implementation, two consumers, and a cross-module test that says
- * so.
+ * Row sizes for a hull track (2.4), re-exported from where the tracks are
+ * drawn so the cross-module agreement test keeps pointing at the form.
  */
-export function hullRows(boxes: number, rows: number): number[] {
-  const bounds = hullRowBounds(boxes, rows as 3 | 4 | 5 | 6)
-  return bounds.map((end, i) => end - (i === 0 ? 0 : bounds[i - 1]))
-}
+export { hullRows }
 
 export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdProps) {
-  const rows = hullRows(design.hullBoxes, design.hullRows)
   const generators = damage.screenGenerators ?? design.screens.generators
   const screenLevel = Math.min(design.screens.level, generators)
   const thrust = damage.thrust ?? design.drive.thrust
+  const parties =
+    crewFactors(design.mass, design.group === 'civilian') + design.additionalDamageControlParties
 
-  // Which row the next damage point lands in, so that row can show what the
-  // threshold check will need (4.11).
-  let consumed = 0
-  let liveRow = -1
-  for (let i = 0; i < rows.length; i++) {
-    if (damage.hullMarked < consumed + rows[i]) {
-      liveRow = i
-      break
-    }
-    consumed += rows[i]
-  }
+  // Laying a ship out walks its whole fit-out and then fits a hull round it, so
+  // it is done once per design and damage state rather than once per render —
+  // the map redraws this on every pointer move.
+  const plan = useMemo(
+    () =>
+      planShip(design, {
+        destroyed: damage.destroyed,
+        fired: damage.fired,
+        screenGenerators: damage.screenGenerators,
+        thrust: damage.thrust,
+      }),
+    [design, damage.destroyed, damage.fired, damage.screenGenerators, damage.thrust],
+  )
 
   return (
     <div className="ssd">
@@ -119,113 +124,23 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
         ) : null}
       </div>
 
-      {/* Armour, drawn as circles above the hull — the rulebook draws them as
-          circles and calls them boxes anyway (4.8). Outermost layer first,
-          because that is the one damage reaches first (7.7). */}
-      {design.armour.layers.length > 0 ? (
-        <div className="hull-track" aria-label="Armour">
-          {design.armour.layers
-            .map((boxes, layer) => ({ boxes, layer }))
-            .reverse()
-            .map(({ boxes, layer }) => (
-              <div className="hull-row" key={layer}>
-                <span className="row-label">{layer === 0 ? 'ARM' : `L${layer + 1}`}</span>
-                {Array.from({ length: boxes }, (_, i) => {
-                  const marked = i < (damage.armourMarked[layer] ?? 0)
-                  // The burnt-out ones are counted from the outside of the
-                  // damaged run inwards, so the boxes that will knit back are
-                  // the ones nearest the undamaged armour.
-                  const burnt =
-                    marked && i < (damage.armourBurntOut?.[layer] ?? 0)
-                  return (
-                    <span
-                      key={i}
-                      title={
-                        burnt
-                          ? 'Burnt out — this box cannot regenerate again this battle (7.8)'
-                          : undefined
-                      }
-                      className={`box is-armour${design.armour.regenerative ? ' is-regen' : ''}${
-                        marked ? ' is-marked' : ''
-                      }${burnt ? ' is-burnt' : ''}`}
-                    />
-                  )
-                })}
-              </div>
-            ))}
-        </div>
-      ) : null}
+      <HullPlan plan={plan} redacted={redacted} title={`${name ?? design.name}, plan view`} />
 
-      <div className="hull-track" aria-label="Hull">
-        {rows.map((boxes, row) => {
-          const before = rows.slice(0, row).reduce((a, b) => a + b, 0)
-          return (
-            <div className="hull-row" key={row}>
-              <span className="row-label">{row + 1}</span>
-              {Array.from({ length: boxes }, (_, i) => (
-                <span
-                  key={i}
-                  className={`box is-hull${damage.hullMarked > before + i ? ' is-marked' : ''}`}
-                />
-              ))}
-              {/* No check is made at the end of the last row — the ship is
-                  already destroyed (4.11). */}
-              {row === liveRow && row < rows.length - 1 ? (
-                <span className="row-threshold" title="Threshold check when this row is crossed">
-                  {thresholdTarget(row + 1)}+
-                </span>
-              ) : null}
-            </div>
-          )
-        })}
+      <Tracks
+        design={design}
+        hullMarked={damage.hullMarked}
+        armourMarked={damage.armourMarked}
+        armourBurntOut={damage.armourBurntOut}
+      />
+
+      {/* Crew parties come from the hull's own crew (10.4), so the sheet shows
+          what the ship actually musters, not what was bought. The stars on the
+          hull track are where they are lost. */}
+      <div className="ssd-crew">
+        {parties > 0 ? <span>DCP ×{parties}</span> : null}
+        {design.marineParties > 0 ? <span>MARINES ×{design.marineParties}</span> : null}
+        {redacted ? <span className="is-redacted">Fit-out not known</span> : null}
       </div>
-
-      {redacted ? (
-        <div className="ssd-systems">
-          <span className="system-chip">Systems not known</span>
-        </div>
-      ) : (
-        <>
-          <div className="ssd-systems" aria-label="Weapons">
-            {design.weapons.map((weapon) => (
-              <span
-                key={weapon.id}
-                className={`system-chip${damage.destroyed.has(weapon.id) ? ' is-destroyed' : ''}${
-                  damage.fired?.has(weapon.id) ? ' is-fired' : ''
-                }`}
-                title={damage.fired?.has(weapon.id) ? 'Already fired this turn' : undefined}
-              >
-                {weapon.label}
-                <span className="arcs">{weapon.broadside ? 'BR' : weapon.arcs.join('')}</span>
-              </span>
-            ))}
-          </div>
-          <div className="ssd-systems" aria-label="Systems">
-            {design.systems.map((system) => (
-              <span
-                key={system.id}
-                className={`system-chip${damage.destroyed.has(system.id) ? ' is-destroyed' : ''}`}
-              >
-                {system.label}
-              </span>
-            ))}
-            {/* Crew parties come from the hull's own crew (10.4), so the SSD
-                shows what the ship actually musters, not what was bought. */}
-            {crewFactors(design.mass, design.group === 'civilian') +
-              design.additionalDamageControlParties >
-            0 ? (
-              <span className="system-chip">
-                DCP ×
-                {crewFactors(design.mass, design.group === 'civilian') +
-                  design.additionalDamageControlParties}
-              </span>
-            ) : null}
-            {design.marineParties > 0 ? (
-              <span className="system-chip">MARINES ×{design.marineParties}</span>
-            ) : null}
-          </div>
-        </>
-      )}
     </div>
   )
 }

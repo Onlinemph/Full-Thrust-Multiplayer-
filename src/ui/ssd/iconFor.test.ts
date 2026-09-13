@@ -151,6 +151,18 @@ describe('the generated sprite and catalogue agree', () => {
     expect(SSD_SPRITE).not.toMatch(/(fill|stroke)="(white|black|#000000|#FFFFFF)"/i)
   })
 
+  it('leaves nothing to be filled with black by default', () => {
+    // SVG fills a shape black unless told otherwise, and a surprising amount of
+    // the sheet leans on that: the star in a crew box, the two lobes of a Point
+    // Defence System, the dot under a defensive screen. On paper that default
+    // is ink. On a dark panel it is a hole, and a hole draws as nothing at all
+    // rather than as an error.
+    const unpainted = SSD_SPRITE.match(
+      /<(?:path|circle|rect|polygon|ellipse|polyline|text)(?![^>]*fill=)[^>]*>/g,
+    )
+    expect(unpainted ?? []).toEqual([])
+  })
+
   it('states a usable aspect ratio for every symbol', () => {
     const bad = SSD_ICONS.filter((i) => !(i.aspect > 0.05 && i.aspect < 20))
     expect(bad.map((i) => `${i.id} ${i.aspect}`)).toEqual([])
