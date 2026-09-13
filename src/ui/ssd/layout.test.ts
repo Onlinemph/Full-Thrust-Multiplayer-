@@ -465,6 +465,6 @@ describe('the sheet as a whole', () => {
   })
 
   function weaponWith(id: string, arcs: Arc[]) {
-    return { ...heavyCruiser.weapons[0], id, arcs }
+    return { ...(heavyCruiser as ShipDesign).weapons[0], id, arcs }
   }
 })

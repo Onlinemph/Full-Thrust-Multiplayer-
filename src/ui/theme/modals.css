@@ -345,18 +345,282 @@
   font-size: var(--text-sm);
 }
 
-.shipyard-controls {
+/* The yard is two columns: the decisions down the left, in the order a
+   designer makes them, and the sheet on the right, which never scrolls away
+   because it is the answer to every one of them. */
+.yard-modal {
+  width: min(80rem, 100%);
+  gap: var(--gap);
+}
+
+.yard-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.yard-head h2 {
+  margin: 0;
+}
+
+.yard-legal {
+  color: var(--screens);
+}
+
+.yard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+  gap: var(--gap-3);
+  min-height: 0;
+}
+
+.yard-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  overflow-y: auto;
+  max-height: 72vh;
+  padding-right: var(--gap);
+  min-width: 0;
+}
+
+.yard-side {
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--gap);
+  max-height: 72vh;
   overflow-y: auto;
-  max-height: 60vh;
-  padding-right: var(--gap);
+  padding-right: 2px;
 }
 
-.shipyard-controls input[type='range'] {
+.yard-sheet {
+  padding: var(--gap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+/* The sheet shares the column with the numbers and the save button, so it
+   gives up a little height to keep them above the fold. */
+.yard-sheet .ssd-plan {
+  max-height: 36vh;
+}
+
+.yard-section .panel-row {
+  flex-wrap: wrap;
+}
+
+/* One decision at a time. A section is a heading with the rule it answers
+   to, and everything under it is that decision's controls. */
+.yard-section {
+  border-top: 1px solid var(--line);
+  padding-top: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.yard-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.yard-section h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.yard-section h3 .rule-ref {
+  margin-left: 0.5em;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.yard-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--gap);
+}
+
+.yard-slider input[type='range'] {
   width: 100%;
   accent-color: var(--thrust);
+}
+
+.yard-slider-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+
+.yard-slider-head .num {
+  color: var(--ink);
+  font-size: var(--text-md);
+}
+
+.catalogue-group h4 {
+  margin: var(--gap) 0 0.3rem;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* The weapon catalogue as a table: one row a weapon, one button a mounting.
+   The number on the button is the arcs, because that is what a mounting is
+   bought by (4.2); the mass is beside it because that is what it costs. */
+.family-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.family-tab {
+  font-size: var(--text-xs);
+  padding: 0.25em 0.7em;
+  opacity: 0.7;
+}
+
+.family-tab.is-on {
+  opacity: 1;
+  border-color: var(--side-a);
+  color: var(--side-a);
+}
+
+.catalogue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.catalogue-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.15rem 0.3rem;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+}
+
+.catalogue-row:nth-child(odd) {
+  background: var(--panel-2);
+}
+
+.catalogue-name {
+  color: var(--ink);
+}
+
+.catalogue-mounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mount-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-size: var(--text-xs);
+  padding: 0.15em 0.5em;
+}
+
+.mount-btn b {
+  color: var(--side-a);
+}
+
+.mount-btn .num {
+  color: var(--ink-dim);
+}
+
+/* What is fitted, tallied, with a way off the hull. */
+.fitted-systems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tally-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: var(--text-xs);
+  padding: 0.15em 0.2em 0.15em 0.5em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.tally-chip .num {
+  color: var(--ink-dim);
+}
+
+.tally-chip button {
+  padding: 0 0.45em;
+  border: none;
+  background: none;
+  color: var(--ink-dim);
+  font-size: 1.05em;
+  line-height: 1.2;
+}
+
+.tally-chip button:hover {
+  color: var(--ink);
+  background: var(--panel-3);
+}
+
+/* The numbers a captain reads off the hull in a fight. */
+.summary-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem var(--gap);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.summary-strip div {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-strip dt {
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+}
+
+.summary-strip dd {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+
+.yard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+@media (max-width: 900px) {
+  .yard {
+    grid-template-columns: 1fr;
+  }
+  .yard-side {
+    position: static;
+    max-height: none;
+  }
+  .yard-controls {
+    max-height: none;
+  }
 }
 
 /* A rule the engine does not read yet: shown, explained, and not settable. */
