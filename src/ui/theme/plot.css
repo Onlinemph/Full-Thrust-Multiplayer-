@@ -73,6 +73,34 @@
   pointer-events: none;
 }
 
+/* The ship's guns, off its own sheet: a bar across each battery at counter
+   size, a dot per gun once the map is close enough for dots to mean anything.
+   A flight deck is a bar too, drawn hollow, because a hangar is a hole. */
+.counter-gun {
+  fill: var(--on-bright);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.counter-battery {
+  stroke: var(--on-bright);
+  stroke-linecap: round;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.counter-battery.is-bay {
+  stroke-dasharray: 60 45;
+  opacity: 0.4;
+}
+
+.counter.is-cloaked .counter-gun,
+.counter.is-cloaked .counter-battery {
+  fill: currentColor;
+  stroke: currentColor;
+  opacity: 0.35;
+}
+
 /* 5.23's barrel. The only fitting that changes the shape of the ship carrying
    it, so the only one worth drawing at counter size. */
 .counter-spinal {

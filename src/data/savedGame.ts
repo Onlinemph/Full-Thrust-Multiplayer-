@@ -74,8 +74,13 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *  13  5.9, 9.1 — a transporter with nobody left to send is refused, phase 9
  *             puts point defence on a gunboat squadron, and 9.1's own
  *             anti-ship table takes one boat a hit.
+ *  14  10.3 — the Core Systems block is on every hull, as the book says it
+ *             is: "assumed to be part of the essential structure of all
+ *             ships". Three more dice at every threshold point on a table
+ *             that plays with them, which only a design that named its own
+ *             block ever rolled before.
  */
-export const CURRENT_RULES_VERSION = 13
+export const CURRENT_RULES_VERSION = 14
 
 export interface GameSetup {
   scenarioId: string

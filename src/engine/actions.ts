@@ -3644,7 +3644,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       if (!ship) return refuse('No such ship')
       const result = rollThresholdChecks(ship, state.rng, {
         turn: state.turn,
-        driveDamage: optional(state).driveDamage,
+        ...thresholdOptions(state),
       })
       if (!result) return refuse('No threshold check owing')
       pushLog(state, {
@@ -3665,7 +3665,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
 
     case 'threshold-sweep': {
       if (state.phase !== 'threshold') return refuse('Threshold checks are phase 13')
-      for (const result of thresholdPhase(state, { driveDamage: optional(state).driveDamage })) {
+      for (const result of thresholdPhase(state, thresholdOptions(state))) {
         const ship = shipById(state, result.shipId)
         if (!ship) continue
         knockOffCourse(state, ship, result.rowsLost, result.extraRows)
@@ -3741,7 +3741,7 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       // "Apply damage if necessary and roll threshold checks again" — the
       // quick reference sheet's phase 15, and the reason the sweep runs after
       // the blast rather than before it.
-      thresholdPhase(state, { driveDamage: optional(state).driveDamage })
+      thresholdPhase(state, thresholdOptions(state))
       return OK
     }
 
@@ -11209,6 +11209,22 @@ export function setOptionalRules(state: GameState, rules: OptionalRules): void {
 
 export function optional(state: GameState): OptionalRules {
   return OPTIONS.get(state) ?? {}
+}
+
+/**
+ * How this table rolls a threshold point (4.11, 10.3, the Drive Damage box).
+ *
+ * One place, because three actions roll them — the phase-13 sweep, the
+ * per-ship check in phases 10 and 15, and a reactor breach's neighbours — and
+ * an option honoured by two of the three is the kind of bug a replay finds a
+ * month later. Core Systems are on every hull from reading 14; before that a
+ * journal rolled for them only where the design named them, and it still does.
+ */
+function thresholdOptions(state: GameState): { driveDamage?: boolean; coreSystems?: boolean } {
+  return {
+    driveDamage: optional(state).driveDamage,
+    coreSystems: rulesReading(state) >= 14 && optional(state).coreSystems === true,
+  }
 }
 
 /**

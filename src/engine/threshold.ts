@@ -35,7 +35,7 @@ import {
   type ShipState,
 } from './game'
 import { ANTIMATTER_CHARGE_THRESHOLD_DRM } from './defences'
-import type { SystemKind } from './types'
+import type { CoreSystemsDef, SystemKind } from './types'
 
 // ---------------------------------------------------------------------------
 // Identifiers
@@ -64,6 +64,16 @@ export const CORE_SYSTEM_IDS = {
 
 /** Which Core System a check or event is about (10.3). */
 export type CoreSystem = 'bridge' | 'life-support' | 'power-core'
+
+/**
+ * The Core Systems every hull is built with (10.3).
+ *
+ * *"The Core Systems do not need to have mass allocated to them during ship
+ * design; they are assumed to be part of the essential structure of all
+ * ships."* A design may still name its own block — the tests do, to knock out
+ * one system at a time — but a design that says nothing has all three.
+ */
+export const EVERY_CORE_SYSTEM: CoreSystemsDef = { bridge: true, lifeSupport: true, powerCore: true }
 
 /**
  * `OngoingEffect.source` values this module writes, so other modules can find
@@ -220,7 +230,10 @@ function markBoxRepaired(ship: ShipState, id: string, boxes: number): void {
  * because 6.6 has already crossed it off — "Once fired, it is crossed off and
  * cannot be used again."
  */
-export function checkableSystems(ship: ShipState): CheckableSystem[] {
+export function checkableSystems(
+  ship: ShipState,
+  opts: { coreSystems?: boolean } = {},
+): CheckableSystem[] {
   const design = ship.design
   const out: CheckableSystem[] = []
 
@@ -297,7 +310,11 @@ export function checkableSystems(ship: ShipState): CheckableSystem[] {
     })
   }
 
-  const core = design.coreSystems
+  // 10.3: every hull has the block. A design that names its own keeps it; one
+  // that says nothing gets all three when the table plays with Core Systems,
+  // and nothing at all when it does not — *"If you do not wish to use the Core
+  // System rules, simply ignore the systems within the Core box"*.
+  const core = design.coreSystems ?? (opts.coreSystems === true ? EVERY_CORE_SYSTEM : undefined)
   if (core) {
     const entries: Array<{ fitted: boolean; id: string; label: string; core: CoreSystem }> = [
       { fitted: core.bridge, id: CORE_SYSTEM_IDS.bridge, label: 'Bridge', core: 'bridge' },
@@ -612,6 +629,15 @@ export interface ThresholdSweepOptions {
   driveDamage?: boolean
   /** Override the Flawed Design modifier (13.13). Defaults to +1 on the die. */
   flawedDrm?: number
+  /**
+   * 10.3's Core Systems on every hull, not only on designs that list them.
+   *
+   * Set by the store from the table's option and the battle's rules reading:
+   * three more dice at every threshold point is three more draws from the
+   * stream, so a journal written before the block was universal must keep
+   * rolling only for the designs that named it.
+   */
+  coreSystems?: boolean
 }
 
 /**
@@ -645,7 +671,7 @@ export function rollThresholdChecks(
   const destroyedIds: string[] = []
   const coreEvents: CoreSystemEvent[] = []
 
-  for (const system of checkableSystems(ship)) {
+  for (const system of checkableSystems(ship, { coreSystems: opts.coreSystems })) {
     const drm = flawedDrm + system.drm
     // The optional Drive Damage rule: "make two threshold rolls for the drive
     // during phase 13 IF the ship lost two or more rows of hull boxes". Read

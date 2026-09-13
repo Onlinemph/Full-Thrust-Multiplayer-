@@ -1,6 +1,7 @@
 import { hullRowBounds } from '../../engine/combat'
 import { thresholdTarget } from '../../engine/dice'
 import { crewFactorBoxes, crewFactors } from '../../engine/game'
+import { FLAWED_DESIGN_DRM } from '../../engine/threshold'
 import type { ShipDesign } from '../../engine/types'
 import { SsdGlyph } from './Glyph'
 import { iconForArmourBox, iconForHullBox } from './iconFor'
@@ -68,7 +69,9 @@ export function Tracks({ design, hullMarked, armourMarked, armourBurntOut }: Tra
   )
 
   // Which row the next point of damage lands in, so that row can show what the
-  // threshold check will need (4.11).
+  // threshold check will need (4.11). 13.13's Flawed Design fails a pip
+  // earlier, and the tab says so, because the number on the tab is the one the
+  // dice are actually rolled against.
   let consumed = 0
   let liveRow = -1
   for (let i = 0; i < rows.length; i += 1) {
@@ -78,11 +81,13 @@ export function Tracks({ design, hullMarked, armourMarked, armourBurntOut }: Tra
     }
     consumed += rows[i]
   }
+  const flawedDrm = design.flawed === true ? FLAWED_DESIGN_DRM : 0
 
   const width = LABEL + widest * PITCH + TRAIL
   const height = lines * PITCH + GAP
 
   let boxNumber = 0
+  const armourTotal = design.armour.layers.reduce((a, b) => a + b, 0)
 
   return (
     <svg
@@ -90,7 +95,10 @@ export function Tracks({ design, hullMarked, armourMarked, armourBurntOut }: Tra
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="xMinYMid meet"
       role="img"
-      aria-label={`${design.hullBoxes} hull boxes in ${rows.length} rows`}
+      aria-label={
+        `${armourTotal > 0 ? `${armourTotal} armour boxes, ` : ''}` +
+        `${design.hullBoxes} hull boxes in ${rows.length} rows, ${hullMarked} marked`
+      }
     >
       {armour.map(({ boxes, layer }, line) => (
         <g key={`armour-${layer}`}>
@@ -151,7 +159,7 @@ export function Tracks({ design, hullMarked, armourMarked, armourBurntOut }: Tra
                 x={LABEL + boxes * PITCH + 4}
                 y={line * PITCH + GAP + BOX / 2}
               >
-                {thresholdTarget(row + 1)}+
+                {thresholdTarget(row + 1) - flawedDrm}+
                 <tspan className="ssd-threshold-in" dx={7}>
                   in {before + boxes - hullMarked}
                 </tspan>

@@ -72,8 +72,31 @@
 /* Mass, thrust, points — the three numbers on every hull. */
 .ssd-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--gap-2);
+  align-items: center;
   color: var(--ink-dim);
+}
+
+/* A fact about the hull that is not a box on it: a stealth hull, a flaw. */
+.ssd-badge {
+  font-size: 0.85em;
+  letter-spacing: 0.06em;
+  padding: 0.05em 0.4em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink-dim);
+}
+
+.ssd-badge.is-warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.screen-pip.is-down {
+  border-color: var(--damage);
+  background: none;
+  opacity: 0.6;
 }
 
 .ssd-stats b {
@@ -109,6 +132,13 @@
   fill: var(--panel);
   stroke: var(--line);
   stroke-width: 3;
+}
+
+/* Where one band of the ship hands over to the next. Faint on purpose: a frame
+   is structure, and structure is read past, not read. */
+.ssd-frame {
+  stroke: var(--line-soft);
+  stroke-width: 2;
 }
 
 /* 5.23: a gun with a ship built around it, drawn running the length of the
@@ -148,6 +178,18 @@
   stroke-linecap: round;
 }
 
+/* 10.3: a Core System the design left out. Never there, so never lost —
+   dimmed rather than struck. */
+.ssd-cell-absent {
+  fill: var(--panel);
+  opacity: 0.7;
+}
+
+/* A fitting the design has not got: the block is the book's and stays whole. */
+.ssd-mount.is-absent {
+  color: var(--ink-faint);
+}
+
 /* The number the ship's own copy of a symbol carries: a drive's thrust, a
    hold's mass. The sheet's printed sample is hidden and this replaces it, in
    the same place and at the same size. */
@@ -155,10 +197,21 @@
   display: none;
 }
 
+/* A classed weapon keeps the digit the sheet printed unless the ship's own
+   number is drawn over it — a Beam-5 on a sheet that stops at 4. */
+.ssd-glyph.has-value .ssd-digit {
+  display: none;
+}
+
 .ssd-value {
   fill: currentColor;
   font-family: var(--font-mono);
   font-weight: 700;
+}
+
+/* A digit that was a hole in a filled disc stays a hole. */
+.ssd-value.is-hole {
+  fill: var(--ssd-paper);
 }
 
 /* ── Arc rose ─────────────────────────────────────────────────────────────── */

@@ -139,26 +139,97 @@ VARIABLE_NUMBER = {
 }
 
 
-def number_slot(sym, semantic_id):
+# The sheet's Mine Layer references an id that nothing defines — four
+# `<use href="#6e223869de347">` next to an unreferenced `_mineIndividual`
+# symbol that is plainly what they meant. Repaired here rather than in the
+# sheet so the sheet stays the artist's file; anything else dangling is a
+# hard error, because a dangling reference draws nothing and says nothing.
+REPAIRED_REFERENCES = {
+    '6e223869de347': '_mineIndividual',
+}
+
+
+def repair_references(el):
+    for node in el.iter():
+        for attr in (XLINK + 'href', 'href'):
+            ref = node.get(attr)
+            if ref is not None and ref.startswith('#') and ref[1:] in REPAIRED_REFERENCES:
+                node.set(attr, '#' + REPAIRED_REFERENCES[ref[1:]])
+
+
+# Symbols whose printed digit is the weapon's class. The digit stays — it is
+# the symbol's own identity — but its position is recorded so a rating the
+# sheet does not print (a Beam-5, a PBL-6) can be drawn over it rather than
+# drawn as the nearest class the sheet has, which would state a number of
+# dice the gun does not roll.
+CLASS_LABEL = re.compile(r'^Class (\d)')
+
+
+def number_slot(sym, semantic_id, label):
     """Where a symbol's sample number sits, so the app can print the real one.
 
     The sample itself is marked `ssd-sample` and hidden by CSS. Coordinates are
     in the symbol's own viewBox, so drawing over it means nesting an <svg> with
     the same viewBox rather than working out the scale by hand.
     """
-    if semantic_id not in VARIABLE_NUMBER:
+    klass = CLASS_LABEL.match(label)
+    if semantic_id not in VARIABLE_NUMBER and klass is None:
         return None
     for el in sym.iter(NS + 'text'):
-        if not ''.join(el.itertext()).strip().isdigit():
+        text = ''.join(el.itertext()).strip()
+        if not text.isdigit():
             continue
-        el.set('class', 'ssd-sample')
-        return {
+        if klass is not None and text != klass.group(1):
+            continue
+        slot = {
             'x': float(el.get('x', 0)),
             'y': float(el.get('y', 0)),
             'size': float(el.get('font-size', 100)),
-            'means': VARIABLE_NUMBER[semantic_id],
+            # A digit drawn as a hole in a filled disc (the grasers, the
+            # phasers) has to be replaced by a hole, not by ink.
+            'ink': el.get('fill') != 'var(--ssd-paper)',
         }
+        if klass is not None:
+            el.set('class', 'ssd-digit')
+            slot['means'] = 'class'
+        else:
+            el.set('class', 'ssd-sample')
+            slot['means'] = VARIABLE_NUMBER[semantic_id]
+            if semantic_id in CENTRE_ON_OUTLINE:
+                centre = polygon_centroid(sym)
+                if centre is not None:
+                    slot['x'], slot['y'] = centre
+        return slot
     return None
+
+
+# The sheet prints the drive's thrust a little low in the pentagon. Asked for
+# in the centre, so it is put at the outline's own centroid, which is where the
+# eye reads the middle of a house-shaped box to be.
+CENTRE_ON_OUTLINE = {'main-drive', 'main-drive-advanced'}
+
+
+def polygon_centroid(sym):
+    """Area centroid of the symbol's first polygon, or None."""
+    poly = sym.find(NS + 'polygon')
+    if poly is None:
+        return None
+    pts = [float(v) for v in re.split(r'[\s,]+', poly.get('points', '').strip()) if v]
+    xy = list(zip(pts[0::2], pts[1::2]))
+    if len(xy) < 3:
+        return None
+    area = 0.0
+    cx = 0.0
+    cy = 0.0
+    for (x0, y0), (x1, y1) in zip(xy, xy[1:] + xy[:1]):
+        cross = x0 * y1 - x1 * y0
+        area += cross
+        cx += (x0 + x1) * cross
+        cy += (y0 + y1) * cross
+    if abs(area) < 1e-9:
+        return None
+    area *= 0.5
+    return (round(cx / (6 * area), 2), round(cy / (6 * area), 2))
 
 
 def slug(label: str) -> str:
@@ -254,7 +325,9 @@ def main() -> int:
         new_id = rename.get(sid, sid)
         sym.set('id', f'ssd-{new_id}' if sid in rename else sid)
         recolour(sym)
-        slot = number_slot(sym, new_id)
+        repair_references(sym)
+        entry_for_slot = by_icon.get(sid)
+        slot = number_slot(sym, new_id, entry_for_slot['label'] if entry_for_slot else '')
         markup = ET.tostring(sym, encoding='unicode')
         out_parts.append(markup)
 
@@ -278,6 +351,12 @@ def main() -> int:
             icons.append(icon)
 
     sprite = ''.join(out_parts)
+
+    defined = set(re.findall(r'id="([^"]+)"', sprite))
+    dangling = sorted(set(re.findall(r'href="#([^"]+)"', sprite)) - defined)
+    if dangling:
+        print(f'dangling references in the sprite: {dangling}', file=sys.stderr)
+        return 1
 
     # Print-shop noise the browser does not need: a miter limit that is already
     # the default, and coordinates carried to twelve decimal places.
@@ -319,11 +398,14 @@ def main() -> int:
         + "  /** The symbol's own coordinate system, for drawing on top of it. */\n"
         + '  viewBox: string\n'
         + '  /**\n'
-        + '   * Where the sheet printed a sample number, for the seven symbols whose\n'
-        + '   * number is the ship\'s rather than the symbol\'s. The sample itself is\n'
-        + '   * marked `ssd-sample` and hidden; draw the real value here instead.\n'
+        + '   * Where a number sits inside the symbol. For the seven symbols whose\n'
+        + '   * number is the ship\'s rather than the symbol\'s (`means` names it) the\n'
+        + '   * sample is marked `ssd-sample` and always hidden. For the classed\n'
+        + '   * weapons (`means: "class"`) the printed digit is marked `ssd-digit` and\n'
+        + '   * stays unless a value is drawn over it. `ink` says whether the digit is\n'
+        + '   * ink on paper or a hole in a filled disc.\n'
         + '   */\n'
-        + '  numberSlot?: { x: number; y: number; size: number; means: string }\n'
+        + '  numberSlot?: { x: number; y: number; size: number; means: string; ink: boolean }\n'
         + '}\n\n'
         + 'export const SSD_ICONS: readonly SsdIcon[] = '
         + json.dumps(icons, indent=1, ensure_ascii=False)

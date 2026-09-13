@@ -9,13 +9,15 @@ import { COUNTER_EXTENT, counterSilhouette } from './ssd/layout'
  * likeness of it and not a second drawing of the same idea: `counterSilhouette`
  * runs the same layout the sheet does and hands back the same outline, so a
  * ship that reads as a long streamlined needle on paper reads as one on the
- * table, and a starbase reads as the octagon it is drawn as.
+ * table, a broadside ship carries its sponsons, a carrier its flight deck, and
+ * a starbase reads as the octagon it is drawn as.
  *
- * Almost nothing survives being shrunk to forty pixels, so almost nothing is
- * kept: the outline, the bow filled in — because which way the bow points is
- * the one thing a player must never have to guess (3.1, 4.2, 4.10) — and a
- * spinal mount's barrel, which is the only fitting that changes the shape of
- * the ship carrying it.
+ * The guns come with it. At the size a counter usually is, each battery is a
+ * bar across the hull where the sheet drew its row — a bow battery a bar at
+ * the bow, a broadside a bar down each flank — and once the map is zoomed in
+ * far enough for a dot per gun to mean something, it is dots per gun. The bow
+ * is filled in whatever the size, because which way it points is the one thing
+ * a player must never have to guess (3.1, 4.2, 4.10).
  *
  * Presentational and prop-driven: it knows nothing about game state, so the
  * map, the fleet picker and the designer can all draw the same counter.
@@ -59,6 +61,15 @@ export interface CounterProps {
 export function counterRadius(mass: number): number {
   return 0.45 * Math.cbrt(Math.max(1, mass))
 }
+
+/**
+ * Below this many pixels of half-length, a dot per gun is a smear and the
+ * batteries are drawn as bars instead.
+ */
+const DOTS_FROM_PX = 34
+/** A gun's dot and a battery's bar, in the counter's ±1000 box. */
+const DOT_RADIUS = 58
+const BAR_WIDTH = 95
 
 export function Counter({
   position,
@@ -121,6 +132,36 @@ export function Counter({
               y2={silhouette.spine.y2}
             />
           ) : null}
+          {r >= DOTS_FROM_PX
+            ? silhouette.guns.map((gun, i) => (
+                <circle key={i} className="counter-gun" cx={gun.x} cy={gun.y} r={DOT_RADIUS} />
+              ))
+            : silhouette.bars.map((bar, i) => (
+                <line
+                  key={i}
+                  className={`counter-battery is-${bar.kind}`}
+                  x1={bar.x0}
+                  y1={bar.y}
+                  x2={bar.x1}
+                  y2={bar.y}
+                  strokeWidth={BAR_WIDTH}
+                />
+              ))}
+          {r >= DOTS_FROM_PX
+            ? silhouette.bars
+                .filter((bar) => bar.kind === 'bay')
+                .map((bar, i) => (
+                  <line
+                    key={`bay-${i}`}
+                    className="counter-battery is-bay"
+                    x1={bar.x0}
+                    y1={bar.y}
+                    x2={bar.x1}
+                    y2={bar.y}
+                    strokeWidth={BAR_WIDTH}
+                  />
+                ))
+            : null}
         </g>
       )}
       {inverted ? (

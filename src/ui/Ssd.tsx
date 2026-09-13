@@ -1,6 +1,4 @@
-import { useMemo } from 'react'
-
-import { crewFactors } from '../engine/game'
+import { crewFactorBoxes, crewFactors } from '../engine/game'
 import type { ShipDesign } from '../engine/types'
 import { HullPlan } from './ssd/HullPlan'
 import { Tracks, hullRows } from './ssd/Tracks'
@@ -38,12 +36,14 @@ export interface SsdDamage {
    * reason a player watches the armour row at all.
    */
   armourBurntOut?: number[]
-  /** Ids of weapons and systems knocked out by threshold checks (4.11). */
+  /**
+   * Ids of weapons and systems knocked out by threshold checks (4.11) — the
+   * one set the engine records losses in, screen generators and the core's
+   * three included. Everything drawn crossed off is crossed off from here.
+   */
   destroyed: ReadonlySet<string>
   /** Weapons already fired this turn — in Full Thrust, once is all (2.6). */
   fired?: ReadonlySet<string>
-  /** Surviving screen generators, which set the working screen level (7.2). */
-  screenGenerators?: number
   /** Current thrust, which halves on the drive's first threshold loss (4.11). */
   thrust?: number
 }
@@ -71,25 +71,35 @@ const PRISTINE: SsdDamage = {
 export { hullRows }
 
 export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdProps) {
-  const generators = damage.screenGenerators ?? design.screens.generators
-  const screenLevel = Math.min(design.screens.level, generators)
+  // The working screen level is what the generators still standing can hold up
+  // (7.2), read from the same set of losses as everything else on the sheet.
+  const generators = design.systems.filter((s) => s.kind === 'screen-generator')
+  const standing = generators.filter((g) => !damage.destroyed.has(g.id)).length
+  const screenLevel = Math.min(design.screens.level, standing)
   const thrust = damage.thrust ?? design.drive.thrust
-  const parties =
-    crewFactors(design.mass, design.group === 'civilian') + design.additionalDamageControlParties
 
-  // Laying a ship out walks its whole fit-out and then fits a hull round it, so
-  // it is done once per design and damage state rather than once per render —
-  // the map redraws this on every pointer move.
-  const plan = useMemo(
-    () =>
-      planShip(design, {
-        destroyed: damage.destroyed,
-        fired: damage.fired,
-        screenGenerators: damage.screenGenerators,
-        thrust: damage.thrust,
-      }),
-    [design, damage.destroyed, damage.fired, damage.screenGenerators, damage.thrust],
+  // Damage control parties are the crew still aboard plus what was bought
+  // (10.4, 10.5): one party per crew dot that is not yet in a crossed-off box.
+  // The same arithmetic as the engine's `survivingCrewFactors`, on the same
+  // dots the track draws, so the number and the stars are one fact.
+  const dots = crewFactorBoxes(
+    design.hullBoxes,
+    crewFactors(design.mass, design.group === 'civilian'),
   )
+  const parties =
+    dots.filter((box) => box > damage.hullMarked).length + design.additionalDamageControlParties
+
+  // Cheap enough — a tenth of a millisecond on the heaviest hull in the game —
+  // that memoising it is not worth a stale sheet: the sets it reads are
+  // mutated in place by the engine, so nothing about their identity says
+  // whether they changed.
+  const plan = planShip(design, {
+    destroyed: damage.destroyed,
+    fired: damage.fired,
+    thrust: damage.thrust,
+  })
+
+  const stealthHull = design.systems.some((s) => s.kind === 'stealth-hull')
 
   return (
     <div className="ssd">
@@ -110,16 +120,33 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
         <span>
           CPV <b className="num">{design.points}</b>
         </span>
-        {screenLevel > 0 ? (
+        {design.screens.level > 0 ? (
           <span className="screen-level">
             SCR
-            {Array.from({ length: generators }, (_, i) => (
-              <span
-                key={i}
-                className={`screen-pip${i < screenLevel ? ' is-up' : ' is-backup'}`}
-                title={i < screenLevel ? 'Screen generator' : 'Backup generator'}
-              />
-            ))}
+            {generators.map((generator, i) => {
+              const up = !damage.destroyed.has(generator.id)
+              return (
+                <span
+                  key={generator.id}
+                  className={`screen-pip${up ? (i < screenLevel ? ' is-up' : ' is-backup') : ' is-down'}`}
+                  title={
+                    !up
+                      ? 'Generator knocked out'
+                      : i < design.screens.level
+                        ? 'Screen generator'
+                        : 'Backup generator'
+                  }
+                />
+              )
+            })}
+          </span>
+        ) : null}
+        {/* 7.4's stealth hull is the hull's own shaping, not a box on it, so
+            it is stated here rather than drawn as a fitting. */}
+        {stealthHull && !redacted ? <span className="ssd-badge">STEALTH HULL</span> : null}
+        {design.flawed === true ? (
+          <span className="ssd-badge is-warn" title="13.13: threshold checks fail a pip earlier">
+            FLAWED
           </span>
         ) : null}
       </div>
@@ -135,11 +162,17 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
 
       {/* Crew parties come from the hull's own crew (10.4), so the sheet shows
           what the ship actually musters, not what was bought. The stars on the
-          hull track are where they are lost. */}
+          hull track are where they are lost. Under the sensor rules the
+          complement is fit-out and stays hidden with the rest of it. */}
       <div className="ssd-crew">
-        {parties > 0 ? <span>DCP ×{parties}</span> : null}
-        {design.marineParties > 0 ? <span>MARINES ×{design.marineParties}</span> : null}
-        {redacted ? <span className="is-redacted">Fit-out not known</span> : null}
+        {redacted ? (
+          <span className="is-redacted">Fit-out not known</span>
+        ) : (
+          <>
+            {parties > 0 ? <span>DCP ×{parties}</span> : null}
+            {design.marineParties > 0 ? <span>MARINES ×{design.marineParties}</span> : null}
+          </>
+        )}
       </div>
     </div>
   )

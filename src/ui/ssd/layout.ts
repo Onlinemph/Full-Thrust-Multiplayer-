@@ -1,14 +1,18 @@
-import { ARC_ORDER } from '../../engine/types'
-import type { Arc, ShipDesign, SystemDef } from '../../engine/types'
+import { CORE_SYSTEM_IDS } from '../../engine/threshold'
+import type { Arc, ShipDesign, SystemDef, WeaponDef } from '../../engine/types'
+import { turretMountedArcs } from '../../engine/weapons/kinetics'
+import { arcBearing, bearsSomewhere } from './bearing'
 import {
+  CARRIER_KINDS,
   COUNTER_EXTENT,
   HULL_MARGIN,
   boxInsideOutline,
   deckBeamFraction,
+  halfBeamAt,
   hullPath,
   hullPlan,
   hullShape,
-  halfBeamAt,
+  normalisation,
   normalisePlan,
   outlinePolyline,
   type HullPlan,
@@ -21,7 +25,6 @@ import {
   iconForSystem,
   iconForWeapon,
 } from './iconFor'
-import { ssdIcon } from './Glyph'
 
 /**
  * Laying a ship out the way it was built.
@@ -39,13 +42,21 @@ import { ssdIcon } from './Glyph'
  * clears the widest row. So there is no collision to resolve and no design
  * that fails to lay out — the hull yields to the contents rather than the
  * contents being squeezed into a hull.
+ *
+ * Reading down the keel, the bands are the ones the book's own sheets have:
+ * the bow, the forward flanks, the all-round mounts, the guts, the aft flanks,
+ * the hangars, the stern battery, then the bottom row — *"the symbols for the
+ * FTL and main drive, and the … Core Systems"* (2.4).
  */
+
+export type GlyphState = 'live' | 'fired' | 'destroyed' | 'degraded' | 'absent'
 
 /** One symbol's box in a laid-out ship, in the plan's own coordinates. */
 export interface PlacedGlyph {
   key: string
   icon: string
   label: string
+  kind: 'weapon' | 'system' | 'bay' | 'screen' | 'drive' | 'ftl' | 'core' | 'flaw'
   /** Centre of the box. */
   x: number
   y: number
@@ -57,7 +68,12 @@ export interface PlacedGlyph {
   arcs?: readonly Arc[]
   /** Where the rosette goes, when there is one: under the symbol. */
   rose: { x: number; y: number; radius: number } | null
-  state: 'live' | 'fired' | 'destroyed' | 'degraded'
+  state: GlyphState
+  /**
+   * The Core Systems block is one symbol with three systems in it (10.3), and
+   * each is crossed off on its own. `fx` is how far across the box each sits.
+   */
+  cells?: ReadonlyArray<{ key: string; label: string; fx: number; state: GlyphState }>
 }
 
 export interface SsdPlan {
@@ -69,62 +85,34 @@ export interface SsdPlan {
   /** 5.23: the spinal mount's run, from the breech to the muzzle. */
   spine: { x: number; y1: number; y2: number } | null
   glyphs: PlacedGlyph[]
+  /** Where one band ends and the next begins: the ship's frames. */
+  frames: number[]
   viewBox: string
 }
 
 /** What the sheet knows about a ship's damage when it draws it. */
 export interface PlanDamage {
+  /** Ids crossed off the SSD — weapons, systems, the core's three (4.11, 10.3). */
   destroyed: ReadonlySet<string>
   fired?: ReadonlySet<string>
-  /** Surviving screen generators, which set the working screen level (7.2). */
-  screenGenerators?: number
   /** Current thrust, which halves on the drive's first threshold loss (4.11). */
   thrust?: number
 }
 
 // ---------------------------------------------------------------------------
-// Bearing
+// Bands
 // ---------------------------------------------------------------------------
 
-/**
- * Where a mounting points, and how tightly.
- *
- * The six arcs are 60° wedges around the bow (4.2), so a set of them has a mean
- * direction and a concentration: a single arc is tight and points one way, the
- * four arcs of a broadside point broadly abeam, and all six cancel out exactly.
- * That cancelling is the useful part — it is how an all-round mount identifies
- * itself as belonging on the keel rather than on any one side.
- */
-export function arcBearing(arcs: readonly Arc[]): { degrees: number; spread: number } {
-  if (arcs.length === 0) return { degrees: 0, spread: 0 }
-  let sx = 0
-  let sy = 0
-  for (const arc of arcs) {
-    const index = ARC_ORDER.indexOf(arc)
-    if (index < 0) continue
-    const radians = (index * 60 * Math.PI) / 180
-    sx += Math.sin(radians)
-    sy += Math.cos(radians)
-  }
-  const spread = Math.hypot(sx, sy) / arcs.length
-  if (spread < 1e-9) return { degrees: 0, spread: 0 }
-  const degrees = (Math.atan2(sx, sy) * 180) / Math.PI
-  return { degrees: degrees < 0 ? degrees + 360 : degrees, spread }
-}
-
-/**
- * The six bands a mounting can belong to, and the seventh for a mount that
- * bears every way.
- *
- * A mounting whose arcs nearly cancel belongs on the keel however its mean
- * happens to fall. Adjacent 60° arcs concentrate as 2·sin(30n°)/n, so the
- * ladder is 1 arc 1.00, two 0.87, three 0.67, four 0.43, five 0.20 and six
- * exactly nothing. 0.34 sits in the one wide gap on it: a mount covering four
- * arcs still has a side to be bolted to, and one covering five does not.
- */
-const KEEL_SPREAD = 0.34
-
-type BandId = 'bow' | 'forward' | 'midships' | 'core' | 'aft' | 'bays' | 'stern'
+type BandId =
+  | 'bow'
+  | 'forward'
+  | 'midships'
+  | 'core'
+  | 'aft'
+  | 'bays'
+  | 'stern'
+  | 'keel'
+  | 'drives'
 type Side = 'port' | 'centre' | 'starboard'
 
 const BAND_ORDER: readonly BandId[] = [
@@ -135,16 +123,16 @@ const BAND_ORDER: readonly BandId[] = [
   'aft',
   'bays',
   'stern',
+  'keel',
+  'drives',
 ]
 
 /** Bands whose contents run down the sides of the hull rather than across it. */
 const FLANK_BANDS: ReadonlySet<BandId> = new Set<BandId>(['forward', 'aft'])
 
 function station(arcs: readonly Arc[]): { band: BandId; side: Side } {
-  const { degrees, spread } = arcBearing(arcs)
-  if (spread < KEEL_SPREAD) return { band: 'midships', side: 'centre' }
-  const sector = (Math.round(degrees / 60) % 6 + 6) % 6
-  switch (sector) {
+  if (!bearsSomewhere(arcs)) return { band: 'midships', side: 'centre' }
+  switch (arcBearing(arcs).sector) {
     case 0:
       return { band: 'bow', side: 'centre' }
     case 1:
@@ -161,243 +149,30 @@ function station(arcs: readonly Arc[]): { band: BandId; side: Side } {
 }
 
 // ---------------------------------------------------------------------------
-// Gathering what is on the ship
+// Sizes
 // ---------------------------------------------------------------------------
-
-interface Item {
-  key: string
-  icon: string
-  label: string
-  value?: number
-  arcs?: readonly Arc[]
-  state: PlacedGlyph['state']
-  /** Box width in glyph units; the wide symbols take more than one. */
-  units: number
-  band: BandId
-  side: Side
-}
-
-/** Systems that are part of the ship's small-craft plant rather than its guts. */
-const BAY_KINDS = new Set([
-  'hangar-bay',
-  'launch-tube',
-  'catapult',
-  'fighter-rack',
-  'gunboat-rack',
-  'gunboat-bay',
-  'boat-bay',
-  'tender',
-])
 
 /**
- * Systems the sheet draws once with a number in them rather than once each.
+ * Box sides, in plan units.
  *
- * The sheet's Cargo Hold has a number printed inside it, and it means the mass
- * held — so a liner with twenty mass of cargo is one hold that says 20, not
- * twenty holds. Drawing it the other way is what turns a merchantman's sheet
- * into a wall of identical boxes.
+ * Not one size. A weapon is what a player is looking for, so it is the
+ * biggest thing on the deck; the drive is bigger still because its number is
+ * the ship's speed; a fitting is a fitting. The Core Systems block is the
+ * sheet's 3:1 symbol at the width of three fittings.
  */
-const COUNTED_KINDS = new Set(['cargo', 'passenger-berthing', 'troop-berthing', 'boat-bay', 'tender'])
-
-function weaponItems(design: ShipDesign, damage: PlanDamage): Item[] {
-  const items: Item[] = []
-  for (const weapon of design.weapons) {
-    const icon = iconForWeapon(weapon)
-    if (icon === null) continue
-    const spec = ssdIcon(icon)
-    const where = station(weapon.arcs)
-    items.push({
-      key: weapon.id,
-      icon,
-      label: weapon.label,
-      arcs: weapon.arcs,
-      state: damage.destroyed.has(weapon.id)
-        ? 'destroyed'
-        : damage.fired?.has(weapon.id)
-          ? 'fired'
-          : 'live',
-      units: unitsFor(spec?.aspect ?? 1),
-      band: where.band,
-      side: where.side,
-    })
-  }
-  return items
-}
-
-function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
-  const items: Item[] = []
-  const counted = new Map<string, { live: number; total: number; system: SystemDef }>()
-
-  for (const system of design.systems) {
-    if (system.kind === 'screen-generator' || system.kind === 'ftl-drive') continue
-    const icon = iconForSystem(system.kind)
-    if (icon === null) continue
-    const dead = damage.destroyed.has(system.id)
-
-    if (COUNTED_KINDS.has(system.kind)) {
-      const seen = counted.get(system.kind) ?? { live: 0, total: 0, system }
-      seen.total += 1
-      if (!dead) seen.live += 1
-      counted.set(system.kind, seen)
-      continue
-    }
-
-    const spec = ssdIcon(icon)
-    const where = system.arcs !== undefined && system.arcs.length > 0
-      ? station(system.arcs)
-      : { band: 'core' as BandId, side: 'centre' as Side }
-    items.push({
-      key: system.id,
-      icon,
-      label: system.label,
-      arcs: system.arcs,
-      state: dead ? 'destroyed' : 'live',
-      units: unitsFor(spec?.aspect ?? 1),
-      band: BAY_KINDS.has(system.kind) ? 'bays' : where.band,
-      side: BAY_KINDS.has(system.kind) ? 'centre' : where.side,
-    })
-  }
-
-  for (const [kind, tally] of counted) {
-    const icon = iconForSystem(tally.system.kind)
-    if (icon === null) continue
-    items.push({
-      key: `count-${kind}`,
-      icon,
-      label: `${tally.system.label} ×${tally.total}`,
-      value: tally.live,
-      // All of them gone is a destroyed system; some of them gone is a ship
-      // still carrying cargo, and saying otherwise would be a lie about a
-      // number the player is reading off the box.
-      state: tally.live === 0 ? 'destroyed' : tally.live < tally.total ? 'degraded' : 'live',
-      units: 1,
-      band: BAY_KINDS.has(kind) ? 'bays' : 'core',
-      side: 'centre',
-    })
-  }
-
-  return items
-}
-
-function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
-  const items: Item[] = []
-
-  // Fighter bays are drawn by what is in them (8.15): a wing of interceptors
-  // and a wing of torpedo bombers are the same 6 mass and completely different
-  // news for whoever is being launched at.
-  design.fighterBays.forEach((bay, index) => {
-    items.push({
-      key: `bay-${index}`,
-      icon: iconForFighterBay(bay.typeId, bay.modifiers ?? []),
-      label: bay.label,
-      state: 'live',
-      units: 1,
-      band: 'bays',
-      side: 'centre',
-    })
-  })
-
-  design.gunboats.forEach((squadron, index) => {
-    items.push({
-      key: `gunboats-${index}`,
-      icon: 'gunboat-rack',
-      label: squadron.label,
-      state: 'live',
-      units: 1,
-      band: 'bays',
-      side: 'centre',
-    })
-  })
-
-  // Screens are drawn from the design rather than from the system list, because
-  // which of the six screen symbols is right depends on level and grade (7.2,
-  // 7.3, 7.16) rather than on the entry that pays for it.
-  const generators = design.systems.filter((s) => s.kind === 'screen-generator')
-  const standing = damage.screenGenerators ?? generators.length
-  const screenIcon = iconForScreen(design.screens)
-  if (screenIcon !== null && design.screens.level > 0) {
-    generators.forEach((generator, index) => {
-      items.push({
-        key: generator.id,
-        icon: screenIcon,
-        label: index < design.screens.level ? generator.label : `${generator.label} (backup)`,
-        state: index < standing ? 'live' : 'destroyed',
-        units: 1,
-        band: 'core',
-        side: 'centre',
-      })
-    })
-  }
-  const areaIcon = iconForScreen(design.screens, { area: true })
-  if (areaIcon !== null) {
-    items.push({
-      key: 'area-screen',
-      icon: areaIcon,
-      label: 'Area defensive screen',
-      state: 'live',
-      units: 1,
-      band: 'core',
-      side: 'centre',
-    })
-  }
-
-  // 10.3's Core Systems block is three cells wide on the sheet and sits where
-  // the bridge sits: amidships, behind everything that shoots.
-  if (design.coreSystems !== undefined) {
-    items.push({
-      key: 'core-systems',
-      icon: 'core-systems',
-      label: 'Core systems',
-      state: 'live',
-      units: unitsFor(ssdIcon('core-systems')?.aspect ?? 3),
-      band: 'core',
-      side: 'centre',
-    })
-  }
-
-  // The drive is the stern, and the number inside it is what the ship can
-  // actually manage now rather than what it was built with.
-  const driveIcon = iconForDrive(design.drive.advanced)
-  if (driveIcon !== null) {
-    const thrust = damage.thrust ?? design.drive.thrust
-    items.push({
-      key: 'drive',
-      icon: driveIcon,
-      label: design.drive.advanced ? 'Main drive (advanced)' : 'Main drive',
-      value: thrust,
-      state: thrust < design.drive.thrust ? 'degraded' : 'live',
-      units: 1.35,
-      band: 'stern',
-      side: 'centre',
-    })
-  }
-
-  const ftlIcon = iconForFtl(design.ftl)
-  if (ftlIcon !== null) {
-    const ftlSystem = design.systems.find((s) => s.kind === 'ftl-drive')
-    items.push({
-      key: ftlSystem?.id ?? 'ftl',
-      icon: ftlIcon,
-      label: design.ftl === 'tug' ? 'FTL drive (tug)' : 'FTL drive',
-      state:
-        ftlSystem !== undefined && damage.destroyed.has(ftlSystem.id) ? 'destroyed' : 'live',
-      units: 1,
-      band: 'stern',
-      side: 'centre',
-    })
-  }
-
-  return items
-}
-
-// ---------------------------------------------------------------------------
-// The flow
-// ---------------------------------------------------------------------------
-
-/** Side of a symbol's box, in plan units. */
-const GLYPH = 36
+const SIZE = {
+  weapon: 40,
+  system: 32,
+  bay: 36,
+  screen: 32,
+  drive: 46,
+  ftl: 36,
+  flaw: 32,
+} as const
+const CORE_WIDTH = 116
+const CORE_HEIGHT = 39
 /** Space between two symbols in a row. */
-const GLYPH_GAP = 8
+const GAP = 8
 /** Space either side of the keel, so a broadside battery is visibly abeam. */
 const SPINE_HALF = 22
 /**
@@ -409,8 +184,8 @@ const SPINE_HALF = 22
  */
 const ROSE_BAND = 21
 const ROSE_RADIUS = 10
-/** Space between two bands, which is where the ship's frames would be. */
-const BAND_GAP = 15
+/** Space between two bands, which is where the ship's frames are drawn. */
+const BAND_GAP = 18
 /**
  * Clear deck kept fore and aft of the contents.
  *
@@ -420,27 +195,392 @@ const BAND_GAP = 15
  * have to argue with the corner they are sitting in.
  */
 const DECK_INSET = 15
-
 /**
  * Symbols across before a band wraps.
  *
  * The hull has to be wide enough for its widest band, so this is what decides
  * how fat every ship looks. Four keeps a cruiser reading as a cruiser; six had
- * them all coming out as coffins.
+ * them all coming out as coffins. A station is not a ship and is not laid out
+ * like one — it has no bow and is drawn as an octagon — so it is allowed to be
+ * the squat thing it is.
  */
 const SHIP_ACROSS = 4
-/**
- * A station is not a ship and is not laid out like one: it has no bow, it is
- * drawn as an octagon, and stacking its fit-out four wide would make it a
- * tower. Wider rows keep it the squat thing it is.
- */
 const STATION_ACROSS = 7
 
-function unitsFor(aspect: number): number {
-  // A symbol wider than it is tall gets a wider box rather than being squashed
-  // into a square one: the sheet's Core Systems block is 3:1 and means it.
-  return aspect > 1.35 ? Math.min(3, Math.round(aspect * 2) / 2) : 1
+// ---------------------------------------------------------------------------
+// Gathering what is on the ship
+// ---------------------------------------------------------------------------
+
+interface Item {
+  key: string
+  icon: string
+  label: string
+  kind: PlacedGlyph['kind']
+  value?: number
+  arcs?: readonly Arc[]
+  state: GlyphState
+  width: number
+  height: number
+  band: BandId
+  side: Side
+  /** Where it sorts among the guts, so like sits with like. */
+  order: number
+  cells?: PlacedGlyph['cells']
 }
+
+/**
+ * How the guts are ordered amidships.
+ *
+ * Targeting first, then what the ship sees and hides with, then screens, then
+ * point defence, then the crew and the holds. The same order on every sheet,
+ * so a player who has read one ship has read them all — and identical
+ * fittings sit together, which is what makes a row of four PDS read as "four
+ * PDS" instead of four things to count.
+ */
+const GUTS_ORDER: readonly string[] = [
+  'firecon',
+  'advanced-firecon',
+  'adfc',
+  'advanced-adfc',
+  'enhanced-sensors',
+  'superior-sensors',
+  'ecm',
+  'area-ecm',
+  'holofield',
+  'stealth-field',
+  'cloaking-device',
+  'cloaking-field',
+  'tuffley-cloak',
+  'reflex-field',
+  'screen',
+  'area-screen',
+  'pds',
+  'ads',
+  'scattergun',
+  'grapeshot',
+  'minesweeper',
+  'ortillery',
+  'damage-control-party',
+  'marine-party',
+  'antimatter-charge',
+  'dummy-bogey',
+  'weasel-emitter',
+  'cargo',
+  'passenger-berthing',
+  'troop-berthing',
+  'shipyard',
+  'flaw',
+]
+
+function orderOf(kind: string): number {
+  const index = GUTS_ORDER.indexOf(kind)
+  return index < 0 ? GUTS_ORDER.length : index
+}
+
+/**
+ * Systems the sheet draws once with a number in them rather than once each.
+ *
+ * The sheet's Cargo Hold has a number printed inside it, and it means the mass
+ * held — so a liner with twenty mass of cargo is one hold that says 20, not
+ * twenty holds. Drawing it the other way is what turns a merchantman's sheet
+ * into a wall of identical boxes.
+ */
+const COUNTED_KINDS = new Set(['cargo', 'passenger-berthing', 'troop-berthing', 'boat-bay', 'tender'])
+
+/** The arcs a mounting actually bears through, turret and all (4.2, 5.22). */
+function arcsOf(design: ShipDesign, weapon: WeaponDef): readonly Arc[] {
+  if (weapon.turretId === undefined) return weapon.arcs
+  const turret = design.turrets.find((t) => t.id === weapon.turretId)
+  // 5.22: "Weapons with more than 1 arc that are mounted in a turret lose
+  // their additional arcs" — the turret's traverse is what the gun has.
+  return turret === undefined ? weapon.arcs : turretMountedArcs(weapon, turret)
+}
+
+/** The class a symbol prints, where it prints one. */
+const PRINTED_CLASS = /^class-(\d)-/
+
+function weaponItems(design: ShipDesign, damage: PlanDamage): Item[] {
+  const items: Item[] = []
+  for (const weapon of design.weapons) {
+    const icon = iconForWeapon(weapon)
+    if (icon === null) continue
+    const arcs = arcsOf(design, weapon)
+    const where = station(arcs)
+    // The sheet prints the class inside the symbol. Where the gun's rating is
+    // one the sheet does not carry — a Beam-5 on a sheet that stops at 4 —
+    // the true rating is drawn over the digit rather than a lower one shown,
+    // because that digit is the number of dice the gun rolls.
+    const printed = PRINTED_CLASS.exec(icon)
+    const value =
+      printed !== null && Number(printed[1]) !== Math.round(weapon.rating)
+        ? Math.round(weapon.rating)
+        : undefined
+    items.push({
+      key: weapon.id,
+      icon,
+      label: weapon.turretId === undefined ? weapon.label : `${weapon.label} (turret ${weapon.turretId})`,
+      kind: 'weapon',
+      value,
+      arcs,
+      state: damage.destroyed.has(weapon.id)
+        ? 'destroyed'
+        : damage.fired?.has(weapon.id)
+          ? 'fired'
+          : 'live',
+      width: SIZE.weapon,
+      height: SIZE.weapon,
+      band: where.band,
+      side: where.side,
+      order: 0,
+    })
+  }
+  return items
+}
+
+function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
+  const items: Item[] = []
+  const counted = new Map<string, { live: number; total: number; system: SystemDef }>()
+  // A wing rides in a bay: the i-th fighter group is in the i-th hangar, the
+  // i-th gunboat squadron on the i-th rack (8.2, 9.1). Drawn once, as the bay,
+  // with what is in it choosing the symbol — not as a bay and then a wing.
+  let hangars = 0
+  let racks = 0
+
+  for (const system of design.systems) {
+    if (system.kind === 'screen-generator' || system.kind === 'ftl-drive') continue
+    if (system.kind === 'stealth-hull') continue
+    let icon = iconForSystem(system.kind)
+    if (icon === null) continue
+    const dead = damage.destroyed.has(system.id)
+
+    if (COUNTED_KINDS.has(system.kind)) {
+      const seen = counted.get(system.kind) ?? { live: 0, total: 0, system }
+      seen.total += 1
+      if (!dead) seen.live += 1
+      counted.set(system.kind, seen)
+      continue
+    }
+
+    let label = system.label
+    if (system.kind === 'hangar-bay') {
+      const wing = design.fighterBays[hangars]
+      hangars += 1
+      if (wing !== undefined) {
+        icon = iconForFighterBay(wing.typeId, wing.modifiers ?? [])
+        label = wing.label
+      }
+    } else if (system.kind === 'gunboat-rack' || system.kind === 'gunboat-bay') {
+      const squadron = design.gunboats[racks]
+      racks += 1
+      if (squadron !== undefined) {
+        icon = system.kind === 'gunboat-rack' ? 'gunboat-rack-occupied-sample' : icon
+        label = squadron.label
+      }
+    }
+
+    const bay = CARRIER_KINDS.has(system.kind)
+    const where =
+      system.arcs !== undefined && system.arcs.length > 0
+        ? station(system.arcs)
+        : { band: 'core' as BandId, side: 'centre' as Side }
+    items.push({
+      key: system.id,
+      icon,
+      label,
+      kind: bay ? 'bay' : 'system',
+      arcs: system.arcs,
+      state: dead ? 'destroyed' : 'live',
+      width: bay ? SIZE.bay : SIZE.system,
+      height: bay ? SIZE.bay : SIZE.system,
+      band: bay ? 'bays' : where.band,
+      side: bay ? 'centre' : where.side,
+      order: orderOf(system.kind),
+    })
+  }
+
+  // A wing with no hangar to ride in is a design fault the yard reports, but
+  // it is still aboard, so it is still drawn rather than lost.
+  design.fighterBays.slice(hangars).forEach((wing, i) => {
+    items.push({
+      key: `wing-${hangars + i}`,
+      icon: iconForFighterBay(wing.typeId, wing.modifiers ?? []),
+      label: `${wing.label} (no hangar)`,
+      kind: 'bay',
+      state: 'live',
+      width: SIZE.bay,
+      height: SIZE.bay,
+      band: 'bays',
+      side: 'centre',
+      order: 0,
+    })
+  })
+  design.gunboats.slice(racks).forEach((squadron, i) => {
+    items.push({
+      key: `squadron-${racks + i}`,
+      icon: 'gunboat-rack-occupied-sample',
+      label: `${squadron.label} (no rack)`,
+      kind: 'bay',
+      state: 'live',
+      width: SIZE.bay,
+      height: SIZE.bay,
+      band: 'bays',
+      side: 'centre',
+      order: 0,
+    })
+  })
+
+  for (const [kind, tally] of counted) {
+    const icon = iconForSystem(tally.system.kind)
+    if (icon === null) continue
+    const bay = CARRIER_KINDS.has(kind)
+    items.push({
+      key: `count-${kind}`,
+      icon,
+      label: `${tally.system.label} ×${tally.total}`,
+      kind: bay ? 'bay' : 'system',
+      value: tally.live,
+      // All of them gone is a destroyed system; some of them gone is a ship
+      // still carrying cargo, and saying otherwise would be a lie about a
+      // number the player is reading off the box.
+      state: tally.live === 0 ? 'destroyed' : tally.live < tally.total ? 'degraded' : 'live',
+      width: bay ? SIZE.bay : SIZE.system,
+      height: bay ? SIZE.bay : SIZE.system,
+      band: bay ? 'bays' : 'core',
+      side: 'centre',
+      order: orderOf(kind),
+    })
+  }
+
+  return items
+}
+
+function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
+  const items: Item[] = []
+
+  // Screens are drawn from the design rather than from the system list, because
+  // which of the six screen symbols is right depends on level and grade (7.2,
+  // 7.3, 7.16) rather than on the entry that pays for it. Which generators are
+  // still up is read from the same set as everything else on the sheet.
+  const generators = design.systems.filter((s) => s.kind === 'screen-generator')
+  const screenIcon = iconForScreen(design.screens)
+  if (screenIcon !== null && design.screens.level > 0) {
+    generators.forEach((generator, index) => {
+      items.push({
+        key: generator.id,
+        icon: screenIcon,
+        label: index < design.screens.level ? generator.label : `${generator.label} (backup)`,
+        kind: 'screen',
+        state: damage.destroyed.has(generator.id) ? 'destroyed' : 'live',
+        width: SIZE.screen,
+        height: SIZE.screen,
+        band: 'core',
+        side: 'centre',
+        order: orderOf('screen'),
+      })
+    })
+  }
+  const areaIcon = iconForScreen(design.screens, { area: true })
+  if (areaIcon !== null) {
+    items.push({
+      key: 'area-screen',
+      icon: areaIcon,
+      label: 'Area defensive screen',
+      kind: 'screen',
+      state: 'live',
+      width: SIZE.screen,
+      height: SIZE.screen,
+      band: 'core',
+      side: 'centre',
+      order: orderOf('area-screen'),
+    })
+  }
+
+  // 13.13's Flawed Design is on the sheet as the sheet's own symbol, because a
+  // player reading the threshold tab needs to know why it is a pip lower.
+  if (design.flawed === true) {
+    items.push({
+      key: 'flawed-design',
+      icon: 'flawed-design',
+      label: 'Flawed design (13.13)',
+      kind: 'flaw',
+      state: 'live',
+      width: SIZE.flaw,
+      height: SIZE.flaw,
+      band: 'core',
+      side: 'centre',
+      order: orderOf('flaw'),
+    })
+  }
+
+  // 10.3: every hull has the block — "assumed to be part of the essential
+  // structure of all ships" — so every sheet draws it, in the bottom row where
+  // 2.4 puts it. A design that names its own block and leaves one out gets
+  // that cell dimmed rather than the block redrawn: the symbol is the book's.
+  const core = design.coreSystems
+  const cellState = (fitted: boolean, id: string): GlyphState =>
+    !fitted ? 'absent' : damage.destroyed.has(id) ? 'destroyed' : 'live'
+  const cells = [
+    { key: CORE_SYSTEM_IDS.bridge, label: 'Bridge', fx: 0.258, state: cellState(core?.bridge ?? true, CORE_SYSTEM_IDS.bridge) },
+    { key: CORE_SYSTEM_IDS.lifeSupport, label: 'Life support', fx: 0.5, state: cellState(core?.lifeSupport ?? true, CORE_SYSTEM_IDS.lifeSupport) },
+    { key: CORE_SYSTEM_IDS.powerCore, label: 'Power core', fx: 0.742, state: cellState(core?.powerCore ?? true, CORE_SYSTEM_IDS.powerCore) },
+  ]
+  items.push({
+    key: 'core-systems',
+    icon: 'core-systems',
+    label: 'Core systems: bridge, life support, power core',
+    kind: 'core',
+    state: cells.every((c) => c.state === 'destroyed') ? 'destroyed' : 'live',
+    width: CORE_WIDTH,
+    height: CORE_HEIGHT,
+    band: 'keel',
+    side: 'centre',
+    order: 0,
+    cells,
+  })
+
+  // The bottom row: FTL and the main drive, and the number inside the drive is
+  // what the ship can actually manage now rather than what it was built with.
+  const ftlIcon = iconForFtl(design.ftl)
+  if (ftlIcon !== null) {
+    const ftlSystem = design.systems.find((s) => s.kind === 'ftl-drive')
+    items.push({
+      key: ftlSystem?.id ?? 'ftl',
+      icon: ftlIcon,
+      label: design.ftl === 'tug' ? 'FTL drive (tug)' : 'FTL drive',
+      kind: 'ftl',
+      state:
+        ftlSystem !== undefined && damage.destroyed.has(ftlSystem.id) ? 'destroyed' : 'live',
+      width: SIZE.ftl,
+      height: SIZE.ftl,
+      band: 'drives',
+      side: 'centre',
+      order: 0,
+    })
+  }
+  const driveIcon = iconForDrive(design.drive.advanced)
+  if (driveIcon !== null) {
+    const thrust = damage.thrust ?? design.drive.thrust
+    items.push({
+      key: 'drive',
+      icon: driveIcon,
+      label: design.drive.advanced ? 'Main drive (advanced)' : 'Main drive',
+      kind: 'drive',
+      value: thrust,
+      state: thrust < design.drive.thrust ? 'degraded' : 'live',
+      width: SIZE.drive,
+      height: SIZE.drive,
+      band: 'drives',
+      side: 'centre',
+      order: 1,
+    })
+  }
+
+  return items
+}
+
+// ---------------------------------------------------------------------------
+// The flow
+// ---------------------------------------------------------------------------
 
 interface Row {
   items: Item[]
@@ -452,16 +592,39 @@ interface Row {
 }
 
 function cellHeight(item: Item): number {
-  return item.arcs !== undefined && item.arcs.length > 0 ? GLYPH + ROSE_BAND : GLYPH
+  return item.arcs !== undefined && item.arcs.length > 0 ? item.height + ROSE_BAND : item.height
+}
+
+function rowWidth(items: Item[]): number {
+  return items.reduce((sum, item) => sum + item.width, 0) + (items.length - 1) * GAP
 }
 
 function rowOf(items: Item[], halfWidth: number, flank: boolean): Row {
   return { items, halfWidth, height: Math.max(...items.map(cellHeight)), flank }
 }
 
-function rowWidth(items: Item[]): number {
-  const units = items.reduce((sum, item) => sum + item.units, 0)
-  return units * GLYPH + (items.length - 1) * GLYPH_GAP
+/**
+ * Split a band's contents into rows of nearly equal length.
+ *
+ * Filling rows greedily gave a band of ten fittings as four, four and two,
+ * which reads as three rows and a mistake. Ten is four, three and three: the
+ * rows differ by one at most, the longer ones forward, and the whole band is
+ * as close to a rectangle as the count allows. Symmetry is not decoration on a
+ * sheet — a ragged block is one the eye has to count.
+ */
+function balancedRows(items: Item[], across: number): Item[][] {
+  if (items.length === 0) return []
+  const rows = Math.ceil(items.length / across)
+  const base = Math.floor(items.length / rows)
+  const extra = items.length % rows
+  const out: Item[][] = []
+  let at = 0
+  for (let row = 0; row < rows; row += 1) {
+    const size = base + (row < extra ? 1 : 0)
+    out.push(items.slice(at, at + size))
+    at += size
+  }
+  return out
 }
 
 /** Break a band's contents into rows, keeping port to port and starboard to starboard. */
@@ -476,30 +639,17 @@ function bandRows(band: BandId, items: Item[], across: number): Row[] {
     const rows: Row[] = []
     for (let i = 0; i < Math.max(port.length, starboard.length); i += 1) {
       const pair = [port[i], starboard[i]].filter((x): x is Item => x !== undefined)
-      rows.push(rowOf(pair, SPINE_HALF + Math.max(...pair.map((x) => x.units)) * GLYPH, true))
+      rows.push(rowOf(pair, SPINE_HALF + Math.max(...pair.map((x) => x.width)), true))
     }
     return rows
   }
 
   const ordered = [
     ...items.filter((i) => i.side === 'port'),
-    ...items.filter((i) => i.side === 'centre'),
+    ...items.filter((i) => i.side === 'centre').sort((a, b) => a.order - b.order),
     ...items.filter((i) => i.side === 'starboard'),
   ]
-  const rows: Row[] = []
-  let current: Item[] = []
-  let units = 0
-  for (const item of ordered) {
-    if (current.length > 0 && units + item.units > across) {
-      rows.push(rowOf(current, rowWidth(current) / 2, false))
-      current = []
-      units = 0
-    }
-    current.push(item)
-    units += item.units
-  }
-  if (current.length > 0) rows.push(rowOf(current, rowWidth(current) / 2, false))
-  return rows
+  return balancedRows(ordered, across).map((row) => rowOf(row, rowWidth(row) / 2, false))
 }
 
 /**
@@ -527,20 +677,25 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
 
   // An empty ship still needs a hull to be nothing inside of.
   const contentHeight = Math.max(
-    rows.reduce((sum, row) => sum + row.height + GLYPH_GAP, -GLYPH_GAP) +
+    rows.reduce((sum, row) => sum + row.height + GAP, -GAP) +
       Math.max(0, countBands(rows) - 1) * BAND_GAP,
-    GLYPH,
+    SIZE.system,
   )
   const deckHeight = contentHeight + DECK_INSET * 2
 
-  // Where each row sits, and therefore how pinched the hull is beside it.
+  // Where each row sits, and therefore how pinched the hull is beside it. The
+  // frames go between bands, halfway across the wider gap that marks one.
   let y = -contentHeight / 2
   let lastBand: BandId | null = null
+  const frames: number[] = []
   const placedRows = rows.map((row) => {
-    if (lastBand !== null && row.band !== lastBand) y += BAND_GAP
+    if (lastBand !== null && row.band !== lastBand) {
+      frames.push(round(y - GAP / 2 + BAND_GAP / 2))
+      y += BAND_GAP
+    }
     lastBand = row.band
     const top = y
-    y += row.height + GLYPH_GAP
+    y += row.height + GAP
     return { ...row, top }
   })
 
@@ -551,17 +706,21 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
       // them — which is where the spinal mount runs, when there is one.
       for (const item of row.items) {
         const sign = item.side === 'port' ? -1 : 1
-        glyphs.push(place(item, sign * (SPINE_HALF + (item.units * GLYPH) / 2), row.top))
+        glyphs.push(place(item, sign * (SPINE_HALF + item.width / 2), row.top))
       }
       continue
     }
     let x = -rowWidth(row.items) / 2
     for (const item of row.items) {
-      const width = item.units * GLYPH
-      glyphs.push(place(item, x + width / 2, row.top))
-      x += width + GLYPH_GAP
+      glyphs.push(place(item, x + item.width / 2, row.top))
+      x += item.width + GAP
     }
   }
+
+  // A broadside is a sponson: the plating bulges where the flank rows sit.
+  const sponsons = mergeRuns(
+    placedRows.filter((row) => row.flank).map((row) => [row.top, row.top + row.height] as const),
+  )
 
   // The hull has to clear the widest row where that row actually sits — a row
   // over the pinched waist needs more beam than the same row at the shoulder.
@@ -581,7 +740,7 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
   // hull let out until every symbol clears the plating. Two passes are enough
   // for every design in the game; the loop is bounded so that a hull nobody
   // has built yet cannot hang the sheet.
-  let hull = hullPlan(shape, deckHeight, beam)
+  let hull = hullPlan(shape, deckHeight, beam, sponsons)
   for (let pass = 0; pass < 6; pass += 1) {
     const outline = outlinePolyline(hull)
     const clear = glyphs.every((g) => {
@@ -597,7 +756,7 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
     })
     if (clear) break
     beam *= 1.06
-    hull = hullPlan(shape, deckHeight, beam)
+    hull = hullPlan(shape, deckHeight, beam, sponsons)
   }
 
   // 5.23: the barrel runs from the breech to the muzzle, and on a real ship
@@ -617,6 +776,7 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
     counterPath: hullPath(normalisePlan(hull)),
     spine,
     glyphs,
+    frames,
     viewBox: `${round(-hull.beam - pad)} ${round(hull.noseY - pad)} ${round(width)} ${round(height)}`,
   }
 }
@@ -627,6 +787,21 @@ function countBands(rows: Array<{ band: BandId }>): number {
   return new Set(rows.map((r) => r.band)).size
 }
 
+/** Adjacent or overlapping y ranges joined into one. */
+function mergeRuns(runs: ReadonlyArray<readonly [number, number]>): Array<readonly [number, number]> {
+  const sorted = [...runs].sort((a, b) => a[0] - b[0])
+  const out: Array<readonly [number, number]> = []
+  for (const run of sorted) {
+    const last = out[out.length - 1]
+    if (last !== undefined && run[0] <= last[1] + GAP + 1) {
+      out[out.length - 1] = [last[0], Math.max(last[1], run[1])]
+    } else {
+      out.push(run)
+    }
+  }
+  return out
+}
+
 /** One symbol, centred on `x` and hung from the top edge of its row. */
 function place(item: Item, x: number, top: number): PlacedGlyph {
   const armed = item.arcs !== undefined && item.arcs.length > 0
@@ -634,16 +809,18 @@ function place(item: Item, x: number, top: number): PlacedGlyph {
     key: item.key,
     icon: item.icon,
     label: item.label,
+    kind: item.kind,
     x: round(x),
-    y: round(top + GLYPH / 2),
-    width: item.units * GLYPH,
-    height: GLYPH,
+    y: round(top + item.height / 2),
+    width: item.width,
+    height: item.height,
     value: item.value,
     arcs: item.arcs,
     rose: armed
-      ? { x: round(x), y: round(top + GLYPH + ROSE_BAND / 2), radius: ROSE_RADIUS }
+      ? { x: round(x), y: round(top + item.height + ROSE_BAND / 2), radius: ROSE_RADIUS }
       : null,
     state: item.state,
+    cells: item.cells,
   }
 }
 
@@ -652,7 +829,6 @@ function round(value: number): number {
 }
 
 export { COUNTER_EXTENT }
-
 
 // ---------------------------------------------------------------------------
 // The counter
@@ -663,10 +839,11 @@ export { COUNTER_EXTENT }
  *
  * Not a second drawing of the ship: the same outline, from the same layout,
  * scaled down — so a hull that reads as a long streamlined needle on its sheet
- * reads as one on the map, and a station reads as the octagon it is. Three
- * things survive the shrink, and nothing else could: the outline, a filled bow
- * so that facing is unmistakable at forty pixels, and a spinal mount, which is
- * the one fitting that changes the shape of the ship carrying it.
+ * reads as one on the map, and a station reads as the octagon it is. What
+ * survives the shrink is chosen for what reads at forty pixels: the outline
+ * with its sponsons and gun deck, a filled bow so that facing is never in
+ * doubt, a spinal mount's barrel, and the ship's guns — as dots where the
+ * counter is big enough, as a bar across each battery where it is not.
  *
  * Coordinates are in a ±`COUNTER_EXTENT` box about the hull's own middle; the
  * caller scales by `radius / COUNTER_EXTENT`.
@@ -679,6 +856,10 @@ export interface CounterSilhouette {
   spine: { y1: number; y2: number } | null
   /** True for a hull with no bow to point — a station, or a ship with no drive. */
   radial: boolean
+  /** Every weapon, where the sheet drew it. */
+  guns: ReadonlyArray<{ x: number; y: number }>
+  /** Every row of weapons or bays, as a bar: what a battery looks like from far off. */
+  bars: ReadonlyArray<{ x0: number; x1: number; y: number; kind: 'gun' | 'bay' }>
 }
 
 const SILHOUETTES = new WeakMap<ShipDesign, CounterSilhouette>()
@@ -687,20 +868,58 @@ export function counterSilhouette(design: ShipDesign): CounterSilhouette {
   const cached = SILHOUETTES.get(design)
   if (cached !== undefined) return cached
 
-  const hull = normalisePlan(planShip(design).hull)
-  // Far enough back that the bow mark is a bow and not a pinprick, and forward
-  // of anything the sheet draws inside the hull.
+  const plan = planShip(design)
+  const hull = normalisePlan(plan.hull)
+  const { scale, midY } = normalisation(plan.hull)
+  const nx = (x: number) => round(x * scale)
+  const ny = (y: number) => round((y - midY) * scale)
+
   // The whole prow, filled: at forty pixels a tapered outline reads as a
-  // rounded end, and half a prow reads as a smudge.
-  const chin = hull.deckTop
-  const halfChin = halfBeamAt(hull, chin) * 0.86
+  // rounded end, and half a prow reads as a smudge. A station gets a mark too
+  // if anything aboard it bears one way and not another — its arcs are
+  // measured off its facing like everyone else's (4.2), and an octagon with
+  // no mark is the same octagon at every facing.
+  let bow = ''
+  if (!hull.shape.radial) {
+    const chin = hull.deckTop
+    const halfChin = halfBeamAt(hull, chin) * 0.86
+    bow =
+      `M 0 ${round(hull.noseY)} L ${round(halfChin)} ${round(chin)} ` +
+      `L ${round(-halfChin)} ${round(chin)} Z`
+  } else if (design.weapons.some((w) => bearsSomewhere(w.arcs))) {
+    const cut = (hull.deckTop - hull.noseY) * 0.9
+    const half = hull.beam * 0.42
+    bow =
+      `M ${round(-half)} ${round(hull.noseY)} L ${round(half)} ${round(hull.noseY)} ` +
+      `L 0 ${round(hull.noseY + cut * 1.4)} Z`
+  }
+
+  const armed = plan.glyphs.filter((g) => g.kind === 'weapon' || g.kind === 'bay')
+  const byRow = new Map<number, PlacedGlyph[]>()
+  for (const g of armed) {
+    const list = byRow.get(g.y) ?? []
+    list.push(g)
+    byRow.set(g.y, list)
+  }
+  const bars = [...byRow.entries()].flatMap(([y, list]) => {
+    // A flank row is two batteries, port and starboard, with the keel between.
+    const port = list.filter((g) => g.x < -1)
+    const starboard = list.filter((g) => g.x > 1)
+    const centre = list.filter((g) => Math.abs(g.x) <= 1 || (port.length === 0 && starboard.length === 0))
+    const groups = port.length > 0 || starboard.length > 0 ? [port, starboard] : [centre]
+    return groups
+      .filter((group) => group.length > 0)
+      .map((group) => ({
+        x0: nx(Math.min(...group.map((g) => g.x - g.width / 2))),
+        x1: nx(Math.max(...group.map((g) => g.x + g.width / 2))),
+        y: ny(y),
+        kind: group.every((g) => g.kind === 'bay') ? ('bay' as const) : ('gun' as const),
+      }))
+  })
 
   const silhouette: CounterSilhouette = {
     path: hullPath(hull),
-    bow: hull.shape.radial
-      ? ''
-      : `M 0 ${round(hull.noseY)} L ${round(halfChin)} ${round(chin)} ` +
-        `L ${round(-halfChin)} ${round(chin)} Z`,
+    bow,
     spine: hull.shape.spine
       ? {
           y1: round(hull.noseY + (hull.deckTop - hull.noseY) * 0.2),
@@ -708,6 +927,8 @@ export function counterSilhouette(design: ShipDesign): CounterSilhouette {
         }
       : null,
     radial: hull.shape.radial,
+    guns: armed.filter((g) => g.kind === 'weapon').map((g) => ({ x: nx(g.x), y: ny(g.y) })),
+    bars,
   }
   SILHOUETTES.set(design, silhouette)
   return silhouette

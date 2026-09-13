@@ -16,6 +16,12 @@ export function ssdIcon(id: string): SsdIcon | undefined {
   return BY_ID.get(id)
 }
 
+/** A symbol's viewBox as four numbers. */
+export function viewBoxOf(icon: SsdIcon): [number, number, number, number] {
+  const [x, y, w, h] = icon.viewBox.split(/[\s,]+/).map(Number)
+  return [x, y, w, h]
+}
+
 /**
  * The symbol definitions, mounted once near the root of the app.
  *
@@ -49,8 +55,9 @@ export interface SsdGlyphProps {
   className?: string
   /**
    * The number this ship's copy of the symbol carries: a drive's thrust, a
-   * hold's mass, a bay's craft. Only seven symbols have somewhere to put one,
-   * and passing it to any other is ignored rather than drawn somewhere wrong.
+   * hold's mass, a bay's craft, or a weapon class the sheet does not print.
+   * Only symbols with somewhere to put one take it; passing it to any other
+   * is ignored rather than drawn somewhere wrong.
    */
   value?: number | string
   title?: string
@@ -88,10 +95,17 @@ export function SsdGlyph({
     )
   }
 
-  // The seven symbols whose printed number is this ship's rather than the
-  // symbol's. Nested in the symbol's own viewBox so the replacement lands
-  // exactly where the sample was, without working out the scale by hand.
+  // A number of this ship's own. Nested in the symbol's coordinate system so
+  // the replacement lands exactly where the sheet printed its digit, without
+  // working out the scale by hand.
+  //
+  // The inner <use> is given the symbol's own viewBox rectangle explicitly. Left
+  // to its defaults a <use> sits at 0,0 with a 100% width, and none of the
+  // numbered symbols has a viewBox anchored at the origin — the drive's starts
+  // at 164,−35 — so the symbol was drawn a fifth of a box to the left of its
+  // number and the number a fifth to the right of its symbol.
   const slot = icon.numberSlot
+  const [vx, vy, vw, vh] = viewBoxOf(icon)
   return (
     <svg
       x={x}
@@ -99,13 +113,13 @@ export function SsdGlyph({
       width={size}
       height={height}
       viewBox={icon.viewBox}
-      className={classes}
+      className={`${classes} has-value`}
       overflow="visible"
     >
-      <title>{`${label} — ${slot.means} ${value}`}</title>
-      <use href={`#ssd-${id}`} />
+      <title>{slot.means === 'class' ? label : `${label} — ${slot.means} ${value}`}</title>
+      <use href={`#ssd-${id}`} x={vx} y={vy} width={vw} height={vh} />
       <text
-        className="ssd-value"
+        className={slot.ink ? 'ssd-value' : 'ssd-value is-hole'}
         x={slot.x}
         y={slot.y}
         fontSize={slot.size}

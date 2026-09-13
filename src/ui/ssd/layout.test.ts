@@ -3,13 +3,17 @@ import { SHIP_DESIGNS } from '../../data/ships'
 import type { Arc, ShipDesign } from '../../engine/types'
 import {
   boxInsideOutline,
+  halfBeamAt,
   hullShape,
+  insideOutline,
   normalisePlan,
   outlinePolyline,
 } from './geometry'
+import { CORE_SYSTEM_IDS } from '../../engine/threshold'
 import { SSD_ICON_IDS } from './icons.generated'
 import { SSD_SPRITE } from './sprite.generated'
-import { COUNTER_EXTENT, arcBearing, counterSilhouette, planShip } from './layout'
+import { arcBearing } from './bearing'
+import { COUNTER_EXTENT, counterSilhouette, planShip } from './layout'
 
 /**
  * The sheet has to draw every ship in the game and every ship the shipyard can
@@ -118,7 +122,8 @@ describe('every hull in the game lays out', () => {
     for (const design of SHIP_DESIGNS) {
       const plan = planShip(design)
       const aspect = (plan.hull.tailY - plan.hull.noseY) / (plan.hull.beam * 2)
-      expect(aspect, design.name).toBeGreaterThan(1)
+      // A station is exactly as wide as it is long; nothing is wider than long.
+      expect(aspect, design.name).toBeGreaterThanOrEqual(1 - 1e-9)
       expect(aspect, design.name).toBeLessThan(3.5)
     }
   })
@@ -291,4 +296,175 @@ describe('a mount is drawn where it can shoot', () => {
     expect(guns.length).toBeGreaterThan(0)
     for (const gun of guns) expect(gun.y, gun.label).toBeLessThanOrEqual(drive?.y ?? 0)
   })
+})
+
+describe('what the first review found', () => {
+  const weapon = (id: string, arcs: Arc[]) => ({ ...heavyCruiser.weapons[0], id, arcs })
+  const at = (design: ShipDesign, id: string) => planShip(design).glyphs.find((g) => g.key === id)
+
+  it('mirrors a port broadside and its starboard twin', () => {
+    // Four adjacent arcs point exactly between two sectors, and a tie broken
+    // by floating-point noise put the two sides of one ship in different
+    // bands. Whatever the tie-break, it has to be the same on both sides.
+    const stbd = weapon('stbd', ['FS', 'AS', 'A', 'AP'])
+    const port = weapon('port', ['AS', 'A', 'AP', 'FP'])
+    const plan = { ...heavyCruiser, weapons: [stbd, port] }
+    expect(at(plan, 'stbd')?.y).toBe(at(plan, 'port')?.y)
+    expect(at(plan, 'stbd')?.x).toBe(-(at(plan, 'port')?.x ?? 0))
+    const two = { ...heavyCruiser, weapons: [weapon('s', ['AS', 'A']), weapon('p', ['A', 'AP'])] }
+    expect(at(two, 's')?.y).toBe(at(two, 'p')?.y)
+  })
+
+  it('does not care what order the arcs were written in', () => {
+    const a = { ...heavyCruiser, weapons: [weapon('w', ['F', 'FS', 'AS', 'A'])] }
+    const b = { ...heavyCruiser, weapons: [weapon('w', ['FS', 'AS', 'F', 'A'])] }
+    expect(at(a, 'w')?.y).toBe(at(b, 'w')?.y)
+    expect(at(a, 'w')?.x).toBe(at(b, 'w')?.x)
+  })
+
+  it("draws a carrier's bays once each, as what rides in them (8.2)", () => {
+    const carrier = SHIP_DESIGNS.find((d) => d.fighterBays.length > 2)
+    expect(carrier).toBeDefined()
+    const design = carrier as ShipDesign
+    const hangars = design.systems.filter((s) => s.kind === 'hangar-bay')
+    const drawn = planShip(design).glyphs.filter((g) => g.icon.startsWith('hangar-bay'))
+    expect(drawn).toHaveLength(hangars.length)
+    // Keyed by the bay the wing rides in, so a threshold check can cross it off.
+    for (const hangar of hangars) expect(drawn.map((g) => g.key)).toContain(hangar.id)
+    expect(drawn.some((g) => g.icon !== 'hangar-bay')).toBe(true)
+  })
+
+  it('strikes a screen generator the engine crossed off', () => {
+    const screened = SHIP_DESIGNS.find((d) => d.screens.level > 0)
+    expect(screened).toBeDefined()
+    const design = screened as ShipDesign
+    const generator = design.systems.find((s) => s.kind === 'screen-generator')
+    expect(generator).toBeDefined()
+    const plan = planShip(design, { destroyed: new Set([generator?.id ?? '']) })
+    expect(plan.glyphs.find((g) => g.key === generator?.id)?.state).toBe('destroyed')
+  })
+
+  it('draws the Core Systems block on every hull and crosses its cells off one at a time', () => {
+    for (const design of SHIP_DESIGNS) {
+      const core = planShip(design).glyphs.find((g) => g.kind === 'core')
+      expect(core, design.name).toBeDefined()
+      expect(core?.cells?.map((c) => c.state)).toEqual(['live', 'live', 'live'])
+    }
+    const hit = planShip(heavyCruiser, { destroyed: new Set([CORE_SYSTEM_IDS.lifeSupport]) })
+    const core = hit.glyphs.find((g) => g.kind === 'core')
+    expect(core?.cells?.map((c) => c.state)).toEqual(['live', 'destroyed', 'live'])
+    expect(core?.state).toBe('live')
+  })
+
+  it('puts the core block and the drives in the bottom rows, as 2.4 has them', () => {
+    const plan = planShip(heavyCruiser)
+    const core = plan.glyphs.find((g) => g.kind === 'core')
+    const drive = plan.glyphs.find((g) => g.kind === 'drive')
+    const rest = plan.glyphs.filter((g) => g.kind !== 'core' && g.kind !== 'drive' && g.kind !== 'ftl')
+    for (const g of rest) expect(g.y).toBeLessThan(core?.y ?? 0)
+    expect(core?.y).toBeLessThan(drive?.y ?? 0)
+  })
+
+  it('draws a Beam-5 with a 5 in it, not as the class-4 symbol it borrows', () => {
+    const five = { ...heavyCruiser.weapons[0], id: 'b5', rating: 5, label: 'Beam-5' }
+    const glyph = at({ ...heavyCruiser, weapons: [five] }, 'b5')
+    expect(glyph?.icon).toBe('class-4-beam')
+    expect(glyph?.value).toBe(5)
+    const four = { ...five, id: 'b4', rating: 4 }
+    expect(at({ ...heavyCruiser, weapons: [four] }, 'b4')?.value).toBeUndefined()
+  })
+
+  it('bears a turreted gun through its turret, not its printed arcs (5.22)', () => {
+    const turret = { id: 't1', arcs: ['F', 'FS', 'AS'] as Arc[], capacity: 6, mass: 2, points: 6 }
+    const gun = { ...weapon('g', ['F', 'FS', 'AS', 'A', 'AP', 'FP']), turretId: 't1' }
+    const glyph = at({ ...heavyCruiser, turrets: [turret], weapons: [gun] }, 'g')
+    expect(glyph?.arcs).toEqual(['F', 'FS', 'AS'])
+    expect(glyph?.x).not.toBe(0)
+  })
+
+  it('gives a station with a forward battery something to point with', () => {
+    const station = SHIP_DESIGNS.find((d) => d.group === 'station' && d.weapons.some((w) => w.arcs.length < 6))
+    expect(station).toBeDefined()
+    expect(counterSilhouette(station as ShipDesign).bow).not.toBe('')
+  })
+
+  it("keeps the counter's filled bow inside the hull it is drawn on", () => {
+    for (const design of SHIP_DESIGNS) {
+      const { bow } = counterSilhouette(design)
+      if (bow === '') continue
+      const numbers = bow.match(/-?\d+(\.\d+)?/g)?.map(Number) ?? []
+      const outline = outlinePolyline(normalisePlan(planShip(design).hull), 48)
+      // Every vertex of the bow, nudged a hair inward, is inside the plating.
+      for (let i = 0; i < numbers.length; i += 2) {
+        const [x, y] = [numbers[i] * 0.995, numbers[i + 1] * 0.995]
+        expect(insideOutline(outline, x, y), `${design.name} bow vertex ${i / 2}`).toBe(true)
+      }
+    }
+  })
+
+  it('draws a mine rack with mines in it', () => {
+    // The sheet's Mine Layer referred to a symbol nothing defined, so the one
+    // weapon a minelayer is named for drew as an empty box.
+    const layer = SHIP_DESIGNS.find((d) => d.weapons.some((w) => w.weaponClass === 'mine-rack'))
+    expect(layer).toBeDefined()
+    const glyph = planShip(layer as ShipDesign).glyphs.find((g) => g.icon === 'mine-layer')
+    expect(glyph).toBeDefined()
+    expect(SSD_SPRITE).toContain('href="#_mineIndividual"')
+    expect(SSD_SPRITE).not.toContain('6e223869de347')
+  })
+})
+
+describe('the sheet as a whole', () => {
+  it('splits a band into rows that differ by one at most, the longer ones forward', () => {
+    const guts = Array.from({ length: 10 }, (_, i) => ({
+      id: `pds-${i}`,
+      kind: 'pds' as const,
+      label: 'PDS',
+      mass: 1,
+      points: 3,
+    }))
+    const plan = planShip({ ...heavyCruiser, weapons: [], systems: guts })
+    const rows = new Map<number, number>()
+    for (const g of plan.glyphs.filter((g) => g.icon === 'point-defense-system')) {
+      rows.set(g.y, (rows.get(g.y) ?? 0) + 1)
+    }
+    const sizes = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, n]) => n)
+    expect(sizes).toEqual([4, 3, 3])
+  })
+
+  it('draws a frame between every pair of bands and none inside one', () => {
+    const plan = planShip(heavyCruiser)
+    // A frame sits in a gap, never on a symbol.
+    for (const y of plan.frames) {
+      for (const g of plan.glyphs) {
+        const top = g.y - g.height / 2
+        const bottom = g.rose === null ? g.y + g.height / 2 : g.rose.y + g.rose.radius
+        expect(y < top || y > bottom, `frame ${y} crosses ${g.label}`).toBe(true)
+      }
+    }
+    expect(plan.frames.length).toBeGreaterThan(2)
+  })
+
+  it('bulges the plating where a broadside sits, and nowhere else', () => {
+    const port = weaponWith('p', ['A', 'AP', 'FP'])
+    const broadside = planShip({ ...heavyCruiser, weapons: [port] })
+    const bare = planShip({ ...heavyCruiser, weapons: [] })
+    expect(broadside.hull.sponsons.length).toBe(1)
+    expect(bare.hull.sponsons.length).toBe(0)
+    const [y0, y1] = broadside.hull.sponsons[0]
+    expect(halfBeamAt(broadside.hull, (y0 + y1) / 2)).toBeGreaterThan(
+      halfBeamAt(broadside.hull, y1 + 40),
+    )
+  })
+
+  it('gives the counter a bar per battery and a dot per gun', () => {
+    const { bars, guns } = counterSilhouette(heavyCruiser)
+    expect(guns).toHaveLength(heavyCruiser.weapons.length)
+    expect(bars.length).toBeGreaterThan(0)
+    for (const bar of bars) expect(bar.x1).toBeGreaterThan(bar.x0)
+  })
+
+  function weaponWith(id: string, arcs: Arc[]) {
+    return { ...heavyCruiser.weapons[0], id, arcs }
+  }
 })

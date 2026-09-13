@@ -1,4 +1,5 @@
 import type { ShipDesign } from '../../engine/types'
+import { arcBearing, bearsSomewhere } from './bearing'
 
 /**
  * The shape of a hull, worked out from how the ship was built.
@@ -31,7 +32,23 @@ export interface HullShape {
   radial: boolean
   /** A spinal mount runs the length of the hull and is drawn doing it. */
   spine: boolean
+  /** A battery bears forward, so the bow is a gun deck rather than a point. */
+  gunDeck: boolean
+  /** Hangars or racks aboard, so the stern is a flight deck: broad and flat. */
+  flightDeck: boolean
 }
+
+/** Systems that make a hull a carrier, to a silhouette (8, 9, 11.6). */
+export const CARRIER_KINDS: ReadonlySet<string> = new Set([
+  'hangar-bay',
+  'launch-tube',
+  'catapult',
+  'fighter-rack',
+  'gunboat-rack',
+  'gunboat-bay',
+  'boat-bay',
+  'tender',
+])
 
 const GROUP_SLENDERNESS: Record<ShipDesign['group'], number> = {
   escort: 2.3,
@@ -39,7 +56,11 @@ const GROUP_SLENDERNESS: Record<ShipDesign['group'], number> = {
   capital: 1.85,
   civilian: 1.7,
   monster: 1.45,
-  station: 1.0,
+  // Not 1. An octagon exactly as wide as it is long is honest about what a
+  // station is and useless as a sheet: seven fittings across in a hull twice
+  // that wide is a wall of specks. A little taller than wide keeps it plainly
+  // not a ship and keeps its symbols the size of everyone else's.
+  station: 1.3,
 }
 
 const STREAMLINING_SLENDERNESS: Record<ShipDesign['streamlining'], number> = {
@@ -93,6 +114,10 @@ function clamp(value: number, low: number, high: number): number {
 
 export function hullShape(design: ShipDesign): HullShape {
   const spine = hasSpinalMount(design)
+  const gunDeck = design.weapons.some(
+    (w) => bearsSomewhere(w.arcs) && arcBearing(w.arcs).sector === 0,
+  )
+  const flightDeck = design.systems.some((s) => CARRIER_KINDS.has(s.kind))
   // A station and a ship with no drive are the same problem: nothing about
   // them points anywhere, so a bow would be a lie.
   const radial = design.group === 'station' || design.drive.thrust === 0
@@ -112,11 +137,17 @@ export function hullShape(design: ShipDesign): HullShape {
     tailRun: 0.11,
     waist: STREAMLINING_WAIST[design.streamlining],
     // A ship with thrust 8 is mostly engine; a thrust-2 freighter barely has
-    // one. The stern is where that shows.
-    stern: clamp(0.52 + 0.3 * Math.min(1, design.drive.thrust / 8), 0.45, 0.92),
+    // one. The stern is where that shows — unless there is a flight deck back
+    // there, which is broad whatever the drive under it.
+    stern: Math.max(
+      clamp(0.52 + 0.3 * Math.min(1, design.drive.thrust / 8), 0.45, 0.92),
+      flightDeck ? 0.86 : 0,
+    ),
     edge: STREAMLINING_EDGE[design.streamlining],
     radial,
     spine,
+    gunDeck,
+    flightDeck,
   }
 }
 
@@ -136,6 +167,30 @@ export interface HullPlan {
   deckTop: number
   deckBottom: number
   tailY: number
+  /**
+   * Where a broadside sits, as y ranges down the deck. The plating bulges out
+   * there: a battery bolted to the side of a hull is a sponson, and it is the
+   * one thing about a ship's fit-out that changes its outline.
+   */
+  sponsons: ReadonlyArray<readonly [number, number]>
+}
+
+/** How far a sponson stands proud of the hull, and over what run it fairs in. */
+const SPONSON_BULGE = 1.09
+const SPONSON_RAMP = 8
+
+/** The plating's bulge at a point down the deck: 1 clear of any sponson. */
+export function bulgeAt(plan: HullPlan, y: number): number {
+  let bulge = 1
+  for (const [y0, y1] of plan.sponsons) {
+    if (y < y0 - SPONSON_RAMP || y > y1 + SPONSON_RAMP) continue
+    const fair =
+      y < y0 ? (SPONSON_RAMP - (y0 - y)) / SPONSON_RAMP
+      : y > y1 ? (SPONSON_RAMP - (y - y1)) / SPONSON_RAMP
+      : 1
+    bulge = Math.max(bulge, 1 + (SPONSON_BULGE - 1) * fair)
+  }
+  return bulge
 }
 
 /** The gap kept between a symbol and the hull plating beside it. */
@@ -148,7 +203,12 @@ export const HULL_MARGIN = 9
  */
 const SLENDERNESS_TOLERANCE = 1.2
 
-export function hullPlan(shape: HullShape, deckHeight: number, deckHalfWidth: number): HullPlan {
+export function hullPlan(
+  shape: HullShape,
+  deckHeight: number,
+  deckHalfWidth: number,
+  sponsons: ReadonlyArray<readonly [number, number]> = [],
+): HullPlan {
   let deck = Math.max(deckHeight, 40)
   let beam = Math.max(deckHalfWidth, 36)
   const nose = shape.radial ? deck * 0.22 : clamp(deck * shape.noseRun, 46, 320)
@@ -175,6 +235,11 @@ export function hullPlan(shape: HullShape, deckHeight: number, deckHalfWidth: nu
       // shortening it would put the plating back through the contents.
       beam = Math.max(beam, (tailY - noseY) / (2 * shape.slenderness * SLENDERNESS_TOLERANCE))
     }
+  } else {
+    // A station is as wide as it is long: its build says slenderness 1, and
+    // the only way to honour that without pushing the plating through the
+    // contents is to widen it.
+    beam = Math.max(beam, (tailY - noseY) / (2 * shape.slenderness))
   }
 
   return {
@@ -184,6 +249,7 @@ export function hullPlan(shape: HullShape, deckHeight: number, deckHalfWidth: nu
     deckTop: -deck / 2,
     deckBottom: deck / 2,
     tailY,
+    sponsons,
   }
 }
 
@@ -197,15 +263,26 @@ export function halfBeamAt(plan: HullPlan, y: number): number {
   const { shape, beam, deckTop, deckBottom } = plan
   if (y <= deckTop) {
     if (shape.radial) return beam
+    // Tapers to what the deck profile starts at, not to the full beam, so the
+    // answer at the shoulder is the same from both sides of it.
     const t = (y - plan.noseY) / (deckTop - plan.noseY)
-    return beam * Math.max(0, t)
+    return beam * deckProfile(shape)[0][1] * Math.max(0, t)
   }
   if (y >= deckBottom) {
     if (shape.radial) return beam
     const t = (y - deckBottom) / (plan.tailY - deckBottom)
-    return beam * (shape.stern + (shape.stern * 0.84 - shape.stern) * t)
+    return beam * (shape.stern + (shape.stern * transomFraction(shape) - shape.stern) * t)
   }
-  return beam * deckBeamFraction(shape, deckBottom - deckTop, y - (deckTop + deckBottom) / 2)
+  return (
+    beam *
+    deckBeamFraction(shape, deckBottom - deckTop, y - (deckTop + deckBottom) / 2) *
+    bulgeAt(plan, y)
+  )
+}
+
+/** How wide the transom is, as a fraction of the stern: a flight deck is squarer. */
+function transomFraction(shape: HullShape): number {
+  return shape.flightDeck ? 0.96 : 0.82
 }
 
 /**
@@ -278,15 +355,31 @@ function controlPoints(plan: HullPlan): Array<[number, number]> {
   const noseLength = deckTop - noseY
   const deckLength = deckBottom - deckTop
   // A partially streamlined hull has a nose cone rather than a needle, so its
-  // stem is a short flat rather than a point. Done here rather than while
-  // drawing, so the outline and the fit check see the same hull.
-  const stem = shape.edge === 'chamfered' ? beam * 0.12 : 0
+  // stem is a short flat rather than a point; so is the bow of a ship with a
+  // battery bearing forward, because a gun deck is not a point either. Done
+  // here rather than while drawing, so the outline and the fit check see the
+  // same hull.
+  const stem = shape.edge === 'chamfered' ? beam * 0.12 : shape.gunDeck ? beam * 0.1 : 0
+
+  // The deck's outline is the profile with the sponsons on it. Sampled at the
+  // profile's own points and at each sponson's edges, so a sponson is a
+  // bulge with fairings and not a step through the plating.
+  const ys = new Set<number>(deckProfile(shape).map(([t]) => deckTop + t * deckLength))
+  for (const [y0, y1] of plan.sponsons) {
+    for (const y of [y0 - SPONSON_RAMP, y0, y1, y1 + SPONSON_RAMP]) {
+      if (y > deckTop && y < deckBottom) ys.add(y)
+    }
+  }
+  const deck = [...ys]
+    .sort((a, b) => a - b)
+    .map((y): [number, number] => [halfBeamAt(plan, y), y])
+
   return [
     [stem, noseY],
     [beam * 0.34, noseY + noseLength * 0.3],
     [beam * 0.62, noseY + noseLength * 0.68],
-    ...deckProfile(shape).map(([t, f]): [number, number] => [beam * f, deckTop + t * deckLength]),
-    [beam * shape.stern * 0.82, tailY],
+    ...deck,
+    [beam * shape.stern * transomFraction(shape), tailY],
   ]
 }
 
@@ -358,10 +451,14 @@ export const COUNTER_EXTENT = 1000
  * path and not a second drawing of the same idea. Scaled by the longer axis
  * and centred on the hull's own middle, so a long ship reads long on the table.
  */
-export function normalisePlan(plan: HullPlan): HullPlan {
+export function normalisation(plan: HullPlan): { scale: number; midY: number } {
   const halfLength = (plan.tailY - plan.noseY) / 2
   const midY = (plan.tailY + plan.noseY) / 2
-  const scale = COUNTER_EXTENT / Math.max(halfLength, plan.beam)
+  return { scale: COUNTER_EXTENT / Math.max(halfLength, plan.beam), midY }
+}
+
+export function normalisePlan(plan: HullPlan): HullPlan {
+  const { scale, midY } = normalisation(plan)
   return {
     ...plan,
     beam: plan.beam * scale,
@@ -369,6 +466,7 @@ export function normalisePlan(plan: HullPlan): HullPlan {
     deckTop: (plan.deckTop - midY) * scale,
     deckBottom: (plan.deckBottom - midY) * scale,
     tailY: (plan.tailY - midY) * scale,
+    sponsons: plan.sponsons.map(([y0, y1]) => [(y0 - midY) * scale, (y1 - midY) * scale] as const),
   }
 }
 

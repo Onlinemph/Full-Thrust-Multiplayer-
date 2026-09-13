@@ -38,6 +38,9 @@ const DEFAULT_SETUP: GameSetup = {
   // which is the whole point of it being a setup field. A rock that does
   // nothing to a ship that flies into it is not terrain, it is scenery.
   terrainHazards: true,
+  // 10.3 calls them "optional but recommended" and every SSD in the book
+  // prints the block, so a new table plays with them unless it says otherwise.
+  coreSystems: true,
 }
 
 let setup: GameSetup = DEFAULT_SETUP

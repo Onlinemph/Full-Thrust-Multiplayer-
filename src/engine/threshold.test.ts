@@ -812,3 +812,72 @@ describe('phase 13 across the fleet (2.6)', () => {
     expect(thresholdPhase(state)).toHaveLength(0)
   })
 })
+
+describe('Core Systems on every hull (10.3)', () => {
+  const bare = () =>
+    ship({ systems: [{ id: 'fc-1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 }] })
+
+  it('rolls for the bridge, life support and power core of a design that names none', () => {
+    // "assumed to be part of the essential structure of all ships" — a design
+    // that says nothing about its core has all three of it.
+    const ids = checkableSystems(bare(), { coreSystems: true }).map((entry) => entry.id)
+    expect(ids).toEqual([
+      DRIVE_SYSTEM_ID,
+      'fc-1',
+      CORE_SYSTEM_IDS.bridge,
+      CORE_SYSTEM_IDS.lifeSupport,
+      CORE_SYSTEM_IDS.powerCore,
+    ])
+    for (const entry of checkableSystems(bare(), { coreSystems: true })) {
+      if (entry.kind === 'core') expect(entry.drm).toBe(CORE_SYSTEM_DRM)
+    }
+  })
+
+  it('rolls for nothing extra when the table does not play with them', () => {
+    // "If you do not wish to use the Core System rules, simply ignore the
+    // systems within the Core box" — and a journal written before the block
+    // was on every hull must keep drawing exactly the dice it drew.
+    expect(checkableSystems(bare()).map((entry) => entry.id)).toEqual([DRIVE_SYSTEM_ID, 'fc-1'])
+    expect(checkableSystems(bare(), { coreSystems: false }).map((entry) => entry.id)).toEqual([
+      DRIVE_SYSTEM_ID,
+      'fc-1',
+    ])
+  })
+
+  it('lets a design that names its own block keep it, whatever the table says', () => {
+    const named = ship({ coreSystems: { bridge: true, lifeSupport: false, powerCore: false } })
+    const ids = checkableSystems(named, { coreSystems: true }).map((entry) => entry.id)
+    expect(ids).toContain(CORE_SYSTEM_IDS.bridge)
+    expect(ids).not.toContain(CORE_SYSTEM_IDS.lifeSupport)
+    expect(ids).not.toContain(CORE_SYSTEM_IDS.powerCore)
+  })
+
+  it('draws three more dice at a threshold point, and only then', () => {
+    const withCore = bare()
+    const without = bare()
+    markHullBoxes(withCore, hullRowsOf(withCore)[0])
+    markHullBoxes(without, hullRowsOf(without)[0])
+    const a = rollThresholdChecks(withCore, new Rng(7), { turn: 1, coreSystems: true })
+    const b = rollThresholdChecks(without, new Rng(7), { turn: 1 })
+    expect(a?.checks.length).toBe((b?.checks.length ?? 0) + 3)
+    // Same seed, same first dice: the core's three come after everything the
+    // sheet already rolled, so the rest of the sweep is unchanged.
+    expect(a?.checks.slice(0, b?.checks.length).map((c) => c.roll)).toEqual(
+      b?.checks.map((c) => c.roll),
+    )
+  })
+})
+
+function hullRowsOf(target: ShipState): number[] {
+  const bounds: number[] = []
+  const rows = target.design.hullRows
+  const boxes = target.design.hullBoxes
+  const base = Math.floor(boxes / rows)
+  const extra = boxes % rows
+  let sum = 0
+  for (let row = 0; row < rows; row += 1) {
+    sum += base + (row < extra ? 1 : 0)
+    bounds.push(sum)
+  }
+  return bounds
+}

@@ -12,11 +12,14 @@ export interface SsdIcon {
   /** The symbol's own coordinate system, for drawing on top of it. */
   viewBox: string
   /**
-   * Where the sheet printed a sample number, for the seven symbols whose
-   * number is the ship's rather than the symbol's. The sample itself is
-   * marked `ssd-sample` and hidden; draw the real value here instead.
+   * Where a number sits inside the symbol. For the seven symbols whose
+   * number is the ship's rather than the symbol's (`means` names it) the
+   * sample is marked `ssd-sample` and always hidden. For the classed
+   * weapons (`means: "class"`) the printed digit is marked `ssd-digit` and
+   * stays unless a value is drawn over it. `ink` says whether the digit is
+   * ink on paper or a hole in a filled disc.
    */
-  numberSlot?: { x: number; y: number; size: number; means: string }
+  numberSlot?: { x: number; y: number; size: number; means: string; ink: boolean }
 }
 
 export const SSD_ICONS: readonly SsdIcon[] = [
@@ -98,8 +101,9 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "viewBox": "164.0 -35.5 629.0 629.0",
   "numberSlot": {
    "x": 479.5,
-   "y": 343.52,
+   "y": 322.02,
    "size": 400.0,
+   "ink": true,
    "means": "thrust rating"
   }
  },
@@ -111,8 +115,9 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "viewBox": "245.0 45.0 470.0 470.0",
   "numberSlot": {
    "x": 480.0,
-   "y": 320.0,
+   "y": 280.0,
    "size": 400.0,
+   "ink": true,
    "means": "thrust rating"
   }
  },
@@ -238,6 +243,7 @@ export const SSD_ICONS: readonly SsdIcon[] = [
    "x": 479.5,
    "y": 318.5,
    "size": 100.0,
+   "ink": true,
    "means": "craft carried"
   }
  },
@@ -258,6 +264,7 @@ export const SSD_ICONS: readonly SsdIcon[] = [
    "x": 480.0,
    "y": 410.75,
    "size": 131.25,
+   "ink": true,
    "means": "mass carried"
   }
  },
@@ -376,6 +383,7 @@ export const SSD_ICONS: readonly SsdIcon[] = [
    "x": 480.0,
    "y": 410.75,
    "size": 131.25,
+   "ink": true,
    "means": "passengers carried"
   }
  },
@@ -431,6 +439,7 @@ export const SSD_ICONS: readonly SsdIcon[] = [
    "x": 479.5,
    "y": 318.5,
    "size": 100.0,
+   "ink": true,
    "means": "craft carried"
   }
  },
@@ -444,6 +453,7 @@ export const SSD_ICONS: readonly SsdIcon[] = [
    "x": 480.0,
    "y": 410.75,
    "size": 131.25,
+   "ink": true,
    "means": "troops carried"
   }
  },
@@ -557,7 +567,14 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 1 Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-emp-projector",
@@ -571,49 +588,98 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 1Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-gravitic-gun",
   "label": "Class 1Gravitic Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-heavy-graser",
   "label": "Class 1Heavy Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-heavy-high-intensity-graser",
   "label": "Class 1Heavy High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-high-intensity-graser",
   "label": "Class 1High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-k-gun",
   "label": "Class 1K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-long-range-k-gun",
   "label": "Class 1Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-needle-beam",
@@ -627,42 +693,84 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 1Phaser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-plasma-bolt-launcher",
   "label": "Class 1Plasma Bolt Launcher",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-plasma-cannon",
   "label": "Class 1Plasma Cannon",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-short-range-k-gun",
   "label": "Class 1Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-1-transporter-beam",
   "label": "Class 1Transporter Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-beam",
   "label": "Class 2 Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-emp-projector",
@@ -676,49 +784,98 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 2Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-gravitic-gun",
   "label": "Class 2Gravitic Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-heavy-graser",
   "label": "Class 2Heavy Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-heavy-high-intensity-graser",
   "label": "Class 2Heavy High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-high-intensity-graser",
   "label": "Class 2High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-k-gun",
   "label": "Class 2K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-long-range-k-gun",
   "label": "Class 2Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-needle-beam",
@@ -732,42 +889,84 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 2Phaser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-plasma-bolt-launcher",
   "label": "Class 2Plasma Bolt Launcher",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-plasma-cannon",
   "label": "Class 2Plasma Cannon",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-short-range-k-gun",
   "label": "Class 2Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-2-transporter-beam",
   "label": "Class 2Transporter Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-beam",
   "label": "Class 3 Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-emp-projector",
@@ -781,49 +980,98 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 3Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-gravitic-gun",
   "label": "Class 3Gravitic Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-heavy-graser",
   "label": "Class 3Heavy Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-heavy-high-intensity-graser",
   "label": "Class 3Heavy High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-high-intensity-graser",
   "label": "Class 3High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-k-gun",
   "label": "Class 3K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-long-range-k-gun",
   "label": "Class 3Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-needle-beam",
@@ -837,42 +1085,84 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 3Phaser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-plasma-bolt-launcher",
   "label": "Class 3Plasma Bolt Launcher",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-plasma-cannon",
   "label": "Class 3Plasma Cannon",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-short-range-k-gun",
   "label": "Class 3Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-3-transporter-beam",
   "label": "Class 3Transporter Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-beam",
   "label": "Class 4 Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-emp-projector",
@@ -886,28 +1176,56 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 4Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-high-intensity-graser",
   "label": "Class 4High-Intensity Graser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-k-gun",
   "label": "Class 4K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-long-range-k-gun",
   "label": "Class 4Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-needle-beam",
@@ -921,77 +1239,154 @@ export const SSD_ICONS: readonly SsdIcon[] = [
   "label": "Class 4Phaser",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-plasma-bolt-launcher",
   "label": "Class 4Plasma Bolt Launcher",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-plasma-cannon",
   "label": "Class 4Plasma Cannon",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 250.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-short-range-k-gun",
   "label": "Class 4Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-4-transporter-beam",
   "label": "Class 4Transporter Beam",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-5-k-gun",
   "label": "Class 5K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-5-long-range-k-gun",
   "label": "Class 5Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-5-short-range-k-gun",
   "label": "Class 5Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-6-k-gun",
   "label": "Class 6K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "class-6-long-range-k-gun",
   "label": "Class 6Long-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-1.0 -1.0 602.0 602.0"
+  "viewBox": "-1.0 -1.0 602.0 602.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": false,
+   "means": "class"
+  }
  },
  {
   "id": "class-6-short-range-k-gun",
   "label": "Class 6Short-Range K-Gun",
   "section": "Weapons",
   "aspect": 1.0,
-  "viewBox": "-26.0 24.0 652.0 652.0"
+  "viewBox": "-26.0 24.0 652.0 652.0",
+  "numberSlot": {
+   "x": 300.0,
+   "y": 325.0,
+   "size": 300.0,
+   "ink": true,
+   "means": "class"
+  }
  },
  {
   "id": "fusion-array",
