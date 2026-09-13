@@ -66,7 +66,10 @@ WEAPONS = {
     # 14.4 lists K5 and K6, and the short and long ranged guns of every class.
     'k-gun-5': {5: {1: (11, 44)}},
     'k-gun-6': {6: {1: (14, 56)}},
-    'k-gun-short': {1: {6: (1, 4)}, 2: {2: (2, 8)}, 3: {1: (3, 12)},
+    # "SRK-1 mass 1.5 6-arcs", and "Short range K-1's can be bought in pairs
+    # for 3 mass" confirms the half: the rule of thumb ("half the mass, rounded
+    # up") would print 1, and the table prints 1.5. The table wins.
+    'k-gun-short': {1: {6: (1.5, 6)}, 2: {2: (2, 8)}, 3: {1: (3, 12)},
                     4: {1: (4, 16)}, 5: {1: (6, 24)}, 6: {1: (7, 28)}},
     'k-gun-long': {1: {6: (4, 16)}, 2: {1: (6, 24), 2: (8, 32)}, 3: {1: (10, 40)},
                    4: {1: (16, 64)}, 5: {1: (22, 88)}, 6: {1: (28, 112)}},

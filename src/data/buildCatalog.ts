@@ -89,7 +89,7 @@ export const CATALOGUE_WEAPONS: readonly CatalogueWeapon[] = [
   { weaponClass: 'gravitic-gun', variant: 'standard', rating: 3, label: "Grav-3", mountings: [{ arcs: 1, mass: 4, points: 12 }, { arcs: 2, mass: 5, points: 15 }, { arcs: 3, mass: 6, points: 18 }, { arcs: 4, mass: 7, points: 21 }, { arcs: 5, mass: 8, points: 24 }, { arcs: 6, mass: 9, points: 27 }] },
   { weaponClass: 'k-gun', variant: 'standard', rating: 5, label: "K-5", mountings: [{ arcs: 1, mass: 11, points: 44 }] },
   { weaponClass: 'k-gun', variant: 'standard', rating: 6, label: "K-6", mountings: [{ arcs: 1, mass: 14, points: 56 }] },
-  { weaponClass: 'k-gun', variant: 'short', rating: 1, label: "SRK-1", mountings: [{ arcs: 6, mass: 1, points: 4 }] },
+  { weaponClass: 'k-gun', variant: 'short', rating: 1, label: "SRK-1", mountings: [{ arcs: 6, mass: 1.5, points: 6 }] },
   { weaponClass: 'k-gun', variant: 'short', rating: 2, label: "SRK-2", mountings: [{ arcs: 2, mass: 2, points: 8 }] },
   { weaponClass: 'k-gun', variant: 'short', rating: 3, label: "SRK-3", mountings: [{ arcs: 1, mass: 3, points: 12 }] },
   { weaponClass: 'k-gun', variant: 'short', rating: 4, label: "SRK-4", mountings: [{ arcs: 1, mass: 4, points: 16 }] },

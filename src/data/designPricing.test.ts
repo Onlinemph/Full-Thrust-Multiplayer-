@@ -5,12 +5,14 @@ import {
   hullBoxesFor,
   minimumHullBoxes,
   priceDesign,
+  printedWeaponCost,
   proportionalCost,
   protectionBoxes,
   repriceProportional,
   validateDesign,
 } from './designPricing'
-import type { ShipDesign } from '../engine/types'
+import { ARC_ORDER, type ShipDesign } from '../engine/types'
+import { CATALOGUE_WEAPONS } from './buildCatalog'
 
 /**
  * The construction rules, as sections 13 and 14 state them.
@@ -143,5 +145,141 @@ describe('crew parties (10.4, 13.13)', () => {
     expect(validateDesign(legal)).toEqual([])
     const greedy = hull({ mass: 100, additionalDamageControlParties: 4, marineParties: 3 })
     expect(validateDesign(greedy).some((f) => f.kind === 'too-many-parties')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The families that price by a formula (5.14, 5.16, 5.21, 6.6, 6.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Section 14 prints most mountings as a plain row, and those the catalogue can
+ * simply carry. Five families do not: a Pulse Torpedo, a K-Gun, a Pulser, a
+ * Plasma Bolt Launcher and a multi-stage missile are priced by arc count,
+ * class or range line, so the numbers were typed out by hand into the
+ * generator and copied into the Shipyard's list. `printedWeaponCost` derives
+ * them from the section instead, and these are the checks that stop the two
+ * drifting — one of them found the SRK-1 at mass 1 when the table prints 1.5.
+ */
+describe('mountings priced by formula, not by row', () => {
+  const gun = (over: Partial<ShipDesign['weapons'][number]>): ShipDesign['weapons'][number] => ({
+    id: 'w',
+    label: 'gun',
+    weaponClass: 'k-gun',
+    rating: 1,
+    variant: 'standard',
+    arcs: ['F'],
+    mass: 0,
+    points: 0,
+    ...over,
+  })
+
+  it('reads the printed Pulse Torpedo table off 5.14', () => {
+    // "Pulse Torpedo mass 4 1 arc, +1 mass per additional arc"; the SR tube is
+    // 2 and buys both extra arcs for 1; LR and VPT are 8 and +2.
+    expect(printedWeaponCost(gun({ weaponClass: 'pulse-torpedo', arcs: ['F'] }))).toEqual({
+      mass: 4,
+      points: 12,
+      rule: '5.14',
+    })
+    expect(
+      printedWeaponCost(gun({ weaponClass: 'pulse-torpedo', arcs: ['FP', 'F', 'FS'] }))?.mass,
+    ).toBe(6)
+    expect(
+      printedWeaponCost(gun({ weaponClass: 'pulse-torpedo', variant: 'short', arcs: ['F'] }))?.mass,
+    ).toBe(2)
+    expect(
+      printedWeaponCost(gun({ weaponClass: 'pulse-torpedo', variant: 'long', arcs: ['F'] }))?.mass,
+    ).toBe(8)
+  })
+
+  it('charges a K-Gun 4 points a mass, and 2 more for Flak shells', () => {
+    // "K-Guns cost 4 per mass" and "for an additional 2 points a K-Gun may be
+    // equipped with Flak ammunition" — no extra mass either way.
+    const k2 = gun({ rating: 2, arcs: ['F'] })
+    expect(printedWeaponCost(k2)).toEqual({ mass: 3, points: 12, rule: '5.16' })
+    expect(printedWeaponCost({ ...k2, flak: true })).toEqual({
+      mass: 3,
+      points: 14,
+      rule: '5.16',
+    })
+  })
+
+  it('prices the SRK-1 at the 1.5 the table prints, not the 1 the rule of thumb gives', () => {
+    // "SRK-1 mass 1.5 6-arcs", and "Short range K-1's can be bought in pairs
+    // for 3 mass" — which is the same number, twice.
+    const srk1 = printedWeaponCost(
+      gun({ rating: 1, variant: 'short', arcs: ['F', 'FS', 'AS', 'A', 'AP', 'FP'] }),
+    )
+    expect(srk1?.mass).toBe(1.5)
+    expect(srk1?.mass !== undefined && srk1.mass * 2).toBe(3)
+  })
+
+  it('scales a Plasma Bolt Launcher by class and arc (6.8)', () => {
+    // "3 mass per class + 1 mass x class per extra arc (max three arcs)"
+    expect(printedWeaponCost(gun({ weaponClass: 'plasma-bolt-launcher', rating: 3, arcs: ['F'] }))).toEqual(
+      { mass: 9, points: 27, rule: '6.8' },
+    )
+    expect(
+      printedWeaponCost(
+        gun({ weaponClass: 'plasma-bolt-launcher', rating: 3, arcs: ['FP', 'F', 'FS'] }),
+      )?.mass,
+    ).toBe(15)
+  })
+
+  it('adds 2 mass and doubles the points for an extra missile stage (6.6)', () => {
+    const rack = gun({ weaponClass: 'salvo-missile-rack', arcs: ['FP', 'F', 'FS'] })
+    expect(printedWeaponCost(rack)).toEqual({ mass: 4, points: 12, rule: '6.6' })
+    expect(printedWeaponCost({ ...rack, variant: 'two-stage' })).toEqual({
+      mass: 6,
+      points: 24,
+      rule: '6.6 multi-stage',
+    })
+  })
+
+  it('agrees with every mounting the Shipyard offers', () => {
+    // The catalogue is generated from the same tables, so the two must match
+    // on every row of every family the section prices by formula.
+    for (const entry of CATALOGUE_WEAPONS) {
+      for (const mounting of entry.mountings) {
+        const printed = printedWeaponCost({
+          id: 'w',
+          label: entry.label,
+          weaponClass: entry.weaponClass,
+          rating: entry.rating,
+          variant: entry.variant,
+          arcs: ARC_ORDER.slice(0, mounting.arcs),
+          mass: mounting.mass,
+          points: mounting.points,
+        })
+        if (!printed) continue
+        expect(printed.mass, `${entry.label} in ${mounting.arcs} arcs`).toBe(mounting.mass)
+        expect(printed.points, `${entry.label} in ${mounting.arcs} arcs`).toBe(mounting.points)
+      }
+    }
+  })
+
+  it('reports a hand-built mounting that is cheaper than the section', () => {
+    const cheap = hull({
+      weapons: [gun({ id: 'k', label: 'K-3', rating: 3, mass: 2, points: 8 })],
+      systems: [{ id: 'fc', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 }],
+    })
+    const fault = validateDesign(cheap).find((f) => f.kind === 'mispriced-weapon')
+    expect(fault).toBeDefined()
+    expect(describeFault(fault!)).toContain('5 mass')
+  })
+
+  it('caps Plasma Bolt Launchers at one per 50 mass of hull (6.8)', () => {
+    const bolt = (id: string) =>
+      gun({ id, label: 'PBL-1', weaponClass: 'plasma-bolt-launcher', rating: 1, mass: 3, points: 9 })
+    const overmounted = hull({
+      mass: 40,
+      hullBoxes: 12,
+      weapons: [bolt('p1'), bolt('p2')],
+      systems: [{ id: 'fc', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 }],
+    })
+    const fault = validateDesign(overmounted).find((f) => f.kind === 'too-many-plasma-bolts')
+    expect(fault).toBeDefined()
+    expect(describeFault(fault!)).toContain('50 mass')
   })
 })

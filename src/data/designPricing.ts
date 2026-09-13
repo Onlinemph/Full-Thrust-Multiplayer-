@@ -33,8 +33,23 @@ import {
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
-import { canMountFlak, maxSpinalMountMass } from '../engine/weapons/kinetics'
-import { checkMagazine } from '../engine/ordnance'
+import {
+  canMountFlak,
+  FLAK_UPGRADE_POINTS,
+  kGunMass,
+  maxSpinalMountMass,
+  pulseTorpedoMass,
+  pulserMass,
+} from '../engine/weapons/kinetics'
+import {
+  checkMagazine,
+  magazineCapacity,
+  multiStageMass,
+  multiStagePoints,
+  plasmaBoltLauncherLimit,
+  plasmaBoltMass,
+  ORDNANCE_MOUNTS,
+} from '../engine/ordnance'
 import {
   tenderBayMassFor,
   tenderBayPoints,
@@ -402,6 +417,14 @@ export type DesignFault =
   | { kind: 'launcher-unfed'; weaponId: string }
   /** 6.6: a launcher drawing from more than one magazine, or a magazine overpacked. */
   | { kind: 'bad-magazine'; magazineId: string; problem: string }
+  /**
+   * A mounting whose entry disagrees with the printed table (5.14, 5.16, 5.21,
+   * 6.6, 6.8). Every one of these families prices by arc count, class or
+   * range line, and a catalogue typed by hand drifts.
+   */
+  | { kind: 'mispriced-weapon'; weaponId: string; label: string; mass: number; points: number; rule: string }
+  /** 6.8: more Plasma Bolt Launchers than one per 50 mass of hull. */
+  | { kind: 'too-many-plasma-bolts'; fitted: number; allowed: number }
 
 export function describeFault(fault: DesignFault): string {
   switch (fault.kind) {
@@ -445,6 +468,12 @@ export function describeFault(fault: DesignFault): string {
       return `${fault.weaponId} is a Salvo Missile Launcher with no magazine: 6.6 lets it "fire one salvo per turn provided ammunition is left in the magazine", and there is none`
     case 'bad-magazine':
       return `magazine ${fault.magazineId}: ${fault.problem}`
+    case 'mispriced-weapon':
+      return `${fault.label} should be ${fault.mass} mass and ${fault.points} points (${fault.rule})`
+    case 'too-many-plasma-bolts':
+      return fault.allowed === 0
+        ? '6.8 allows one Plasma Bolt Launcher per 50 mass of ship, and this hull is under 50'
+        : `${fault.fitted} Plasma Bolt Launchers where 6.8 allows ${fault.allowed} — one per 50 mass`
     case 'spinal-overmounted':
       return fault.allowed === 0
         ? `${fault.fitted} mass of Spinal Mount on a hull too small to carry one: 5.23 allows 16 mass per 50 of ship, so nothing under mass 50 may mount any`
@@ -578,6 +607,69 @@ function factionFaults(design: ShipDesign, factionId: string, clanId?: string): 
   return faults
 }
 
+/**
+ * What the printed table charges for one mounting, where a section gives a
+ * formula rather than a row (5.14, 5.16, 5.21, 6.6, 6.8).
+ *
+ * The families here all price by something a catalogue entry cannot carry —
+ * the arc count, the class, the range line — so the numbers were typed out by
+ * hand into `buildCatalog.ts` and the Shipyard, and a typo there is a fleet
+ * quietly getting a cheap gun. `null` means section 14 prints a plain row for
+ * this family and there is nothing to re-derive.
+ *
+ * Points are the section's own multiplier on mass: 3 for a Pulse Torpedo and a
+ * Plasma Bolt Launcher, 4 for a K-Gun (*"K-Guns cost 4 per mass"*), 5 for a
+ * Pulser, and whatever `ORDNANCE_MOUNTS` carries for section 6.
+ */
+export function printedWeaponCost(
+  weapon: ShipDesign['weapons'][number],
+): { mass: number; points: number; rule: string } | null {
+  const arcs = weapon.arcs.length
+  switch (weapon.weaponClass) {
+    case 'pulse-torpedo': {
+      const mass = pulseTorpedoMass(weapon.variant, arcs)
+      return { mass, points: mass * 3, rule: '5.14' }
+    }
+    case 'k-gun': {
+      const mass = kGunMass(weapon.rating, weapon.variant, arcs)
+      // "For an additional 2 points a K-Gun may be equipped with Flak
+      // ammunition" — no extra mass, so the shells ride in the same magazine.
+      const flak = weapon.flak === true ? FLAK_UPGRADE_POINTS : 0
+      return { mass, points: mass * 4 + flak, rule: '5.16' }
+    }
+    case 'pulser': {
+      const mass = pulserMass(arcs)
+      return { mass, points: mass * 5, rule: '5.21' }
+    }
+    case 'plasma-bolt-launcher': {
+      const mass = plasmaBoltMass(weapon.rating, arcs)
+      return { mass, points: mass * 3, rule: '6.8' }
+    }
+    default:
+      break
+  }
+  // Section 6's mountings are a flat table, but the two-stage option is a
+  // formula on top of it: "an extra stage … increases the mass by 2 and
+  // doubles the points cost" (6.6).
+  const mount = ORDNANCE_MOUNTS.find(
+    (entry) => entry.weaponClass === weapon.weaponClass && entry.arcs === arcs,
+  )
+  if (!mount || mount.mass === null) return null
+  const base = {
+    mass: mount.mass,
+    points: mount.points ?? (mount.pointsPerMass === null ? null : mount.mass * mount.pointsPerMass),
+  }
+  if (base.points === null) return null
+  if (weapon.variant !== 'two-stage') {
+    return { mass: base.mass, points: base.points, rule: '6.6' }
+  }
+  return {
+    mass: multiStageMass(base.mass),
+    points: multiStagePoints(base.points),
+    rule: '6.6 multi-stage',
+  }
+}
+
 export function validateDesign(
   design: ShipDesign,
   opts: {
@@ -666,7 +758,8 @@ export function validateDesign(
         magazineId: magazine.id,
         problem:
           problem === 'over-capacity'
-            ? `${check.massUsed} mass of loads in ${magazine.mass} mass of magazine (6.6)`
+            ? `${check.massUsed} mass of loads in ${magazine.mass} mass of magazine, which holds ` +
+              `${magazineCapacity(magazine.mass)} standard salvoes (6.6)`
             : problem === 'mixed-stages'
               ? 'a magazine carries regular missiles or multi-stage, not a mixture (6.6)'
               : 'only standard missiles may be multi-stage, not ER (6.6)',
@@ -682,6 +775,42 @@ export function validateDesign(
           problem: `${launcherId} draws from ${feeders.length} magazines; 6.6 allows one`,
         })
       }
+    }
+  }
+
+  // 5.14, 5.16, 5.21, 6.6, 6.8: the families that price by arc count, class or
+  // range line, checked against the section rather than against whatever the
+  // catalogue entry says. A turreted mounting is left alone: 5.22 sells the
+  // turret the arcs and the gun inside it is bought bare.
+  for (const weapon of design.weapons) {
+    if (weapon.turretId) continue
+    const printed = printedWeaponCost(weapon)
+    if (!printed) continue
+    if (
+      Math.abs(weapon.mass - printed.mass) > 1e-6 ||
+      Math.abs(weapon.points - printed.points) > 1e-6
+    ) {
+      faults.push({
+        kind: 'mispriced-weapon',
+        weaponId: weapon.id,
+        label: weapon.label,
+        mass: printed.mass,
+        points: printed.points,
+        rule: printed.rule,
+      })
+    }
+  }
+
+  // 6.8: "a ship can mount only one launcher per 50 mass of ship". The firing
+  // handler has always refused the extras; a design that carries them is
+  // paying mass for a gun it can never fire.
+  const bolts = design.weapons.filter(
+    (weapon) => weapon.weaponClass === 'plasma-bolt-launcher',
+  ).length
+  if (bolts > 0) {
+    const allowed = plasmaBoltLauncherLimit(design.mass)
+    if (bolts > allowed) {
+      faults.push({ kind: 'too-many-plasma-bolts', fitted: bolts, allowed })
     }
   }
 
