@@ -946,7 +946,7 @@ function bearingArcs(ship: ShipState, arcs: readonly Arc[]): readonly Arc[] {
  * asked about `SystemDef`s, which have no `turretId`, and about bare arc lists
  * with no weapon behind them at all.
  */
-function weaponArcs(ship: ShipState, weapon: WeaponDef): readonly Arc[] {
+export function weaponArcs(ship: ShipState, weapon: WeaponDef): readonly Arc[] {
   if (weapon.turretId === undefined) return bearingArcs(ship, weapon.arcs)
   const turret = ship.design.turrets.find((candidate) => candidate.id === weapon.turretId)
   if (!turret) return bearingArcs(ship, weapon.arcs)
@@ -8262,7 +8262,7 @@ function oppositeCorner(corner: TableCorner): TableCorner {
   }
 }
 
-function oppositeEdge(edge: TableEdge): TableEdge {
+export function oppositeEdge(edge: TableEdge): TableEdge {
   switch (edge) {
     case 'top':
       return 'bottom'
@@ -8276,8 +8276,11 @@ function oppositeEdge(edge: TableEdge): TableEdge {
 }
 
 /** Whether a point sits on the named edge of the table, within a hair. */
-function onEdge(position: Point, edge: TableEdge, bounds: Bounds): boolean {
-  const slack = 0.5
+/** How far off the line a placement may be and still count as on the edge. */
+export const EDGE_SLACK = 0.5
+
+export function onEdge(position: Point, edge: TableEdge, bounds: Bounds): boolean {
+  const slack = EDGE_SLACK
   switch (edge) {
     case 'left':
       return Math.abs(position.x - bounds.minX) <= slack
@@ -9122,7 +9125,7 @@ function adfcCount(ship: ShipState, kind: 'adfc' | 'advanced-adfc'): number {
 }
 
 /** Which launcher classes put a marker on the table (6.2, 6.6). */
-function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | null {
+export function missileKindOf(weaponClass: string): 'salvo' | 'heavy' | 'antimatter' | null {
   switch (weaponClass) {
     case 'heavy-missile':
       return 'heavy'

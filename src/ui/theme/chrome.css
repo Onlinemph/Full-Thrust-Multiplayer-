@@ -108,12 +108,82 @@
 .app-side {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
-  padding: var(--gap);
-  overflow-y: auto;
   border-left: 1px solid var(--line);
   background: var(--bg);
   min-height: 0;
+  overflow: hidden;
+}
+
+/* The column proper: everything that changes with the phase scrolls here,
+   and the log stays put underneath it. */
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+}
+
+/* The log's dock. Its height is the player's to set — the log has a resize
+   handle — and the header folds it to a line when the sheet needs the room. */
+.side-dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  max-height: 60vh;
+}
+
+.side-dock-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0.2rem var(--gap);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--text-sm);
+}
+
+.side-dock.is-folded .side-dock-head {
+  border-bottom: none;
+}
+
+.side-dock-toggle {
+  border: none;
+  background: none;
+  padding: 0.2em 0.3em;
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.side-dock-toggle:hover:not(:disabled) {
+  background: none;
+  color: var(--ink);
+}
+
+.side-dock-toggle.is-on {
+  color: var(--side-a);
+}
+
+.side-dock .log {
+  height: 24vh;
+  min-height: 4rem;
+  max-height: 55vh;
+  resize: vertical;
+  padding: var(--gap);
+}
+
+.side-dock .keys {
+  margin: 0;
+  padding: var(--gap);
+  border-bottom: 1px solid var(--line-soft);
+  display: grid;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
 }
 
 .app-side p {
@@ -144,6 +214,10 @@
   .app-side {
     border-left: none;
     border-top: 1px solid var(--line);
+  }
+
+  .side-dock .log {
+    height: 18vh;
   }
 }
 

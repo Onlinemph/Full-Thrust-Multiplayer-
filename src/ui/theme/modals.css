@@ -49,6 +49,40 @@
 
 /* A signalling code is a couple of kilobytes of SDP, so it is shown to be
    copied rather than read: monospace, selected on focus, with a copy button. */
+/* The six letters that are the whole of the handshake, set big enough to read
+   out over a call. */
+.match-code {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-2);
+  padding: var(--gap) var(--gap-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+.match-code b {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  color: var(--side-a);
+}
+
+.code-field input[type='text'] {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.6rem;
+  width: 10em;
+}
+
 .code-field {
   display: flex;
   flex-direction: column;

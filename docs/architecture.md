@@ -17,7 +17,9 @@ single property is what gives you:
   faces, so undo cannot be used to fish for a better result.
 - **Battle files.** A save is JSON: the setup and the list of actions. It opens on any machine.
 - **Remote play.** Two browsers exchanging actions stay in step with no server and no authority
-  beyond the host's journal.
+  beyond the host's journal. The protocol (`ui/link.ts`) does not know the wire; WebRTC
+  (`ui/net.ts`) and a Supabase Realtime channel (`ui/supabaseLink.ts`) both carry it, and the
+  Supabase wire also keeps the saved game in a row so a match survives a closed tab.
 - **Auditing a volley.** Both players can replay the turn and see the same dice.
 
 Two rules keep replay honest, and they are not negotiable:

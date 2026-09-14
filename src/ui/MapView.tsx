@@ -24,7 +24,7 @@ import { isGateActive } from '../engine/ftl'
 import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
 import { NOVA_SWEEPS } from '../engine/ew'
 import type { GameState, ShipState } from '../engine/game'
-import { advance, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
+import { advance, courseToDegrees, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Course, MovementOrder, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
@@ -32,7 +32,8 @@ import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
 import { OrderCompass } from './OrderCompass'
 import { Starfield } from './Starfield'
-import { dispatch } from './store'
+import { outsideReach, reachOfAim, reachOfGroup, reachOfReturn, type Reach } from './reach'
+import { dispatch, refuseAtTable } from './store'
 
 /**
  * The plotting surface.
@@ -203,6 +204,16 @@ export function MapView({
       x: (event.clientX - box.left - originX) / scale,
       y: (event.clientY - box.top - originY) / scale,
     }
+    // Outside the reach of what is in hand: refused here, with the rule,
+    // rather than written and refused by the engine — or, for a launcher,
+    // written and spent on a marker that never flew.
+    if (reach !== null) {
+      const why = outsideReach(game, reach, to)
+      if (why !== null) {
+        refuseAtTable(why)
+        return
+      }
+    }
     // A ship coming back onto the table wants an edge, and nothing else in
     // phase 1 wants a bare-table click at all (3.9, 17.7).
     if (returnWith) {
@@ -265,21 +276,32 @@ export function MapView({
 
   /** Where a click on bare table sends the group in hand (8.5, 9.1). */
   const flyTo = (to: Point) => {
+    const moving = game.phase === 'move-fighters' || game.phase === 'secondary-fighter-moves'
     if (squadron) {
       // A squadron uses one action for both phases: 9.1 gives it 18 MU on the
       // fighter move and 9 on the secondary, and the handler reads which.
-      if (game.phase === 'move-fighters' || game.phase === 'secondary-fighter-moves') {
+      if (squadron.status !== 'in-flight') {
+        refuseAtTable(`${squadron.label} is not in flight (9.1)`)
+      } else if (!moving) {
+        refuseAtTable('Gunboats move with the fighters, phases 4 and 6 (9.1)')
+      } else {
         dispatch({ type: 'move-gunboats', squadronId: squadron.id, to })
       }
       return
     }
+    if (!flight) return
     // A group can be selected while it is still in the bay, so that its
     // re-arming and pre-deployment orders are reachable (8.15). It cannot be
-    // flown from there.
-    if (!flight || flight.status !== 'in-flight') return
+    // flown from there — and a click that tries is told so, not ignored.
+    if (flight.status !== 'in-flight') {
+      refuseAtTable(`${flight.label} is ${flight.status === 'aboard' ? 'still in the bay' : 'not in flight'} (8.5)`)
+      return
+    }
     if (game.phase === 'move-fighters') dispatch({ type: 'move-flight', flightId: flight.id, to })
     else if (game.phase === 'secondary-fighter-moves') {
       dispatch({ type: 'secondary-move-flight', flightId: flight.id, to })
+    } else {
+      refuseAtTable('Fighter groups move in phase 4, and again in phase 6 (8.5)')
     }
   }
 
@@ -304,6 +326,20 @@ export function MapView({
 
   const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
   const effects = useFx()
+
+  /* How far the thing in hand reaches, drawn on the table and checked before
+     a click is written: a group's move, a launcher's range and arcs, a spinal
+     mount's lay, the edge a returning ship comes back over. */
+  const returningShip = returnWith ? game.ships.find((s) => s.id === returnWith) : undefined
+  const reach: Reach | null = aimWith
+    ? reachOfAim(game, aimWith)
+    : returningShip
+      ? reachOfReturn(game, returningShip)
+      : squadron
+        ? reachOfGroup(game, squadron, true)
+        : flight
+          ? reachOfGroup(game, flight, false)
+          : null
 
   /**
    * Phase 11, with one of ours selected: clicking an enemy puts a FireCon on
@@ -577,6 +613,8 @@ export function MapView({
                 />
               ))
             : null}
+
+          {reach !== null ? <ReachOverlay reach={reach} scale={scale} table={table} /> : null}
 
           {/* Fire arcs of the weapon in hand, on the selected ship only — six
               overlapping fans would be unreadable. */}
@@ -954,4 +992,98 @@ function visible(ship: ShipState, viewingSide: string | null): boolean {
   if (viewingSide === null) return true
   if (!ship.cloaked) return true
   return ship.side === viewingSide
+}
+
+
+/**
+ * The reach of what is in hand, drawn where it can go: a disc for a move, a
+ * fan of the arcs it bears through for a launcher, a cone dead ahead for a
+ * spinal mount, a band along the edge for a ship coming back. Labelled with
+ * the number, because the number is the rule.
+ */
+function ReachOverlay({
+  reach,
+  scale,
+  table,
+}: {
+  reach: Reach
+  scale: number
+  table: { width: number; height: number }
+}) {
+  switch (reach.kind) {
+    case 'disc':
+      return (
+        <g className="reach is-disc">
+          <circle
+            cx={reach.centre.x * scale}
+            cy={reach.centre.y * scale}
+            r={reach.radius * scale}
+            className="reach-area"
+          />
+          <text
+            className="reach-label"
+            x={reach.centre.x * scale}
+            y={(reach.centre.y - reach.radius) * scale - 4}
+          >
+            {reach.label}
+          </text>
+        </g>
+      )
+    case 'fan':
+      return (
+        <g
+          className="reach is-fan"
+          transform={`translate(${reach.centre.x * scale} ${reach.centre.y * scale})`}
+        >
+          <circle r={reach.radius * scale} className="reach-ring" />
+          <ArcRose facing={reach.facing} lit={reach.arcs} radius={reach.radius * scale} />
+          <text className="reach-label" y={-reach.radius * scale - 4}>
+            {reach.label}
+          </text>
+        </g>
+      )
+    case 'cone': {
+      const r = reach.radius * scale
+      const a = (reach.halfAngle * Math.PI) / 180
+      const path =
+        `M 0 0 L ${(r * Math.sin(-a)).toFixed(1)} ${(-r * Math.cos(a)).toFixed(1)} ` +
+        `A ${r} ${r} 0 0 1 ${(r * Math.sin(a)).toFixed(1)} ${(-r * Math.cos(a)).toFixed(1)} Z`
+      return (
+        <g
+          className="reach is-cone"
+          transform={`translate(${reach.centre.x * scale} ${reach.centre.y * scale}) rotate(${courseToDegrees(reach.facing)})`}
+        >
+          <path d={path} className="reach-area" />
+          <text
+            className="reach-label"
+            transform={`rotate(${-courseToDegrees(reach.facing)})`}
+            y={-r - 4}
+          >
+            {reach.label}
+          </text>
+        </g>
+      )
+    }
+    case 'edge': {
+      const band = 1 * scale
+      const w = table.width * scale
+      const h = table.height * scale
+      const rect =
+        reach.edge === 'top'
+          ? { x: 0, y: -band / 2, width: w, height: band }
+          : reach.edge === 'bottom'
+            ? { x: 0, y: h - band / 2, width: w, height: band }
+            : reach.edge === 'left'
+              ? { x: -band / 2, y: 0, width: band, height: h }
+              : { x: w - band / 2, y: 0, width: band, height: h }
+      return (
+        <g className="reach is-edge">
+          <rect {...rect} className="reach-area" />
+          <text className="reach-label" x={w / 2} y={reach.edge === 'bottom' ? h + 14 : -8}>
+            {reach.label}
+          </text>
+        </g>
+      )
+    }
+  }
 }

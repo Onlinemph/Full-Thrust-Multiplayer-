@@ -69,10 +69,19 @@ jobs:
       # that looks exactly like the one this workflow exists to fix. A
       # non-empty output (including the bare "/" of a user site or a custom
       # domain) is truthy and wins; only an empty one reaches the repo name.
+      #
+      # The two Supabase values are optional repository Variables (Settings →
+      # Secrets and variables → Actions → Variables). Unset, the build has no
+      # match codes and remote play is the pasted-code handshake; set, matches
+      # get a code and a row on the server. See README, "Multiplayer through
+      # Supabase". Variables rather than secrets because the anon key is meant
+      # to ship in the bundle — the schema's row-level security guards the data.
       - name: Build
         run: npm run build
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path || format('/{0}/', github.event.repository.name) }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -66,6 +66,35 @@ select itself as the source.
 
 Once it has run, the site is at `https://<user>.github.io/<repo-name>/`.
 
+### Multiplayer through Supabase
+
+Remote play works out of the box with no server: the host makes an invite code, the guest answers
+with a reply code, and the two consoles talk over WebRTC. That is a couple of kilobytes of pasted
+text each way, and a closed tab ends the match.
+
+With a Supabase project behind the build, a match is a six-letter code instead, and the battle
+lives on the server between sessions — either player can close the tab and come back to it.
+
+1. Create a project at [supabase.com](https://supabase.com) and open its SQL editor.
+2. Run [`supabase/schema.sql`](supabase/schema.sql). It creates one table and three functions,
+   keyed on the match code, and locks the table down so the anon key can reach nothing else.
+3. Build with the project's URL and anon key:
+
+   ```bash
+   VITE_SUPABASE_URL=https://<ref>.supabase.co \
+   VITE_SUPABASE_ANON_KEY=<anon key> \
+   npm run build
+   ```
+
+   For GitHub Pages, add both as repository **Variables** (Settings → Secrets and variables →
+   Actions → Variables); the deploy workflow passes them to the build. For local work put them in
+   `.env.local`, which is ignored by git.
+
+The **Remote play** panel then offers *Create a match* and *Join*. The server never sees the
+rules: what it stores is the same JSON a battle file holds, and the host's console is still the
+ordering authority, exactly as over WebRTC. The anon key is meant to ship in a browser bundle; the
+schema's row-level security is what guards the data, and the code is the only secret.
+
 ## What is implemented
 
 The tactical game is playable end to end: write orders, roll initiative, move, fire, take

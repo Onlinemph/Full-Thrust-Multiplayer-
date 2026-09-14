@@ -316,6 +316,17 @@ function noteRefusal(outcome: ActionOutcome): void {
   refusal = { text: outcome.refused, seq: refusalSeq }
 }
 
+/**
+ * A refusal the table makes before any action is written: a click outside the
+ * reach of what is in hand. Same notice, same place, so the player reads it
+ * the same way as one the engine sent back.
+ */
+export function refuseAtTable(text: string): void {
+  refusalSeq += 1
+  refusal = { text, seq: refusalSeq }
+  emit()
+}
+
 /** Take the notice down — the player has read it, or acted since. */
 export function clearRefusal(): void {
   if (refusal === null) return

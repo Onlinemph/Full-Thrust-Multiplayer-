@@ -360,6 +360,8 @@ export function App() {
               : null
           }
           onTerrainPlaced={() => setPlacingTerrain(null)}
+          returnWith={returning}
+          onReturned={() => setReturning(null)}
           aimWith={
             game.phase === 'launch-missiles' || (game.phase === 'ship-fire' && aiming?.kind === 'spinal')
               ? aiming
@@ -369,6 +371,7 @@ export function App() {
         />
 
         <aside className="app-side">
+          <div className="side-scroll">
           <ReplayBar onPreview={setPreviewing} />
 
           <PhaseDebtNotice debt={debt} armed={armedSkip === phaseKey} />
@@ -515,31 +518,13 @@ export function App() {
             </div>
           )}
 
-          <details className="panel keys">
-            <summary>Keyboard</summary>
-            <dl>
-              {KEY_HELP.map(([keys, does]) => (
-                <div key={keys}>
-                  <dt>{keys}</dt>
-                  <dd>{does}</dd>
-                </div>
-              ))}
-            </dl>
-          </details>
-
-          <div className="panel log" style={{ flex: 1, minHeight: '8rem' }}>
-            {log
-              .slice()
-              .reverse()
-              .map((entry) => (
-                <div key={entry.seq} className={`log-entry is-${entry.kind}`}>
-                  {entry.text}
-                  {entry.dice?.length ? (
-                    <span className="log-dice"> [{entry.dice.join(' ')}]</span>
-                  ) : null}
-                </div>
-              ))}
           </div>
+
+          {/* The log is docked under the scrolling column rather than at the
+              end of it: what just happened is the one thing a player reads
+              every phase, and it was a screen and a half down. Dragging its
+              top edge resizes it; the header folds it away. */}
+          <LogDock log={log} />
         </aside>
       </main>
 
@@ -1186,6 +1171,63 @@ function moveEveryone(): void {
   }
   // Markers fly in the same phase the ships do (2.6 phase 5).
   dispatch({ type: 'move-ordnance' })
+}
+
+/**
+ * The battle log, docked.
+ *
+ * Newest entry at the bottom, the way a log reads; the dice beside the volley
+ * they came from. The keyboard help lives in the header, because both are
+ * things a player wants a glance at and neither deserves a panel of its own.
+ */
+function LogDock({ log }: { log: GameState['log'] }) {
+  const [open, setOpen] = useState(true)
+  const [keys, setKeys] = useState(false)
+  return (
+    <div className={`side-dock${open ? '' : ' is-folded'}`}>
+      <div className="side-dock-head">
+        <button className="side-dock-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? '▾' : '▸'} Battle log
+        </button>
+        <span className="num" style={{ color: 'var(--ink-faint)' }}>
+          {log.length}
+        </span>
+        <span className="spacer" />
+        <button
+          className={`side-dock-toggle${keys ? ' is-on' : ''}`}
+          onClick={() => setKeys((v) => !v)}
+          aria-expanded={keys}
+        >
+          Keyboard
+        </button>
+      </div>
+      {keys ? (
+        <dl className="keys">
+          {KEY_HELP.map(([combo, does]) => (
+            <div key={combo}>
+              <dt>{combo}</dt>
+              <dd>{does}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {open ? (
+        <div className="log" role="log" aria-live="polite">
+          {log
+            .slice()
+            .reverse()
+            .map((entry) => (
+              <div key={entry.seq} className={`log-entry is-${entry.kind}`}>
+                {entry.text}
+                {entry.dice?.length ? (
+                  <span className="log-dice"> [{entry.dice.join(' ')}]</span>
+                ) : null}
+              </div>
+            ))}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 /** What the phase's one button does, and what it says. */

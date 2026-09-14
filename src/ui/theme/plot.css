@@ -388,6 +388,67 @@
   opacity: 0.22;
 }
 
+/* ── Reach ────────────────────────────────────────────────────────────────── */
+
+/* How far the thing in hand can go, drawn before the click: the area it may
+   land in, tinted, with the rule's number on it. Under the counters, over the
+   grid, and never in the way of the pointer. */
+.reach {
+  pointer-events: none;
+}
+
+.reach-area {
+  fill: var(--fighters);
+  fill-opacity: 0.09;
+  stroke: var(--fighters);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 4;
+  opacity: 0.9;
+}
+
+/* Only the arcs the mount bears through are drawn: the fan is where the
+   marker may go, and an arc it cannot reach is not part of the picture. */
+.reach.is-fan .arc-wedge {
+  fill: var(--ordnance);
+  stroke: var(--ordnance);
+  stroke-opacity: 0.6;
+  pointer-events: none;
+}
+
+.reach.is-fan .arc-wedge:not(.is-lit) {
+  display: none;
+}
+
+.reach-ring {
+  fill: none;
+  stroke: var(--ordnance);
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+  opacity: 0.5;
+}
+
+.reach.is-cone .reach-area {
+  fill: var(--thrust);
+  stroke: var(--thrust);
+}
+
+.reach.is-edge .reach-area {
+  fill: var(--side-a);
+  stroke: var(--side-a);
+  fill-opacity: 0.18;
+}
+
+.reach-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--ink);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--void);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
 .range-ring.is-live {
   opacity: 0.65;
   stroke-dasharray: none;
