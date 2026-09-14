@@ -309,6 +309,15 @@
   opacity: 0.85;
 }
 
+/* The order the compass has the pointer on, before it is written. */
+.track.is-preview {
+  stroke: var(--side-a);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
 /* 17: this plot crosses something. Red because the consequence at the far end
    of it is 17.6, which does not have a damage roll. */
 .track.is-hazard {
@@ -704,4 +713,117 @@
   stroke-opacity: 0.22;
   stroke-linecap: round;
   fill: none;
+}
+
+/* ── The order compass ─────────────────────────────────────────────────────── */
+
+/* 3.5's order, written on the table: a ring of course changes round the
+   selected ship, port to the left and starboard to the right, the throttle
+   under it. Positioned at the counter's screen coordinates by MapView; every
+   child is placed about that point. The container itself takes no pointer
+   events, so the table under the ring can still be clicked and dragged. */
+.compass {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+  font-family: var(--font-mono);
+}
+
+.compass > * {
+  pointer-events: auto;
+}
+
+.compass-ring {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed var(--line);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.compass-btn {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: rgb(11 16 28 / 0.94);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.55);
+}
+
+.compass-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: var(--side-a);
+  color: var(--side-a);
+}
+
+.compass-btn.is-on,
+.compass-btn.is-on:hover:not(:disabled) {
+  background: var(--thrust);
+  border-color: var(--thrust);
+  color: var(--on-bright);
+}
+
+.compass-straight {
+  font-size: 12px;
+}
+
+.compass-pill,
+.compass-actions {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.compass-pill {
+  padding: 2px 6px;
+  background: rgb(11 16 28 / 0.94);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.55);
+}
+
+.compass-pill button {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border-radius: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.compass-pill .num {
+  min-width: 4.5em;
+  text-align: center;
+  color: var(--thrust);
+}
+
+.compass-pill .num.is-unwritten {
+  color: var(--ink-dim);
+}
+
+.compass-thrust {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  padding-left: 4px;
+  border-left: 1px solid var(--line);
+}
+
+.compass-actions button {
+  font-size: var(--text-xs);
+  padding: 0.3em 0.7em;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.55);
 }

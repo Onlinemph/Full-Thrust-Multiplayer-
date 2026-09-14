@@ -165,6 +165,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* A setting that is currently in force — the turn that is written, the mode
+   that is set. Lit rather than filled, so it reads as state, not as the one
+   thing to press. */
+button.is-on {
+  background: var(--panel-3);
+  border-color: var(--side-a);
+  color: var(--side-a);
+}
+
 /* The one primary action on a screen. Orange, because a primary action is
    almost always the player spending something. */
 button.primary {

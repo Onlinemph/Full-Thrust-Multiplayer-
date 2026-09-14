@@ -40,6 +40,15 @@
   flex: 1;
 }
 
+/* A row that stands for a ship on the table: clicking it selects the ship. */
+.panel-row.is-pickable {
+  cursor: pointer;
+}
+
+.panel-row.is-pickable.is-selected {
+  box-shadow: inset 2px 0 0 var(--side-a);
+}
+
 /* ── The SSD ──────────────────────────────────────────────────────────────── */
 
 .ssd {
@@ -132,6 +141,82 @@
   fill: var(--panel);
   stroke: var(--line);
   stroke-width: 3;
+}
+
+/* The plan and the card that explains whatever is under the pointer. The
+   wrap is the coordinate space the card is placed in. */
+.ssd-plan-wrap {
+  position: relative;
+}
+
+.ssd-mount.is-hovered {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+.ssd-cell-hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.ssd-tip {
+  position: absolute;
+  z-index: 5;
+  width: 16rem;
+  max-width: calc(100% - 4px);
+  pointer-events: none;
+  padding: 0.5rem 0.65rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.55);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--ink);
+  animation: refusal-in 90ms ease-out;
+}
+
+.ssd-tip.is-above {
+  transform: translateY(-100%);
+}
+
+.ssd-tip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--gap);
+}
+
+.ssd-tip-title {
+  font-weight: 700;
+}
+
+.ssd-tip-section {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--side-a);
+  white-space: nowrap;
+}
+
+.ssd-tip-state {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--damage);
+  margin-top: 0.15rem;
+}
+
+.ssd-tip-facts {
+  list-style: none;
+  margin: 0.35rem 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+}
+
+.ssd-tip-rule {
+  margin: 0.35rem 0 0;
+  color: var(--ink);
 }
 
 /* Where one band of the ship hands over to the next. Faint on purpose: a frame

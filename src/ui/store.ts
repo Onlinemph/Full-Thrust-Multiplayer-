@@ -124,6 +124,29 @@ export function currentMatchSide(): string | null {
 }
 
 /**
+ * The sides this console commands, or null for every side on the table.
+ *
+ * Three ways to sit at this screen. Two people sharing it command everything
+ * and look through whichever eyes they choose — null. One person in an online
+ * match commands the side they joined as. One person against the computer
+ * commands every side the computer does not fly, and the computer's fleet is
+ * no more theirs to order about than a remote opponent's would be: its orders
+ * are refused, and its view is not on offer.
+ */
+export function commandedSides(): string[] | null {
+  if (matchSide !== null) return [matchSide]
+  const ai = setup.aiSides ?? []
+  if (ai.length === 0) return null
+  return game.sides.map((side) => side.id).filter((id) => !ai.includes(id))
+}
+
+/** Whether this console may give a side orders. */
+export function commands(side: string): boolean {
+  const mine = commandedSides()
+  return mine === null || mine.includes(side)
+}
+
+/**
  * Hooks the network layer installs to mirror what happens here to the peer.
  * Null in hot-seat, which is why every call site uses optional chaining.
  */
@@ -228,16 +251,30 @@ function aiKey(side: string): string {
 
 /** Apply an action, journal it, autosave, notify. The only way state changes. */
 export function dispatch(action: GameAction): ActionOutcome {
-  if (matchSide !== null && action.type !== 'signal-ready') {
+  if (action.type !== 'signal-ready') {
     const side = actionSide(game, action)
+    const ai = setup.aiSides ?? []
     // Actions with no side — advancing the shared sequence, choice scripts —
-    // pass untouched. Sides the computer commands are driven from the creator's
-    // console, which is the other exception.
-    if (side !== null && side !== matchSide && !(setup.aiSides ?? []).includes(side)) {
-      const denied: ActionOutcome = { refused: 'That fleet is not yours to command' }
-      noteRefusal(denied)
+    // pass untouched. Online, sides the computer commands are driven from the
+    // creator's console, which is the one exception to "not yours". Against the
+    // computer at one screen there is no exception: the computer's own actions
+    // never come through here (`runAi` journals them directly), so anything
+    // for its fleet that does is a player reaching across the table.
+    const denied: string | null =
+      side === null
+        ? null
+        : matchSide !== null
+          ? side !== matchSide && !ai.includes(side)
+            ? 'That fleet is not yours to command'
+            : null
+          : ai.includes(side)
+            ? 'The computer commands that fleet'
+            : null
+    if (denied !== null) {
+      const outcome: ActionOutcome = { refused: denied }
+      noteRefusal(outcome)
       emit()
-      return denied
+      return outcome
     }
   }
 

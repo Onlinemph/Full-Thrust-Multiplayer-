@@ -25,6 +25,7 @@ import {
   iconForSystem,
   iconForWeapon,
 } from './iconFor'
+import { weaponWeight } from './weight'
 
 /**
  * Laying a ship out the way it was built.
@@ -64,6 +65,8 @@ export interface PlacedGlyph {
   height: number
   /** The number this ship's copy carries — a drive's thrust, a hold's mass. */
   value?: number
+  /** A weapon's size relative to a class-3 mount; the counter draws it so too. */
+  weight?: number
   /** Which way it bears, for the arc rosette. Absent on anything unarmed. */
   arcs?: readonly Arc[]
   /** Where the rosette goes, when there is one: under the symbol. */
@@ -156,12 +159,14 @@ function station(arcs: readonly Arc[]): { band: BandId; side: Side } {
  * Box sides, in plan units.
  *
  * Not one size. A weapon is what a player is looking for, so it is the
- * biggest thing on the deck; the drive is bigger still because its number is
- * the ship's speed; a fitting is a fitting. The Core Systems block is the
- * sheet's 3:1 symbol at the width of three fittings.
+ * biggest thing on the deck — and a big weapon is bigger than a small one,
+ * `weapon` being the side of a class-3 mount and `weaponWeight` scaling it
+ * either way; the drive is bigger still because its number is the ship's
+ * speed; a fitting is a fitting. The Core Systems block is the sheet's 3:1
+ * symbol at the width of three fittings.
  */
 const SIZE = {
-  weapon: 40,
+  weapon: 42,
   system: 32,
   bay: 36,
   screen: 32,
@@ -225,6 +230,8 @@ interface Item {
   side: Side
   /** Where it sorts among the guts, so like sits with like. */
   order: number
+  /** A weapon's size relative to a class-3 mount; 1 for everything else. */
+  weight: number
   cells?: PlacedGlyph['cells']
 }
 
@@ -315,6 +322,8 @@ function weaponItems(design: ShipDesign, damage: PlanDamage): Item[] {
       printed !== null && Number(printed[1]) !== Math.round(weapon.rating)
         ? Math.round(weapon.rating)
         : undefined
+    const weight = weaponWeight(weapon)
+    const side = round(SIZE.weapon * weight)
     items.push({
       key: weapon.id,
       icon,
@@ -327,11 +336,12 @@ function weaponItems(design: ShipDesign, damage: PlanDamage): Item[] {
         : damage.fired?.has(weapon.id)
           ? 'fired'
           : 'live',
-      width: SIZE.weapon,
-      height: SIZE.weapon,
+      width: side,
+      height: side,
       band: where.band,
       side: where.side,
       order: 0,
+      weight,
     })
   }
   return items
@@ -395,6 +405,7 @@ function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: bay ? 'bays' : where.band,
       side: bay ? 'centre' : where.side,
       order: orderOf(system.kind),
+      weight: 1,
     })
   }
 
@@ -412,6 +423,7 @@ function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'bays',
       side: 'centre',
       order: 0,
+      weight: 1,
     })
   })
   design.gunboats.slice(racks).forEach((squadron, i) => {
@@ -426,6 +438,7 @@ function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'bays',
       side: 'centre',
       order: 0,
+      weight: 1,
     })
   })
 
@@ -448,6 +461,7 @@ function systemItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: bay ? 'bays' : 'core',
       side: 'centre',
       order: orderOf(kind),
+      weight: 1,
     })
   }
 
@@ -476,6 +490,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
         band: 'core',
         side: 'centre',
         order: orderOf('screen'),
+        weight: 1,
       })
     })
   }
@@ -492,6 +507,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'core',
       side: 'centre',
       order: orderOf('area-screen'),
+      weight: 1,
     })
   }
 
@@ -509,6 +525,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'core',
       side: 'centre',
       order: orderOf('flaw'),
+      weight: 1,
     })
   }
 
@@ -535,6 +552,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
     band: 'keel',
     side: 'centre',
     order: 0,
+    weight: 1,
     cells,
   })
 
@@ -555,6 +573,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'drives',
       side: 'centre',
       order: 0,
+      weight: 1,
     })
   }
   const driveIcon = iconForDrive(design.drive.advanced)
@@ -572,6 +591,7 @@ function plantItems(design: ShipDesign, damage: PlanDamage): Item[] {
       band: 'drives',
       side: 'centre',
       order: 1,
+      weight: 1,
     })
   }
 
@@ -591,8 +611,13 @@ interface Row {
   flank: boolean
 }
 
-function cellHeight(item: Item): number {
-  return item.arcs !== undefined && item.arcs.length > 0 ? item.height + ROSE_BAND : item.height
+function armed(item: Item): boolean {
+  return item.arcs !== undefined && item.arcs.length > 0
+}
+
+/** The tallest symbol in a row: what the row's symbols are centred on. */
+function symbolHeight(items: Item[]): number {
+  return Math.max(...items.map((item) => item.height))
 }
 
 function rowWidth(items: Item[]): number {
@@ -600,7 +625,40 @@ function rowWidth(items: Item[]): number {
 }
 
 function rowOf(items: Item[], halfWidth: number, flank: boolean): Row {
-  return { items, halfWidth, height: Math.max(...items.map(cellHeight)), flank }
+  // The symbols sit centred on the tallest of them, and the rosettes go in a
+  // band under all of them — on one line, whatever the guns above them weigh.
+  return {
+    items,
+    halfWidth,
+    height: symbolHeight(items) + (items.some(armed) ? ROSE_BAND : 0),
+    flank,
+  }
+}
+
+/** Heaviest first; among equals, like beside like; among those, as built. */
+function byWeight(a: Item, b: Item): number {
+  return b.weight - a.weight || a.icon.localeCompare(b.icon)
+}
+
+/**
+ * A row arranged the way a battery is built: the heaviest gun on the centre
+ * line, the next pair either side of it, and so on outward — so a pair reads
+ * as a pair, a triple as a big gun flanked by two smaller ones, and a mixed
+ * row is symmetric about the keel in weight. A row whose weights are all the
+ * same is left in the order it was built, which for the guts amidships is the
+ * one order every sheet shares.
+ */
+function symmetric(items: Item[]): Item[] {
+  if (items.length < 2 || items.every((item) => item.weight === items[0].weight)) return items
+  const sorted = [...items].sort(byWeight)
+  const left: Item[] = []
+  const right: Item[] = []
+  sorted.forEach((item, index) => {
+    if (index === 0) return
+    if (index % 2 === 1) left.push(item)
+    else right.push(item)
+  })
+  return [...left.reverse(), sorted[0], ...right]
 }
 
 /**
@@ -633,9 +691,10 @@ function bandRows(band: BandId, items: Item[], across: number): Row[] {
 
   if (FLANK_BANDS.has(band)) {
     // A broadside runs fore-and-aft along the side it fires from, which is
-    // where it would actually be bolted.
-    const port = items.filter((i) => i.side === 'port')
-    const starboard = items.filter((i) => i.side !== 'port')
+    // where it would actually be bolted — heaviest gun forward on each side,
+    // so two matching broadsides come out as mirror images.
+    const port = items.filter((i) => i.side === 'port').sort(byWeight)
+    const starboard = items.filter((i) => i.side !== 'port').sort(byWeight)
     const rows: Row[] = []
     for (let i = 0; i < Math.max(port.length, starboard.length); i += 1) {
       const pair = [port[i], starboard[i]].filter((x): x is Item => x !== undefined)
@@ -644,12 +703,17 @@ function bandRows(band: BandId, items: Item[], across: number): Row[] {
     return rows
   }
 
+  // Like with like down the keel, and within a kind the heaviest forward: a
+  // band of five guns is a row of three big ones over a row of two.
   const ordered = [
     ...items.filter((i) => i.side === 'port'),
-    ...items.filter((i) => i.side === 'centre').sort((a, b) => a.order - b.order),
+    ...items.filter((i) => i.side === 'centre').sort((a, b) => a.order - b.order || byWeight(a, b)),
     ...items.filter((i) => i.side === 'starboard'),
   ]
-  return balancedRows(ordered, across).map((row) => rowOf(row, rowWidth(row) / 2, false))
+  return balancedRows(ordered, across).map((row) => {
+    const arranged = symmetric(row)
+    return rowOf(arranged, rowWidth(arranged) / 2, false)
+  })
 }
 
 /**
@@ -701,18 +765,19 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
 
   const glyphs: PlacedGlyph[] = []
   for (const row of placedRows) {
+    const tallest = symbolHeight(row.items)
     if (row.flank) {
       // Port to port, starboard to starboard, and the keel left clear between
       // them — which is where the spinal mount runs, when there is one.
       for (const item of row.items) {
         const sign = item.side === 'port' ? -1 : 1
-        glyphs.push(place(item, sign * (SPINE_HALF + item.width / 2), row.top))
+        glyphs.push(place(item, sign * (SPINE_HALF + item.width / 2), row.top, tallest))
       }
       continue
     }
     let x = -rowWidth(row.items) / 2
     for (const item of row.items) {
-      glyphs.push(place(item, x + item.width / 2, row.top))
+      glyphs.push(place(item, x + item.width / 2, row.top, tallest))
       x += item.width + GAP
     }
   }
@@ -802,22 +867,26 @@ function mergeRuns(runs: ReadonlyArray<readonly [number, number]>): Array<readon
   return out
 }
 
-/** One symbol, centred on `x` and hung from the top edge of its row. */
-function place(item: Item, x: number, top: number): PlacedGlyph {
-  const armed = item.arcs !== undefined && item.arcs.length > 0
+/**
+ * One symbol, centred on `x` and on the row's symbol line — a small gun in a
+ * row of big ones sits level with them, not hung from the top — with its
+ * rosette in the band under the tallest symbol in the row.
+ */
+function place(item: Item, x: number, top: number, tallest: number): PlacedGlyph {
   return {
     key: item.key,
     icon: item.icon,
     label: item.label,
     kind: item.kind,
     x: round(x),
-    y: round(top + item.height / 2),
+    y: round(top + tallest / 2),
     width: item.width,
     height: item.height,
     value: item.value,
+    weight: item.kind === 'weapon' ? item.weight : undefined,
     arcs: item.arcs,
-    rose: armed
-      ? { x: round(x), y: round(top + item.height + ROSE_BAND / 2), radius: ROSE_RADIUS }
+    rose: armed(item)
+      ? { x: round(x), y: round(top + tallest + ROSE_BAND / 2), radius: ROSE_RADIUS }
       : null,
     state: item.state,
     cells: item.cells,
@@ -856,10 +925,14 @@ export interface CounterSilhouette {
   spine: { y1: number; y2: number } | null
   /** True for a hull with no bow to point — a station, or a ship with no drive. */
   radial: boolean
-  /** Every weapon, where the sheet drew it. */
-  guns: ReadonlyArray<{ x: number; y: number }>
-  /** Every row of weapons or bays, as a bar: what a battery looks like from far off. */
-  bars: ReadonlyArray<{ x0: number; x1: number; y: number; kind: 'gun' | 'bay' }>
+  /** Every weapon, where the sheet drew it, and how big it drew it. */
+  guns: ReadonlyArray<{ x: number; y: number; weight: number }>
+  /**
+   * Every row of weapons or bays, as a bar: what a battery looks like from
+   * far off. `weight` is the battery's mean gun, so a heavy battery is a
+   * heavier bar.
+   */
+  bars: ReadonlyArray<{ x0: number; x1: number; y: number; kind: 'gun' | 'bay'; weight: number }>
 }
 
 const SILHOUETTES = new WeakMap<ShipDesign, CounterSilhouette>()
@@ -914,6 +987,7 @@ export function counterSilhouette(design: ShipDesign): CounterSilhouette {
         x1: nx(Math.max(...group.map((g) => g.x + g.width / 2))),
         y: ny(y),
         kind: group.every((g) => g.kind === 'bay') ? ('bay' as const) : ('gun' as const),
+        weight: group.reduce((sum, g) => sum + (g.weight ?? 1), 0) / group.length,
       }))
   })
 
@@ -927,7 +1001,9 @@ export function counterSilhouette(design: ShipDesign): CounterSilhouette {
         }
       : null,
     radial: hull.shape.radial,
-    guns: armed.filter((g) => g.kind === 'weapon').map((g) => ({ x: nx(g.x), y: ny(g.y) })),
+    guns: armed
+      .filter((g) => g.kind === 'weapon')
+      .map((g) => ({ x: nx(g.x), y: ny(g.y), weight: g.weight ?? 1 })),
     bars,
   }
   SILHOUETTES.set(design, silhouette)

@@ -21,6 +21,7 @@ import {
   pointDefenceMounts,
   pointDefenceOrder,
   shipsAwaitingFtlEntry,
+  shipsAwaitingMovement,
   shipsAwaitingOrders,
   tableIsCrowded,
   type PhaseDebt,
@@ -50,6 +51,8 @@ import { VectorOrderPanel } from './VectorOrderPanel'
 import { Ssd } from './Ssd'
 import {
   canUndo,
+  commandedSides,
+  commands,
   currentGame,
   currentSetup,
   dispatch,
@@ -80,7 +83,19 @@ export function App() {
      table, not from a ship's panel, and a carrier's own counter stays selected
      while its wing is out (8.5). */
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null)
-  const [viewingSide, setViewingSide] = useState<string | null>(null)
+  const [chosenSide, setChosenSide] = useState<string | null>(null)
+  /* One player's console looks through that player's eyes and nobody else's.
+     The open table and the other fleet's view are courtesies of two people
+     sharing one screen; against the computer or a remote opponent they are a
+     way of reading cards the rules keep face down, so they are not on offer. */
+  const commanded = commandedSides()
+  const viewingSide =
+    commanded === null
+      ? chosenSide
+      : chosenSide !== null && commanded.includes(chosenSide)
+        ? chosenSide
+        : (commanded[0] ?? null)
+  const canCommand = (ship: ShipState): boolean => commands(ship.side)
   const [showOnline, setShowOnline] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [litArcs, setLitArcs] = useState<readonly Arc[] | undefined>(undefined)
@@ -149,12 +164,61 @@ export function App() {
     dispatch({ type: 'advance-phase' })
   }
 
+  /* The one button. In most phases what stands between the table and the next
+     phase is a single resolution this console can run — move the ships, roll
+     the thresholds, resolve the point defence — so the button that ends the
+     phase offers that first, and Enter does whatever the button says. A turn
+     with nothing to decide is then Enter, Enter, Enter. */
+  const primary = primaryAction(game, debt, armedSkip === phaseKey, endPhase, canCommand)
+
+  /**
+   * The next of our ships still without orders, after `fromId` in table order,
+   * so that writing orders is click, order, click, order down the line rather
+   * than a hunt across the table for whoever is left.
+   */
+  const selectNextOwing = (fromId: string | null): void => {
+    const live = currentGame()
+    const owed = shipsAwaitingOrders(live).filter(canCommand)
+    if (owed.length === 0) return
+    const order = live.ships.map((ship) => ship.id)
+    const from = fromId === null ? -1 : order.indexOf(fromId)
+    const after = owed.find((ship) => order.indexOf(ship.id) > from) ?? owed[0]
+    setSelectedId(after.id)
+  }
+
+  /** 3.5: straight ahead at the same speed, written as the blank sheet means it. */
+  const holdCourse = (ship: ShipState): void => {
+    const live = currentGame()
+    if (optional(live).movementSystem === 'vector') {
+      if (dispatch({ type: 'plot-vector-orders', shipId: ship.id, orders: [] }).refused) return
+    } else {
+      const order = ship.order
+      if (order?.turn) dispatch({ type: 'plot-turn', shipId: ship.id, direction: null, points: 0 })
+      if (order?.secondTurn) {
+        dispatch({ type: 'plot-second-turn', shipId: ship.id, direction: null, points: 0 })
+      }
+      if (order === null || order.accel !== 0) {
+        if (dispatch({ type: 'plot-accel', shipId: ship.id, accel: 0 }).refused) return
+      }
+    }
+    selectNextOwing(ship.id)
+  }
+
+  /* Phase 1 opens on the first of our ships still to write for, so the turn
+     starts with a compass on the table rather than a hunt for a counter. Only
+     when nothing is selected: a player looking at an enemy sheet keeps it. */
+  useEffect(() => {
+    if (screen === 'battle' && game.phase === 'orders' && selectedId === null) selectNextOwing(null)
+    // Runs when the phase changes, and not when the selection does.
+  }, [phaseKey, screen])
+
   useKeyboard({
     game,
     selectedId,
     onSelect: setSelectedId,
+    canCommand,
     suspended: screen !== 'battle' || showOnline || showSetup || showLibrary || showYard,
-    onEndPhase: endPhase,
+    onPrimary: primary.disabled ? endPhase : primary.run,
   })
 
   const modals = (
@@ -212,20 +276,31 @@ export function App() {
 
         <span className="spacer" />
 
-        <label>
-          Viewing{' '}
-          <select
-            value={viewingSide ?? ''}
-            onChange={(event) => setViewingSide(event.target.value || null)}
-          >
-            <option value="">Open table</option>
-            {game.sides.map((side) => (
-              <option key={side.id} value={side.id}>
-                {side.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {commanded !== null && commanded.length === 1 ? (
+          <span className="commanding">
+            Commanding{' '}
+            <b style={{ color: `var(--side-${viewingSide})` }}>
+              {game.sides.find((side) => side.id === viewingSide)?.name ?? viewingSide}
+            </b>
+          </span>
+        ) : (
+          <label>
+            Viewing{' '}
+            <select
+              value={viewingSide ?? ''}
+              onChange={(event) => setChosenSide(event.target.value || null)}
+            >
+              {commanded === null ? <option value="">Open table</option> : null}
+              {game.sides
+                .filter((side) => commanded === null || commanded.includes(side.id))
+                .map((side) => (
+                  <option key={side.id} value={side.id}>
+                    {side.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
 
         <button onClick={() => setScreen('menu')}>Menu</button>
         <button onClick={() => setShowLibrary(true)}>Ships</button>
@@ -250,12 +325,12 @@ export function App() {
           />
         </label>
         <button
-          className={`primary end-phase${armedSkip === phaseKey ? ' is-armed' : ''}`}
-          disabled={debt.required.length > 0}
-          title={debt.required.length > 0 ? debt.required.join('\n') : undefined}
-          onClick={endPhase}
+          className={`primary end-phase${primary.armed ? ' is-armed' : ''}`}
+          disabled={primary.disabled}
+          title={primary.disabled ? debt.required.join('\n') : undefined}
+          onClick={primary.run}
         >
-          {armedSkip === phaseKey ? 'End phase anyway' : 'End phase'}
+          {primary.label}
         </button>
       </header>
 
@@ -266,6 +341,9 @@ export function App() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           viewingSide={viewingSide}
+          canCommand={canCommand}
+          onHoldCourse={holdCourse}
+          onNextShip={selectNextOwing}
           litArcs={litArcs}
           selectedFlightId={selectedFlightId}
           onSelectFlight={setSelectedFlightId}
@@ -328,6 +406,8 @@ export function App() {
               phase={game.phase}
               game={game}
               viewingSide={viewingSide}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
               aiming={aiming}
               onAim={setAiming}
               returning={returning}
@@ -407,7 +487,9 @@ export function App() {
                 <VectorOrderPanel
                   ship={selected}
                   editable={
-                    game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                    game.phase === 'orders' &&
+                    canCommand(selected) &&
+                    !awaiting.some((ship) => ship.id === selected.id)
                   }
                 />
               ) : null}
@@ -415,7 +497,9 @@ export function App() {
                 game={game}
                 ship={selected}
                 editable={
-                  game.phase === 'orders' && !awaiting.some((ship) => ship.id === selected.id)
+                  game.phase === 'orders' &&
+                  canCommand(selected) &&
+                  !awaiting.some((ship) => ship.id === selected.id)
                 }
                 emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
               />
@@ -666,6 +750,8 @@ function PhaseControls({
   phase,
   game,
   viewingSide,
+  selectedId,
+  onSelect,
   aiming,
   onAim,
   returning,
@@ -676,6 +762,8 @@ function PhaseControls({
   phase: Phase
   game: GameState
   viewingSide: string | null
+  selectedId: string | null
+  onSelect: (shipId: string | null) => void
   aiming: AimingMount | null
   onAim: (mount: AimingMount | null) => void
   returning: string | null
@@ -717,14 +805,25 @@ function PhaseControls({
           {unordered.length > 0 ? (
             <div className="panel-block">
               {unordered.map((ship) => (
-                <div className="panel-row" key={ship.id}>
+                <div
+                  className={`panel-row is-pickable${ship.id === selectedId ? ' is-selected' : ''}`}
+                  key={ship.id}
+                  onClick={() => onSelect(ship.id)}
+                >
                   {/* Named in the side's colour: on an open table both fleets
                       can have a "Heavy Cruiser 1", and the colour is what
                       tells a hot-seat player whose it is. */}
                   <span style={{ color: `var(--side-${ship.side})` }}>{ship.name}</span>
                   <span className="spacer" />
                   <span style={{ color: 'var(--ink-faint)' }}>no orders</span>
-                  <button onClick={() => holdCourse(ship.id)}>Hold course</button>
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      holdCourse(ship.id)
+                    }}
+                  >
+                    Hold course
+                  </button>
                 </div>
               ))}
               {unordered.length > 1 ? (
@@ -1072,15 +1171,95 @@ function terrainDue(game: GameState): boolean {
 function moveEveryone(): void {
   // 11.5's arrival is a move, and it can land on top of somebody, so the
   // inbound hulls come out first and the rest of the table flies around them.
-  for (const ship of shipsAwaitingFtlEntry(currentGame())) bringOutOfFtl(ship.id)
+  for (const ship of shipsAwaitingFtlEntry(currentGame())) {
+    if (commands(ship.side)) bringOutOfFtl(ship.id)
+  }
   // Read the live game rather than the render's snapshot: each dispatch below
   // mutates it, and the movement order depends on what has already moved.
-  for (const ship of shipMovementOrder(currentGame())) {
-    if (ship.destroyed || ship.offTable) continue
+  // Only the ships this console commands, and only the ones still to move —
+  // the computer flies its own the moment the phase opens.
+  const live = currentGame()
+  const pending = new Set(shipsAwaitingMovement(live).map((ship) => ship.id))
+  for (const ship of shipMovementOrder(live)) {
+    if (!pending.has(ship.id) || !commands(ship.side)) continue
     dispatch({ type: 'move-ship', shipId: ship.id })
   }
   // Markers fly in the same phase the ships do (2.6 phase 5).
   dispatch({ type: 'move-ordnance' })
+}
+
+/** What the phase's one button does, and what it says. */
+interface PrimaryAction {
+  label: string
+  run: () => void
+  disabled: boolean
+  /** "End phase anyway": the second click on a phase with optional work left. */
+  armed: boolean
+}
+
+/**
+ * The resolution the phase is waiting on, if there is one this console can
+ * run; otherwise ending the phase.
+ *
+ * Every required item `phaseDebt` names is settled by one action, and the
+ * button that would otherwise sit disabled saying so may as well do it. The
+ * exception is phase 1: what it waits on is the player's own judgement, ship
+ * by ship, and a button that wrote ten orders at once would be writing them
+ * wrong.
+ */
+function primaryAction(
+  game: GameState,
+  debt: PhaseDebt,
+  armed: boolean,
+  endPhase: () => void,
+  canCommand: (ship: ShipState) => boolean,
+): PrimaryAction {
+  const owed = debt.required.length > 0
+  const run = (label: string, action: () => void): PrimaryAction => ({
+    label,
+    run: action,
+    disabled: false,
+    armed: false,
+  })
+  switch (game.phase) {
+    case 'move-ships': {
+      const mine = [...shipsAwaitingFtlEntry(game), ...shipsAwaitingMovement(game)].filter(canCommand)
+      if (mine.length > 0) return run('Move ships', moveEveryone)
+      break
+    }
+    case 'threshold':
+      if (shipsAwaitingThreshold(game).length > 0) {
+        return run('Roll threshold checks', () => dispatch({ type: 'threshold-sweep' }))
+      }
+      break
+    case 'point-defence':
+      if (owed) return run('Resolve point defence', () => dispatch({ type: 'resolve-point-defence' }))
+      break
+    case 'ordnance-vs-ships':
+      if (owed) {
+        return run('Resolve ordnance attacks', () => dispatch({ type: 'resolve-ordnance-attacks' }))
+      }
+      break
+    case 'boarding':
+      if (owed) return run('Resolve boarding', () => dispatch({ type: 'resolve-boarding' }))
+      break
+    case 'damage-control':
+      if (owed) return run('Roll repairs', () => dispatch({ type: 'resolve-damage-control' }))
+      break
+    case 'reactor-explosions':
+      if (owed) {
+        return run('Roll for breached cores', () => dispatch({ type: 'resolve-reactor-explosions' }))
+      }
+      break
+    default:
+      break
+  }
+  return {
+    label: armed ? 'End phase anyway' : 'End phase',
+    run: endPhase,
+    disabled: owed,
+    armed,
+  }
 }
 
 /**

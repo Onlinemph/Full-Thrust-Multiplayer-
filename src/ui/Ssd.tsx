@@ -151,7 +151,12 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
         ) : null}
       </div>
 
-      <HullPlan plan={plan} redacted={redacted} title={`${name ?? design.name}, plan view`} />
+      <HullPlan
+        plan={plan}
+        design={design}
+        redacted={redacted}
+        title={`${name ?? design.name}, plan view`}
+      />
 
       <Tracks
         design={design}

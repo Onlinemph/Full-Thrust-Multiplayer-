@@ -16,19 +16,21 @@ import {
  */
 const TOUCHING_SEPARATION = 1.6
 import { stationaryCollisionRisk } from '../engine/terrain'
-import { shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
+import { engagedTargets, shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
-import { flakMarkers, novaBursts, optional } from '../engine/actions'
+import { flakMarkers, novaBursts, optional, shipsAwaitingOrders } from '../engine/actions'
+import { canManoeuvre } from '../engine/specialmoves'
 import { isGateActive } from '../engine/ftl'
 import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
 import { NOVA_SWEEPS } from '../engine/ew'
 import type { GameState, ShipState } from '../engine/game'
 import { advance, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
-import type { Course, Point } from '../engine/types'
+import type { Course, MovementOrder, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
+import { OrderCompass } from './OrderCompass'
 import { Starfield } from './Starfield'
 import { dispatch } from './store'
 
@@ -54,6 +56,12 @@ export interface MapViewProps {
   onSelect: (shipId: string | null) => void
   /** Which side's eyes we are looking through; null is the open table. */
   viewingSide: string | null
+  /** Whether this console may give a ship orders. Absent means every ship. */
+  canCommand?: (ship: ShipState) => boolean
+  /** Phase 1's compass: straight on at the same speed, then the next ship. */
+  onHoldCourse?: (ship: ShipState) => void
+  /** Phase 1's compass: the next of our ships still without orders. */
+  onNextShip?: (fromId: string) => void
   /** Arcs to light up on the selected ship — the weapon currently in hand. */
   litArcs?: readonly ('F' | 'FS' | 'AS' | 'A' | 'AP' | 'FP')[]
   /** The fighter group in hand, if any (8.5). */
@@ -103,6 +111,9 @@ export function MapView({
   selectedId,
   onSelect,
   viewingSide,
+  canCommand,
+  onHoldCourse,
+  onNextShip,
   litArcs,
   placingTerrain = null,
   onTerrainPlaced,
@@ -293,6 +304,36 @@ export function MapView({
 
   const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
   const effects = useFx()
+
+  /**
+   * Phase 11, with one of ours selected: clicking an enemy puts a FireCon on
+   * it (4.4), which is the first thing a gunner does and was a trip to the
+   * panel. Clicking one already engaged does nothing rather than spending a
+   * second FireCon; an enemy is inspected by deselecting first.
+   */
+  const engageFromSelected = (target: ShipState): boolean => {
+    if (game.phase !== 'ship-fire' || selected === undefined) return false
+    if (!(canCommand?.(selected) ?? true)) return false
+    if (target.side === selected.side || target.destroyed || target.offTable) return false
+    if (engagedTargets(selected, game.phase).includes(target.id)) return true
+    dispatch({ type: 'assign-firecon', shipId: selected.id, targetId: target.id })
+    return true
+  }
+  /* The order the compass has the pointer on, drawn as a ghost track before
+     it is written: the turn is judged by the line it makes on the table, and
+     the line is cheap to show. */
+  const [preview, setPreview] = useState<MovementOrder | null>(null)
+  const previewLegs =
+    preview !== null && selected !== undefined && game.phase === 'orders' && !selected.offTable
+      ? applyOrder(
+          {
+            placement: selected.placement,
+            velocity: selected.velocity,
+            drive: { ...driveFromDef(selected.design.drive), hits: selected.driveHits },
+          },
+          preview,
+        ).legs
+      : null
 
   /**
    * The track each ship has plotted for this turn (3.4), drawn as the two legs
@@ -582,6 +623,16 @@ export function MapView({
             </g>
           ))}
 
+          {previewLegs !== null && selected !== undefined ? (
+            <polyline
+              className="track is-preview"
+              points={[
+                `${selected.placement.position.x * scale},${selected.placement.position.y * scale}`,
+                ...previewLegs.map((leg) => `${leg.to.x * scale},${leg.to.y * scale}`),
+              ].join(' ')}
+            />
+          ) : null}
+
           {game.ordnance.map((marker) => (
             <circle
               key={marker.id}
@@ -704,6 +755,7 @@ export function MapView({
                 art={ship.design.art}
                 onClick={() => {
                   if (declareAgainstShip(ship.id)) return
+                  if (engageFromSelected(ship)) return
                   onSelect(ship.id === selectedId ? null : ship.id)
                 }}
               />
@@ -796,8 +848,45 @@ export function MapView({
           )}
         </g>
       </svg>
+
+      {/* Phase 1, written on the table: the course changes the drive allows,
+          in a ring round the selected ship (3.5). HTML rather than SVG so the
+          buttons are buttons — focusable, hoverable, the same as every other
+          control — and drawn over the plot at the counter's screen position. */}
+      {compassFor(selected) ? (
+        <OrderCompass
+          key={selected?.id}
+          ship={selected as ShipState}
+          x={originX + (drawnAt.get(selected?.id ?? '')?.x ?? 0) * scale}
+          y={originY + (drawnAt.get(selected?.id ?? '')?.y ?? 0) * scale}
+          clearance={counterRadius((selected as ShipState).design.mass) * scale}
+          onTrack={(selected as ShipState).orbit !== null}
+          editable={canCommand?.(selected as ShipState) ?? true}
+          onHold={() => onHoldCourse?.(selected as ShipState)}
+          onNext={() => onNextShip?.((selected as ShipState).id)}
+          moreToWrite={shipsAwaitingOrders(game).some(
+            (ship) => ship.id !== selected?.id && (canCommand?.(ship) ?? true),
+          )}
+          onPreview={setPreview}
+        />
+      ) : null}
     </div>
   )
+
+  /**
+   * Whether the selected ship gets a compass: phase 1, cinematic movement, a
+   * ship that is on the table and free to manoeuvre (16.6, 18.1), and one this
+   * console can see the orders of. An enemy hull gets its sheet, not its
+   * order form.
+   */
+  function compassFor(ship: ShipState | undefined): boolean {
+    if (!ship || game.phase !== 'orders' || vector) return false
+    if (ship.destroyed || ship.offTable || ship.captured) return false
+    if (game.deployment && !game.deployment.placed.includes(ship.id)) return false
+    if (!canManoeuvre(ship.dock)) return false
+    if (!(canCommand?.(ship) ?? true)) return false
+    return drawnAt.has(ship.id)
+  }
 }
 
 /**

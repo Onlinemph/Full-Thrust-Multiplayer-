@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import type { GameState, ShipState } from '../engine/game'
+import { shipsAwaitingOrders } from '../engine/actions'
 import { dispatch, undo } from './store'
 
 /**
@@ -19,23 +20,42 @@ export interface KeyboardOptions {
   game: GameState
   selectedId: string | null
   onSelect: (shipId: string | null) => void
+  /** Whether this console may give a ship orders. Absent means every ship. */
+  canCommand?: (ship: ShipState) => boolean
   /** Whether a modal is open — shortcuts stand down while one is. */
   suspended?: boolean
-  /** Ending the phase, with whatever asking the console does first. */
-  onEndPhase?: () => void
+  /**
+   * The phase's one button — move the ships, roll the checks, end the phase —
+   * with whatever asking the console does first.
+   */
+  onPrimary?: () => void
 }
 
-/** Ships this console may give orders to, in a stable order for cycling. */
-function orderableShips(game: GameState): ShipState[] {
-  return game.ships.filter((ship) => !ship.destroyed && !ship.offTable)
+/**
+ * Ships this console may give orders to, in a stable order for cycling.
+ *
+ * In phase 1, while any of ours still has no orders, Tab goes round those and
+ * only those: the point of cycling is to get every sheet written, and a ship
+ * already written for is a stop on the way to one that is not.
+ */
+function orderableShips(game: GameState, canCommand?: (ship: ShipState) => boolean): ShipState[] {
+  const mine = game.ships.filter(
+    (ship) => !ship.destroyed && !ship.offTable && (canCommand?.(ship) ?? true),
+  )
+  if (game.phase === 'orders') {
+    const owed = shipsAwaitingOrders(game).filter((ship) => canCommand?.(ship) ?? true)
+    if (owed.length > 0) return owed
+  }
+  return mine
 }
 
 export function useKeyboard({
   game,
   selectedId,
   onSelect,
+  canCommand,
   suspended,
-  onEndPhase,
+  onPrimary,
 }: KeyboardOptions): void {
   useEffect(() => {
     if (suspended) return
@@ -47,9 +67,12 @@ export function useKeyboard({
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
 
-      const ships = orderableShips(game)
+      const ships = orderableShips(game, canCommand)
       const index = ships.findIndex((ship) => ship.id === selectedId)
-      const ship = index >= 0 ? ships[index] : undefined
+      // The arrows write on whichever ship is selected, cycled to or not —
+      // but only on one of ours.
+      const chosen = game.ships.find((candidate) => candidate.id === selectedId)
+      const ship = chosen !== undefined && (canCommand?.(chosen) ?? true) ? chosen : undefined
 
       switch (event.key) {
         // ── Selection ─────────────────────────────────────────────────────
@@ -109,8 +132,9 @@ export function useKeyboard({
         case 'Enter':
           event.preventDefault()
           // Through the same door the button uses, so a phase with optional
-          // work left is asked about from the keyboard too.
-          if (onEndPhase) onEndPhase()
+          // work left is asked about from the keyboard too, and a phase with
+          // a resolution to run runs it.
+          if (onPrimary) onPrimary()
           else dispatch({ type: 'advance-phase' })
           break
         case 'u':
@@ -123,16 +147,16 @@ export function useKeyboard({
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [game, selectedId, onSelect, suspended, onEndPhase])
+  }, [game, selectedId, onSelect, canCommand, suspended, onPrimary])
 }
 
 /** The bindings, for the help panel. Kept beside them so they cannot drift. */
 export const KEY_HELP: Array<[keys: string, does: string]> = [
-  ['Tab / N', 'Next ship (Shift for the previous one)'],
+  ['Tab / N', 'Next ship — in phase 1, the next one still without orders'],
   ['← →', 'Turn to port or starboard, one clock point at a time'],
   ['↑ ↓', 'Accelerate or decelerate'],
   ['Backspace', 'Clear the order'],
-  ['Space', 'End the phase'],
+  ['Enter / Space', 'The phase’s button: move the ships, roll the checks, end the phase'],
   ['U', 'Undo'],
   ['Esc', 'Deselect'],
 ]

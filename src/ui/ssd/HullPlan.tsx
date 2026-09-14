@@ -1,5 +1,9 @@
+import { useRef, useState } from 'react'
+
+import type { ShipDesign } from '../../engine/types'
 import { SsdGlyph } from './Glyph'
 import { ArcRose } from './ArcRose'
+import { describeCoreCell, describeGlyph, type MountInfo } from './describe'
 import type { PlacedGlyph, SsdPlan } from './layout'
 
 /**
@@ -19,10 +23,29 @@ import type { PlacedGlyph, SsdPlan } from './layout'
 
 export interface HullPlanProps {
   plan: SsdPlan
+  /**
+   * The design the plan was laid out from. With it, hovering a symbol says
+   * what the symbol is and which rule it comes from; without it, the symbols
+   * carry their names as native tooltips and nothing more.
+   */
+  design?: ShipDesign
   /** An enemy hull under the sensor rules: the shape, and nothing inside it. */
   redacted?: boolean
   title: string
 }
+
+/** What the pointer is over, and where, in the wrap's own pixels. */
+interface Hover {
+  key: string
+  /** One of the three cells in the Core Systems block (10.3). */
+  cell: string | null
+  x: number
+  y: number
+}
+
+/** The card's width in CSS pixels, for keeping it inside the sheet. */
+const TIP_WIDTH = 256
+const TIP_OFFSET = 14
 
 function describe(glyph: PlacedGlyph): string {
   const state =
@@ -38,15 +61,42 @@ function describe(glyph: PlacedGlyph): string {
   return `${glyph.label}${value}${arcs}${state}`
 }
 
-export function HullPlan({ plan, redacted = false, title }: HullPlanProps) {
+export function HullPlan({ plan, design, redacted = false, title }: HullPlanProps) {
   const clipId = `hull-clip-${Math.abs(hashOf(plan.path))}`
+  const wrap = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<Hover | null>(null)
+  const explain = design !== undefined && !redacted
+
+  /** Where the pointer is, relative to the wrap, from a pointer event. */
+  const track = (key: string, cell: string | null) => (event: React.PointerEvent) => {
+    if (!explain) return
+    const box = wrap.current?.getBoundingClientRect()
+    if (!box) return
+    setHover({ key, cell, x: event.clientX - box.left, y: event.clientY - box.top })
+  }
+  const leave = () => setHover(null)
+
+  const hovered: MountInfo | null =
+    explain && hover !== null ? infoFor(design, plan, hover) : null
+
+  // The card sits down and to the right of the pointer, and flips to the
+  // other side of it where it would otherwise run off the sheet.
+  const box = wrap.current?.getBoundingClientRect()
+  const tipLeft =
+    hover === null ? 0 : box && hover.x + TIP_OFFSET + TIP_WIDTH > box.width
+      ? Math.max(0, hover.x - TIP_OFFSET - TIP_WIDTH)
+      : hover.x + TIP_OFFSET
+  const tipAbove = hover !== null && box !== undefined && hover.y > box.height * 0.6
+
   return (
+    <div className="ssd-plan-wrap" ref={wrap}>
     <svg
       className="ssd-plan"
       viewBox={plan.viewBox}
       preserveAspectRatio="xMidYMid meet"
       role="group"
       aria-label={title}
+      onPointerLeave={leave}
     >
       <defs>
         <clipPath id={clipId}>
@@ -86,9 +136,14 @@ export function HullPlan({ plan, redacted = false, title }: HullPlanProps) {
         : plan.glyphs.map((glyph) => (
             <g
               key={glyph.key}
-              className={`ssd-mount is-${glyph.kind} is-${glyph.state}`}
+              className={`ssd-mount is-${glyph.kind} is-${glyph.state}${
+                hover?.key === glyph.key ? ' is-hovered' : ''
+              }`}
               role="img"
               aria-label={describe(glyph)}
+              onPointerMove={track(glyph.key, null)}
+              onPointerEnter={track(glyph.key, null)}
+              onPointerLeave={leave}
             >
               <SsdGlyph
                 id={glyph.icon}
@@ -97,7 +152,7 @@ export function HullPlan({ plan, redacted = false, title }: HullPlanProps) {
                 size={glyph.width}
                 height={glyph.height}
                 value={glyph.value}
-                title={glyph.label}
+                title={explain ? '' : glyph.label}
               />
               {glyph.rose !== null && glyph.arcs !== undefined ? (
                 <ArcRose
@@ -115,8 +170,25 @@ export function HullPlan({ plan, redacted = false, title }: HullPlanProps) {
                     const cx = glyph.x - glyph.width / 2 + glyph.width * cell.fx
                     const half = glyph.width * 0.085
                     return (
-                      <g key={cell.key} className={`ssd-cell is-${cell.state}`}>
-                        <title>{cell.label}</title>
+                      <g
+                        key={cell.key}
+                        className={`ssd-cell is-${cell.state}`}
+                        onPointerMove={(event) => {
+                          if (!explain) return
+                          event.stopPropagation()
+                          track(glyph.key, cell.key)(event)
+                        }}
+                      >
+                        {explain ? null : <title>{cell.label}</title>}
+                        {explain ? (
+                          <rect
+                            className="ssd-cell-hit"
+                            x={cx - half * 1.6}
+                            y={glyph.y - glyph.height * 0.45}
+                            width={half * 3.2}
+                            height={glyph.height * 0.9}
+                          />
+                        ) : null}
                         {cell.state === 'absent' ? (
                           <rect
                             className="ssd-cell-absent"
@@ -153,7 +225,52 @@ export function HullPlan({ plan, redacted = false, title }: HullPlanProps) {
             </g>
           ))}
     </svg>
+
+      {hovered !== null && hover !== null ? (
+        <div
+          className={`ssd-tip${tipAbove ? ' is-above' : ''}`}
+          role="tooltip"
+          style={{ left: tipLeft, top: tipAbove ? hover.y - TIP_OFFSET : hover.y + TIP_OFFSET }}
+        >
+          <div className="ssd-tip-head">
+            <span className="ssd-tip-title">{hovered.title}</span>
+            <span className="ssd-tip-section">§{hovered.section}</span>
+          </div>
+          {hovered.state !== null ? <div className="ssd-tip-state">{hovered.state}</div> : null}
+          {hovered.facts.length > 0 ? (
+            <ul className="ssd-tip-facts">
+              {hovered.facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="ssd-tip-rule">{hovered.rule}</p>
+        </div>
+      ) : null}
+    </div>
   )
+}
+
+/** The card for whatever is under the pointer: a cell of the core block, or a mount. */
+function infoFor(design: ShipDesign, plan: SsdPlan, hover: Hover): MountInfo | null {
+  const glyph = plan.glyphs.find((g) => g.key === hover.key)
+  if (glyph === undefined) return null
+  if (hover.cell !== null) {
+    const cell = glyph.cells?.find((c) => c.key === hover.cell)
+    const info = describeCoreCell(hover.cell)
+    if (info !== null && cell !== undefined) {
+      return {
+        ...info,
+        state:
+          cell.state === 'destroyed'
+            ? 'Knocked out'
+            : cell.state === 'absent'
+              ? 'Not fitted'
+              : null,
+      }
+    }
+  }
+  return describeGlyph(design, glyph)
 }
 
 /** A stable id for the clip path, so two sheets on one page do not share one. */

@@ -60,6 +60,10 @@ export interface SsdGlyphProps {
    * is ignored rather than drawn somewhere wrong.
    */
   value?: number | string
+  /**
+   * The native tooltip. Defaults to the symbol's own name; an empty string
+   * draws none, for a sheet that explains its symbols some better way.
+   */
   title?: string
 }
 
@@ -90,7 +94,7 @@ export function SsdGlyph({
   if (value === undefined || icon.numberSlot === undefined) {
     return (
       <use href={`#ssd-${id}`} x={x} y={y} width={size} height={height} className={classes}>
-        <title>{label}</title>
+        {label ? <title>{label}</title> : null}
       </use>
     )
   }
@@ -116,7 +120,7 @@ export function SsdGlyph({
       className={`${classes} has-value`}
       overflow="visible"
     >
-      <title>{slot.means === 'class' ? label : `${label} — ${slot.means} ${value}`}</title>
+      {label ? <title>{slot.means === 'class' ? label : `${label} — ${slot.means} ${value}`}</title> : null}
       <use href={`#ssd-${id}`} x={vx} y={vy} width={vw} height={vh} />
       <text
         className={slot.ink ? 'ssd-value' : 'ssd-value is-hole'}

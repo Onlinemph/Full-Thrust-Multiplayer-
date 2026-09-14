@@ -45,6 +45,13 @@
   padding: 0.2em 0.4em;
 }
 
+/* One player's console: the side it commands is a fact in the bar, where the
+   choice of viewpoint would otherwise be. */
+.commanding {
+  color: var(--ink-dim);
+  font-size: var(--text-sm);
+}
+
 /* Turn and phase are the two facts a player checks constantly, so they sit
    next to the title and are set in the tabular face. */
 .turn-readout {

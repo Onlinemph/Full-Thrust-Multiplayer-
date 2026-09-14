@@ -275,7 +275,14 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         <button disabled={!editable} onClick={() => setTurn('starboard', turnPoints(order) + 1)}>
           Starboard ▶
         </button>
-        <button disabled={!editable || !order.turn} onClick={() => setTurn(null, 0)}>
+        {/* 3.5: "no change" is the commonest order of all, so straight ahead
+            is offered whether or not a turn has been written — clicking it on
+            a blank sheet writes the order that holds the course. */}
+        <button
+          disabled={!editable}
+          className={ship.order !== null && !order.turn ? 'is-on' : undefined}
+          onClick={() => setTurn(null, 0)}
+        >
           Straight
         </button>
       </div>

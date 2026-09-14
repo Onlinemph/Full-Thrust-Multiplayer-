@@ -132,9 +132,18 @@ export function Counter({
               y2={silhouette.spine.y2}
             />
           ) : null}
+          {/* A gun is drawn the size the sheet drew it: a Beam-4 is a dot
+              twice the area of a Beam-1, and a battery of big guns is a
+              heavier bar than a battery of small ones. */}
           {r >= DOTS_FROM_PX
             ? silhouette.guns.map((gun, i) => (
-                <circle key={i} className="counter-gun" cx={gun.x} cy={gun.y} r={DOT_RADIUS} />
+                <circle
+                  key={i}
+                  className="counter-gun"
+                  cx={gun.x}
+                  cy={gun.y}
+                  r={(DOT_RADIUS * gun.weight).toFixed(0)}
+                />
               ))
             : silhouette.bars.map((bar, i) => (
                 <line
@@ -144,7 +153,7 @@ export function Counter({
                   y1={bar.y}
                   x2={bar.x1}
                   y2={bar.y}
-                  strokeWidth={BAR_WIDTH}
+                  strokeWidth={(BAR_WIDTH * bar.weight).toFixed(0)}
                 />
               ))}
           {r >= DOTS_FROM_PX
