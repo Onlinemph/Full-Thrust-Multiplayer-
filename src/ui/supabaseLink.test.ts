@@ -9,6 +9,7 @@ import {
   joinMatch,
   newMatchCode,
   normaliseCode,
+  projectUrl,
   useSupabaseClientForTests,
 } from './supabaseLink'
 
@@ -95,6 +96,28 @@ describe('remote play through Supabase', () => {
     hangUp(null)
     setMatchSide(null)
     newGame(SETUP)
+  })
+
+  it('takes the project URL however the dashboard showed it', () => {
+    expect(projectUrl('https://abcdefgh.supabase.co/rest/v1/')).toBe('https://abcdefgh.supabase.co')
+    expect(projectUrl('https://abcdefgh.supabase.co/')).toBe('https://abcdefgh.supabase.co')
+    expect(projectUrl(' https://abcdefgh.supabase.co ')).toBe('https://abcdefgh.supabase.co')
+  })
+
+  it('says what to do about a project without the schema in it', async () => {
+    const project = fakeProject()
+    const bare = project.client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<unknown> }
+    bare.rpc = () =>
+      Promise.resolve({
+        data: null,
+        error: { code: 'PGRST202', message: 'Could not find the function public.create_match(p_code, p_saved) in the schema cache' },
+      })
+    useSupabaseClientForTests(project.client)
+    await createMatch()
+    expect(netState().phase).toBe('failed')
+    expect(netState().error).toMatch(/schema\.sql/)
+    useSupabaseClientForTests(null)
+    hangUp(null)
   })
 
   it('mints codes from an alphabet with nothing confusable in it', () => {

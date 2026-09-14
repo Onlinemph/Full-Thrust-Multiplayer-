@@ -45,6 +45,31 @@ export function supabaseConfigured(): boolean {
   return Boolean(import.meta.env.VITE_SUPABASE_URL) && Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY)
 }
 
+/**
+ * The project URL as the client wants it: the origin, nothing after it.
+ *
+ * The dashboard shows the REST endpoint (`…supabase.co/rest/v1/`) in more
+ * places than the bare project URL, and a URL copied from there is the one
+ * thing most likely to be pasted in. The client adds `/rest/v1` itself, so a
+ * pasted one would double it; strip whatever path came along.
+ */
+export function projectUrl(raw: string): string {
+  return raw.trim().replace(/\/(rest|realtime|auth|storage)\/v1\/?$/i, '').replace(/\/+$/, '')
+}
+
+/**
+ * What went wrong, said for a player rather than a database.
+ *
+ * The one failure a first-time setup is almost certain to hit is a project
+ * without the schema in it, and PostgREST reports that as a missing function.
+ */
+function explain(error: { code?: string; message: string }): string {
+  if (error.code === 'PGRST202' || /could not find the function/i.test(error.message)) {
+    return 'The project has no match functions yet: run supabase/schema.sql in its SQL editor, then try again.'
+  }
+  return error.message
+}
+
 let client: SupabaseClient | null = null
 let injected: SupabaseClient | null = null
 
@@ -55,7 +80,7 @@ function supabase(): SupabaseClient {
   const url = import.meta.env.VITE_SUPABASE_URL
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY
   if (!url || !key) throw new Error('Supabase is not configured')
-  client = createClient(url, key)
+  client = createClient(projectUrl(url), key.trim())
   return client
 }
 
@@ -106,7 +131,7 @@ let closing = false
 
 async function persist(code: string): Promise<void> {
   const { error } = await supabase().rpc('save_match', { p_code: code, p_saved: currentSave() })
-  if (error) setNetState({ error: `Could not save the match: ${error.message}` })
+  if (error) setNetState({ error: `Could not save the match: ${explain(error)}` })
 }
 
 function schedulePersist(code: string): void {
@@ -221,7 +246,7 @@ export async function createMatch(): Promise<void> {
   const code = newMatchCode()
   const { error } = await supabase().rpc('create_match', { p_code: code, p_saved: currentSave() })
   if (error) {
-    hangUp(`Could not create the match: ${error.message}`)
+    hangUp(`Could not create the match: ${explain(error)}`)
     return
   }
   try {
@@ -250,7 +275,7 @@ export async function joinMatch(input: string, role: NetRole = 'guest'): Promise
   hangUp(null)
   const { data, error } = await supabase().rpc('fetch_match', { p_code: code })
   if (error) {
-    hangUp(`Could not look the match up: ${error.message}`)
+    hangUp(`Could not look the match up: ${explain(error)}`)
     return
   }
   if (!looksLikeSave(data)) {
