@@ -401,9 +401,14 @@ export function MapView({
     ).map((placed) => [placed.id, placed.position] as const),
   )
 
+  // 3.5: orders are written in secret and revealed by the move. The tracks
+  // are the orders, so through one side's eyes only that side's are drawn;
+  // the open table shows everyone's, which is what two people at one screen
+  // have agreed to.
   const tracks = game.ships
     .filter((ship) => !ship.destroyed && !ship.offTable && (vector ? ship.vectorOrders : ship.order))
     .filter((ship) => visible(ship, viewingSide))
+    .filter((ship) => viewingSide === null || ship.side === viewingSide)
     .map((ship) => {
       if (vector) {
         // 12.12: the flown sequence is bookkeeping — a model "does NOT indicate
@@ -785,6 +790,14 @@ export function MapView({
                 side={SIDE_CLASS[ship.side] ?? 'c'}
                 design={ship.design}
                 label={ship.name}
+                // What is known of the other side is what can be seen: how
+                // fast it is going, which is the number the range next turn
+                // depends on.
+                note={
+                  viewingSide !== null && ship.side !== viewingSide && !ship.destroyed
+                    ? `${ship.velocity} MU`
+                    : undefined
+                }
                 selected={ship.id === selectedId}
                 destroyed={ship.destroyed}
                 cloaked={ship.cloaked}

@@ -898,6 +898,22 @@ export interface InitiativeRoll {
  * This turn's initiative (2.6 phase 2). `rounds[0]` is the opening roll; any
  * further rounds are tie-breaks among the tied leaders.
  */
+/**
+ * Which reading of the rules a battle is fought under. Kept beside the state
+ * rather than in it, so a save carries the number and a replay reads it back
+ * before the first action. `actions.ts` re-exports both for the callers that
+ * always had them from there.
+ */
+const RULES_READING = new WeakMap<GameState, number>()
+
+export function setRulesReading(state: GameState, version: number | undefined): void {
+  RULES_READING.set(state, Math.max(1, Math.floor(version ?? 1)))
+}
+
+export function rulesReading(state: GameState): number {
+  return RULES_READING.get(state) ?? 1
+}
+
 export interface InitiativeState {
   turn: number
   rounds: InitiativeRoll[][]
@@ -995,6 +1011,21 @@ export interface GameState {
    * sweep nobody ran (2.6), and reconstructed from the journal like the rest.
    */
   resolved: Partial<Record<Phase, number>>
+  /**
+   * Sides that have said the current phase may end (2.6, online). Cleared as
+   * each phase opens. Part of the state rather than of the console, so a
+   * console that joins late, or comes back after a crash, sees who is waiting.
+   */
+  readyToEnd: SideId[]
+  /**
+   * Phase 11's turn to fire: *"Starting with the player who won initiative,
+   * each player alternates in firing any/all weapon systems on one ship"*.
+   * `side` is whose turn it is to open a ship's fire, or null when nobody is
+   * kept waiting — the other sides have nothing left to fire. `sequence`
+   * counts activations opened, so a console driving the computer can act
+   * each time the turn comes round again.
+   */
+  fire: { side: SideId | null; sequence: number }
   log: LogEntry[]
 }
 
@@ -1063,6 +1094,8 @@ export function createGame(opts: GameOptions): GameState {
     gates: opts.gates ?? [],
     initiative: null,
     resolved: {},
+    readyToEnd: [],
+    fire: { side: null, sequence: 0 },
     deployment: opts.deployment ?? null,
     log: [],
   }
@@ -1549,9 +1582,59 @@ function onEnterPhase(state: GameState): void {
     kind: 'phase',
     text: `Turn ${state.turn}, phase ${phaseNumber(state.phase)} — ${PHASE_LABELS[state.phase]}`,
   })
-  if (state.phase === 'initiative' && state.initiative?.turn !== state.turn) {
+  // Agreement to end a phase is agreement to end that phase and no other.
+  state.readyToEnd = []
+  // Up to reading 15 the dice were thrown as the phase opened, and the button
+  // that followed threw them again. From 16 the roll is a press — one — and
+  // the phase owes it until it is made (2.6).
+  if (
+    state.phase === 'initiative' &&
+    state.initiative?.turn !== state.turn &&
+    rulesReading(state) < 16
+  ) {
     rollInitiative(state)
   }
+  // 2.6 phase 11: the side with initiative opens the firing.
+  if (state.phase === 'ship-fire') {
+    state.fire = { side: nextFiringSide(state, null), sequence: 0 }
+  }
+}
+
+/** Whether a side still has a ship that could open its fire this turn (2.6). */
+export function sideCanStillFire(state: GameState, side: SideId, except?: string): boolean {
+  return state.ships.some(
+    (ship) =>
+      ship.side === side &&
+      ship.id !== except &&
+      canShipFire(ship) &&
+      !ship.captured &&
+      ship.design.weapons.some((weapon) => !ship.destroyedSystems.has(weapon.id)),
+  )
+}
+
+/**
+ * Whose turn it is to fire next, after `after` (2.6 phase 11).
+ *
+ * Walks the initiative order from the side after `after`, round to `after`
+ * itself, and returns the first side with a ship that can still open its
+ * fire — `except` being the ship whose fire is being opened now, which does
+ * not count as one left to open. Null when nobody is waiting on anybody:
+ * every other side is spent, so whoever has ships left just fires them.
+ */
+export function nextFiringSide(state: GameState, after: SideId | null, except?: string): SideId | null {
+  const order = state.initiative?.order ?? state.sides.map((side) => side.id)
+  if (order.length === 0) return null
+  const start = after === null ? -1 : order.indexOf(after)
+  for (let step = 1; step <= order.length; step += 1) {
+    const side = order[(start + step + order.length) % order.length]
+    if (side === after && step < order.length) continue
+    if (sideCanStillFire(state, side, except)) {
+      // The side that just fired gets the turn back only when nobody else
+      // can take it — and then there is nobody to keep waiting.
+      return side === after ? null : side
+    }
+  }
+  return null
 }
 
 function onBeginTurn(state: GameState): void {

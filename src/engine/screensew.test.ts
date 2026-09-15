@@ -42,6 +42,10 @@ const READING_BEFORE = 10
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
   while (game.phase !== phase && guard-- > 0) endPhase(game)
+  // Phase 11 is fired in turns from reading 16, the side with initiative
+  // first. Every shooter in this file is side b and the cases are about
+  // screens and sensors, not the sequence, so b is simply handed the turn.
+  if (phase === 'ship-fire') game.fire = { side: 'b', sequence: 0 }
 }
 
 /** A hull with one Beam-3, and whatever else the case needs. */

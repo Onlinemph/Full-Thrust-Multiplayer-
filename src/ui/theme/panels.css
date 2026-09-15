@@ -397,6 +397,57 @@
   border-style: dashed;
 }
 
+/* Declared at this target (2.6): lit in the thrust colour until it is rolled. */
+.system-chip.is-planned {
+  background: var(--thrust);
+  border-color: var(--thrust);
+  color: var(--on-bright);
+}
+
+/* Declared at another target. */
+.system-chip.is-elsewhere {
+  opacity: 0.45;
+}
+
+/* The declaration, read back before the dice. */
+.fire-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap);
+  margin-bottom: var(--gap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: var(--text-sm);
+}
+
+.fire-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.fire-plan-list li {
+  display: flex;
+  gap: var(--gap);
+}
+
+.fire-plan-at {
+  color: var(--ink-dim);
+}
+
+/* Whose turn it is to fire, when it is not this ship's side's. */
+.fire-turn {
+  padding: 0.35rem var(--gap);
+  border-left: 3px solid var(--warn);
+  background: var(--panel-2);
+  color: var(--warn);
+  font-size: var(--text-sm);
+}
+
 /* Knocked out by a threshold check: struck through and left in place, because
    on paper it is crossed off, not erased. */
 .system-chip.is-destroyed {

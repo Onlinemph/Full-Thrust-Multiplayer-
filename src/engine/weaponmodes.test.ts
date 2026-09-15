@@ -369,7 +369,7 @@ describe('an antimatter missile on a failing rack (6.6)', () => {
     ammo: 1,
   }
 
-  const wounded = (reading = CURRENT_RULES_VERSION): GameState => {
+  const wounded = (reading = CURRENT_RULES_VERSION, seed = 0x514): GameState => {
     const game = battle(
       [
         createShipState({
@@ -386,6 +386,7 @@ describe('an antimatter missile on a failing rack (6.6)', () => {
         }),
       ],
       reading,
+      seed,
     )
     return game
   }
@@ -396,7 +397,7 @@ describe('an antimatter missile on a failing rack (6.6)', () => {
     // not protect a ship from its own exploding missiles."
     let seen = false
     for (let n = 0; n < 60 && !seen; n += 1) {
-      const game = wounded()
+      const game = wounded(CURRENT_RULES_VERSION, 0x514 + n * 7919)
       setRulesReading(game, CURRENT_RULES_VERSION)
       const carrier = shipOf(game, 'carrier')
       // Take the hull down past a threshold row and check.

@@ -54,7 +54,19 @@ function battle(rulesVersion?: number): {
   second.placement = { position: { x: 20, y: 32 }, facing: 3 }
   other.placement = { position: { x: 26, y: 32 }, facing: 9 }
   advanceTo(game, 'ship-fire')
+  giveInitiative(game, first.side)
   return { game, first, second, enemy, other }
+}
+
+/**
+ * 2.6 from reading 16: phase 11 is fired in turns, the side with initiative
+ * first. These tests are about the activation, not the turn, so the shooters'
+ * side is given the initiative and the enemy takes its turn in between.
+ */
+function giveInitiative(game: GameState, side: string): void {
+  const others = game.sides.map((s) => s.id).filter((id) => id !== side)
+  game.initiative = { turn: game.turn, rounds: [], winner: side, order: [side, ...others] }
+  game.fire = { side, sequence: 0 }
 }
 
 /** The nth beam on this hull that bears dead ahead. */
@@ -81,6 +93,8 @@ describe('one activation a turn', () => {
   it('closes a ship out once play moves on to another', () => {
     const { game, first, second, enemy, other } = battle(CURRENT_RULES_VERSION)
     expect(shoot(game, first, enemy, 0).refused).toBeUndefined()
+    // The enemy's turn, then ours again with another ship.
+    expect(shoot(game, enemy, first, 0).refused).toBeUndefined()
     expect(shoot(game, second, other, 0).refused).toBeUndefined()
     const late = shoot(game, first, enemy, 1)
     expect(late.refused).toContain('play moved on')
@@ -90,14 +104,16 @@ describe('one activation a turn', () => {
     const { game, first, second, enemy, other } = battle(CURRENT_RULES_VERSION)
     shoot(game, first, enemy, 0)
     expect(canShipFire(first)).toBe(true)
-    shoot(game, second, other, 0)
+    shoot(game, enemy, first, 0)
     expect(canShipFire(first)).toBe(false)
+    shoot(game, second, other, 0)
     expect(canShipFire(second)).toBe(true)
   })
 
   it('lets the new ship carry on firing', () => {
     const { game, first, second, enemy, other } = battle(CURRENT_RULES_VERSION)
     shoot(game, first, enemy, 0)
+    shoot(game, enemy, first, 0)
     shoot(game, second, other, 0)
     expect(shoot(game, second, other, 1).refused).toBeUndefined()
   })
@@ -112,6 +128,7 @@ describe('one activation a turn', () => {
   it('gives everyone their activation back next turn', () => {
     const { game, first, second, enemy, other } = battle(CURRENT_RULES_VERSION)
     shoot(game, first, enemy, 0)
+    shoot(game, enemy, first, 0)
     shoot(game, second, other, 0)
     expect(canShipFire(first)).toBe(false)
     let guard = 60
@@ -119,6 +136,7 @@ describe('one activation a turn', () => {
     while (game.turn === turn && guard-- > 0) advancePhase(game)
     expect(canShipFire(first)).toBe(true)
     advanceTo(game, 'ship-fire')
+    giveInitiative(game, first.side)
     expect(shoot(game, first, enemy, 0).refused).toBeUndefined()
   })
 

@@ -26,6 +26,9 @@ import type { Phase, ShipDesign } from './types'
 function advanceTo(game: GameState, phase: Phase): void {
   let guard = 40
   while (game.phase !== phase && guard-- > 0) advancePhase(game)
+  // Phase 11 is fired in turns from reading 16; these cases are about the
+  // mount, so the lance's side is simply handed the turn.
+  if (phase === 'ship-fire') game.fire = { side: 'a', sequence: 0 }
 }
 
 function nextTurn(game: GameState): void {

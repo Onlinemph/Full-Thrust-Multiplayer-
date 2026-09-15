@@ -29,6 +29,8 @@ export interface CounterProps {
   /** The hull. Its mass sets the counter's size (2.3), its build the shape. */
   design: ShipDesign
   label?: string
+  /** A second line under the name — the speed of a ship whose orders are hidden. */
+  note?: string
   selected?: boolean
   destroyed?: boolean
   /** Drawn as an outline: visible to its own side, not to the enemy (7.20). */
@@ -77,6 +79,7 @@ export function Counter({
   side,
   design,
   label,
+  note,
   selected = false,
   destroyed = false,
   cloaked = false,
@@ -195,6 +198,16 @@ export function Counter({
           textAnchor="middle"
         >
           {label}
+        </text>
+      ) : null}
+      {note ? (
+        <text
+          className="counter-note"
+          transform={`rotate(${-courseToDegrees(facing)})`}
+          y={r + 22}
+          textAnchor="middle"
+        >
+          {note}
         </text>
       ) : null}
     </g>

@@ -401,6 +401,9 @@ describe('the old way in (7.24)', () => {
     })
     setRulesReading(game, CURRENT_RULES_VERSION)
     advanceTo(game, 'ship-fire')
+    // Phase 11 is fired in turns from this reading; hand 'wave' the turn so
+    // the refusal under test is the gun's, not the sequence's.
+    game.fire = { side: 'a', sequence: 0 }
     expect(
       applyAction(game, {
         type: 'fire-weapon',

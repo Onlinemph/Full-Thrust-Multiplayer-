@@ -85,6 +85,10 @@ function fakeProject() {
       channels.push(ch)
       return ch
     },
+    removeChannel(ch: FakeChannel) {
+      ch.status = 'removed'
+      return Promise.resolve('ok')
+    },
   }
   return { client: client as unknown as SupabaseClient, rows, rpc, channels }
 }

@@ -7,7 +7,9 @@ import {
   applyRemoteSave,
   applyRemoteUndo,
   currentSave,
+  enterMatch,
   journalLength,
+  leaveMatch,
   setNetHooks,
 } from './store'
 
@@ -41,6 +43,15 @@ export type NetMessage =
   | { kind: 'action'; seq: number; action: GameAction }
   | { kind: 'undo'; lengthAfter: number }
   | { kind: 'sync-request' }
+  /**
+   * The guest's journal length, sent now and then. A wire that drops a
+   * message leaves two journals quietly apart until the next action crosses;
+   * the host answers a length it does not agree with by shipping its record.
+   */
+  | { kind: 'probe'; length: number }
+
+/** How often a guest asks the host whether they still agree, in ms. */
+const PROBE_EVERY_MS = 15_000
 
 export type NetRole = 'host' | 'guest'
 
@@ -138,6 +149,11 @@ export function receive(message: NetMessage, role: NetRole, reply: (message: Net
     case 'sync-request':
       reply({ kind: 'sync', saved: currentSave() })
       return
+    case 'probe':
+      if (role === 'host' && message.length !== journalLength()) {
+        reply({ kind: 'sync', saved: currentSave() })
+      }
+      return
   }
 }
 
@@ -148,6 +164,7 @@ export function receive(message: NetMessage, role: NetRole, reply: (message: Net
 let active: Link | null = null
 /** Whatever the transport needs torn down on hang-up before there is a link. */
 let teardown: (() => void) | null = null
+let probeTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * Take a link into service: the store's hooks send through it, and the host
@@ -157,9 +174,12 @@ export function attachLink(
   link: Link,
   role: NetRole,
   transport: NetTransport,
-  opts: { code?: string | null; peers?: number } = {},
+  opts: { code?: string | null; peers?: number; fresh?: boolean } = {},
 ): void {
   active = link
+  // The table becomes the match's: the home battle is put away, and a host
+  // starting a new match starts it at turn 1 from the setup as it stands.
+  enterMatch(role, opts.fresh ?? role === 'host')
   setNetState({
     phase: 'connected',
     role,
@@ -175,6 +195,11 @@ export function attachLink(
     onUndo: (lengthAfter) => link.send({ kind: 'undo', lengthAfter }),
     onReplace: (saved) => link.send({ kind: 'sync', saved }),
   })
+  if (probeTimer !== null) clearInterval(probeTimer)
+  probeTimer =
+    role === 'guest'
+      ? setInterval(() => link.send({ kind: 'probe', length: journalLength() }), PROBE_EVERY_MS)
+      : null
 }
 
 /** The transport's own cleanup, run on hang-up whether or not a link was made. */
@@ -185,12 +210,18 @@ export function setTeardown(fn: (() => void) | null): void {
 /** Close the link. `reason` null is a deliberate hang-up rather than a fault. */
 export function hangUp(reason: string | null): void {
   setNetHooks(null)
+  if (probeTimer !== null) {
+    clearInterval(probeTimer)
+    probeTimer = null
+  }
   const link = active
   active = null
   link?.close()
   const cleanup = teardown
   teardown = null
   cleanup?.()
+  // The home table's battle comes back, if a match had put it away.
+  leaveMatch()
   setNetState({
     ...IDLE,
     phase: reason === null ? 'idle' : 'failed',

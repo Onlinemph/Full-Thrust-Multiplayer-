@@ -84,8 +84,14 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             checks, unresolved point defence, ordnance, boarding, repairs
  *             and breached cores. A refusal changes what the next action sees,
  *             so an older journal that skipped a phase keeps skipping it.
+ *  16  2.6  — phase 11 is fired in turns, the side with initiative first and
+ *             one ship's whole declared fire at a time; initiative is rolled
+ *             once; a phase with nothing in it is passed over; and under the
+ *             ready gate a phase ends when every console has said it may.
+ *             Each of these refuses or advances where an older journal did
+ *             not, so each moves the dice for everything after it.
  */
-export const CURRENT_RULES_VERSION = 15
+export const CURRENT_RULES_VERSION = 16
 
 export interface GameSetup {
   scenarioId: string
@@ -245,6 +251,7 @@ export function buildGame(setup: GameSetup): GameState {
     battleType: setup.battleType,
     fighterQuality: setup.fighterQuality,
     tableScale: setup.tableScale,
+    rulesVersion: setup.rulesVersion,
   })
   // The optional rules are part of the setup, and the setup is what a battle
   // file carries — so stamping them onto the game here is what makes a replay
@@ -356,6 +363,9 @@ export function buildGame(setup: GameSetup): GameState {
   setRulesReading(game, setup.rulesVersion)
 
   setOptionalRules(game, {
+    readyGate: setup.readyGate,
+    // The computer has no console to press Ready on.
+    readyExempt: setup.aiSides,
     driveDamage: setup.driveDamage,
     rearArcAttacks: setup.rearArcAttacks,
     aftArcFire: setup.aftArcFire,

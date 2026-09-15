@@ -23,6 +23,7 @@ import {
   shipsAwaitingFtlEntry,
   shipsAwaitingMovement,
   shipsAwaitingOrders,
+  sidesAwaited,
   tableIsCrowded,
   type PhaseDebt,
 } from '../engine/actions'
@@ -144,7 +145,20 @@ export function App() {
     awaiting.some((ship) => ship.id === selected.id)
       ? { facing: deployFacing, velocity: deployVelocity }
       : null
-  const log = viewingSide ? logFor(game, viewingSide) : game.log
+  // Through one side's eyes, and under the sensor rules (12), the other
+  // side's threshold checks are theirs to read: the log says a check was
+  // rolled and not what it took.
+  const log = viewingSide
+    ? logFor(game, viewingSide).map((entry) =>
+        setup.sensorRules && entry.kind === 'threshold' && entry.side && entry.side !== viewingSide
+          ? {
+              ...entry,
+              text: `${shipById(game, entry.shipId ?? '')?.name ?? 'The enemy'} takes a threshold check`,
+              dice: undefined,
+            }
+          : entry,
+      )
+    : game.log
   const end = battleEnd(game, scenario)
 
   const debt = phaseDebt(game)
@@ -169,7 +183,26 @@ export function App() {
      the thresholds, resolve the point defence — so the button that ends the
      phase offers that first, and Enter does whatever the button says. A turn
      with nothing to decide is then Enter, Enter, Enter. */
-  const primary = primaryAction(game, debt, armedSkip === phaseKey, endPhase, canCommand)
+  /* Online, the button says this console is ready and the phase ends when
+     every console has said so (2.6). A phase with optional work left is still
+     asked about first, the same as ending it outright. */
+  const ready = (sides: string[]) => {
+    if (debt.optional.length > 0 && armedSkip !== phaseKey) {
+      setArmedSkip(phaseKey)
+      return
+    }
+    setArmedSkip(null)
+    for (const side of sides) dispatch({ type: 'signal-ready', side, ready: true })
+  }
+  const primary = primaryAction(
+    game,
+    debt,
+    armedSkip === phaseKey,
+    endPhase,
+    canCommand,
+    commands,
+    ready,
+  )
 
   /**
    * The next of our ships still without orders, after `fromId` in table order,
@@ -398,8 +431,10 @@ export function App() {
             />
           ) : game.phase === 'ship-fire' && selected ? (
             <CombatPanel
+              key={selected.id}
               game={game}
               ship={selected}
+              canCommand={canCommand(selected)}
               onHoverWeapon={setLitArcs}
               aiming={aiming}
               onAim={setAiming}
@@ -486,26 +521,47 @@ export function App() {
                   declarations written beside them — cloaks, mines, an armed
                   Nova Cannon, a charging Wave Gun, a detonate order, a turret
                   facing — are other sections' rules and stay. */}
-              {optional(game).movementSystem === 'vector' ? (
-                <VectorOrderPanel
-                  ship={selected}
-                  editable={
-                    game.phase === 'orders' &&
-                    canCommand(selected) &&
-                    !awaiting.some((ship) => ship.id === selected.id)
-                  }
-                />
-              ) : null}
-              <OrderPanel
-                game={game}
-                ship={selected}
-                editable={
-                  game.phase === 'orders' &&
-                  canCommand(selected) &&
-                  !awaiting.some((ship) => ship.id === selected.id)
-                }
-                emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
-              />
+              {viewingSide !== null && selected.side !== viewingSide ? (
+                /* 3.5: the other side's orders are written in secret. What
+                   can be seen of their ship is where it is and how fast it
+                   is going. */
+                <div className="panel">
+                  <h3>Under way</h3>
+                  <div className="panel-row">
+                    <span>Velocity</span>
+                    <span className="spacer" />
+                    <span className="num">{selected.velocity} MU</span>
+                  </div>
+                  <div className="panel-row">
+                    <span>Course</span>
+                    <span className="spacer" />
+                    <span className="num">{selected.placement.facing} o&rsquo;clock</span>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {optional(game).movementSystem === 'vector' ? (
+                    <VectorOrderPanel
+                      ship={selected}
+                      editable={
+                        game.phase === 'orders' &&
+                        canCommand(selected) &&
+                        !awaiting.some((ship) => ship.id === selected.id)
+                      }
+                    />
+                  ) : null}
+                  <OrderPanel
+                    game={game}
+                    ship={selected}
+                    editable={
+                      game.phase === 'orders' &&
+                      canCommand(selected) &&
+                      !awaiting.some((ship) => ship.id === selected.id)
+                    }
+                    emergencyThrustAllowed={Boolean(setup.emergencyThrust)}
+                  />
+                </>
+              )}
             </>
           ) : (
             <div className="panel">
@@ -868,9 +924,22 @@ function PhaseControls({
       return (
         <div className="panel">
           <h3>Phase 2 · Initiative</h3>
-          <button className="primary" onClick={() => dispatch({ type: 'roll-initiative' })}>
-            Roll initiative
-          </button>
+          {game.initiative?.turn === game.turn ? (
+            <p>
+              <b style={{ color: `var(--side-${game.initiative.winner})` }}>
+                {game.sides.find((s) => s.id === game.initiative?.winner)?.name}
+              </b>{' '}
+              has the initiative this turn
+              {game.initiative.rounds[0]
+                ? ` (${game.initiative.rounds[0].map((r) => `${game.sides.find((s) => s.id === r.side)?.name ?? r.side} ${r.roll}`).join(', ')})`
+                : ''}
+              . One roll a turn: the dice have spoken (2.6).
+            </p>
+          ) : (
+            <button className="primary" onClick={() => dispatch({ type: 'roll-initiative' })}>
+              Roll initiative
+            </button>
+          )}
           {order.length > 1 ? (
             <div className="panel-row">
               <span>
@@ -901,7 +970,10 @@ function PhaseControls({
         <div className="panel">
           <h3>Phase 5 · Move ships</h3>
           <p style={{ color: 'var(--ink-dim)' }}>
-            Ships move in initiative order, the side with initiative moving last.
+            Anything on a fixed path moves first. Both sides move at once, strictly to the orders
+            written in phase 1, minelayers before the rest and screening or pursuing fighters with
+            their ship. Ships entering or leaving FTL are moved or placed last. Collisions,
+            minesweeping and mine attacks are resolved as they happen (2.6).
           </p>
           {inbound.map((ship) => (
             <div className="panel-row" key={ship.id}>
@@ -1154,20 +1226,20 @@ function terrainDue(game: GameState): boolean {
 }
 
 function moveEveryone(): void {
-  // 11.5's arrival is a move, and it can land on top of somebody, so the
-  // inbound hulls come out first and the rest of the table flies around them.
-  for (const ship of shipsAwaitingFtlEntry(currentGame())) {
-    if (commands(ship.side)) bringOutOfFtl(ship.id)
-  }
   // Read the live game rather than the render's snapshot: each dispatch below
   // mutates it, and the movement order depends on what has already moved.
   // Only the ships this console commands, and only the ones still to move —
-  // the computer flies its own the moment the phase opens.
+  // the computer flies its own the moment the phase opens. The order is
+  // 2.6's: fixed paths first, minelayers next, then everyone else.
   const live = currentGame()
   const pending = new Set(shipsAwaitingMovement(live).map((ship) => ship.id))
   for (const ship of shipMovementOrder(live)) {
     if (!pending.has(ship.id) || !commands(ship.side)) continue
     dispatch({ type: 'move-ship', shipId: ship.id })
+  }
+  // 2.6 phase 5: "Ships entering or exiting FTL are moved or placed last."
+  for (const ship of shipsAwaitingFtlEntry(currentGame())) {
+    if (commands(ship.side)) bringOutOfFtl(ship.id)
   }
   // Markers fly in the same phase the ships do (2.6 phase 5).
   dispatch({ type: 'move-ordnance' })
@@ -1255,6 +1327,8 @@ function primaryAction(
   armed: boolean,
   endPhase: () => void,
   canCommand: (ship: ShipState) => boolean,
+  commandsSide: (side: string) => boolean,
+  ready: (sides: string[]) => void,
 ): PrimaryAction {
   const owed = debt.required.length > 0
   const run = (label: string, action: () => void): PrimaryAction => ({
@@ -1264,6 +1338,11 @@ function primaryAction(
     armed: false,
   })
   switch (game.phase) {
+    case 'initiative':
+      if (game.initiative?.turn !== game.turn) {
+        return run('Roll initiative', () => dispatch({ type: 'roll-initiative' }))
+      }
+      break
     case 'move-ships': {
       const mine = [...shipsAwaitingFtlEntry(game), ...shipsAwaitingMovement(game)].filter(canCommand)
       if (mine.length > 0) return run('Move ships', moveEveryone)
@@ -1295,6 +1374,23 @@ function primaryAction(
       break
     default:
       break
+  }
+  // Online, ending a phase is an agreement (2.6): the button says this console
+  // is ready, and the phase ends when every console has said so.
+  if (optional(game).readyGate === true) {
+    const mine = game.sides.map((s) => s.id).filter((id) => commandsSide(id))
+    const waiting = sidesAwaited(game)
+    const stillMine = mine.filter((id) => waiting.includes(id))
+    if (stillMine.length === 0 && waiting.length > 0) {
+      const names = waiting.map((id) => game.sides.find((s) => s.id === id)?.name ?? id).join(', ')
+      return { label: `Waiting for ${names}`, run: () => undefined, disabled: true, armed: false }
+    }
+    return {
+      label: armed ? 'Ready anyway' : 'Ready to end phase',
+      run: () => ready(stillMine),
+      disabled: owed,
+      armed,
+    }
   }
   return {
     label: armed ? 'End phase anyway' : 'End phase',

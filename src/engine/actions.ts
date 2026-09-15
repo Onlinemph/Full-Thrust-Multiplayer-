@@ -50,8 +50,11 @@ import {
   type SideId,
   type TableGate,
   activeShips,
+  nextFiringSide,
   shipsAwaitingThreshold,
   shotsLeft,
+  rulesReading,
+  phaseNumber,
 } from './game'
 import {
   applyOrder,
@@ -417,6 +420,7 @@ import type {
   WeaponClass,
   WeaponDef,
 } from './types'
+import { PHASE_LABELS } from './types'
 
 // ---------------------------------------------------------------------------
 // The action union
@@ -564,6 +568,23 @@ export type GameAction =
        * it rides in the action; every other weapon ignores it.
        */
       systemId?: string
+    }
+  /**
+   * 2.6 phase 11: *"The player must declare all the fire for his ship, before
+   * any dice are rolled."* The whole declaration in one action — each shot a
+   * weapon and what it is at — resolved in the order given, and the ship's
+   * fire closed behind it: play has moved on.
+   */
+  | {
+      type: 'fire-volley'
+      shipId: string
+      shots: Array<{
+        weaponId: string
+        targetId: string
+        /** What the target is; a ship unless said otherwise. */
+        kind?: 'ship' | 'flight' | 'gunboats'
+        systemId?: string
+      }>
     }
   /** Fire at a fighter group, which costs a FireCon like a ship (4.4). */
   | { type: 'fire-at-flight'; shipId: string; weaponId: string; flightId: string }
@@ -1120,6 +1141,14 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         const debt = phaseDebt(state)
         if (debt.required.length > 0) return refuse(debt.required[0])
       }
+      // Online, a phase ends when every console has said it may: one player
+      // cannot walk the shared sequence on past the other's turn to fire.
+      if (rulesReading(state) >= 16 && optional(state).readyGate === true && !everyoneReady(state)) {
+        const waiting = sidesAwaited(state)
+          .map((id) => state.sides.find((s) => s.id === id)?.name ?? id)
+          .join(', ')
+        return refuse(`The phase ends when every console is ready — still to say so: ${waiting} (2.6)`)
+      }
       endPhase(state)
       return OK
     }
@@ -1257,12 +1286,38 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
     case 'signal-ready': {
       const side = state.sides.find((s) => s.id === action.side)
       if (!side) return refuse('No such side')
-      readySides(state)[action.side] = action.ready
+      if (rulesReading(state) < 16) {
+        // Recorded and nothing more, which is all an older journal did.
+        state.readyToEnd = action.ready
+          ? [...new Set([...state.readyToEnd, action.side])]
+          : state.readyToEnd.filter((id) => id !== action.side)
+        return OK
+      }
+      if (!action.ready) {
+        state.readyToEnd = state.readyToEnd.filter((id) => id !== action.side)
+        return OK
+      }
+      // Saying the phase may end is saying its work is done, so the same
+      // things stand in the way here as stand in the way of ending it.
+      const debt = phaseDebt(state)
+      if (debt.required.length > 0) return refuse(debt.required[0])
+      if (!state.readyToEnd.includes(action.side)) state.readyToEnd.push(action.side)
+      if (everyoneReady(state)) {
+        pushLog(state, { kind: 'phase', text: 'Both sides are ready — the phase ends' })
+        endPhase(state)
+      }
       return OK
     }
 
     case 'roll-initiative': {
       if (state.phase !== 'initiative') return refuse('Initiative is rolled in phase 2')
+      // One roll a turn (2.6): the dice have spoken, and a second throw would
+      // be fishing. Gated, because an older journal that re-rolled drew dice
+      // this refusal would take out of the stream.
+      if (rulesReading(state) >= 16 && state.initiative?.turn === state.turn) {
+        const winner = state.sides.find((s) => s.id === state.initiative?.winner)?.name
+        return refuse(`Initiative has been rolled this turn${winner ? ` — ${winner} has it` : ''} (2.6)`)
+      }
       rollInitiative(state)
       return OK
     }
@@ -2835,8 +2890,67 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const ship = shipById(state, action.shipId)
       if (!ship) return refuse('No such ship')
       if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      if (ship.hasFiredThisTurn) return spent(ship)
       // Holding fire spends the activation exactly as firing does: 2.6 gives a
-      // ship one, and choosing not to use it is using it.
+      // ship one, and choosing not to use it is using it — in turn, like a
+      // shot, and passing the turn on like one.
+      const open = FIRING_ACTIVATION.get(state)
+      const mine = open !== undefined && open.turn === state.turn && open.phase === state.phase && open.shipId === ship.id
+      if (!mine) {
+        const activation = openFiringActivation(state, ship)
+        if (activation) return activation
+        claimFiringActivation(state, ship)
+      }
+      markShipFired(ship)
+      FIRING_ACTIVATION.delete(state)
+      pushLog(state, { kind: 'fire', shipId: ship.id, side: ship.side, text: `${ship.name} holds its fire` })
+      return OK
+    }
+
+    /**
+     * 2.6 phase 11: the ship's whole fire, declared and then rolled.
+     *
+     * Each shot goes through the same handler a single one would, in the
+     * order declared, so every rule a shot answers to is answered once, here.
+     * A shot refused — out of arc, out of range, a FireCon short — is logged
+     * and the rest still fire; the volley fails only if none of it could. The
+     * ship's fire is closed behind it: play has moved on.
+     */
+    case 'fire-volley': {
+      const ship = shipById(state, action.shipId)
+      if (!ship) return refuse('No such ship')
+      if (state.phase !== 'ship-fire') return refuse('Ships fire in phase 11')
+      if (action.shots.length === 0) return refuse('Nothing declared: name a weapon and a target, or hold fire (2.6)')
+      const activation = openFiringActivation(state, ship)
+      if (activation) return activation
+      const refusals: string[] = []
+      let fired = 0
+      for (const shot of action.shots) {
+        const single: GameAction =
+          shot.kind === 'flight'
+            ? { type: 'fire-at-flight', shipId: ship.id, weaponId: shot.weaponId, flightId: shot.targetId }
+            : shot.kind === 'gunboats'
+              ? { type: 'fire-at-gunboats', shipId: ship.id, weaponId: shot.weaponId, squadronId: shot.targetId }
+              : {
+                  type: 'fire-weapon',
+                  shipId: ship.id,
+                  weaponId: shot.weaponId,
+                  targetId: shot.targetId,
+                  ...(shot.systemId !== undefined ? { systemId: shot.systemId } : {}),
+                }
+        const outcome = applyAction(state, single)
+        if (outcome.refused !== undefined) {
+          const weapon = ship.design.weapons.find((w) => w.id === shot.weaponId)
+          refusals.push(`${weapon?.label ?? shot.weaponId}: ${outcome.refused}`)
+        } else {
+          fired += 1
+        }
+      }
+      for (const why of refusals) {
+        pushLog(state, { kind: 'fire', shipId: ship.id, side: ship.side, text: `${ship.name} — ${why}` })
+      }
+      if (fired === 0) return refuse(refusals[0] ?? 'Nothing fired')
+      // Declared, rolled, done: the ship may not add to it afterwards.
       markShipFired(ship)
       FIRING_ACTIVATION.delete(state)
       return OK
@@ -6610,6 +6724,16 @@ function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome 
   const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
   if (live && open.shipId === ship.id) return ship.hasFiredThisTurn ? spent(ship) : null
   if (ship.hasFiredThisTurn) return spent(ship)
+  // 2.6: "Starting with the player who won initiative, each player alternates
+  // in firing any/all weapon systems on one ship." Opening a ship's fire out
+  // of turn is refused; a ship whose fire is already open goes on firing.
+  if (rulesReading(state) >= 16 && state.phase === 'ship-fire') {
+    const turn = state.fire.side
+    if (turn !== null && turn !== ship.side) {
+      const name = state.sides.find((s) => s.id === turn)?.name ?? turn
+      return refuse(`It is ${name}'s turn to fire a ship (2.6)`)
+    }
+  }
   return null
 }
 
@@ -6635,6 +6759,14 @@ function claimFiringActivation(state: GameState, ship: ShipState): void {
     if (previous) markShipFired(previous)
   }
   FIRING_ACTIVATION.set(state, { shipId: ship.id, turn: state.turn, phase: state.phase })
+  // The turn passes the moment a ship's fire opens (2.6): the next side with
+  // a ship left to fire is up, and this ship does not count as one.
+  if (state.phase === 'ship-fire') {
+    state.fire = {
+      side: nextFiringSide(state, ship.side, ship.id),
+      sequence: state.fire.sequence + 1,
+    }
+  }
 }
 
 function spent(ship: ShipState): ActionOutcome {
@@ -11040,6 +11172,13 @@ function writeBackDamage(target: ShipState, after: DamageableTarget): void {
  * that is the authority.
  */
 export interface OptionalRules {
+  /**
+   * Online: a phase ends when every console has said it may (2.6), rather
+   * than when either presses the button. `readyExempt` names the sides that
+   * never have to say so — the computer's, which has no console.
+   */
+  readyGate?: boolean
+  readyExempt?: SideId[]
   driveDamage?: boolean
   rearArcAttacks?: boolean
   coreSystems?: boolean
@@ -11182,25 +11321,16 @@ function thresholdOptions(state: GameState): { driveDamage?: boolean; coreSystem
  * every setup from the start and never read by anything, so the first fix
  * that needed it is also the one that makes it work.
  */
-const RULES_READING = new WeakMap<GameState, number>()
+export { rulesReading, setRulesReading } from './game'
 
-export function setRulesReading(state: GameState, version: number | undefined): void {
-  RULES_READING.set(state, Math.max(1, Math.floor(version ?? 1)))
-}
-
-export function rulesReading(state: GameState): number {
-  return RULES_READING.get(state) ?? 1
-}
-
-const READY = new WeakMap<GameState, Record<SideId, boolean>>()
-
-function readySides(state: GameState): Record<SideId, boolean> {
-  let map = READY.get(state)
-  if (!map) {
-    map = {}
-    READY.set(state, map)
-  }
-  return map
+/**
+ * Sides that have to say so before a phase ends under the ready gate (2.6,
+ * online): every side, less the ones the option exempts — the computer's,
+ * which has no console to press a button on.
+ */
+function sidesThatMustAgree(state: GameState): SideId[] {
+  const exempt = optional(state).readyExempt ?? []
+  return state.sides.map((side) => side.id).filter((id) => !exempt.includes(id))
 }
 
 /**
@@ -11284,6 +11414,12 @@ export function phaseDebt(state: GameState): PhaseDebt {
   const done = (phase: Phase): boolean => state.resolved[phase] === state.turn
 
   switch (state.phase) {
+    case 'initiative': {
+      if (rulesReading(state) >= 16 && state.initiative?.turn !== state.turn) {
+        required.push('Initiative not yet rolled (2.6)')
+      }
+      break
+    }
     case 'orders': {
       const owed = shipsAwaitingOrders(state)
       if (owed.length > 0) {
@@ -11430,7 +11566,7 @@ export function phaseDebt(state: GameState): PhaseDebt {
  * need to walk the sequence without playing every phase of it; the action is
  * the only door a player or a peer console has.
  */
-export function endPhase(state: GameState): void {
+export function endPhase(state: GameState, depth = 0, passed: Phase[] = []): void {
   // 16.6 tests where a ship "ends up … at the end of the turn", and against
   // a target that is itself under way that cannot be answered until both
   // have moved. So the approach is settled as the movement phase closes,
@@ -11513,11 +11649,89 @@ export function endPhase(state: GameState): void {
   // opens — before anyone writes an order they might have written
   // differently with a FireCon still on the board.
   if (state.turn !== turnBefore) rollSolarFlares(state)
+  // A phase with nothing in it — no ordnance to launch, no fighters to fly,
+  // nobody boarded, nothing to repair — is passed over, so a battle between
+  // two gun-armed fleets is the five phases the introductory scenario names
+  // and a carrier action is all fifteen. Gated: an older journal pressed
+  // through every phase itself and its next action expects the one it saw.
+  if (rulesReading(state) >= 16 && depth < state.phases.length && phaseIsEmpty(state)) {
+    // The header this phase just wrote comes off again: the run of passed
+    // phases is one line, written when the sequence lands somewhere.
+    const last = state.log[state.log.length - 1]
+    if (last && last.kind === 'phase' && last.phase === state.phase && last.turn === state.turn) {
+      state.log.pop()
+    }
+    endPhase(state, depth + 1, [...passed, state.phase])
+    return
+  }
+  if (passed.length > 0) {
+    const header = state.log.pop()
+    const numbers = passed.map((phase) => phaseNumber(phase))
+    const text =
+      passed.length === 1
+        ? `Nothing to do in phase ${numbers[0]} (${PHASE_LABELS[passed[0]!]}) — passed`
+        : `Nothing to do in phases ${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]} — passed`
+    pushLog(state, { kind: 'phase', text })
+    if (header) state.log.push({ ...header, seq: state.log.length + 1 })
+  }
+}
+
+/**
+ * Whether the phase the sequence has just entered has anything for anyone to
+ * do (2.6). Phases where a player always decides something — orders, the
+ * roll, movement, fire — are never empty; the rest are empty when nothing on
+ * the table can take part in them.
+ */
+function phaseIsEmpty(state: GameState): boolean {
+  const live = activeShips(state)
+  const flying = [...state.fighterGroups, ...state.gunboatSquadrons].filter(
+    (group) => group.status === 'in-flight',
+  )
+  const anyCraft = [...state.fighterGroups, ...state.gunboatSquadrons].some(
+    (group) => group.status !== 'destroyed',
+  )
+  const markers = ordnanceOf(state).length + boltsOf(state).length
+  switch (state.phase) {
+    case 'launch-missiles':
+      return !live.some((ship) =>
+        ship.design.weapons.some(
+          (weapon) =>
+            !ship.destroyedSystems.has(weapon.id) &&
+            ((ORDNANCE_CLASSES.has(weapon.weaponClass) &&
+              (weapon.ammo === undefined || shotsLeft(ship, weapon.id) > 0)) ||
+              (weapon.flak === true && canMountFlak(weapon))),
+        ),
+      ) && !anyCraft
+    case 'move-fighters':
+    case 'secondary-fighter-moves':
+      return !anyCraft
+    case 'allocate-attacks':
+    case 'fighter-vs-fighter':
+      return flying.length === 0
+    case 'point-defence':
+    case 'ordnance-vs-ships':
+      return markers === 0 && flying.length === 0
+    case 'boarding':
+      return !state.ships.some(
+        (ship) => !ship.destroyed && boardingContinues(ship.side, ship.boarders, ship.captured),
+      )
+    case 'threshold':
+      return shipsAwaitingThreshold(state).length === 0 && !live.some((ship) => ship.pendingThresholdRows > 0)
+    case 'damage-control':
+      return !live.some(
+        (ship) =>
+          availableDamageControlParties(ship) > 0 &&
+          (ship.destroyedSystems.size > 0 || ship.driveHits > 0),
+      )
+    case 'reactor-explosions':
+      return !state.ships.some((ship) => !ship.destroyed && ship.core.reactorExplosionPending)
+    default:
+      return false
+  }
 }
 
 export function sidesAwaited(state: GameState): SideId[] {
-  const ready = readySides(state)
-  return state.sides.filter((side) => !ready[side.id]).map((side) => side.id)
+  return sidesThatMustAgree(state).filter((id) => !state.readyToEnd.includes(id))
 }
 
 export function everyoneReady(state: GameState): boolean {
@@ -11525,7 +11739,7 @@ export function everyoneReady(state: GameState): boolean {
 }
 
 export function clearReady(state: GameState): void {
-  READY.set(state, {})
+  state.readyToEnd = []
 }
 
 /**

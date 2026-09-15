@@ -80,11 +80,13 @@ import {
   novaArmedOn,
   optional,
   pointDefenceCanEngage,
+  rulesReading,
   waveGunCharge,
   proposeDeployment,
   shipsAwaitingGateEntry,
   type GameAction,
 } from './actions'
+import { canShipFire } from './game'
 import { isGateActive } from './ftl'
 import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
 import type { MovementOrder, Point, TurnDirection, WeaponDef } from './types'
@@ -673,6 +675,9 @@ export function aiActions(
           actions.push({ type: 'announce-gate-activation', gateId: gate.def.id })
         }
       }
+      // 2.6 phase 5: the ships fly first; anything entering or leaving FTL —
+      // a gate entry, an arrival dropping out of hyperspace — is placed last.
+      for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
       for (const ship of shipsAwaitingGateEntry(game)) {
         if (ship.side !== side) continue
         const gate = game.gates.find((candidate) => candidate.def.id === ship.awaitingGate)
@@ -698,7 +703,6 @@ export function aiActions(
           velocity: ship.ftlArrival.velocity,
         })
       }
-      for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
       // Ordnance flies with the ships (2.6 phase 5), once for the whole table.
       if (side === game.sides[0]?.id) actions.push({ type: 'move-ordnance' })
       break
@@ -735,8 +739,15 @@ export function aiActions(
       actions.push(...planSmallCraftAttacks(game, side))
       break
 
-    case 'ship-fire':
-      for (const ship of mine) {
+    case 'ship-fire': {
+      // 2.6: from reading 16 the phase is fired in turns, one ship's whole
+      // declared fire at a time, so the computer takes one ship when the turn
+      // is its own and comes back for the next when the turn comes round —
+      // the console driving it re-asks each time the sequence moves on.
+      const inTurns = rulesReading(game) >= 16
+      if (inTurns && game.fire.side !== null && game.fire.side !== side) break
+      const shooters = inTurns ? mine.filter((ship) => canShipFire(ship) && !ship.captured) : mine
+      for (const ship of shooters) {
         // 7.23: an armed cannon fires and nothing else does, so the shot is
         // taken instead of the fire plan rather than alongside it.
         const nova = ship.design.weapons.find(
@@ -745,6 +756,7 @@ export function aiActions(
         )
         if (nova && novaArmedOn(game, ship)) {
           actions.push({ type: 'fire-nova-cannon', shipId: ship.id, weaponId: nova.id })
+          if (inTurns) break
           continue
         }
         // 7.24: letting the wave go costs every other gun on the hull for the
@@ -753,11 +765,33 @@ export function aiActions(
         const wave = waveWorthFiring(game, ship)
         if (wave) {
           actions.push({ type: 'fire-wave-gun', shipId: ship.id, weaponId: wave.id })
+          if (inTurns) break
           continue
         }
-        actions.push(...planFire(game, ship))
+        const plan = planFire(game, ship)
+        if (!inTurns) {
+          actions.push(...plan)
+          continue
+        }
+        // The plan as one declaration: the beam that is laid on a point goes
+        // first on its own, and every shot at a ship or a group rides in the
+        // volley. A ship with nothing worth firing holds its fire, which is
+        // what passes the turn on.
+        const shots: Array<{ weaponId: string; targetId: string; kind?: 'ship' | 'flight' | 'gunboats' }> = []
+        for (const action of plan) {
+          if (action.type === 'fire-weapon') shots.push({ weaponId: action.weaponId, targetId: action.targetId })
+          else if (action.type === 'fire-at-flight') {
+            shots.push({ weaponId: action.weaponId, targetId: action.flightId, kind: 'flight' })
+          } else if (action.type === 'fire-at-gunboats') {
+            shots.push({ weaponId: action.weaponId, targetId: action.squadronId, kind: 'gunboats' })
+          } else actions.push(action)
+        }
+        if (shots.length > 0) actions.push({ type: 'fire-volley', shipId: ship.id, shots })
+        else if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
+        break
       }
       break
+    }
 
     case 'move-fighters':
       actions.push(...planSmallCraftMoves(game, side, false))

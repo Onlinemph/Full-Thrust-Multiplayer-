@@ -894,6 +894,12 @@ function deploymentFor(
 
 export interface StartOptions {
   seed: number
+  /**
+   * The rules reading the battle is fought under. From reading 16 the
+   * introductory scenario runs the whole sequence and the empty phases are
+   * passed over; before it, the five phases it names are the sequence.
+   */
+  rulesVersion?: number
   /** Override the scenario's deployment (18.1). `'none'` turns one off. */
   battleType?: BattleType | 'none'
   /** Override the scenario's forces outright — campaign battles. */
@@ -1045,8 +1051,13 @@ export function startScenario(scenarioId: string, opts: StartOptions): GameState
     fighterGroups: ships.flatMap((ship) => embarkedFlights(ship, quality)),
     gunboatSquadrons: ships.flatMap(embarkedSquadrons),
     scenario: scenario.id,
-    // The introductory scenario plays phases 1, 2, 5, 11 and 13 only (2.6).
-    phases: scenario.introductoryPhases ? INTRODUCTORY_PHASES : undefined,
+    // The introductory scenario plays phases 1, 2, 5, 11 and 13 only (2.6) —
+    // as a fixed sequence under the older readings, and from reading 16 as
+    // what is left of the whole sequence once the phases nothing takes part
+    // in are passed over, which for two gun-armed fleets is the same five and
+    // for a damaged one is those plus the repairs.
+    phases:
+      scenario.introductoryPhases && (opts.rulesVersion ?? 1) < 16 ? INTRODUCTORY_PHASES : undefined,
     sides: scenario.sides.map((s) => ({ id: s.id, name: s.name, team: s.team })),
     ships,
     gates: (scenario.gates ?? []).map((gate) => {

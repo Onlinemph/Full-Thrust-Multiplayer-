@@ -1,7 +1,7 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js'
 
 import type { SavedGame } from '../data/savedGame'
-import { applyRemoteSave, currentSave, setNetHooks } from './store'
+import { applyRemoteSave, currentSave, enterMatch, setNetHooks } from './store'
 import {
   attachLink,
   hangUp,
@@ -125,6 +125,8 @@ function looksLikeSave(value: unknown): value is SavedGame {
 // ---------------------------------------------------------------------------
 
 let channel: RealtimeChannel | null = null
+/** The client the open channel belongs to, so it can be removed from that one. */
+let channelClient: SupabaseClient | null = null
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 /** Set while we are closing on purpose, so the CLOSED status is not a fault. */
 let closing = false
@@ -151,7 +153,13 @@ function closeChannel(): void {
   channel = null
   if (open) {
     closing = true
-    void open.unsubscribe().finally(() => {
+    // Removed from the client, not merely unsubscribed: the client hands the
+    // same channel object back for the same topic, and a second join under
+    // the same code would otherwise be re-subscribing a closed channel with
+    // its handlers doubled — which is a join that fails for no visible reason.
+    const owner = channelClient
+    channelClient = null
+    void (owner?.removeChannel(open) ?? Promise.resolve()).finally(() => {
       closing = false
     })
   }
@@ -166,10 +174,12 @@ function closeChannel(): void {
 function open(code: string, role: NetRole): Promise<void> {
   closeChannel()
   setNetState({ phase: 'connecting', role, transport: 'supabase', code, error: null })
-  const ch = supabase().channel(`match:${code}`, {
+  const owner = supabase()
+  const ch = owner.channel(`match:${code}`, {
     config: { broadcast: { self: false }, presence: { key: `${role}-${newMatchCode()}` } },
   })
   channel = ch
+  channelClient = owner
   setTeardown(closeChannel)
 
   const send = (message: NetMessage): void => {
@@ -190,7 +200,10 @@ function open(code: string, role: NetRole): Promise<void> {
     ch.subscribe((status: string, err?: Error) => {
       if (status === 'SUBSCRIBED') {
         void ch.track({ role, joined: new Date().toISOString() })
-        attachLink(link, role, 'supabase', { code })
+        // The match's game is already on the table — built fresh by
+        // createMatch, or loaded from the row by joinMatch — so this attaches
+        // without starting over.
+        attachLink(link, role, 'supabase', { code, fresh: false })
         // The host keeps the row current so a late guest, or either player
         // after a crash, has the battle to come back to.
         if (role === 'host') {
@@ -243,6 +256,9 @@ export async function createMatch(): Promise<void> {
     return
   }
   hangUp(null)
+  // A match starts at turn 1 from the setup as the table has it; the battle
+  // that was on the table is put away and comes back when the match ends.
+  enterMatch('host', true)
   const code = newMatchCode()
   const { error } = await supabase().rpc('create_match', { p_code: code, p_saved: currentSave() })
   if (error) {
@@ -273,7 +289,12 @@ export async function joinMatch(input: string, role: NetRole = 'guest'): Promise
     return
   }
   hangUp(null)
-  const { data, error } = await supabase().rpc('fetch_match', { p_code: code })
+  let { data, error } = await supabase().rpc('fetch_match', { p_code: code })
+  if (error && !/function/i.test(error.message)) {
+    // One more try: a project waking from its pause, or a wobble on the way.
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    ;({ data, error } = await supabase().rpc('fetch_match', { p_code: code }))
+  }
   if (error) {
     hangUp(`Could not look the match up: ${explain(error)}`)
     return
@@ -282,6 +303,7 @@ export async function joinMatch(input: string, role: NetRole = 'guest'): Promise
     hangUp(`No match under the code ${code}.`)
     return
   }
+  enterMatch(role, false)
   applyRemoteSave(data)
   try {
     await open(code, role)

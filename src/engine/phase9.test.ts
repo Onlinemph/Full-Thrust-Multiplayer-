@@ -257,6 +257,9 @@ describe('point defence against a ship (7.12, 7.13)', () => {
       strip(shipOf(game, 'hulk'))
       const before = hullRemaining(shipOf(game, 'hulk'))
       advanceTo(game, 'ship-fire')
+      // 2.6: phase 11 is fired in turns. When the hulk's side has the
+      // initiative it holds its fire, and the turn passes.
+      if (game.fire.side === 'b') applyAction(game, { type: 'pass-fire', shipId: 'hulk' })
       const mount = shipOf(game, 'pd').design.systems.find((s) => s.kind === 'pds')!
       const outcome = applyAction(game, {
         type: 'fire-point-defence',

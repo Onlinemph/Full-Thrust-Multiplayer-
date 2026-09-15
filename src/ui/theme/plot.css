@@ -388,6 +388,14 @@
   opacity: 0.22;
 }
 
+/* The speed of a ship whose orders are not ours to see. */
+.counter-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--ink-faint);
+  pointer-events: none;
+}
+
 /* ── Reach ────────────────────────────────────────────────────────────────── */
 
 /* How far the thing in hand can go, drawn before the click: the area it may

@@ -3,7 +3,6 @@ import { useSyncExternalStore } from 'react'
 import {
   actionSide,
   applyAction,
-  clearReady,
   undoableInMatch,
   type ActionOutcome,
   type GameAction,
@@ -29,6 +28,8 @@ import { aliveShipIds, clearFx, fxAfter, fxBefore, queueFx } from './fx'
  */
 
 const SAVE_KEY = 'ftpc.saved-game.v1'
+/** The online match, kept apart from the battle on the home table. */
+const MATCH_KEY = 'ftpc.match.v1'
 
 const DEFAULT_SETUP: GameSetup = {
   scenarioId: 'intro-fleet-engagement',
@@ -71,9 +72,12 @@ function saved(): SavedGame {
   return { version: 1, setup: withEmbedded(setup), actions: journal }
 }
 
+/** Where the battle on the table is written: its own slot, or the match's. */
+let saveKey = SAVE_KEY
+
 function autosave(): void {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(saved()))
+    localStorage.setItem(saveKey, JSON.stringify(saved()))
   } catch {
     // Quota, or a private window. The battle still plays; it just will not
     // survive a refresh. Not worth interrupting the game over.
@@ -117,6 +121,73 @@ let matchSide: string | null = null
 export function setMatchSide(side: string | null): void {
   matchSide = side
   emit()
+}
+
+/**
+ * Whether a match is on: the battle on the table is the match's, and the
+ * battle that was on the table before it is waiting in its own slot.
+ */
+let inMatch = false
+/** The home table's battle while a match is on: what comes back afterwards. */
+let homeSave: SavedGame | null = null
+
+/**
+ * Sit down at a match (2.6, online).
+ *
+ * The battle on the home table goes to its slot untouched, so a match played
+ * in the middle of a solo campaign costs nothing. The host's match starts as
+ * every battle should — turn 1, phase 1, from the setup as the table has it,
+ * with the ready gate on so a phase ends when both consoles say so; the
+ * guest's table is about to be replaced by the host's record. Each console
+ * commands one side by default, the host the first and the guest the second,
+ * and can pick another in the panel.
+ */
+export function enterMatch(role: 'host' | 'guest', fresh: boolean): void {
+  if (!inMatch) {
+    autosave()
+    homeSave = saved()
+    inMatch = true
+    saveKey = MATCH_KEY
+  }
+  if (fresh) {
+    setup = { ...setup, readyGate: true, aiSides: [] }
+    journal = []
+    game = buildGame(setup)
+    aiActed = new Set()
+    clearFx()
+    preview = null
+  }
+  const sides = game.sides.map((side) => side.id)
+  matchSide = role === 'host' ? (sides[0] ?? null) : (sides[1] ?? sides[0] ?? null)
+  autosave()
+  emit()
+}
+
+/** Leave the match: the home table's battle comes back. */
+export function leaveMatch(): void {
+  if (!inMatch) return
+  inMatch = false
+  saveKey = SAVE_KEY
+  matchSide = null
+  const home = homeSave
+  homeSave = null
+  if (home !== null) {
+    try {
+      setup = home.setup
+      journal = home.actions
+      game = replayPartial(home, home.actions.length)
+      aiActed = new Set()
+      clearFx()
+      preview = null
+    } catch {
+      // The home battle would not replay; the match's stays on the table.
+    }
+  }
+  emit()
+}
+
+export function isInMatch(): boolean {
+  return inMatch
 }
 
 export function currentMatchSide(): string | null {
@@ -218,10 +289,12 @@ function runAi(): void {
   if (matchSide !== null && matchSide !== game.sides[0]?.id) return
 
   // 18.1's deployment alternates within one phase, so the computer has to be
-  // able to act several times in the same turn and phase — once per placement.
-  // The guard therefore keys on how far the deployment has got, and the loop
-  // runs until nobody moves, which terminates because every deployment action
-  // advances that counter and every other phase acts at most once per side.
+  // able to act several times in the same turn and phase — once per placement
+  // — and 2.6's fire phase alternates ship by ship, so it acts once per turn
+  // of the firing. The guard therefore keys on how far the deployment, or the
+  // firing, has got, and the loop runs until nobody moves, which terminates
+  // because every such action advances the counter it keys on and every other
+  // phase acts at most once per side.
   let guard = 200
   let acted = true
   while (acted && guard-- > 0) {
@@ -246,6 +319,7 @@ function aiKey(side: string): string {
   if (deployment && shipsAwaitingDeployment(game).length > 0) {
     return `${game.turn}:${game.phase}:${side}:d${deployment.order.length}:${deployment.placed.length}`
   }
+  if (game.phase === 'ship-fire') return `${game.turn}:${game.phase}:${side}:f${game.fire.sequence}`
   return `${game.turn}:${game.phase}:${side}`
 }
 
@@ -372,7 +446,6 @@ export function applyRemoteUndo(lengthAfter: number, authoritative: boolean): 'a
   if (journal.length === 0) return 'mismatch'
   journal = journal.slice(0, -1)
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
-  clearReady(game)
   autosave()
   emit()
   return lengthAfter === journal.length ? 'applied' : 'mismatch'
@@ -383,7 +456,6 @@ export function applyRemoteSave(next: SavedGame): void {
   setup = next.setup
   journal = next.actions
   game = replayPartial(next, next.actions.length)
-  clearReady(game)
   clearFx()
   aiActed = new Set()
   preview = null
@@ -403,7 +475,6 @@ export function undo(): boolean {
 
   journal = journal.slice(0, -1)
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
-  clearReady(game)
   clearFx()
   aiActed = new Set()
   preview = null

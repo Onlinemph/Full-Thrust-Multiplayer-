@@ -178,7 +178,9 @@ describe('the ordered detonation (7.9)', () => {
       applyAction(game, { type: 'plot-detonate', shipId: 'bomb', on: true }).refused,
     ).toBeUndefined()
 
-    advanceTo(game, 'boarding')
+    // Phase 12 is passed over when nobody has boarded anybody, so the last
+    // phase that always runs before the check is phase 11.
+    advanceTo(game, 'ship-fire')
     expect(shipOf(game, 'bomb').destroyed).toBe(false)
     advanceTo(game, 'threshold')
     expect(shipOf(game, 'bomb').destroyed).toBe(true)

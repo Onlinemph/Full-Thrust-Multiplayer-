@@ -35,6 +35,8 @@ import { dispatch } from './store'
 export interface CombatPanelProps {
   game: GameState
   ship: ShipState
+  /** Whether this console commands the ship; a sheet only, otherwise. */
+  canCommand?: boolean
   /** Lets the map draw the arcs of whatever weapon is being considered. */
   onHoverWeapon?: (arcs: readonly Arc[] | undefined) => void
   /** 5.23's Spinal Mount is laid on a point, so it goes in hand like a bolt. */
@@ -50,8 +52,52 @@ interface Reach {
   dice: number
 }
 
-export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: CombatPanelProps) {
+/** One shot in the declaration: a weapon, and what it is at. */
+interface PlannedShot {
+  targetId: string
+  kind: 'ship' | 'flight' | 'gunboats'
+  label: string
+}
+
+export function CombatPanel({
+  game,
+  ship,
+  canCommand = true,
+  onHoverWeapon,
+  aiming,
+  onAim,
+}: CombatPanelProps) {
   const targets = enemiesOf(game, ship).filter((e) => !e.destroyed && !e.offTable)
+  /* 2.6 phase 11: "The player must declare all the fire for his ship, before
+     any dice are rolled." So a weapon is clicked onto a target to declare it,
+     the declaration is read back, and one button rolls the lot. The plan is
+     this console's until it is fired; the panel is keyed by ship, so picking
+     another ship starts a fresh sheet. */
+  const [plan, setPlan] = useState<Record<string, PlannedShot>>({})
+  const declare = (weaponId: string, shot: PlannedShot) =>
+    setPlan((current) => {
+      const next = { ...current }
+      if (next[weaponId]?.targetId === shot.targetId) delete next[weaponId]
+      else next[weaponId] = shot
+      return next
+    })
+  const fireVolley = () => {
+    const shots = Object.entries(plan).map(([weaponId, shot]) => ({
+      weaponId,
+      targetId: shot.targetId,
+      kind: shot.kind,
+    }))
+    const outcome = dispatch({ type: 'fire-volley', shipId: ship.id, shots })
+    if (outcome.refused === undefined) setPlan({})
+  }
+  // 2.6: "Starting with the player who won initiative, each player alternates
+  // in firing … one ship." Whose turn it is decides whether the plan can be
+  // fired now, and the panel says so rather than letting the engine refuse.
+  const turn = game.fire.side
+  const myTurn = turn === null || turn === ship.side
+  const turnName = turn === null ? null : (game.sides.find((s) => s.id === turn)?.name ?? turn)
+  const declared = Object.keys(plan).length
+  const mayFire = canCommand && myTurn
   const engaged = engagedTargets(ship, game.phase)
   const fireCons = availableFireCons(ship, game.phase)
   // 4.2's optional exception: a ship that spent no thrust at all may shoot
@@ -158,6 +204,14 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
   return (
     <div className="panel">
       <h3>Phase 11 · Fire</h3>
+      {!myTurn ? (
+        <p className="fire-turn">
+          {turnName}&rsquo;s turn to fire a ship. Yours comes round after theirs (2.6).
+        </p>
+      ) : null}
+      {!canCommand ? (
+        <p className="fire-turn">This ship is not yours to fire.</p>
+      ) : null}
       <div className="panel-row">
         <span>FireCon free</span>
         <span className="spacer" />
@@ -179,6 +233,48 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
         >
           Release
         </button>
+      </div>
+
+      {/* The declaration, read back before the dice: what is aimed at what,
+          and one button for all of it (2.6). */}
+      <div className="fire-plan">
+        {declared === 0 ? (
+          <span style={{ color: 'var(--ink-dim)' }}>
+            Click a weapon under a target to declare it. Nothing rolls until the whole plan is fired.
+          </span>
+        ) : (
+          <ul className="fire-plan-list">
+            {Object.entries(plan).map(([weaponId, shot]) => (
+              <li key={weaponId}>
+                <span>{ship.design.weapons.find((w) => w.id === weaponId)?.label ?? weaponId}</span>
+                <span className="fire-plan-at">at {shot.label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="panel-row" style={{ background: 'none', padding: 0 }}>
+          <button
+            className="primary"
+            disabled={!mayFire || declared === 0}
+            title={
+              !myTurn
+                ? `${turnName}'s turn to fire (2.6)`
+                : declared === 0
+                  ? 'Nothing declared yet'
+                  : 'Roll the whole declaration; the ship is then done for the turn (2.6)'
+            }
+            onClick={fireVolley}
+          >
+            Fire {declared > 0 ? `${declared} shot${declared === 1 ? '' : 's'}` : ''}
+          </button>
+          <button
+            disabled={!mayFire}
+            title="Take the ship's turn without firing (2.6)"
+            onClick={() => dispatch({ type: 'pass-fire', shipId: ship.id })}
+          >
+            Hold fire
+          </button>
+        </div>
       </div>
 
       {waveGun ? (
@@ -414,29 +510,37 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                 <p className="nothing-bears">Nothing bears on them.</p>
               ) : (
                 <div className="ssd-systems">
-                  {reach.map(({ weapon, blocked, dice }) => (
-                    <button
-                      key={weapon.id}
-                      className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
-                      disabled={blocked !== null || (needsNew && fireCons <= 0 && needsFireCon(weapon))}
-                      title={blocked ?? `${dice}D6 at ${range.toFixed(1)} MU`}
-                      onMouseEnter={() =>
-                        onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
-                      }
-                      onMouseLeave={() => onHoverWeapon?.(undefined)}
-                      onClick={() =>
-                        dispatch({
-                          type: 'fire-weapon',
-                          shipId: ship.id,
-                          weaponId: weapon.id,
-                          targetId: target.id,
-                        })
-                      }
-                    >
-                      {weapon.label}
-                      {blocked ? null : <span className="num">{dice}D6</span>}
-                    </button>
-                  ))}
+                  {reach.map(({ weapon, blocked, dice }) => {
+                    const here = plan[weapon.id]?.targetId === target.id
+                    const elsewhere = plan[weapon.id] !== undefined && !here
+                    return (
+                      <button
+                        key={weapon.id}
+                        className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
+                          here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                        }`}
+                        disabled={!canCommand || blocked !== null}
+                        title={
+                          blocked ??
+                          (here
+                            ? 'Declared at this target — click to take it off'
+                            : elsewhere
+                              ? `Declared at ${plan[weapon.id]?.label}; click to move it here`
+                              : `${dice}D6 at ${range.toFixed(1)} MU — click to declare`)
+                        }
+                        onMouseEnter={() =>
+                          onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
+                        }
+                        onMouseLeave={() => onHoverWeapon?.(undefined)}
+                        onClick={() =>
+                          declare(weapon.id, { targetId: target.id, kind: 'ship', label: target.name })
+                        }
+                      >
+                        {weapon.label}
+                        {blocked ? null : <span className="num">{dice}D6</span>}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -471,25 +575,26 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
                 <span className="num arcs">{arc}</span>
               </div>
               <div className="ssd-systems">
-                {reach.map(({ weapon, blocked, dice }) => (
-                  <button
-                    key={weapon.id}
-                    className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}`}
-                    disabled={blocked !== null}
-                    title={blocked ?? `${dice}D6, and every hit kills a boat (9.1)`}
-                    onClick={() =>
-                      dispatch({
-                        type: 'fire-at-gunboats',
-                        shipId: ship.id,
-                        weaponId: weapon.id,
-                        squadronId: squadron.id,
-                      })
-                    }
-                  >
-                    {weapon.label}
-                    {blocked ? null : <span className="num">{dice}D6</span>}
-                  </button>
-                ))}
+                {reach.map(({ weapon, blocked, dice }) => {
+                  const here = plan[weapon.id]?.targetId === squadron.id
+                  const elsewhere = plan[weapon.id] !== undefined && !here
+                  return (
+                    <button
+                      key={weapon.id}
+                      className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
+                        here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                      }`}
+                      disabled={!canCommand || blocked !== null}
+                      title={blocked ?? `${dice}D6, and every hit kills a boat (9.1) — click to declare`}
+                      onClick={() =>
+                        declare(weapon.id, { targetId: squadron.id, kind: 'gunboats', label: squadron.label })
+                      }
+                    >
+                      {weapon.label}
+                      {blocked ? null : <span className="num">{dice}D6</span>}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )
@@ -591,9 +696,6 @@ export function CombatPanel({ game, ship, onHoverWeapon, aiming, onAim }: Combat
         )
       })}
 
-      <button onClick={() => dispatch({ type: 'pass-fire', shipId: ship.id })}>
-        Hold fire this turn
-      </button>
     </div>
   )
 }
