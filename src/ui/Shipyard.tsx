@@ -39,35 +39,24 @@ import { FIGHTER_TYPES, type FighterTypeId } from '../engine/fighters'
 import { GUNBOAT_TYPES, type GunboatTypeId } from '../engine/gunboats'
 import { crewFactors } from '../engine/game'
 import type { HullClass, HullRows, ShipDesign, SystemKind, WeaponClass } from '../engine/types'
-import { MAGAZINE_LOAD_MASS, MAGAZINE_POINTS_PER_MASS } from '../engine/ordnance'
+import { checkMagazine, MAGAZINE_LOAD_MASS, MULTI_STAGE_EXTRA_MASS } from '../engine/ordnance'
+import {
+  describeLoads,
+  feedLauncher,
+  launchersOf,
+  magazineFor,
+  newMagazine,
+  unfeedLauncher,
+  withLoadAdded,
+  withLoadDropped,
+  withoutMagazine,
+} from '../data/magazines'
 import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
 import { CounterPreview } from './CounterPreview'
 import { defaultArcs } from '../data/arcs'
 import { isCounterArtUrl } from '../data/designFile'
 
-/**
- * Add or drop a magazine load, repricing the magazine around it (6.6).
- *
- * The magazine's mass *is* its loads: 6.6 sizes it by what it carries, and
- * leftover mass is wasted rather than free, so a magazine sized to its loads
- * is the one a designer would draw.
- */
-function withLoad(
-  design: ShipDesign,
-  magazineId: string,
-  grade: 'standard' | 'extended',
-  delta: 1 | -1,
-): Partial<ShipDesign> {
-  const magazines = (design.magazines ?? []).map((magazine) => {
-    if (magazine.id !== magazineId) return magazine
-    const loads =
-      delta === 1 ? [...magazine.loads, { grade }] : magazine.loads.slice(0, -1)
-    const mass = loads.reduce((sum, load) => sum + MAGAZINE_LOAD_MASS[load.grade], 0)
-    return { ...magazine, loads, mass, points: mass * MAGAZINE_POINTS_PER_MASS }
-  })
-  return { magazines }
-}
 
 /**
  * The weapon catalogue, in the families a designer thinks in (5, 6).
@@ -742,79 +731,110 @@ export function Shipyard({
             {/* 6.6: "Each magazine has a mass rating, which determines the
                 number of Salvo Missile loads carried: mass 2 for a standard
                 salvo, mass 3 for ER." A launcher draws from one magazine; a
-                magazine may feed several launchers. */}
-            {design.weapons.some((w) => w.weaponClass === 'salvo-missile-launcher') ? (
+                magazine may feed several launchers — so feeding is a move,
+                and the chips on each magazine say which tubes it feeds. */}
+            {launchersOf(design).length > 0 ? (
               <Section title="Magazines" rule="6.6">
                 <div className="panel-row">
                   <span className="rule-detail">
-                    {(design.magazines ?? []).length} fitted — an SML with none fires nothing
+                    {(design.magazines ?? []).length} fitted — a launcher with none fires nothing
                   </span>
                   <span className="spacer" />
-                  <button
-                    onClick={() =>
-                      edit({
-                        magazines: [
-                          ...(design.magazines ?? []),
-                          {
-                            id: `m${(design.magazines ?? []).length + 1}`,
-                            mass: 0,
-                            points: 0,
-                            loads: [],
-                            // A new magazine feeds every launcher that is not
-                            // already fed, which is the common case and the
-                            // one 6.6's "one magazine may feed more than one
-                            // launcher" is written for.
-                            launcherIds: design.weapons
-                              .filter(
-                                (w) =>
-                                  w.weaponClass === 'salvo-missile-launcher' &&
-                                  !(design.magazines ?? []).some((m) =>
-                                    m.launcherIds.includes(w.id),
-                                  ),
-                              )
-                              .map((w) => w.id),
-                          },
-                        ],
-                      })
-                    }
-                  >
+                  <button onClick={() => edit({ magazines: [...(design.magazines ?? []), newMagazine(design)] })}>
                     Add magazine
                   </button>
                 </div>
-                {(design.magazines ?? []).map((magazine) => (
-                  <div className="panel-row" key={magazine.id}>
-                    <span>
-                      {magazine.id} → {magazine.launcherIds.join(', ') || 'nothing'}
-                    </span>
-                    <span className="spacer" />
-                    <span className="num">{magazine.loads.length} salvoes</span>
-                    <span className="num">{magazine.mass}m</span>
-                    {(['standard', 'extended'] as const).map((grade) => (
-                      <button
-                        key={grade}
-                        title={`${MAGAZINE_LOAD_MASS[grade]} mass a salvo (6.6)`}
-                        onClick={() => edit(withLoad(design, magazine.id, grade, 1))}
-                      >
-                        +{grade === 'standard' ? 'std' : 'ER'}
-                      </button>
-                    ))}
-                    <button
-                      disabled={magazine.loads.length === 0}
-                      onClick={() => edit(withLoad(design, magazine.id, 'standard', -1))}
-                    >
-                      −
-                    </button>
-                    <button
-                      onClick={() =>
-                        edit({
-                          magazines: (design.magazines ?? []).filter((m) => m.id !== magazine.id),
-                        })
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                {(design.magazines ?? []).map((magazine) => {
+                  const check = checkMagazine(magazine.mass, magazine.loads)
+                  return (
+                    <div className="fitted-row" key={magazine.id}>
+                      <div className="panel-row">
+                        <b>Magazine {magazine.id}</b>
+                        <span className="rule-detail">{describeLoads(magazine.loads)}</span>
+                        <span className="spacer" />
+                        <span className="num">{magazine.mass}m</span>
+                        <span className="num">{magazine.points}p</span>
+                        <button
+                          title={`${MAGAZINE_LOAD_MASS.standard} mass a standard salvo (6.6)`}
+                          onClick={() => edit(withLoadAdded(design, magazine.id, { grade: 'standard' }))}
+                        >
+                          +std
+                        </button>
+                        <button
+                          title={`${MAGAZINE_LOAD_MASS.extended} mass an extended-range salvo (6.6)`}
+                          onClick={() => edit(withLoadAdded(design, magazine.id, { grade: 'extended' }))}
+                        >
+                          +ER
+                        </button>
+                        <button
+                          title={`${MAGAZINE_LOAD_MASS.standard + MULTI_STAGE_EXTRA_MASS} mass a multi-stage salvo; a magazine holds these or regular loads, not both (6.6)`}
+                          onClick={() =>
+                            edit(withLoadAdded(design, magazine.id, { grade: 'standard', multiStage: true }))
+                          }
+                        >
+                          +MS
+                        </button>
+                        <button
+                          disabled={magazine.loads.length === 0}
+                          title="Take the last load out"
+                          onClick={() => edit(withLoadDropped(design, magazine.id))}
+                        >
+                          −
+                        </button>
+                        <button onClick={() => edit(withoutMagazine(design, magazine.id))}>Remove</button>
+                      </div>
+                      <div className="panel-row arc-picker">
+                        <span className="rule-detail">Feeds</span>
+                        {launchersOf(design).map((launcher) => {
+                          const fed = magazine.launcherIds.includes(launcher.id)
+                          const elsewhere = !fed && magazineFor(design, launcher.id) !== undefined
+                          return (
+                            <button
+                              key={launcher.id}
+                              className={`arc-chip${fed ? ' is-on' : ''}`}
+                              title={
+                                fed
+                                  ? `Take ${launcher.label} ${launcher.id} off this magazine`
+                                  : elsewhere
+                                    ? `Move ${launcher.label} ${launcher.id} here from ${magazineFor(design, launcher.id)?.id}`
+                                    : `Feed ${launcher.label} ${launcher.id} from this magazine`
+                              }
+                              onClick={() =>
+                                edit(
+                                  fed
+                                    ? unfeedLauncher(design, launcher.id)
+                                    : feedLauncher(design, magazine.id, launcher.id),
+                                )
+                              }
+                            >
+                              {launcher.id}
+                            </button>
+                          )
+                        })}
+                        <span className="spacer" />
+                        <span className="rule-detail">
+                          {magazine.launcherIds.length === 0
+                            ? 'feeds nothing'
+                            : check.faults.length > 0
+                              ? check.faults.includes('mixed-stages')
+                                ? 'regular or multi-stage, not both'
+                                : 'ER loads cannot be multi-stage'
+                              : `${magazine.loads.length} load${magazine.loads.length === 1 ? '' : 's'}`}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {launchersOf(design).some((w) => magazineFor(design, w.id) === undefined) ? (
+                  <p className="rule-detail" style={{ color: 'var(--warn)' }}>
+                    Not fed:{' '}
+                    {launchersOf(design)
+                      .filter((w) => magazineFor(design, w.id) === undefined)
+                      .map((w) => `${w.label} ${w.id}`)
+                      .join(', ')}
+                    . Click its chip on a magazine.
+                  </p>
+                ) : null}
               </Section>
             ) : null}
           </div>

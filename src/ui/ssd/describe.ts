@@ -11,7 +11,8 @@ import {
   TWIN_PARTICLE_ARRAY_DICE,
   TWIN_PARTICLE_ARRAY_RANGE,
 } from '../../engine/weapons/beams'
-import type { PlacedGlyph } from './layout'
+import type { PlacedGlyph, SsdPlan } from './layout'
+import { describeLoads } from '../../data/magazines'
 
 /**
  * What a symbol on the sheet is, said in a sentence.
@@ -325,6 +326,10 @@ const SYSTEM_RULES: Record<SystemKind, Blurb | null> = {
 }
 
 const OTHER_RULES: Record<string, Blurb> = {
+  magazine: {
+    section: '6.6',
+    rule: 'Salvo Missile loads for the launchers it feeds: 2 mass a standard salvo, 3 for ER, 2 more for a second stage. A launcher draws from one magazine and a magazine may feed several; at a threshold check it is rolled for as one system, whatever it holds, and knocked out it feeds nothing.',
+  },
   drive: {
     section: '3.2',
     rule: 'The thrust rating is the whole of what the ship can spend in a turn on speeding up, slowing down and turning — with at most half of it on the turn. Halved by its first threshold loss.',
@@ -469,17 +474,45 @@ function stateOf(glyph: PlacedGlyph): string | null {
  * What the symbol under the pointer is, or null for one the sheet does not
  * explain — which should be none of them, and the test says so.
  */
-export function describeGlyph(design: ShipDesign, glyph: PlacedGlyph): MountInfo | null {
+export function describeGlyph(
+  design: ShipDesign,
+  glyph: PlacedGlyph,
+  plan?: Pick<SsdPlan, 'glyphs'>,
+): MountInfo | null {
   const state = stateOf(glyph)
 
   const weapon = design.weapons.find((w) => w.id === glyph.key)
   if (weapon !== undefined) {
     const blurb = WEAPON_RULES[weapon.weaponClass]
+    const facts = weaponFacts(weapon, glyph)
+    // 6.6: a launcher is nothing without its magazine, so the card says which
+    // one, and how much is left in it as the sheet is drawn.
+    if (weapon.weaponClass === 'salvo-missile-launcher') {
+      const fed = (design.magazines ?? []).find((m) => m.launcherIds.includes(weapon.id))
+      if (fed === undefined) facts.push('No magazine feeds it: nothing to fire (6.6)')
+      else {
+        const left = plan?.glyphs.find((g) => g.key === fed.id)?.value ?? fed.loads.length
+        facts.push(`Fed by magazine ${fed.id} — ${left} load${left === 1 ? '' : 's'} left`)
+      }
+    }
+    return { title: glyph.label, facts, rule: blurb.rule, section: blurb.section, state }
+  }
+
+  const magazine = (design.magazines ?? []).find((m) => m.id === glyph.key)
+  if (magazine !== undefined) {
+    const feeds = magazine.launcherIds
+      .map((id) => design.weapons.find((w) => w.id === id)?.label ?? id)
+      .join(', ')
+    const left = glyph.value ?? magazine.loads.length
     return {
       title: glyph.label,
-      facts: weaponFacts(weapon, glyph),
-      rule: blurb.rule,
-      section: blurb.section,
+      facts: [
+        `${left} of ${magazine.loads.length} loads left — ${describeLoads(magazine.loads)}`,
+        feeds ? `Feeds ${feeds}` : 'Feeds nothing',
+        `${magazine.mass} mass, ${magazine.points} points`,
+      ],
+      rule: OTHER_RULES.magazine.rule,
+      section: OTHER_RULES.magazine.section,
       state,
     }
   }

@@ -309,7 +309,7 @@ function infoFor(design: ShipDesign, plan: SsdPlan, hover: Hover): MountInfo | n
       }
     }
   }
-  return describeGlyph(design, glyph)
+  return describeGlyph(design, glyph, plan)
 }
 
 /** A stable id for the clip path, so two sheets on one page do not share one. */

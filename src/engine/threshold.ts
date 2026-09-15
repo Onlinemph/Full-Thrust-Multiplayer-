@@ -295,6 +295,22 @@ export function checkableSystems(
     })
   }
 
+  // 6.6: a magazine "is rolled for as a single system, regardless of its
+  // capacity or the number of Salvo Missile loads in it". One that has been
+  // shot dry is like a spent rack: there is nothing left in it to lose.
+  for (const magazine of design.magazines ?? []) {
+    if (isSystemDestroyed(ship, magazine.id)) continue
+    if ((ship.magazines.get(magazine.id) ?? []).length === 0) continue
+    out.push({
+      id: magazine.id,
+      label: `Magazine ${magazine.id}`,
+      kind: 'system',
+      boxes: 1,
+      boxesLost: 0,
+      drm: 0,
+    })
+  }
+
   // 2.4 puts an FTL symbol on the SSD of any ship that has one. A design that
   // lists its FTL as a system box is rolled for above; one that only sets
   // `ftl` gets the symbol here so it is not quietly immune.
@@ -870,6 +886,11 @@ export function repairTargets(ship: ShipState): Array<{ id: string; label: strin
   offer(DRIVE_SYSTEM_ID, `Main drive (${ship.driveHits} hit${ship.driveHits === 1 ? '' : 's'})`)
   for (const system of ship.design.systems) offer(system.id, system.label)
   for (const weapon of ship.design.weapons) offer(weapon.id, weapon.label)
+  // 6.6: a magazine is a system of its own, so a party can be put on it; the
+  // loads still in it are what a repair gives back to its launchers.
+  for (const magazine of ship.design.magazines ?? []) {
+    offer(magazine.id, `Magazine ${magazine.id}`)
+  }
   offer(CORE_SYSTEM_IDS.bridge, 'Bridge')
   offer(CORE_SYSTEM_IDS.lifeSupport, 'Life support')
   offer(CORE_SYSTEM_IDS.powerCore, 'Power core')

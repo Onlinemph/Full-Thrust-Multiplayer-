@@ -549,6 +549,9 @@ export function App() {
                     // ongoing effects, so an EMP'd ship printed a thrust
                     // rating on its own sheet that the engine would not honour.
                     thrust: currentThrust(selected),
+                    magazineLoads: new Map(
+                      [...selected.magazines].map(([id, loads]) => [id, loads.length]),
+                    ),
                   }}
                 />
               </div>

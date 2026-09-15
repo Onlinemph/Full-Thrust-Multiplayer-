@@ -24,6 +24,7 @@ import {
   iconForScreen,
   iconForSystem,
   iconForWeapon,
+  iconForMagazine,
 } from './iconFor'
 import { weaponWeight } from './weight'
 
@@ -100,6 +101,8 @@ export interface PlanDamage {
   fired?: ReadonlySet<string>
   /** Current thrust, which halves on the drive's first threshold loss (4.11). */
   thrust?: number
+  /** 6.6: loads still in each magazine, by id. Absent, a magazine is full. */
+  magazines?: ReadonlyMap<string, number>
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +345,37 @@ function weaponItems(design: ShipDesign, damage: PlanDamage): Item[] {
       side: where.side,
       order: 0,
       weight,
+    })
+  }
+  return items
+}
+
+/**
+ * 6.6's magazines, drawn beside the launchers they feed: the symbol goes in
+ * the band and on the side its first launcher bears into, so a magazine reads
+ * as part of that battery rather than as a box in the guts. The number in it
+ * is the loads still aboard.
+ */
+function magazineItems(design: ShipDesign, damage: PlanDamage): Item[] {
+  const items: Item[] = []
+  for (const magazine of design.magazines ?? []) {
+    const icon = iconForMagazine(magazine.loads)
+    if (icon === null) continue
+    const launcher = design.weapons.find((w) => magazine.launcherIds.includes(w.id))
+    const where = launcher ? station(arcsOf(design, launcher)) : { band: 'midships' as const, side: 'centre' as const }
+    items.push({
+      key: magazine.id,
+      icon,
+      label: `Magazine ${magazine.id}`,
+      kind: 'system',
+      value: damage.magazines?.get(magazine.id) ?? magazine.loads.length,
+      state: damage.destroyed.has(magazine.id) ? 'destroyed' : 'live',
+      width: SIZE.system,
+      height: SIZE.system,
+      band: where.band,
+      side: where.side,
+      order: 1,
+      weight: 0.5,
     })
   }
   return items
@@ -726,6 +760,7 @@ function bandRows(band: BandId, items: Item[], across: number): Row[] {
 export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): SsdPlan {
   const items = [
     ...weaponItems(design, damage),
+    ...magazineItems(design, damage),
     ...systemItems(design, damage),
     ...plantItems(design, damage),
   ]

@@ -3058,6 +3058,12 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         if (!fed) {
           return refuse(`${weapon.label} is not fed by any magazine (6.6)`)
         }
+        // 6.6: the magazine is a system of its own at a threshold check, and
+        // one that has been knocked out feeds nothing until it is repaired —
+        // "those missiles are useless" to any other launcher.
+        if (ship.destroyedSystems.has(fed.id)) {
+          return refuse(`The magazine feeding ${weapon.label} is knocked out (6.6)`)
+        }
         const held = ship.magazines.get(fed.id) ?? []
         const draw = drawMagazineLoad(
           { id: fed.id, mass: fed.mass, loads: [...held], launcherIds: fed.launcherIds },

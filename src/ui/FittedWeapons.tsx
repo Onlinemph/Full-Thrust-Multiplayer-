@@ -1,6 +1,7 @@
 import type { ShipDesign, WeaponDef } from '../engine/types'
 import { ALL_ARCS } from '../data/buildCatalog'
 import { boughtArcs, catalogueEntryFor, fitArcs, mountingFor } from '../data/arcs'
+import { magazineFor } from '../data/magazines'
 import { canMountFlak, FLAK_UPGRADE_POINTS } from '../engine/weapons/kinetics'
 
 /**
@@ -41,6 +42,17 @@ export function FittedWeapons({
         <div className="fitted-row" key={weapon.id}>
           <div className="panel-row">
             <b>{weapon.label}</b>
+            {weapon.weaponClass === 'salvo-missile-launcher' ? (
+              /* 6.6: a tube is nothing without its magazine. */
+              <span
+                className="rule-detail"
+                style={magazineFor(design, weapon.id) ? undefined : { color: 'var(--warn)' }}
+              >
+                {magazineFor(design, weapon.id)
+                  ? `fed by magazine ${magazineFor(design, weapon.id)?.id}`
+                  : 'no magazine feeds it'}
+              </span>
+            ) : null}
             <span className="spacer" />
             <span className="num">{weapon.mass}m</span>
             <span className="num">{weapon.points}p</span>

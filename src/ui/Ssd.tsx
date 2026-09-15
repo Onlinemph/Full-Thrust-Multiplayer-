@@ -46,6 +46,8 @@ export interface SsdDamage {
   fired?: ReadonlySet<string>
   /** Current thrust, which halves on the drive's first threshold loss (4.11). */
   thrust?: number
+  /** 6.6: loads still in each magazine, by magazine id. Absent means full. */
+  magazineLoads?: ReadonlyMap<string, number>
 }
 
 export interface SsdProps {
@@ -99,6 +101,7 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false, onMoveG
     destroyed: damage.destroyed,
     fired: damage.fired,
     thrust: damage.thrust,
+    magazines: damage.magazineLoads,
   })
 
   const stealthHull = design.systems.some((s) => s.kind === 'stealth-hull')

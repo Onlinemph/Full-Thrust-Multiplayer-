@@ -137,8 +137,9 @@ two browsers.
   gatling batteries, twin particle arrays, meson projectors, needle beams, pulse torpedoes in all
   their variants, submunition packs, K-guns with flak, MKP, boarding torpedoes, fusion arrays,
   gravitic guns, pulsers, turrets and spinal mounts.
-- **Ordnance** (6) — salvo missiles and their racks and launchers, extended and antimatter grades,
-  heavy missiles, multi-stage missiles, rockets, plasma bolts and minefields: launched in phase 3,
+- **Ordnance** (6) — salvo missiles and their racks and launchers, magazines that feed the
+  launchers and are rolled for as one system, extended and antimatter grades, heavy missiles,
+  multi-stage missiles, rockets, plasma bolts and minefields: launched in phase 3,
   flying as markers on the table with their own facing, and attacking in phase 10 after point
   defence has had its say.
 - **Defences** (7) — screens, advanced screens and area screens, ablative and regenerative armour,

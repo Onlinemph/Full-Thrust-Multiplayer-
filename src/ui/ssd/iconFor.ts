@@ -248,6 +248,17 @@ const SYSTEM_ICONS: Record<SystemKind, string | null> = {
   'ftl-drive': null,
 }
 
+/** 6.6's magazine, by what it holds: the sheet has a symbol for each kind of load. */
+export function iconForMagazine(
+  loads: ReadonlyArray<{ grade: 'standard' | 'extended'; multiStage?: boolean }>,
+): IconId | null {
+  if (loads.some((load) => load.multiStage)) return known('salvo-missile-magazine-multistage')
+  if (loads.length > 0 && loads.every((load) => load.grade === 'extended')) {
+    return known('salvo-missile-magazine-long-range')
+  }
+  return known('salvo-missile-magazine')
+}
+
 export function iconForSystem(kind: SystemKind): IconId | null {
   const id = SYSTEM_ICONS[kind]
   return id === null ? null : known(id)

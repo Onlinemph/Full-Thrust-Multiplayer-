@@ -511,6 +511,27 @@ describe('the sheet as a whole', () => {
     expect(boxInsideOutline(outline, moved.x, moved.y, moved.width, moved.height)).toBe(true)
   })
 
+  it('draws a magazine beside the launcher it feeds, with the loads left in it', () => {
+    const boat = SHIP_DESIGNS.find((d) => (d.magazines?.length ?? 0) > 0)
+    expect(boat).toBeDefined()
+    if (boat === undefined) return
+    const magazine = boat.magazines![0]!
+    const plan = planShip(boat)
+    const glyph = plan.glyphs.find((g) => g.key === magazine.id)
+    expect(glyph).toBeDefined()
+    expect(glyph?.icon).toBe('salvo-missile-magazine')
+    expect(glyph?.value).toBe(magazine.loads.length)
+    // Same band and side as the tube it feeds: it reads as part of that battery.
+    const tube = plan.glyphs.find((g) => g.key === magazine.launcherIds[0])
+    expect(tube).toBeDefined()
+    expect(Math.sign(glyph!.x) === Math.sign(tube!.x) || Math.abs(glyph!.x) < 1).toBe(true)
+    // In battle the number is what is left, and a knocked-out one is crossed off.
+    const spent = planShip(boat, { destroyed: new Set([magazine.id]), magazines: new Map([[magazine.id, 1]]) })
+    const later = spent.glyphs.find((g) => g.key === magazine.id)
+    expect(later?.value).toBe(1)
+    expect(later?.state).toBe('destroyed')
+  })
+
   it('gives the counter a bar per battery and a dot per gun', () => {
     const { bars, guns } = counterSilhouette(heavyCruiser)
     expect(guns).toHaveLength(heavyCruiser.weapons.length)

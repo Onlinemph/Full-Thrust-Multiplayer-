@@ -6,6 +6,7 @@ import {
   projectileLine,
   FLAK_MARKER_RANGE,
 } from '../engine/weapons/kinetics'
+import { magazineFor } from '../data/magazines'
 import { dispatch } from './store'
 import type { WeaponDef } from '../engine/types'
 
@@ -143,16 +144,42 @@ export function OrdnancePanel({ game, side, aiming, onAim }: OrdnancePanelProps)
 
             const kind = weapon.weaponClass === 'plasma-bolt-launcher' ? 'plasma-bolt' : 'missile'
             const inHand = aiming?.shipId === ship.id && aiming.weaponId === weapon.id
+            // 6.6: a launcher fires "provided ammunition is left in the
+            // magazine", so the magazine's state is on the row with it.
+            const magazine =
+              weapon.weaponClass === 'salvo-missile-launcher'
+                ? magazineFor(ship.design, weapon.id)
+                : undefined
+            const supply =
+              weapon.weaponClass !== 'salvo-missile-launcher'
+                ? null
+                : magazine === undefined
+                  ? { text: 'no magazine', ok: false }
+                  : ship.destroyedSystems.has(magazine.id)
+                    ? { text: `magazine ${magazine.id} knocked out`, ok: false }
+                    : (ship.magazines.get(magazine.id) ?? []).length === 0
+                      ? { text: `magazine ${magazine.id} empty`, ok: false }
+                      : {
+                          text: `magazine ${magazine.id}: ${(ship.magazines.get(magazine.id) ?? []).length} load${
+                            (ship.magazines.get(magazine.id) ?? []).length === 1 ? '' : 's'
+                          }`,
+                          ok: true,
+                        }
             return (
               <div key={weapon.id} className="ordnance-mount">
                 <span>{weapon.label}</span>
                 <button
                   className={inHand ? 'primary' : undefined}
+                  disabled={supply !== null && !supply.ok}
+                  title={supply !== null && !supply.ok ? `${supply.text} (6.6)` : undefined}
                   onClick={() => onAim(inHand ? null : { shipId: ship.id, weaponId: weapon.id, kind })}
                 >
                   {inHand ? 'Click the table…' : 'Take aim'}
                 </button>
                 <span style={{ color: 'var(--ink-dim)' }}>{maxRangeOf(weapon)} MU</span>
+                {supply !== null ? (
+                  <span style={{ color: supply.ok ? 'var(--ink-dim)' : 'var(--warn)' }}>{supply.text}</span>
+                ) : null}
               </div>
             )
           })}

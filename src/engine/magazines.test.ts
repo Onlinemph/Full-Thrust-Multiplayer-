@@ -6,6 +6,7 @@ import { MAGAZINE_LOAD_MASS, MAGAZINE_POINTS_PER_MASS } from './ordnance'
 import { describeFault, validateDesign } from '../data/designPricing'
 import { allDesigns, designById } from '../data/ships'
 import type { MagazineDef, Phase, ShipDesign } from './types'
+import { checkableSystems, repairTargets } from './threshold'
 
 /**
  * Magazines (6.6).
@@ -170,5 +171,27 @@ describe('design-time checks', () => {
         design.name,
       ).toEqual([])
     }
+  })
+})
+
+describe('a magazine at a threshold check (6.6, 4.11)', () => {
+  it('is rolled for as one system while it has loads, and not once it is dry', () => {
+    const { game, ship, launcherId } = boat(1)
+    expect(checkableSystems(ship).filter((s) => s.id === 'm1')).toHaveLength(1)
+    advanceTo(game, 'launch-missiles')
+    launch(game, ship, launcherId)
+    expect(checkableSystems(ship).some((s) => s.id === 'm1')).toBe(false)
+  })
+
+  it('knocked out, feeds nothing until a party repairs it', () => {
+    const { game, ship, launcherId } = boat(3)
+    ship.destroyedSystems.add('m1')
+    advanceTo(game, 'launch-missiles')
+    expect(launch(game, ship, launcherId).refused).toContain('knocked out')
+    expect(ship.magazines.get('m1')).toHaveLength(3)
+    expect(repairTargets(ship).some((t) => t.id === 'm1')).toBe(true)
+    ship.destroyedSystems.delete('m1')
+    expect(launch(game, ship, launcherId).refused).toBeUndefined()
+    expect(ship.magazines.get('m1')).toHaveLength(2)
   })
 })
