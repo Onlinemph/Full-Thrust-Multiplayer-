@@ -20,6 +20,7 @@ import {
 } from './store'
 import { receive, type NetMessage } from './link'
 import { designById, SHIP_DESIGNS } from '../data/ships'
+import { scenarioById } from '../data/scenarios'
 import type { ShipDesign } from '../engine/types'
 
 /**
@@ -63,9 +64,9 @@ describe('a match lobby', () => {
     expect(currentGame().phase).toBe('orders')
     expect(currentGame().ships.filter((s) => s.side === 'a')).toHaveLength(3)
     // Side b kept the scenario's own force.
-    const scenarioB = newGame({ scenarioId: 'border-skirmish', seed: 21 })
-    void scenarioB
-    expect(currentGame().ships.filter((s) => s.side === 'b').length).toBeGreaterThan(0)
+    const own = scenarioById('border-skirmish')?.sides.find((s) => s.id === 'b')?.force.length ?? 0
+    expect(own).toBeGreaterThan(0)
+    expect(currentGame().ships.filter((s) => s.side === 'b')).toHaveLength(own)
   })
 
   it('will not start for a guest, and will not start twice', () => {

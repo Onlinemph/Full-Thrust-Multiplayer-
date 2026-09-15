@@ -125,6 +125,9 @@ export function App() {
      host starts the battle. */
   const lobby = useLobby()
   const inLobby = lobby !== null && isInMatch()
+  useEffect(() => {
+    if (inLobby) setShowOnline(false)
+  }, [inLobby])
   /* 2.6: a phase with optional work left — ships that have not fired — is
      ended by asking twice. The first click arms the button and says what the
      second one will skip; the arming is dropped the moment the phase changes. */
@@ -267,7 +270,12 @@ export function App() {
 
   const modals = (
     <>
-      {inLobby && !showLibrary && !showYard ? <LobbyPanel /> : null}
+      {inLobby && !showLibrary && !showYard ? (
+        <LobbyPanel
+          onOpenLibrary={() => setShowLibrary(true)}
+          onOpenYard={() => setShowYard(true)}
+        />
+      ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showSetup ? (
         <SetupPanel onClose={() => setShowSetup(false)} onStarted={() => setScreen('battle')} />

@@ -30,7 +30,13 @@ import {
  * host starts the battle once both have pressed it. A change to the rules
  * takes everyone's Ready back: what they agreed to is no longer on the table.
  */
-export function LobbyPanel() {
+export interface LobbyPanelProps {
+  /** The shipyard and the library, reachable from here: a fleet is picked from them. */
+  onOpenYard?: () => void
+  onOpenLibrary?: () => void
+}
+
+export function LobbyPanel({ onOpenYard, onOpenLibrary }: LobbyPanelProps) {
   const game = useGame()
   const lobby = useLobby()
   const net = useNet()
@@ -79,6 +85,8 @@ export function LobbyPanel() {
               ))}
             </select>
           </label>
+          {onOpenLibrary ? <button onClick={onOpenLibrary}>Ship library</button> : null}
+          {onOpenYard ? <button onClick={onOpenYard}>Shipyard</button> : null}
           <button onClick={() => hangUp(null)}>Leave the match</button>
         </div>
 
