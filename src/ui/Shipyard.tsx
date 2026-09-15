@@ -89,13 +89,15 @@ const FAMILIES: ReadonlyArray<{ id: string; label: string; classes: readonly Wea
       'twin-particle-array',
       'meson-projector',
       'gravitic-gun',
+      // 5.21: a beam-type weapon with a pulse mode, not a torpedo.
+      'pulser',
     ],
   },
   { id: 'kinetic', label: 'Kinetic', classes: ['k-gun', 'mkp', 'gatling', 'submunition-pack'] },
   {
     id: 'torpedo',
     label: 'Torpedoes & plasma',
-    classes: ['pulse-torpedo', 'plasma-cannon', 'plasma-bolt-launcher', 'fusion-array', 'pulser'],
+    classes: ['pulse-torpedo', 'plasma-cannon', 'plasma-bolt-launcher', 'fusion-array'],
   },
   {
     id: 'ordnance',
