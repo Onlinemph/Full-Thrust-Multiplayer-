@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { acceptReply, hangUp, hostInvite, joinInvite, useNet } from './net'
+import { netState } from './link'
 import { createMatch, joinMatch, supabaseConfigured } from './supabaseLink'
 import { currentGame, currentMatchSide, setMatchSide } from './store'
 
@@ -27,7 +28,11 @@ export function OnlinePanel({ onClose }: { onClose: () => void }) {
 
   const run = (work: () => Promise<void>) => {
     setBusy(true)
-    void work().finally(() => setBusy(false))
+    void work().finally(() => {
+      setBusy(false)
+      // Linked: the lobby is the next thing to see, not this panel.
+      if (netState().phase === 'connected') onClose()
+    })
   }
 
   return (
@@ -82,8 +87,10 @@ export function OnlinePanel({ onClose }: { onClose: () => void }) {
               {hosted ? (
                 <>
                   <p>
-                    The battle on the table goes up under a six-letter code. Tell the other player
-                    the code; they join with it, and either of you can come back to it later.
+                    A match opens in a lobby under a six-letter code: you settle the rules, each
+                    of you picks a fleet, and the battle starts when both are ready. Tell the
+                    other player the code; they join with it, and either of you can come back to
+                    it later.
                   </p>
                   <button className="primary" disabled={busy} onClick={() => run(createMatch)}>
                     Create a match

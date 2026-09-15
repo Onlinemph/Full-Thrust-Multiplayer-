@@ -32,6 +32,13 @@ export interface HullPlanProps {
   /** An enemy hull under the sensor rules: the shape, and nothing inside it. */
   redacted?: boolean
   title: string
+  /**
+   * The designer's hand: with this, a symbol can be dragged about the sheet
+   * and each move is reported in the plan's own coordinates. The sheet does
+   * not move the symbol itself — the design does, by way of its layout, and
+   * the sheet is drawn again from it.
+   */
+  onMove?: (key: string, x: number, y: number) => void
 }
 
 /** What the pointer is over, and where, in the wrap's own pixels. */
@@ -61,11 +68,39 @@ function describe(glyph: PlacedGlyph): string {
   return `${glyph.label}${value}${arcs}${state}`
 }
 
-export function HullPlan({ plan, design, redacted = false, title }: HullPlanProps) {
+export function HullPlan({ plan, design, redacted = false, title, onMove }: HullPlanProps) {
   const clipId = `hull-clip-${Math.abs(hashOf(plan.path))}`
   const wrap = useRef<HTMLDivElement>(null)
+  const svg = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<Hover | null>(null)
-  const explain = design !== undefined && !redacted
+  /** The symbol in hand, and where on it the pointer took hold. */
+  const [drag, setDrag] = useState<{ key: string; dx: number; dy: number } | null>(null)
+  const explain = design !== undefined && !redacted && drag === null
+  const movable = onMove !== undefined && !redacted
+
+  /** A pointer position in the plan's own coordinates, through the viewBox. */
+  const toPlan = (event: React.PointerEvent): { x: number; y: number } | null => {
+    const ctm = svg.current?.getScreenCTM()
+    if (!ctm) return null
+    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(ctm.inverse())
+    return { x: at.x, y: at.y }
+  }
+  const takeHold = (glyph: PlacedGlyph) => (event: React.PointerEvent) => {
+    if (!movable || event.button !== 0) return
+    const at = toPlan(event)
+    if (at === null) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDrag({ key: glyph.key, dx: glyph.x - at.x, dy: glyph.y - at.y })
+    setHover(null)
+  }
+  const carry = (event: React.PointerEvent) => {
+    if (drag === null) return
+    const at = toPlan(event)
+    if (at === null) return
+    onMove?.(drag.key, Math.round(at.x + drag.dx), Math.round(at.y + drag.dy))
+  }
+  const letGo = () => setDrag(null)
 
   /** Where the pointer is, relative to the wrap, from a pointer event. */
   const track = (key: string, cell: string | null) => (event: React.PointerEvent) => {
@@ -91,7 +126,8 @@ export function HullPlan({ plan, design, redacted = false, title }: HullPlanProp
   return (
     <div className="ssd-plan-wrap" ref={wrap}>
     <svg
-      className="ssd-plan"
+      ref={svg}
+      className={`ssd-plan${movable ? ' is-arrangeable' : ''}`}
       viewBox={plan.viewBox}
       preserveAspectRatio="xMidYMid meet"
       role="group"
@@ -138,10 +174,13 @@ export function HullPlan({ plan, design, redacted = false, title }: HullPlanProp
               key={glyph.key}
               className={`ssd-mount is-${glyph.kind} is-${glyph.state}${
                 hover?.key === glyph.key ? ' is-hovered' : ''
-              }`}
+              }${movable ? ' is-movable' : ''}${drag?.key === glyph.key ? ' is-dragging' : ''}`}
               role="img"
               aria-label={describe(glyph)}
-              onPointerMove={track(glyph.key, null)}
+              onPointerDown={takeHold(glyph)}
+              onPointerMove={drag === null ? track(glyph.key, null) : carry}
+              onPointerUp={letGo}
+              onPointerCancel={letGo}
               onPointerEnter={track(glyph.key, null)}
               onPointerLeave={leave}
             >

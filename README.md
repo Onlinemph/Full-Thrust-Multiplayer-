@@ -76,8 +76,10 @@ With a Supabase project behind the build, a match is a six-letter code instead, 
 lives on the server between sessions — either player can close the tab and come back to it.
 
 1. Create a project at [supabase.com](https://supabase.com) and open its SQL editor.
-2. Run [`supabase/schema.sql`](supabase/schema.sql). It creates one table and three functions,
-   keyed on the match code, and locks the table down so the anon key can reach nothing else.
+2. Run [`supabase/schema.sql`](supabase/schema.sql). It creates the `matches` table and three
+   functions keyed on the match code, the `designs` table and its two functions, and locks both
+   tables down so the anon key can reach nothing else. Already ran an older copy? Run it again;
+   every statement is `if not exists` or `or replace`.
 3. Build with the project's URL and anon key:
 
    ```bash
@@ -90,10 +92,33 @@ lives on the server between sessions — either player can close the tab and com
    Actions → Variables); the deploy workflow passes them to the build. For local work put them in
    `.env.local`, which is ignored by git.
 
-The **Remote play** panel then offers *Create a match* and *Join*. The server never sees the
-rules: what it stores is the same JSON a battle file holds, and the host's console is still the
-ordering authority, exactly as over WebRTC. The anon key is meant to ship in a browser bundle; the
-schema's row-level security is what guards the data, and the code is the only secret.
+The **Remote play** panel then offers *Create a match* and *Join*. A match opens in a **lobby**:
+the host has the setup form (scenario, table, optional rules, factions, tech bases) and every
+change reaches the guest as it is made; each console picks its own side's fleet in the fleet
+picker, home-built hulls included, and presses *Ready*; the host starts the battle once both
+have, and it opens at turn 1 built from those picks. A rule change takes everyone's *Ready*
+back. The same lobby runs over the WebRTC link.
+
+The server never sees the rules: what it stores is the same JSON a battle file holds — with the
+lobby on it until the battle starts — and the host's console is still the ordering authority,
+exactly as over WebRTC. The anon key is meant to ship in a browser bundle; the schema's
+row-level security is what guards the data, and the code is the only secret.
+
+### The community shelf
+
+The same schema adds a `designs` table and two functions, `publish_design` and `list_designs`.
+With them, the **Ship library** has a third shelf beside the fleet book and your own yard:
+anyone can publish a design from their yard under a name, and anyone can take one down into
+theirs. Every hull that comes off the shelf is repriced from the construction tables and run
+through the shipyard's validator before it is shown, so a published design cannot lie about its
+points. There is no delete from the browser; take a design down in the SQL editor:
+
+```sql
+delete from public.designs where id = '<id>';
+```
+
+Without a project the library still has the yard, and a design file (the shipyard's *Download*)
+can be uploaded into it, checked the same way.
 
 ## What is implemented
 
@@ -208,11 +233,14 @@ that one fact.
 - **Scrubbing.** The slider above the phase controls replays the battle to any earlier moment
   without discarding the present. It costs nothing to provide: an earlier moment is just the
   journal replayed to a shorter length.
-- **Ship library.** *Ships* in the top bar shows every design's real SSD, grouped by fleet.
+- **Ship library.** *Ships* in the top bar shows every design's real SSD on three shelves: the
+  fleet book, your own yard, and the community shelf. A design file can be uploaded into the
+  yard, and a yard design published for anyone to use.
 - **Your own designs.** *Shipyard* builds a hull against the section 14 tables, with the mass bar
-  fighting you the whole way, and saves it into the fleet picker beside the shipped roster. A
-  battle that uses one carries its own copy, so the save file opens on a browser that has never
-  seen the design.
+  fighting you the whole way, and saves it into the fleet picker beside the shipped roster. The
+  symbols can be dragged about the sheet to give it a look of its own, and a counter image URL
+  puts your own picture on the table in place of the silhouette. A battle that uses a yard
+  design carries its own copy, so the save file opens on a browser that has never seen it.
 
 ## Ship construction
 

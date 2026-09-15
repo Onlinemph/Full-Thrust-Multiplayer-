@@ -32,7 +32,7 @@ import {
   turretPoints,
   TURRET_CAPACITY,
 } from '../engine/weapons/kinetics'
-import { allDesigns } from '../data/ships'
+import { allDesigns, SHIP_DESIGNS } from '../data/ships'
 import { deleteDesign, saveDesign, savedDesigns } from '../data/shipyard'
 import { hullRowBounds } from '../engine/combat'
 import { thresholdTarget } from '../engine/dice'
@@ -43,6 +43,8 @@ import type { HullClass, HullRows, ShipDesign, SystemKind, WeaponClass } from '.
 import { MAGAZINE_LOAD_MASS, MAGAZINE_POINTS_PER_MASS } from '../engine/ordnance'
 import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
+import { CounterPreview } from './CounterPreview'
+import { isCounterArtUrl } from '../data/designFile'
 
 /**
  * Add or drop a magazine load, repricing the magazine around it (6.6).
@@ -181,8 +183,17 @@ const SYSTEM_GROUPS: ReadonlyArray<{ label: string; kinds: readonly SystemKind[]
  * hull. Changing the mass slider changes everything at once, which is exactly
  * what it does on paper.
  */
-export function Shipyard({ onClose }: { onClose: () => void }) {
-  const [design, setDesign] = useState<ShipDesign>(() => startingPoint())
+export function Shipyard({
+  onClose,
+  initial = null,
+}: {
+  onClose: () => void
+  /** A design to open on — from the library — rather than a bare hull. */
+  initial?: ShipDesign | null
+}) {
+  const [design, setDesign] = useState<ShipDesign>(() =>
+    initial ? structuredClone(initial) : startingPoint(),
+  )
   const [yard, setYard] = useState<ShipDesign[]>(() => [...savedDesigns()])
   const [saved, setSaved] = useState<string | null>(null)
   /* 15: which empire's technology this is being drawn up under. A designer
@@ -198,6 +209,10 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
   const [factionId, setFactionId] = useState('')
   const [clanId, setClanId] = useState('')
   const [family, setFamily] = useState('beams')
+  /* The designer's hand on the sheet: while this is on, symbols drag. */
+  const [arranging, setArranging] = useState(false)
+  const [artInput, setArtInput] = useState(design.art ?? '')
+  const artOk = artInput.trim() === '' || isCounterArtUrl(artInput.trim())
   const cost = priceDesign(design)
   const faults = validateDesign(design, {
     factionId: factionId || undefined,
@@ -803,9 +818,71 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
           </div>
 
           <aside className="yard-side">
-            <div className="yard-sheet">
-              <Ssd design={design} />
+            <div className={`yard-sheet${arranging ? ' is-arranging' : ''}`}>
+              <Ssd
+                design={design}
+                onMoveGlyph={
+                  arranging
+                    ? (key, x, y) => edit({ layout: { ...(design.layout ?? {}), [key]: { x, y } } })
+                    : undefined
+                }
+              />
             </div>
+
+            {/* The sheet's own look: where the symbols sit, and what the
+                counter shows on the table. Neither changes a point of the
+                design; both travel with it. */}
+            <div className="panel-row yard-arrange">
+              <button
+                className={arranging ? 'primary' : undefined}
+                aria-pressed={arranging}
+                title="Drag the symbols about the sheet; the hull is drawn round wherever they end up"
+                onClick={() => setArranging((on) => !on)}
+              >
+                {arranging ? 'Done arranging' : 'Arrange the sheet'}
+              </button>
+              <button
+                disabled={design.layout === undefined}
+                title="Put every symbol back where the sheet lays it out"
+                onClick={() => edit({ layout: undefined })}
+              >
+                Reset layout
+              </button>
+              <span className="spacer" />
+              <span className="rule-detail">
+                {arranging
+                  ? 'Drag a symbol to move it.'
+                  : design.layout
+                    ? `${Object.keys(design.layout).length} placed by hand`
+                    : ''}
+              </span>
+            </div>
+            <div className="yard-art">
+              <label className="code-field">
+                Counter image URL
+                <input
+                  type="text"
+                  value={artInput}
+                  placeholder="https://… or data:image/png;base64,…"
+                  spellCheck={false}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setArtInput(value)
+                    const trimmed = value.trim()
+                    if (trimmed === '') edit({ art: undefined })
+                    else if (isCounterArtUrl(trimmed)) edit({ art: trimmed })
+                  }}
+                />
+              </label>
+              <CounterPreview design={design} size={80} />
+            </div>
+            <p className="rule-detail">
+              {!artOk
+                ? 'Not a picture the map can load: an https:// address or a pasted data:image URL.'
+                : design.art
+                  ? 'Drawn nose-up in place of the silhouette, on every table this design reaches.'
+                  : 'Leave it blank and the counter is the hull outline with its guns.'}
+            </p>
 
             {/* The numbers a captain will read off this hull in a fight, so the
                 designer sees them while there is still time to change them. */}
@@ -854,7 +931,15 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
             </dl>
 
             <div className="yard-actions">
-              <button onClick={() => setDesign(startingPoint())}>Start over</button>
+              <button
+                onClick={() => {
+                  setDesign(startingPoint())
+                  setArtInput('')
+                  setArranging(false)
+                }}
+              >
+                Start over
+              </button>
               <button
                 className="primary"
                 disabled={faults.length > 0}
@@ -867,7 +952,7 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                   // An id derived from the name, so building the same class
                   // twice replaces it rather than filling the yard with
                   // "new-design", "new-design-2", "new-design-3".
-                  const id = slug(design.name) || 'new-design'
+                  const id = yardId(slug(design.name) || 'new-design')
                   saveDesign({ ...design, id })
                   setYard([...savedDesigns()])
                   setSaved(id)
@@ -919,6 +1004,7 @@ export function Shipyard({ onClose }: { onClose: () => void }) {
                           return
                         }
                         setDesign(structuredClone(entry))
+                        setArtInput(entry.art ?? '')
                         setSaved(null)
                       }}
                     >
@@ -1206,6 +1292,15 @@ function slug(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * An id the yard may keep a design under. A roster id is shared vocabulary —
+ * `esu-frigate` means the roster's frigate on every table — so a design that
+ * would take one is stored beside it instead of shadowing it.
+ */
+function yardId(id: string): string {
+  return SHIP_DESIGNS.some((d) => d.id === id) ? `${id}-custom` : id
 }
 
 /** A bare hull to build on: the smallest thing that is not yet illegal. */

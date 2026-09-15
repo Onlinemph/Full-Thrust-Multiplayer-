@@ -234,11 +234,36 @@ export interface GameSetup {
   customDesigns?: ShipDesign[]
 }
 
+/**
+ * One side's part of a match lobby: the force its console picked, whether
+ * that console has said it is ready, and any design the pick names that is
+ * not in the shipped roster — carried whole, so the host can embed it in the
+ * battle the way `withEmbedded` embeds a home-built hull in a save.
+ */
+export interface LobbyPick {
+  /** Design ids in deployment order; null is the scenario's own force. */
+  forceIds: string[] | null
+  ready: boolean
+  designs?: ShipDesign[]
+}
+
+/**
+ * A match before its battle: the host has the setup in hand and each console
+ * picks its own side's fleet. While this is on the record, `setup` is the
+ * host's draft and `actions` is empty; the host starting the battle takes it
+ * off and the record becomes a battle like any other.
+ */
+export interface Lobby {
+  picks: Partial<Record<string, LobbyPick>>
+}
+
 export interface SavedGame {
   /** Bumped only when a change breaks replay of older saves. */
   version: 1
   setup: GameSetup
   actions: GameAction[]
+  /** Present while the match is still in its lobby (online). */
+  lobby?: Lobby
 }
 
 /** Build the turn-one game a setup describes. */

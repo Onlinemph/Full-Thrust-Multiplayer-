@@ -454,6 +454,14 @@ export interface ShipDesign {
   notes?: string
   /** Counter art: a `data:` or `https:` URL drawn nose-up on the map. */
   art?: string
+  /**
+   * Where the designer put a symbol on the sheet, by the symbol's key — a
+   * weapon or system id — in the plan's own coordinates. A symbol with no
+   * entry lays out where the sheet would put it, so a layout survives the
+   * hull being refitted around it; an entry for a symbol the hull no longer
+   * carries is ignored.
+   */
+  layout?: Record<string, { x: number; y: number }>
 }
 
 // ---------------------------------------------------------------------------

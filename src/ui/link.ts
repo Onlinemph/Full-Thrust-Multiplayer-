@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react'
 
 import type { GameAction } from '../engine/actions'
-import type { SavedGame } from '../data/savedGame'
+import type { LobbyPick, SavedGame } from '../data/savedGame'
 import {
+  applyLobbyPick,
   applyRemoteAction,
   applyRemoteSave,
   applyRemoteUndo,
@@ -49,6 +50,12 @@ export type NetMessage =
    * the host answers a length it does not agree with by shipping its record.
    */
   | { kind: 'probe'; length: number }
+  /**
+   * The guest's fleet pick, or its readiness, in the lobby. The host records
+   * it and answers with the record, lobby and all, the way it answers any
+   * disagreement: one sync, and both consoles see the same lobby.
+   */
+  | { kind: 'lobby-pick'; side: string; pick: LobbyPick }
 
 /** How often a guest asks the host whether they still agree, in ms. */
 const PROBE_EVERY_MS = 15_000
@@ -154,6 +161,12 @@ export function receive(message: NetMessage, role: NetRole, reply: (message: Net
         reply({ kind: 'sync', saved: currentSave() })
       }
       return
+    case 'lobby-pick':
+      if (role === 'host') {
+        applyLobbyPick(message.side, message.pick)
+        reply({ kind: 'sync', saved: currentSave() })
+      }
+      return
   }
 }
 
@@ -194,6 +207,7 @@ export function attachLink(
     onAction: (action, seq) => link.send({ kind: 'action', seq, action }),
     onUndo: (lengthAfter) => link.send({ kind: 'undo', lengthAfter }),
     onReplace: (saved) => link.send({ kind: 'sync', saved }),
+    onLobbyPick: (side, pick) => link.send({ kind: 'lobby-pick', side, pick }),
   })
   if (probeTimer !== null) clearInterval(probeTimer)
   probeTimer =

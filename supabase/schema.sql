@@ -68,3 +68,72 @@ grant execute on function public.save_match(text, jsonb) to anon, authenticated;
 
 -- Housekeeping, optional: matches nobody has touched for a month.
 --   delete from public.matches where updated_at < now() - interval '30 days';
+
+-- ---------------------------------------------------------------------------
+-- The community shelf: ship designs players have published.
+--
+-- One row per published design, holding the JSON the shipyard wrote. The
+-- server knows nothing about what a design is; every browser that reads the
+-- shelf reprices and validates what it gets. Two functions, publish and list,
+-- and no delete: the anon key is meant to ship in a browser, and taking a
+-- design down is done here in the SQL editor —
+--   delete from public.designs where id = '<id>';
+
+create table if not exists public.designs (
+  id          uuid primary key default gen_random_uuid(),
+  design      jsonb not null,
+  name        text not null,
+  author      text not null default '',
+  mass        integer not null default 0,
+  points      integer not null default 0,
+  created_at  timestamptz not null default now()
+);
+
+alter table public.designs enable row level security;
+
+-- Anyone: put a design on the shelf. Refuses anything too big to be a design.
+create or replace function public.publish_design(p_design jsonb, p_author text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  if pg_column_size(p_design) > 131072 then
+    raise exception 'design too large';
+  end if;
+  insert into public.designs (design, name, author, mass, points)
+  values (
+    p_design,
+    left(coalesce(p_design->>'name', 'Unnamed design'), 60),
+    left(coalesce(p_author, ''), 40),
+    coalesce(nullif(p_design->>'mass', '')::numeric::integer, 0),
+    coalesce(nullif(p_design->>'points', '')::numeric::integer, 0)
+  )
+  returning id into new_id;
+  return new_id;
+end;
+$$;
+
+-- Anyone: the shelf, newest first.
+create or replace function public.list_designs(p_limit integer default 200)
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(jsonb_agg(to_jsonb(d) order by d.created_at desc), '[]'::jsonb)
+    from (
+      select id, name, author, mass, points, created_at, design
+        from public.designs
+       order by created_at desc
+       limit least(greatest(coalesce(p_limit, 200), 1), 500)
+    ) d;
+$$;
+
+revoke all on public.designs from anon, authenticated;
+grant execute on function public.publish_design(jsonb, text) to anon, authenticated;
+grant execute on function public.list_designs(integer) to anon, authenticated;

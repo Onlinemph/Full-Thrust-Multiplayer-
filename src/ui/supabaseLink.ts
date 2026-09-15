@@ -63,7 +63,7 @@ export function projectUrl(raw: string): string {
  * The one failure a first-time setup is almost certain to hit is a project
  * without the schema in it, and PostgREST reports that as a missing function.
  */
-function explain(error: { code?: string; message: string }): string {
+export function explain(error: { code?: string; message: string }): string {
   if (error.code === 'PGRST202' || /could not find the function/i.test(error.message)) {
     return 'The project has no match functions yet: run supabase/schema.sql in its SQL editor, then try again.'
   }
@@ -86,6 +86,16 @@ function supabase(): SupabaseClient {
 
 export function useSupabaseClientForTests(fake: SupabaseClient | null): void {
   injected = fake
+}
+
+/** The same client, for the community designs that live in the same project. */
+export function supabaseClient(): SupabaseClient {
+  return supabase()
+}
+
+/** Whether there is a project to talk to: configured, or handed in by a test. */
+export function supabaseReady(): boolean {
+  return supabaseConfigured() || injected !== null
 }
 
 export function newMatchCode(random: () => number = Math.random): string {
@@ -220,6 +230,7 @@ function open(code: string, role: NetRole): Promise<void> {
               send({ kind: 'sync', saved })
               schedulePersist(code)
             },
+            onLobbyPick: (side, pick) => send({ kind: 'lobby-pick', side, pick }),
           })
         }
         if (!settled) {

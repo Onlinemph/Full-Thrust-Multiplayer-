@@ -787,6 +787,12 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
     placedRows.filter((row) => row.flank).map((row) => [row.top, row.top + row.height] as const),
   )
 
+  // The designer's own arrangement, where there is one: a symbol goes where
+  // it was put, rosette and all, kept within the deck the rows laid out so
+  // the hull drawn round it still has a nose and a tail. Sideways it may go
+  // as far as it likes; the plating is let out to clear it below.
+  const moved = applyLayout(design, glyphs, contentHeight)
+
   // The hull has to clear the widest row where that row actually sits — a row
   // over the pinched waist needs more beam than the same row at the shoulder.
   let beam = 40
@@ -797,6 +803,15 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
     )
     beam = Math.max(beam, (row.halfWidth + HULL_MARGIN) / Math.max(narrowest, 0.2))
   }
+  for (const g of moved) {
+    const top = g.y - g.height / 2
+    const bottom = g.rose === null ? g.y + g.height / 2 : g.rose.y + g.rose.radius
+    const narrowest = Math.min(
+      deckBeamFraction(shape, deckHeight, top),
+      deckBeamFraction(shape, deckHeight, bottom),
+    )
+    beam = Math.max(beam, (Math.abs(g.x) + g.width / 2 + HULL_MARGIN) / Math.max(narrowest, 0.2))
+  }
 
   // That beam is worked out from the hull's *profile*, which is a straight
   // reading of how pinched the hull is at a given point. A curved hull is
@@ -806,7 +821,7 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
   // for every design in the game; the loop is bounded so that a hull nobody
   // has built yet cannot hang the sheet.
   let hull = hullPlan(shape, deckHeight, beam, sponsons)
-  for (let pass = 0; pass < 6; pass += 1) {
+  for (let pass = 0; pass < (moved.length > 0 ? 14 : 6); pass += 1) {
     const outline = outlinePolyline(hull)
     const clear = glyphs.every((g) => {
       const top = g.y - g.height / 2
@@ -847,6 +862,36 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
 }
 
 const NO_DAMAGE: PlanDamage = { destroyed: new Set<string>() }
+
+/**
+ * Put every symbol the designer moved where they put it (`ShipDesign.layout`).
+ *
+ * Returns the symbols that were moved. A position is clamped to the deck the
+ * rows laid out — above the first row and below the last there is only the
+ * nose and the tail — and a key the hull no longer carries is ignored.
+ */
+function applyLayout(design: ShipDesign, glyphs: PlacedGlyph[], contentHeight: number): PlacedGlyph[] {
+  const layout = design.layout
+  if (layout === undefined) return []
+  const moved: PlacedGlyph[] = []
+  for (const g of glyphs) {
+    const at = layout[g.key]
+    if (at === undefined || !Number.isFinite(at.x) || !Number.isFinite(at.y)) continue
+    const roseBelow = g.rose === null ? 0 : g.rose.y + g.rose.radius - (g.y + g.height / 2)
+    const y = Math.min(
+      contentHeight / 2 - g.height / 2 - roseBelow,
+      Math.max(-contentHeight / 2 + g.height / 2, at.y),
+    )
+    const dx = round(at.x) - g.x
+    const dy = round(y) - g.y
+    if (dx === 0 && dy === 0) continue
+    g.x = round(g.x + dx)
+    g.y = round(g.y + dy)
+    if (g.rose !== null) g.rose = { ...g.rose, x: round(g.rose.x + dx), y: round(g.rose.y + dy) }
+    moved.push(g)
+  }
+  return moved
+}
 
 function countBands(rows: Array<{ band: BandId }>): number {
   return new Set(rows.map((r) => r.band)).size

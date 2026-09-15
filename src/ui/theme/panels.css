@@ -153,6 +153,21 @@
   filter: drop-shadow(0 0 3px currentColor);
 }
 
+/* The shipyard's hand: symbols that can be dragged about the sheet. */
+.ssd-plan.is-arrangeable .ssd-mount.is-movable {
+  cursor: grab;
+}
+
+.ssd-plan.is-arrangeable .ssd-mount.is-dragging {
+  cursor: grabbing;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 4px var(--thrust));
+}
+
+.ssd-plan.is-arrangeable {
+  touch-action: none;
+}
+
 .ssd-cell-hit {
   fill: transparent;
   stroke: none;

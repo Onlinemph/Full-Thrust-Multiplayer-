@@ -281,7 +281,12 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
         <button
           disabled={!editable}
           className={ship.order !== null && !order.turn ? 'is-on' : undefined}
-          onClick={() => setTurn(null, 0)}
+          onClick={() => {
+            // A second change with no first is a single change made late,
+            // which 3.5 does not offer: straight ahead takes it off too.
+            if (order.secondTurn) setSecondTurn(null, 0)
+            setTurn(null, 0)
+          }}
         >
           Straight
         </button>

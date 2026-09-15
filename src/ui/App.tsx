@@ -36,9 +36,11 @@ import { DamageControlPanel } from './DamageControlPanel'
 import { FlightPanel } from './FlightPanel'
 import { GatePanel } from './GatePanel'
 import { MainMenu } from './MainMenu'
+import type { ShipDesign } from '../engine/types'
 import { MapView } from './MapView'
 import { useNet } from './net'
 import { OnlinePanel } from './OnlinePanel'
+import { LobbyPanel } from './LobbyPanel'
 import { ReplayBar } from './ReplayBar'
 import { Scoreboard } from './Scoreboard'
 import { SquadronPanel } from './SquadronPanel'
@@ -64,6 +66,8 @@ import {
   useGame,
   clearRefusal,
   useRefusal,
+  useLobby,
+  isInMatch,
 } from './store'
 
 /**
@@ -106,6 +110,8 @@ export function App() {
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
+  /* A design the library handed to the yard to build on; null is a fresh hull. */
+  const [yardDesign, setYardDesign] = useState<ShipDesign | null>(null)
   /* The front of the house. The app opens on it rather than on whatever
      battle was last on the table; a connected remote match goes straight to
      the table, since the other console is waiting. */
@@ -114,6 +120,11 @@ export function App() {
   useEffect(() => {
     if (net.phase === 'connected') setScreen('battle')
   }, [net.phase])
+  /* A match still in its lobby: the rules and the fleets are settled in a
+     panel over the table, and nothing on the table can be touched until the
+     host starts the battle. */
+  const lobby = useLobby()
+  const inLobby = lobby !== null && isInMatch()
   /* 2.6: a phase with optional work left — ships that have not fired — is
      ended by asking twice. The first click arms the button and says what the
      second one will skip; the arming is dropped the moment the phase changes. */
@@ -250,18 +261,36 @@ export function App() {
     selectedId,
     onSelect: setSelectedId,
     canCommand,
-    suspended: screen !== 'battle' || showOnline || showSetup || showLibrary || showYard,
+    suspended: screen !== 'battle' || showOnline || showSetup || showLibrary || showYard || inLobby,
     onPrimary: primary.disabled ? endPhase : primary.run,
   })
 
   const modals = (
     <>
+      {inLobby && !showLibrary && !showYard ? <LobbyPanel /> : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showSetup ? (
         <SetupPanel onClose={() => setShowSetup(false)} onStarted={() => setScreen('battle')} />
       ) : null}
-      {showLibrary ? <ShipLibrary onClose={() => setShowLibrary(false)} /> : null}
-      {showYard ? <Shipyard onClose={() => setShowYard(false)} /> : null}
+      {showLibrary ? (
+        <ShipLibrary
+          onClose={() => setShowLibrary(false)}
+          onOpenInYard={(design) => {
+            setYardDesign(design)
+            setShowLibrary(false)
+            setShowYard(true)
+          }}
+        />
+      ) : null}
+      {showYard ? (
+        <Shipyard
+          initial={yardDesign}
+          onClose={() => {
+            setShowYard(false)
+            setYardDesign(null)
+          }}
+        />
+      ) : null}
     </>
   )
 

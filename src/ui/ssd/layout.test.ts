@@ -457,6 +457,50 @@ describe('the sheet as a whole', () => {
     )
   })
 
+  it('puts a symbol where the designer put it, and lets the hull out round it', () => {
+    const plain = planShip(heavyCruiser)
+    const gun = plain.glyphs.find((g) => g.kind === 'weapon')
+    expect(gun).toBeDefined()
+    if (gun === undefined) return
+    const custom: ShipDesign = {
+      ...heavyCruiser,
+      layout: { [gun.key]: { x: gun.x + 200, y: gun.y + 30 }, 'no-such-mount': { x: 0, y: 0 } },
+    }
+    const plan = planShip(custom)
+    const moved = plan.glyphs.find((g) => g.key === gun.key)
+    expect(moved?.x).toBe(gun.x + 200)
+    expect(moved?.y).toBe(gun.y + 30)
+    // The rosette went with it.
+    expect(moved?.rose?.x).toBe(gun.rose!.x + 200)
+    // Still inside the plating, which is wider than it was.
+    const outline = outlinePolyline(plan.hull)
+    expect(boxInsideOutline(outline, moved!.x, moved!.y, moved!.width, moved!.height)).toBe(true)
+    expect(plan.hull.beam).toBeGreaterThan(plain.hull.beam)
+    // Everything else is where it was.
+    for (const g of plain.glyphs) {
+      if (g.key === gun.key) continue
+      const same = plan.glyphs.find((other) => other.key === g.key)
+      expect(same?.x).toBe(g.x)
+      expect(same?.y).toBe(g.y)
+    }
+    // And the counter's gun moved with the sheet's.
+    const before = counterSilhouette(heavyCruiser).guns
+    const after = counterSilhouette(custom).guns
+    expect(after).toHaveLength(before.length)
+    expect(after.some((g, i) => g.x !== before[i]!.x)).toBe(true)
+  })
+
+  it('keeps a symbol dragged off the ends of the deck on the deck', () => {
+    const plain = planShip(heavyCruiser)
+    const gun = plain.glyphs.find((g) => g.kind === 'weapon')!
+    const plan = planShip({ ...heavyCruiser, layout: { [gun.key]: { x: gun.x, y: 9999 } } })
+    const moved = plan.glyphs.find((g) => g.key === gun.key)!
+    expect(moved.y).toBeLessThan(plan.hull.deckBottom)
+    expect(moved.y).toBeGreaterThan(gun.y)
+    const outline = outlinePolyline(plan.hull)
+    expect(boxInsideOutline(outline, moved.x, moved.y, moved.width, moved.height)).toBe(true)
+  })
+
   it('gives the counter a bar per battery and a dot per gun', () => {
     const { bars, guns } = counterSilhouette(heavyCruiser)
     expect(guns).toHaveLength(heavyCruiser.weapons.length)

@@ -62,6 +62,8 @@ export interface FleetPickerProps {
   factions?: Partial<Record<string, string>>
   clans?: Partial<Record<string, string>>
   onChange: (forces: Partial<Record<string, string[]>>) => void
+  /** Pick for this side alone — a console in a match lobby picks its own. */
+  onlySide?: string
 }
 
 /**
@@ -85,9 +87,11 @@ export function FleetPicker({
   factions,
   clans,
   onChange,
+  onlySide,
 }: FleetPickerProps) {
   const scenario = scenarioById(scenarioId)
-  const [side, setSide] = useState(scenario?.sides[0]?.id ?? 'a')
+  const [chosenSide, setSide] = useState(scenario?.sides[0]?.id ?? 'a')
+  const side = onlySide ?? chosenSide
   // 18.2 names five kinds of battle and restricts the list differently for
   // each; `open` is the one with no restriction, which is what a scenario is.
   const [format, setFormat] = useState<CompositionFormat>('open')
@@ -172,15 +176,17 @@ export function FleetPicker({
       <h3>Choose forces</h3>
 
       <div className="panel-row">
-        {scenario.sides.map((s) => (
-          <button
-            key={s.id}
-            className={s.id === side ? 'primary' : undefined}
-            onClick={() => setSide(s.id)}
-          >
-            {s.name}
-          </button>
-        ))}
+        {onlySide === undefined
+          ? scenario.sides.map((s) => (
+              <button
+                key={s.id}
+                className={s.id === side ? 'primary' : undefined}
+                onClick={() => setSide(s.id)}
+              >
+                {s.name}
+              </button>
+            ))
+          : <b>{scenario.sides.find((s) => s.id === side)?.name ?? side}</b>}
         <span className="spacer" />
         <span className={`num budget${spent > budget ? ' is-over' : ''}`}>
           {spent} / {budget} {cpv ? 'CPV' : 'points'}

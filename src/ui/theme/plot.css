@@ -846,6 +846,52 @@
   font-size: 12px;
 }
 
+/* 3.5's second course change: the outer ring, fainter than the first until
+   something is written on it. */
+.compass-ring.is-then {
+  border-style: dotted;
+  opacity: 0.45;
+}
+
+.compass-btn.is-then {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  color: var(--ink-dim);
+  border-color: var(--line);
+}
+
+.compass-btn.is-then:hover:not(:disabled) {
+  color: var(--side-a);
+}
+
+.compass-btn.is-then.is-on,
+.compass-btn.is-then.is-on:hover:not(:disabled) {
+  color: var(--on-bright);
+}
+
+.compass-then-label {
+  width: auto;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.compass-then-label:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.compass-then-label.is-clear {
+  color: var(--ink);
+  font-size: 13px;
+}
+
 .compass-pill,
 .compass-actions {
   position: absolute;

@@ -56,6 +56,8 @@ export interface SsdProps {
   name?: string
   /** Hide weapon and system detail: an enemy sheet under the sensors rules. */
   redacted?: boolean
+  /** The shipyard's hand: symbols may be dragged about the plan. */
+  onMoveGlyph?: (key: string, x: number, y: number) => void
 }
 
 const PRISTINE: SsdDamage = {
@@ -70,7 +72,7 @@ const PRISTINE: SsdDamage = {
  */
 export { hullRows }
 
-export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdProps) {
+export function Ssd({ design, damage = PRISTINE, name, redacted = false, onMoveGlyph }: SsdProps) {
   // The working screen level is what the generators still standing can hold up
   // (7.2), read from the same set of losses as everything else on the sheet.
   const generators = design.systems.filter((s) => s.kind === 'screen-generator')
@@ -156,6 +158,7 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false }: SsdPr
         design={design}
         redacted={redacted}
         title={`${name ?? design.name}, plan view`}
+        onMove={onMoveGlyph}
       />
 
       <Tracks

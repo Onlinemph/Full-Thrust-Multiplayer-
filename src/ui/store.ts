@@ -15,8 +15,12 @@ import {
   replayPartial,
   withEmbedded,
   type GameSetup,
+  type Lobby,
+  type LobbyPick,
   type SavedGame,
 } from '../data/savedGame'
+import { designById, setEmbeddedDesigns, SHIP_DESIGNS } from '../data/ships'
+import type { ShipDesign } from '../engine/types'
 import { aiActions } from '../engine/ai'
 import { aliveShipIds, clearFx, fxAfter, fxBefore, queueFx } from './fx'
 
@@ -69,7 +73,12 @@ function subscribe(listener: () => void): () => void {
 // ---------------------------------------------------------------------------
 
 function saved(): SavedGame {
-  return { version: 1, setup: withEmbedded(setup), actions: journal }
+  return {
+    version: 1,
+    setup: withEmbedded(setup),
+    actions: journal,
+    ...(lobby !== null ? { lobby } : {}),
+  }
 }
 
 /** Where the battle on the table is written: its own slot, or the match's. */
@@ -130,6 +139,14 @@ export function setMatchSide(side: string | null): void {
 let inMatch = false
 /** The home table's battle while a match is on: what comes back afterwards. */
 let homeSave: SavedGame | null = null
+/** Which end of the match this console is, while one is on. */
+let matchRole: 'host' | 'guest' | null = null
+/**
+ * The match's lobby, while it has one: the host settles the rules and each
+ * console picks its own fleet, and the battle starts when the host says so.
+ * Null once the battle is on, and always null off-line.
+ */
+let lobby: Lobby | null = null
 
 /**
  * Sit down at a match (2.6, online).
@@ -149,10 +166,20 @@ export function enterMatch(role: 'host' | 'guest', fresh: boolean): void {
     inMatch = true
     saveKey = MATCH_KEY
   }
+  matchRole = role
   if (fresh) {
-    setup = { ...setup, readyGate: true, aiSides: [] }
+    // A new match opens in its lobby. Whatever fleets the host had picked on
+    // the home table are the opening picks, and each console can change its
+    // own; the rules are the host's draft until the battle starts.
+    const picks: Lobby['picks'] = {}
+    for (const [side, ids] of Object.entries(setup.forces ?? {})) {
+      if (ids) picks[side] = { forceIds: [...ids], ready: false, designs: designsFor(ids) }
+    }
+    lobby = { picks }
+    setup = { ...setup, readyGate: true, aiSides: [], forces: undefined, customDesigns: undefined }
     journal = []
     game = buildGame(setup)
+    embedLobbyDesigns()
     aiActed = new Set()
     clearFx()
     preview = null
@@ -169,6 +196,8 @@ export function leaveMatch(): void {
   inMatch = false
   saveKey = SAVE_KEY
   matchSide = null
+  matchRole = null
+  lobby = null
   const home = homeSave
   homeSave = null
   if (home !== null) {
@@ -188,6 +217,140 @@ export function leaveMatch(): void {
 
 export function isInMatch(): boolean {
   return inMatch
+}
+
+export function currentMatchRole(): 'host' | 'guest' | null {
+  return matchRole
+}
+
+// ---------------------------------------------------------------------------
+// The lobby
+// ---------------------------------------------------------------------------
+
+export function currentLobby(): Lobby | null {
+  return lobby
+}
+
+export function useLobby(): Lobby | null {
+  useGameVersion()
+  return lobby
+}
+
+/** The designs a pick names that the roster does not carry: they travel with it. */
+function designsFor(ids: readonly string[]): ShipDesign[] {
+  const out: ShipDesign[] = []
+  for (const id of ids) {
+    if (SHIP_DESIGNS.some((d) => d.id === id) || out.some((d) => d.id === id)) continue
+    const design = designById(id)
+    if (design) out.push(structuredClone(design))
+  }
+  return out
+}
+
+/** Every design the lobby's picks brought with them, so ids resolve here. */
+function lobbyDesigns(): ShipDesign[] {
+  const out: ShipDesign[] = []
+  for (const pick of Object.values(lobby?.picks ?? {})) {
+    for (const design of pick?.designs ?? []) {
+      if (!out.some((d) => d.id === design.id)) out.push(design)
+    }
+  }
+  return out
+}
+
+/**
+ * Make the other console's home-built hulls resolvable on this one. Rebuilding
+ * the game sets the embedded designs from the setup, which has none until the
+ * battle starts, so this is re-done after every rebuild while the lobby is on.
+ */
+function embedLobbyDesigns(): void {
+  if (lobby !== null) setEmbeddedDesigns(lobbyDesigns())
+}
+
+/**
+ * The host changes the rules. Every console's readiness is withdrawn: what
+ * they said they were ready for is no longer what is on the table.
+ */
+export function lobbySetup(patch: Partial<GameSetup>): void {
+  if (lobby === null || matchRole !== 'host') return
+  const scenarioChanged = patch.scenarioId !== undefined && patch.scenarioId !== setup.scenarioId
+  setup = { ...setup, ...patch, readyGate: true, aiSides: [], forces: undefined }
+  const picks: Lobby['picks'] = {}
+  for (const [side, pick] of Object.entries(lobby.picks)) {
+    if (!pick) continue
+    picks[side] = scenarioChanged ? { forceIds: null, ready: false } : { ...pick, ready: false }
+  }
+  lobby = { picks }
+  game = buildGame(setup)
+  embedLobbyDesigns()
+  clearFx()
+  preview = null
+  autosave()
+  net?.onReplace(saved())
+  emit()
+}
+
+/**
+ * This console picks a side's fleet, or says it is ready. The host records
+ * it and tells the guest; the guest records it for itself and tells the
+ * host, whose record then comes back as the one that stands.
+ */
+export function lobbyPick(side: string, pick: { forceIds: string[] | null; ready: boolean }): void {
+  if (lobby === null) return
+  const full: LobbyPick = {
+    forceIds: pick.forceIds === null ? null : [...pick.forceIds],
+    ready: pick.ready,
+    designs: pick.forceIds === null ? undefined : designsFor(pick.forceIds),
+  }
+  if (full.designs !== undefined && full.designs.length === 0) delete full.designs
+  applyLobbyPick(side, full)
+  if (matchRole === 'host') net?.onReplace(saved())
+  else net?.onLobbyPick?.(side, full)
+}
+
+/** A pick arriving — from the other console, or made here. */
+export function applyLobbyPick(side: string, pick: LobbyPick): void {
+  if (lobby === null) return
+  lobby = { picks: { ...lobby.picks, [side]: pick } }
+  embedLobbyDesigns()
+  autosave()
+  emit()
+}
+
+/** Every side of the scenario has said it is ready. */
+export function lobbyAllReady(): boolean {
+  if (lobby === null) return false
+  return game.sides.every((side) => lobby?.picks[side.id]?.ready === true)
+}
+
+/**
+ * The host starts the battle: the picks become the setup's forces, the
+ * designs they brought are embedded, and the record becomes a battle at
+ * turn 1 — which the guest receives as a sync with no lobby on it.
+ */
+export function startMatch(): boolean {
+  if (lobby === null || matchRole !== 'host') return false
+  const forces: Record<string, string[]> = {}
+  for (const [side, pick] of Object.entries(lobby.picks)) {
+    if (pick?.forceIds) forces[side] = [...pick.forceIds]
+  }
+  const designs = lobbyDesigns()
+  setup = {
+    ...setup,
+    rulesVersion: CURRENT_RULES_VERSION,
+    forces: Object.keys(forces).length > 0 ? forces : undefined,
+    customDesigns: designs.length > 0 ? designs : undefined,
+  }
+  lobby = null
+  journal = []
+  game = buildGame(setup)
+  clearFx()
+  aiActed = new Set()
+  preview = null
+  autosave()
+  net?.onReplace(saved())
+  emit()
+  return true
 }
 
 export function currentMatchSide(): string | null {
@@ -225,6 +388,8 @@ export interface NetHooks {
   onAction: (action: GameAction, sequenceAfter: number) => void
   onUndo: (lengthAfter: number) => void
   onReplace: (saved: SavedGame) => void
+  /** A guest's fleet pick or readiness, for the host to record. */
+  onLobbyPick?: (side: string, pick: LobbyPick) => void
 }
 
 let net: NetHooks | null = null
@@ -456,6 +621,8 @@ export function applyRemoteSave(next: SavedGame): void {
   setup = next.setup
   journal = next.actions
   game = replayPartial(next, next.actions.length)
+  lobby = inMatch && next.lobby !== undefined ? next.lobby : null
+  embedLobbyDesigns()
   clearFx()
   aiActed = new Set()
   preview = null

@@ -325,6 +325,58 @@
   padding-right: var(--gap);
 }
 
+/* The three shelves, and the file button beside them. */
+.library-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.library-shelves button .num {
+  margin-left: 0.4em;
+  opacity: 0.7;
+}
+
+.library-notice {
+  padding: 0.4rem 0.6rem;
+  border-left: 2px solid var(--thrust);
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.library-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  margin-bottom: var(--gap);
+}
+
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.library-author {
+  max-width: 20rem;
+  margin-bottom: var(--gap);
+}
+
+.library-detail {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+}
+
+.counter-preview {
+  flex: none;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
 @media (max-width: 760px) {
   .library {
     grid-template-columns: 1fr;
@@ -638,6 +690,29 @@
   font-family: var(--font-mono);
 }
 
+.yard-sheet.is-arranging {
+  outline: 1px dashed var(--thrust);
+  outline-offset: 4px;
+}
+
+.yard-arrange {
+  margin-top: var(--gap);
+}
+
+/* The counter's picture beside the field that names it. */
+.yard-art {
+  display: grid;
+  grid-template-columns: 1fr 5rem;
+  gap: var(--gap);
+  align-items: end;
+  margin-top: var(--gap);
+}
+
+.yard-art .counter-preview {
+  width: 5rem;
+  height: 5rem;
+}
+
 .yard-actions {
   display: flex;
   flex-wrap: wrap;
@@ -693,4 +768,112 @@
 .tech-base-panel .system-chip.is-fitted {
   border-color: var(--screens);
   color: var(--screens);
+}
+
+/* ── Match lobby ──────────────────────────────────────────────────────────── */
+
+/* The setup as a form, inside the New battle modal and the lobby alike. A
+   fieldset so the guest's copy can be switched off in one attribute. */
+.setup-form {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.setup-form:disabled {
+  opacity: 0.8;
+}
+
+.lobby-modal {
+  width: min(84rem, 100%);
+}
+
+.lobby-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2);
+}
+
+.lobby {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(22rem, 1.3fr);
+  gap: var(--gap-2);
+  min-height: 0;
+}
+
+.lobby-rules,
+.lobby-sides {
+  overflow-y: auto;
+  max-height: 62vh;
+  padding-right: var(--gap);
+}
+
+.lobby-rules .setup-form section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.lobby-sides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.lobby-side {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--gap-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.lobby-side.is-mine {
+  border-color: var(--thrust);
+}
+
+.lobby-side h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.lobby-side .fleet-picker {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.lobby-ready {
+  color: var(--screens);
+  font-weight: 600;
+}
+
+.lobby-waiting {
+  color: var(--warn);
+}
+
+.lobby-picked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.lobby-picked .picked {
+  padding-right: 0.6rem;
+}
+
+@media (max-width: 900px) {
+  .lobby {
+    grid-template-columns: 1fr;
+  }
+  .lobby-rules,
+  .lobby-sides {
+    max-height: none;
+  }
 }
