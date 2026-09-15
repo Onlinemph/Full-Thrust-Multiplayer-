@@ -1,5 +1,6 @@
-import type { Arc, ShipDesign, WeaponDef } from '../engine/types'
+import type { ShipDesign, WeaponDef } from '../engine/types'
 import { ALL_ARCS } from '../data/buildCatalog'
+import { boughtArcs, catalogueEntryFor, fitArcs, mountingFor } from '../data/arcs'
 import { canMountFlak, FLAK_UPGRADE_POINTS } from '../engine/weapons/kinetics'
 
 /**
@@ -16,6 +17,9 @@ import { canMountFlak, FLAK_UPGRADE_POINTS } from '../engine/weapons/kinetics'
  * it covers and leaves which arcs to the designer — a three-arc beam is a
  * forward battery or a broadside depending on where you point it, at the same
  * price — so the count is fixed by what was bought and the choice is free.
+ * The count is read off the price (`boughtArcs`), never off the arcs chosen
+ * so far: taking an arc off a three-arc mounting leaves a three-arc mounting
+ * with a slot free, and a wider mounting is bought from the row itself.
  */
 export function FittedWeapons({
   design,
@@ -49,37 +53,72 @@ export function FittedWeapons({
           </div>
 
           {/* 4.2: the mounting is bought by arc count; which arcs is free. */}
-          <div className="panel-row arc-picker">
-            <span className="rule-detail">Arcs</span>
-            {ALL_ARCS.map((arc) => {
-              const on = weapon.arcs.includes(arc)
-              const full = weapon.arcs.length
-              return (
-                <button
-                  key={arc}
-                  className={`arc-chip${on ? ' is-on' : ''}`}
-                  title={
-                    on
-                      ? `Take ${arc} off and put the mounting somewhere else`
-                      : `Cover ${arc} instead`
-                  }
-                  onClick={() => {
-                    const next: Arc[] = on
-                      ? weapon.arcs.filter((a) => a !== arc)
-                      : [...weapon.arcs, arc]
-                    // A mounting covers what it was bought to cover: dropping
-                    // an arc leaves room for another, and the count is the
-                    // price. Over the count, the oldest arc gives way.
-                    replace(weapon.id, {
-                      arcs: next.length > full ? next.slice(next.length - full) : next,
-                    })
-                  }}
+          {(() => {
+            const entry = catalogueEntryFor(weapon)
+            const mounting = mountingFor(weapon)
+            const bought = boughtArcs(weapon)
+            const chosen = weapon.arcs.length
+            const full = chosen >= bought
+            return (
+              <div className="panel-row arc-picker">
+                {entry !== undefined && mounting !== undefined && entry.mountings.length > 1 ? (
+                  <select
+                    aria-label={`${weapon.label} mounting`}
+                    title="How many arcs the mounting is bought to cover (4.2); the price follows"
+                    value={mounting.arcs}
+                    onChange={(event) => {
+                      const next = entry.mountings.find((m) => m.arcs === Number(event.target.value))
+                      if (!next) return
+                      replace(weapon.id, {
+                        mass: next.mass,
+                        points: next.points,
+                        arcs: fitArcs(weapon.arcs, next.arcs),
+                      })
+                    }}
+                  >
+                    {entry.mountings.map((m) => (
+                      <option key={m.arcs} value={m.arcs}>
+                        {m.arcs}-arc — {m.mass} mass, {m.points} pts
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="rule-detail">{bought}-arc</span>
+                )}
+                {ALL_ARCS.map((arc) => {
+                  const on = weapon.arcs.includes(arc)
+                  return (
+                    <button
+                      key={arc}
+                      className={`arc-chip${on ? ' is-on' : ''}`}
+                      disabled={!on && full}
+                      title={
+                        on
+                          ? `Take ${arc} off — the mounting keeps its ${bought} arcs to fill`
+                          : full
+                            ? `Bought as a ${bought}-arc mounting: take one off first, or buy a wider one`
+                            : `Cover ${arc}`
+                      }
+                      onClick={() =>
+                        replace(weapon.id, {
+                          arcs: on ? weapon.arcs.filter((a) => a !== arc) : [...weapon.arcs, arc],
+                        })
+                      }
+                    >
+                      {arc}
+                    </button>
+                  )
+                })}
+                <span
+                  className="num arc-count"
+                  style={{ color: full ? 'var(--ink-dim)' : 'var(--warn)' }}
+                  title={full ? 'Every arc bought is covered' : `${bought - chosen} bought and not yet placed`}
                 >
-                  {arc}
-                </button>
-              )
-            })}
-          </div>
+                  {chosen}/{bought}
+                </span>
+              </div>
+            )
+          })()}
 
           {/* 5.22: a turret widens what a mounting can bear on, at the cost of
               the turret's own mass. A mount belongs to at most one. */}

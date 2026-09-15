@@ -20,7 +20,6 @@ import {
   HULL_ROW_OPTIONS,
 } from '../data/designPricing'
 import {
-  ALL_ARCS,
   CATALOGUE_SYSTEMS,
   CATALOGUE_WEAPONS,
   type CatalogueSystem,
@@ -44,6 +43,7 @@ import { MAGAZINE_LOAD_MASS, MAGAZINE_POINTS_PER_MASS } from '../engine/ordnance
 import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
 import { CounterPreview } from './CounterPreview'
+import { defaultArcs } from '../data/arcs'
 import { isCounterArtUrl } from '../data/designFile'
 
 /**
@@ -263,7 +263,7 @@ export function Shipyard({
           weaponClass: entry.weaponClass,
           rating: entry.rating,
           variant: entry.variant,
-          arcs: [...ALL_ARCS].slice(0, mounting.arcs),
+          arcs: defaultArcs(mounting.arcs),
           mass: mounting.mass,
           points: mounting.points,
           // 6.6's crossed-off mountings. Without this a shipyard-built SM Rack
@@ -700,7 +700,7 @@ export function Shipyard({
                           ...design.turrets,
                           {
                             id: `t${design.turrets.length + 1}`,
-                            arcs: [...ALL_ARCS].slice(0, arcs),
+                            arcs: defaultArcs(arcs),
                             capacity,
                             mass,
                             points: turretPoints(mass),
