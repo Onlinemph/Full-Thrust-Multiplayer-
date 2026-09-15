@@ -219,6 +219,19 @@ export function isInMatch(): boolean {
   return inMatch
 }
 
+/**
+ * The side this console commands has to be a side the table has. A scenario
+ * change in the lobby, or a record arriving from the host, can rebuild the
+ * game with different sides; a console left pointing at one that is gone
+ * could command nothing. It goes back to the role's default seat.
+ */
+function settleMatchSide(): void {
+  if (matchRole === null || matchSide === null) return
+  const sides = game.sides.map((side) => side.id)
+  if (sides.includes(matchSide)) return
+  matchSide = matchRole === 'host' ? (sides[0] ?? null) : (sides[1] ?? sides[0] ?? null)
+}
+
 export function currentMatchRole(): 'host' | 'guest' | null {
   return matchRole
 }
@@ -275,13 +288,16 @@ export function lobbySetup(patch: Partial<GameSetup>): void {
   if (lobby === null || matchRole !== 'host') return
   const scenarioChanged = patch.scenarioId !== undefined && patch.scenarioId !== setup.scenarioId
   setup = { ...setup, ...patch, readyGate: true, aiSides: [], forces: undefined }
+  game = buildGame(setup)
+  settleMatchSide()
+  // Only the new table's sides keep a seat in the lobby.
+  const sides = new Set(game.sides.map((side) => side.id))
   const picks: Lobby['picks'] = {}
   for (const [side, pick] of Object.entries(lobby.picks)) {
-    if (!pick) continue
+    if (!pick || !sides.has(side)) continue
     picks[side] = scenarioChanged ? { forceIds: null, ready: false } : { ...pick, ready: false }
   }
   lobby = { picks }
-  game = buildGame(setup)
   embedLobbyDesigns()
   clearFx()
   preview = null
@@ -622,6 +638,7 @@ export function applyRemoteSave(next: SavedGame): void {
   journal = next.actions
   game = replayPartial(next, next.actions.length)
   lobby = inMatch && next.lobby !== undefined ? next.lobby : null
+  settleMatchSide()
   embedLobbyDesigns()
   clearFx()
   aiActed = new Set()

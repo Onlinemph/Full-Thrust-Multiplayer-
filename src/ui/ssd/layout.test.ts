@@ -490,6 +490,16 @@ describe('the sheet as a whole', () => {
     expect(after.some((g, i) => g.x !== before[i]!.x)).toBe(true)
   })
 
+  it('keeps a symbol asked to sit a universe away within reach', () => {
+    const plain = planShip(heavyCruiser)
+    const gun = plain.glyphs.find((g) => g.kind === 'weapon')!
+    const plan = planShip({ ...heavyCruiser, layout: { [gun.key]: { x: 1e308, y: gun.y } } })
+    const moved = plan.glyphs.find((g) => g.key === gun.key)!
+    expect(moved.x).toBeLessThanOrEqual(600)
+    expect(Number.isFinite(plan.hull.beam)).toBe(true)
+    expect(boxInsideOutline(outlinePolyline(plan.hull), moved.x, moved.y, moved.width, moved.height)).toBe(true)
+  })
+
   it('keeps a symbol dragged off the ends of the deck on the deck', () => {
     const plain = planShip(heavyCruiser)
     const gun = plain.glyphs.find((g) => g.kind === 'weapon')!

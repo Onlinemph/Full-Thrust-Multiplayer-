@@ -79,9 +79,9 @@ export function normaliseDesign(raw: unknown): ShipDesign | string {
     marineParties: Number.isFinite(raw.marineParties) ? raw.marineParties : 0,
   }
   if (typeof design.art === 'string' && !isCounterArtUrl(design.art)) delete design.art
-  if (design.layout !== undefined && (typeof design.layout !== 'object' || design.layout === null)) {
-    delete design.layout
-  }
+  const layout = cleanLayout(design.layout)
+  if (layout === undefined) delete design.layout
+  else design.layout = layout
   // What the file says it costs is not evidence. The tables are.
   design.hullBoxes = Number.isFinite(raw.hullBoxes)
     ? raw.hullBoxes
@@ -98,6 +98,28 @@ export function normaliseDesign(raw: unknown): ShipDesign | string {
     }.`
   }
   return design
+}
+
+/** The furthest from the keel a symbol can be put, in the sheet's own units. */
+export const LAYOUT_REACH = 2000
+
+/**
+ * A layout as the sheet can use it: finite coordinates within reach, keyed by
+ * plain ids. Anything else is dropped rather than drawn — a symbol at 1e308
+ * is a hull the width of the universe.
+ */
+function cleanLayout(raw: unknown): ShipDesign['layout'] | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const out: NonNullable<ShipDesign['layout']> = {}
+  for (const [key, at] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof at !== 'object' || at === null) continue
+    const { x, y } = at as { x?: unknown; y?: unknown }
+    if (typeof x !== 'number' || typeof y !== 'number') continue
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+    if (Math.abs(x) > LAYOUT_REACH || Math.abs(y) > LAYOUT_REACH) continue
+    out[key] = { x, y }
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**

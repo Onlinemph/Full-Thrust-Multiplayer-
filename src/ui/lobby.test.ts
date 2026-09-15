@@ -6,6 +6,7 @@ import {
   currentGame,
   currentJournal,
   currentLobby,
+  currentMatchSide,
   currentSave,
   currentSetup,
   enterMatch,
@@ -139,6 +140,19 @@ describe('a match lobby', () => {
     expect(currentLobby()?.picks.b?.forceIds).toEqual(['esu-frigate'])
     expect(replies[0]?.kind).toBe('sync')
     if (replies[0]?.kind === 'sync') expect(replies[0].saved.lobby?.picks.b?.ready).toBe(true)
+  })
+
+  it('puts a console back in a seat the table has when the sides change under it', () => {
+    enterMatch('guest', false)
+    setMatchSide('zzz')
+    applyRemoteSave({ version: 1, setup: currentSetup(), actions: [], lobby: { picks: {} } })
+    expect(currentMatchSide()).toBe('b')
+    // A pick for a side that is not on the table is dropped when the host re-lays it.
+    leaveMatch()
+    enterMatch('host', true)
+    applyLobbyPick('zzz', { forceIds: ['esu-frigate'], ready: true })
+    lobbySetup({ scenarioId: 'line-of-battle' })
+    expect(currentLobby()?.picks.zzz).toBeUndefined()
   })
 
   it('is over when the match is left', () => {

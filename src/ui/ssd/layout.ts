@@ -863,6 +863,9 @@ export function planShip(design: ShipDesign, damage: PlanDamage = NO_DAMAGE): Ss
 
 const NO_DAMAGE: PlanDamage = { destroyed: new Set<string>() }
 
+/** How far from the keel a designer's layout may put a symbol, in plan units. */
+const LAYOUT_REACH = 600
+
 /**
  * Put every symbol the designer moved where they put it (`ShipDesign.layout`).
  *
@@ -882,7 +885,10 @@ function applyLayout(design: ShipDesign, glyphs: PlacedGlyph[], contentHeight: n
       contentHeight / 2 - g.height / 2 - roseBelow,
       Math.max(-contentHeight / 2 + g.height / 2, at.y),
     )
-    const dx = round(at.x) - g.x
+    // Sideways the plating is let out to clear it, so there has to be a
+    // limit to how far out it can be asked to go.
+    const x = Math.max(-LAYOUT_REACH, Math.min(LAYOUT_REACH, at.x))
+    const dx = round(x) - g.x
     const dy = round(y) - g.y
     if (dx === 0 && dy === 0) continue
     g.x = round(g.x + dx)

@@ -217,7 +217,14 @@ export function OrderPanel({ game, ship, editable, emergencyThrustAllowed }: Ord
               setTyped('')
               // Clear whatever was plotted before writing the new line, so a
               // typed order replaces the clicked one rather than adding to it.
-              dispatch({ type: 'plot-turn', shipId: ship.id, direction: 'port', points: 0 })
+              // Null, not a zero-point turn: the engine reads a direction as a
+              // turn written, and a "P0" is a turn the sheet then shows.
+              if (ship.order?.turn) {
+                dispatch({ type: 'plot-turn', shipId: ship.id, direction: null, points: 0 })
+              }
+              if (ship.order?.secondTurn && !parsed.order.secondTurn) {
+                dispatch({ type: 'plot-second-turn', shipId: ship.id, direction: null, points: 0 })
+              }
               if (parsed.order.turn) {
                 dispatch({
                   type: 'plot-turn',

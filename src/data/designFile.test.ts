@@ -62,6 +62,25 @@ describe('a design file', () => {
     expect(good.art).toBe('https://example.org/f.png')
   })
 
+  it('keeps only the layout entries the sheet can draw', () => {
+    const parsed = parseDesignFile(
+      designFileText({
+        ...frigate,
+        layout: {
+          ok: { x: 12, y: -30 },
+          far: { x: 1e308, y: 0 },
+          words: { x: 'a', y: 0 } as unknown as { x: number; y: number },
+          half: { x: 3 } as unknown as { x: number; y: number },
+        },
+      }),
+    )
+    if (typeof parsed === 'string') throw new Error(parsed)
+    expect(parsed.layout).toEqual({ ok: { x: 12, y: -30 } })
+    const none = parseDesignFile(designFileText({ ...frigate, layout: { far: { x: 1e308, y: 0 } } }))
+    if (typeof none === 'string') throw new Error(none)
+    expect(none.layout).toBeUndefined()
+  })
+
   it('imports under a fresh id when the id is taken, and once only', () => {
     const first = importDesign({ ...frigate, name: 'Someone’s Frigate' })
     expect(first).toBe('esu-frigate-2')
