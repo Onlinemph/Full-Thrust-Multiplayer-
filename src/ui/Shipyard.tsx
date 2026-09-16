@@ -35,8 +35,23 @@ import { allDesigns, SHIP_DESIGNS } from '../data/ships'
 import { deleteDesign, saveDesign, savedDesigns } from '../data/shipyard'
 import { hullRowBounds } from '../engine/combat'
 import { thresholdTarget } from '../engine/dice'
-import { FIGHTER_TYPES, type FighterTypeId } from '../engine/fighters'
-import { GUNBOAT_TYPES, type GunboatTypeId } from '../engine/gunboats'
+import { FIGHTER_MODIFIERS, FIGHTER_TYPES, type FighterTypeId } from '../engine/fighters'
+import { GUNBOAT_MODIFIERS, GUNBOAT_TYPES, type GunboatTypeId } from '../engine/gunboats'
+import { fighterMods, gunboatMods } from '../data/smallCraftMods'
+import {
+  FIGHTER_MODIFIER_IDS,
+  GUNBOAT_MODIFIER_IDS,
+  fighterModProblem,
+  fighterModTitle,
+  gunboatModProblem,
+  gunboatModTitle,
+  squadronLabel,
+  squadronPointsFor,
+  toggleFighterMod,
+  toggleGunboatMod,
+  wingLabel,
+  wingPoints,
+} from '../data/smallCraftBuild'
 import { crewFactors } from '../engine/game'
 import type { HullClass, HullRows, ShipDesign, SystemKind, WeaponClass } from '../engine/types'
 import { checkMagazine, MAGAZINE_LOAD_MASS, MULTI_STAGE_EXTRA_MASS } from '../engine/ordnance'
@@ -1201,6 +1216,26 @@ function SmallCraft({
 }) {
   const fighterTypes = Object.values(FIGHTER_TYPES)
   const gunboatTypes = Object.values(GUNBOAT_TYPES)
+  // 9.2: FTL boats cannot ride a rack; a hull with racks carries its squadrons in them.
+  const onRacks = design.systems.some((s) => s.kind === 'gunboat-rack')
+
+  const setWing = (i: number, typeId: FighterTypeId, modifiers: string[]) =>
+    edit({
+      fighterBays: design.fighterBays.map((w, j) =>
+        j === i
+          ? { ...w, typeId, label: wingLabel(typeId, modifiers), ...(modifiers.length > 0 ? { modifiers } : { modifiers: undefined }) }
+          : w,
+      ),
+    })
+  const setSquadron = (i: number, typeId: GunboatTypeId, modifiers: string[]) =>
+    edit({
+      gunboats: design.gunboats.map((s, j) =>
+        j === i
+          ? { ...s, typeId, label: squadronLabel(typeId, modifiers), ...(modifiers.length > 0 ? { modifiers } : { modifiers: undefined }) }
+          : s,
+      ),
+    })
+
   return (
     <>
       {hangars > 0 ? (
@@ -1208,39 +1243,68 @@ function SmallCraft({
           <h4>
             Wings <span className="rule-detail">{design.fighterBays.length} of {hangars} hangars filled</span>
           </h4>
-          {design.fighterBays.map((wing, i) => (
-            <div className="panel-row" key={i}>
-              <select
-                aria-label={`Wing ${i + 1} type`}
-                value={wing.typeId}
-                onChange={(event) => {
-                  const typeId = event.target.value as FighterTypeId
-                  const bays = design.fighterBays.map((w, j) =>
-                    j === i ? { ...w, typeId, label: `${FIGHTER_TYPES[typeId].label} wing` } : w,
-                  )
-                  edit({ fighterBays: bays })
-                }}
-              >
-                {fighterTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label} — {type.pointsPerWing} pts a wing
-                  </option>
-                ))}
-              </select>
-              <span className="spacer" />
-              <button onClick={() => edit({ fighterBays: design.fighterBays.filter((_, j) => j !== i) })}>
-                Remove
-              </button>
-            </div>
-          ))}
+          {design.fighterBays.map((wing, i) => {
+            const typeId = wing.typeId as FighterTypeId
+            const known = typeId in FIGHTER_TYPES
+            return (
+              <div className="fitted-row" key={i}>
+                <div className="panel-row">
+                  <select
+                    aria-label={`Wing ${i + 1} type`}
+                    value={wing.typeId}
+                    onChange={(event) =>
+                      setWing(i, event.target.value as FighterTypeId, fighterMods(wing.modifiers))
+                    }
+                  >
+                    {fighterTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.label} — {type.pointsPerWing} pts a wing
+                      </option>
+                    ))}
+                  </select>
+                  <span className="spacer" />
+                  {known ? (
+                    <span className="num" title="The wing as built, modifications included (8.15)">
+                      {wingPoints(typeId, wing.modifiers)}p
+                    </span>
+                  ) : null}
+                  <button onClick={() => edit({ fighterBays: design.fighterBays.filter((_, j) => j !== i) })}>
+                    Remove
+                  </button>
+                </div>
+                {/* 8.15's "(+Mod)" options. They stack — a Heavy Fast Long
+                    Range wing is a legal build — except where the engine says
+                    not: Light bars Heavy and Long Range, and some roles. */}
+                {known ? (
+                  <div className="panel-row arc-picker">
+                    <span className="rule-detail">Options</span>
+                    {FIGHTER_MODIFIER_IDS.map((id) => {
+                      const on = fighterMods(wing.modifiers).includes(id)
+                      const problem = on ? null : fighterModProblem(typeId, wing.modifiers, id)
+                      return (
+                        <button
+                          key={id}
+                          className={`arc-chip${on ? ' is-on' : ''}`}
+                          disabled={problem !== null}
+                          title={problem ?? fighterModTitle(id)}
+                          onClick={() => setWing(i, typeId, toggleFighterMod(wing.modifiers, id))}
+                        >
+                          {FIGHTER_MODIFIERS[id].label}
+                        </button>
+                      )
+                    })}
+                    <span className="spacer" />
+                    <span className="rule-detail">{wingLabel(typeId, wing.modifiers)}</span>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
           <button
             disabled={design.fighterBays.length >= hangars}
             onClick={() =>
               edit({
-                fighterBays: [
-                  ...design.fighterBays,
-                  { typeId: 'standard', label: `${FIGHTER_TYPES.standard.label} wing` },
-                ],
+                fighterBays: [...design.fighterBays, { typeId: 'standard', label: wingLabel('standard', []) }],
               })
             }
           >
@@ -1254,39 +1318,65 @@ function SmallCraft({
             Gunboat squadrons{' '}
             <span className="rule-detail">{design.gunboats.length} of {racks} racks filled</span>
           </h4>
-          {design.gunboats.map((squadron, i) => (
-            <div className="panel-row" key={i}>
-              <select
-                aria-label={`Squadron ${i + 1} type`}
-                value={squadron.typeId}
-                onChange={(event) => {
-                  const typeId = event.target.value as GunboatTypeId
-                  const list = design.gunboats.map((s, j) =>
-                    j === i ? { ...s, typeId, label: `${GUNBOAT_TYPES[typeId].label} squadron` } : s,
-                  )
-                  edit({ gunboats: list })
-                }}
-              >
-                {gunboatTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-              <span className="spacer" />
-              <button onClick={() => edit({ gunboats: design.gunboats.filter((_, j) => j !== i) })}>
-                Remove
-              </button>
-            </div>
-          ))}
+          {design.gunboats.map((squadron, i) => {
+            const typeId = squadron.typeId as GunboatTypeId
+            const known = typeId in GUNBOAT_TYPES
+            return (
+              <div className="fitted-row" key={i}>
+                <div className="panel-row">
+                  <select
+                    aria-label={`Squadron ${i + 1} type`}
+                    value={squadron.typeId}
+                    onChange={(event) =>
+                      setSquadron(i, event.target.value as GunboatTypeId, gunboatMods(squadron.modifiers))
+                    }
+                  >
+                    {gunboatTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.label} — {type.pointsEach} pts a boat
+                      </option>
+                    ))}
+                  </select>
+                  <span className="spacer" />
+                  {known ? (
+                    <span className="num" title="Six boats and their options (9.1, 9.2)">
+                      {squadronPointsFor(typeId, squadron.modifiers)}p
+                    </span>
+                  ) : null}
+                  <button onClick={() => edit({ gunboats: design.gunboats.filter((_, j) => j !== i) })}>
+                    Remove
+                  </button>
+                </div>
+                {known ? (
+                  <div className="panel-row arc-picker">
+                    <span className="rule-detail">Options</span>
+                    {GUNBOAT_MODIFIER_IDS.map((id) => {
+                      const on = gunboatMods(squadron.modifiers).includes(id)
+                      const problem = on ? null : gunboatModProblem(typeId, squadron.modifiers, id, onRacks)
+                      return (
+                        <button
+                          key={id}
+                          className={`arc-chip${on ? ' is-on' : ''}`}
+                          disabled={problem !== null}
+                          title={problem ?? gunboatModTitle(id)}
+                          onClick={() => setSquadron(i, typeId, toggleGunboatMod(squadron.modifiers, id))}
+                        >
+                          {GUNBOAT_MODIFIERS[id].label}
+                        </button>
+                      )
+                    })}
+                    <span className="spacer" />
+                    <span className="rule-detail">{squadronLabel(typeId, squadron.modifiers)}</span>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
           <button
             disabled={design.gunboats.length >= racks}
             onClick={() =>
               edit({
-                gunboats: [
-                  ...design.gunboats,
-                  { typeId: 'beam', label: `${GUNBOAT_TYPES.beam.label} squadron` },
-                ],
+                gunboats: [...design.gunboats, { typeId: 'beam', label: squadronLabel('beam', []) }],
               })
             }
           >
