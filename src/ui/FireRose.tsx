@@ -49,7 +49,8 @@ function wedgePath(startDegrees: number, inner: number, outer: number): string {
 
 export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: FireRoseProps) {
   const summaries = fireArcs(game, ship)
-  const inner = Math.max(30, clearance + 10)
+  // Clear of the hull and of the name written under it (Counter's label).
+  const inner = Math.max(44, clearance + 28)
   const outer = inner + 58
   const base = courseToDegrees(ship.placement.facing) - DEGREES_PER_ARC / 2
   const size = outer * 2 + 4
@@ -63,10 +64,22 @@ export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: Fi
       onPointerDown={(event) => event.stopPropagation()}
       onPointerUp={(event) => event.stopPropagation()}
     >
+      {/* Inline geometry, because the plot styles every svg under it as the
+          plot itself — full width, pinned to the corner — and a rose given
+          that treatment is a rose of no size at all. */}
       <svg
         width={size}
         height={size}
         viewBox={`${-size / 2} ${-size / 2} ${size} ${size}`}
+        style={{
+          position: 'absolute',
+          left: -size / 2,
+          top: -size / 2,
+          width: size,
+          height: size,
+          transform: 'none',
+          overflow: 'visible',
+        }}
         onPointerLeave={() => onHoverArc(null)}
       >
         {ARC_ORDER.map((arc, index) => {

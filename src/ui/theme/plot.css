@@ -967,10 +967,9 @@
   font-family: var(--font-mono);
 }
 
-.fire-rose svg {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  overflow: visible;
+/* The plot's own `svg` rule reaches in here; the rose sets its geometry
+   inline and this only keeps the pointer off the box between the wedges. */
+.plot .fire-rose svg {
   pointer-events: none;
 }
 
