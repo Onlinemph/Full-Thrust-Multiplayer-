@@ -420,8 +420,15 @@ describe('destructible asteroids (17.1)', () => {
   }
 
   it('cannot be shot at all unless the scenario gave it a damage track', () => {
-    // "The normal rules assume that asteroids cannot be destroyed."
-    const game = gunline()
+    // "The normal rules assume that asteroids cannot be destroyed." A hull in
+    // reach as well, or reading 17 passes a phase 11 with nothing to shoot.
+    const game = battle(
+      [
+        ship('gun', 'a', 'esu-heavy-cruiser', { x: 40, y: 50 }),
+        ship('mark', 'b', 'esu-heavy-cruiser', { x: 44, y: 50 }),
+      ],
+      [rock()],
+    )
     advanceTo(game, 'ship-fire')
     const beam = shipOf(game, 'gun').design.weapons.find((w) => w.arcs.includes('F'))!
     expect(

@@ -31,6 +31,7 @@ import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
 import { OrderCompass } from './OrderCompass'
+import { OrdnanceGlyph } from './OrdnanceGlyph'
 import { FireRose } from './FireRose'
 import { Starfield } from './Starfield'
 import { outsideReach, reachOfAim, reachOfGroup, reachOfReturn, type Reach } from './reach'
@@ -683,15 +684,7 @@ export function MapView({
           ) : null}
 
           {game.ordnance.map((marker) => (
-            <circle
-              key={marker.id}
-              // A mine sits still and a plasma bolt is a place rather than a
-              // thing on its way somewhere, so neither reads as a missile.
-              className={`missile-marker is-${marker.kind}`}
-              cx={marker.position.x * scale}
-              cy={marker.position.y * scale}
-              r={marker.kind === 'plasma-bolt' ? 5 : 3}
-            />
+            <OrdnanceGlyph key={marker.id} marker={marker} scale={scale} />
           ))}
 
           {/* 7.23's nova template: the swept band, drawn as a capsule from the

@@ -232,7 +232,7 @@ describe('under the ready gate a phase ends when every console says so (2.6)', (
 })
 
 describe('reading', () => {
-  it('is 16', () => {
-    expect(CURRENT_RULES_VERSION).toBe(16)
+  it('is at least 16', () => {
+    expect(CURRENT_RULES_VERSION).toBeGreaterThanOrEqual(16)
   })
 })

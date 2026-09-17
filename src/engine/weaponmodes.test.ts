@@ -451,6 +451,25 @@ describe('a Plasma Bolt Launcher as a shaped charge (6.8)', () => {
         design: design('Shooter', [pbl]),
         placement: { position: { x: 0, y: 0 }, facing: 6 },
       }),
+      // An escort with a plain beam on the target: from reading 17 a phase 11
+      // in which the only shot is the refused one is passed over.
+      createShipState({
+        id: 'escort',
+        side: 'b',
+        design: design('Escort', [
+          {
+            id: 'eb1',
+            label: 'Beam-3',
+            weaponClass: 'beam',
+            rating: 3,
+            variant: 'standard',
+            arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+            mass: 6,
+            points: 18,
+          },
+        ]),
+        placement: { position: { x: 4, y: 0 }, facing: 6 },
+      }),
       createShipState({
         id: 'target',
         side: 'a',

@@ -457,7 +457,10 @@ describe('electronic warfare against a seeker (7.17 – 7.20)', () => {
 
 describe('ECM against the guns (7.18, 7.19)', () => {
   it('shortens the shooter’s sensor reach by 6 MU a level', () => {
-    // 54 MU of FireCon, less 12 for two levels, is 42.
+    // 54 MU of FireCon, less 12 for two levels, is 42. The target carries a
+    // Beam-4 and faces the shooter: from reading 17 a phase 11 in which the
+    // only shot is the one being jammed is passed over, so the case needs a
+    // second gun on the table that can be laid.
     const shot = (range: number, levels: number, reading = CURRENT_RULES_VERSION) => {
       const game = battle(
         [
@@ -465,8 +468,20 @@ describe('ECM against the guns (7.18, 7.19)', () => {
           createShipState({
             id: 'target',
             side: 'a',
-            design: design('Target', { systems: Array.from({ length: levels }, () => 'ecm' as SystemKind) }),
-            placement: at(0, range),
+            design: design('Target', {
+              systems: Array.from({ length: levels }, () => 'ecm' as SystemKind),
+              weapons: [{
+              id: 'b1',
+              label: 'Beam-4',
+              weaponClass: 'beam',
+              rating: 4,
+              variant: 'standard',
+              arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+              mass: 8,
+              points: 24,
+            }],
+            }),
+            placement: { position: { x: 0, y: range }, facing: 12 },
           }),
         ],
         reading,
@@ -496,7 +511,14 @@ describe('ECM against the guns (7.18, 7.19)', () => {
             design: design('Jammer', { systems: ['area-ecm'] }),
             placement: at(0, 0),
           }),
-          createShipState({ id: 'target', side: 'a', design: design('Target'), placement: at(0, 18) }),
+          // Facing the jammer, so the target's own beam bears on it and the
+          // phase stands (reading 17) while the jammer's guns are refused.
+          createShipState({
+            id: 'target',
+            side: 'a',
+            design: design('Target'),
+            placement: { position: { x: 0, y: 18 }, facing: 12 },
+          }),
         ],
         reading,
       )
@@ -554,7 +576,22 @@ describe('ECM against the guns (7.18, 7.19)', () => {
     const shot = (off: boolean) => {
       const game = battle([
         createShipState({ id: 'shooter', side: 'b', design: design('Shooter'), placement: at(0, 0) }),
-        createShipState({ id: 'target', side: 'a', design: design('Target'), placement: at(0, 40) }),
+        // A Beam-4 facing the shooter keeps phase 11 standing (reading 17).
+        createShipState({
+          id: 'target',
+          side: 'a',
+          design: design('Target', { weapons: [{
+            id: 'b1',
+            label: 'Beam-4',
+            weaponClass: 'beam',
+            rating: 4,
+            variant: 'standard',
+            arcs: ['F', 'FS', 'FP', 'A', 'AS', 'AP'],
+            mass: 8,
+            points: 24,
+          }] }),
+          placement: { position: { x: 0, y: 40 }, facing: 12 },
+        }),
         createShipState({
           id: 'jammer',
           side: 'a',

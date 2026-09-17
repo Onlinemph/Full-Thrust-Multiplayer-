@@ -404,7 +404,7 @@ describe("the stealth ship's scan mode (7.4)", () => {
 
   it('is written in orders and lapses with the turn', () => {
     const game = battle([stealthy('ghost', 'a', { x: 20, y: 50 })])
-    advanceTo(game, 'ship-fire')
+    advanceTo(game, 'move-ships')
     expect(
       applyAction(game, { type: 'set-active-scan', shipId: 'ghost', on: true }).refused,
     ).toMatch(/orders/)

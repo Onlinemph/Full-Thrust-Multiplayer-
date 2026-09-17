@@ -481,10 +481,48 @@
 
 /* ── Ordnance and small craft ─────────────────────────────────────────────── */
 
+/* A missile marker is a dart pointing the way it flew (6.3, 6.6): one per
+   missile left on a salvo, one for a Heavy or antimatter missile, one per
+   rocket that hit. The dart is ordnance pink; the tail flare is the owning
+   side's colour, so whose salvo it is reads at a glance. */
 .missile-marker {
   fill: var(--ordnance);
   stroke: var(--void);
   stroke-width: 1;
+}
+
+.missile-marker .missile-dart {
+  fill: var(--ordnance);
+  stroke: var(--void);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.missile-marker .missile-flare {
+  fill: var(--warn);
+  stroke: none;
+  opacity: 0.9;
+}
+
+.missile-marker.side-a .missile-flare {
+  fill: var(--side-a);
+}
+
+.missile-marker.side-b .missile-flare {
+  fill: var(--side-b);
+}
+
+.missile-marker.side-c .missile-flare {
+  fill: var(--side-c);
+}
+
+/* 6.6: an antimatter warhead, drawn inside the blast it is about to become. */
+.missile-marker .missile-warhead {
+  fill: var(--warn);
+  fill-opacity: 0.12;
+  stroke: var(--warn);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
 }
 
 /* 6.9: a mine is laid and left. Hollow, because it is not going anywhere. */

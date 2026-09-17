@@ -518,7 +518,10 @@ describe('flak against a warhead and a squadron (5.16, 6.6, 9.1)', () => {
         velocity: 0,
       })
       const am = shooter.design.weapons.find((w) => w.weaponClass === 'antimatter-missile')!
-      const game = battle({ ships: [gunship('gun', 'a', { x: 20, y: 36 }), shooter], seed })
+      // The gun sits inside the warhead's 6 MU, so the marker will take it
+      // and phase 10 stands: from reading 17 a salvo that finds nothing is
+      // removed as its phase is passed, which is after phase 6's flak.
+      const game = battle({ ships: [gunship('gun', 'a', { x: 32, y: 36 }), shooter], seed })
       // 6.6's three-hit rule is gated with the rest of the marker accounting,
       // and `createGame` stamps reading 1 where `buildGame` stamps the
       // current one.
@@ -537,7 +540,7 @@ describe('flak against a warhead and a squadron (5.16, 6.6, 9.1)', () => {
         weaponId: 'w1',
         aimPoint: { x: 36, y: 36 },
       })
-      advanceTo(game, 'allocate-attacks')
+      advanceTo(game, 'ordnance-vs-ships')
       const hit = game.log.some((entry) => /hit.? on an inbound warhead/.test(entry.text))
       if (hit) sawHit = true
       if (hit && game.ordnance.length > 0) sawSurvivor = true

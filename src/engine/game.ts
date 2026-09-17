@@ -744,6 +744,8 @@ export interface OrdnanceMarkerState {
   /** Missiles left in the salvo; a full salvo is six (6.2). */
   missiles: number
   position: Point
+  /** The way it flew, for the map (6.6). A mine or a bolt has none. */
+  facing?: Course
   launchedTurn: number
   /** Stages left, for the optional multi-stage missile (6.6). */
   stagesRemaining: number

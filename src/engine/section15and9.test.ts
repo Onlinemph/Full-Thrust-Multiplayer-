@@ -230,6 +230,8 @@ describe('a gunboat squadron under fire (9.1)', () => {
   it('refuses a shot at the shooter’s own squadron', () => {
     const game = gunline()
     game.gunboatSquadrons[0].side = 'b'
+    // Something hostile in reach as well, or reading 17 passes the phase.
+    game.gunboatSquadrons.push({ ...squadron('a', { x: 0, y: 8 }), id: 'other' })
     advanceTo(game, 'ship-fire')
     expect(
       applyAction(game, {

@@ -197,7 +197,7 @@ describe('the ordered detonation (7.9)', () => {
 
   it('is only written in phase 1', () => {
     const game = battle({ ships: [bomber('bomb', 'a', { x: 20, y: 40 })] })
-    advanceTo(game, 'ship-fire')
+    advanceTo(game, 'move-ships')
     expect(
       applyAction(game, { type: 'plot-detonate', shipId: 'bomb', on: true }).refused,
     ).toMatch(/phase 1/)

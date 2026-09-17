@@ -212,6 +212,8 @@ import {
   evadeShipFire,
   interceptMissiles,
   isEngaged,
+  isExhausted,
+  canLaunch,
   launchFighterGroup,
   moveFighterGroup,
   moveWithEscortedShip,
@@ -328,6 +330,7 @@ import {
   PLASMA_BOLT_RANGE,
   resolveMineAttack,
   fireRocketPod,
+  rocketPodToHit,
   launchMissile,
   launchPlasmaBolt,
   moveOrdnanceMarkers,
@@ -360,8 +363,11 @@ import {
   isDerelict,
 } from './threshold'
 import {
+  canLaunchSquadron,
+  canSquadronAttack,
   directFireKills,
   ftlTransitDestroys,
+  isSquadronExhausted,
   launchGunboatSquadron,
   pointDefenceAgainstGunboats,
   type GunboatPdMount,
@@ -3375,8 +3381,20 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         alive.map((ship) => seekerTargetOf(state, ship)),
       )
       setOrdnance(state, acquired.markers)
+      // 6.7: a rocket marker never seeks — it was placed on its target at
+      // launch — so the sweep above keeps it and names no acquisition for it,
+      // and until this reading nothing ever resolved it: a pod's hits sat on
+      // the SSD for the rest of the battle. Gated, because they roll.
+      const attacks = [...acquired.acquisitions]
+      if (rulesReading(state) >= 17) {
+        for (const marker of acquired.markers) {
+          if (marker.kind !== 'rocket' || marker.missiles <= 0 || marker.targetShipId === null) continue
+          if (!alive.some((ship) => ship.id === marker.targetShipId)) continue
+          attacks.push({ markerId: marker.id, targetShipId: marker.targetShipId, range: 0 })
+        }
+      }
 
-      for (const hit of acquired.acquisitions) {
+      for (const hit of attacks) {
         const marker = acquired.markers.find((m) => m.id === hit.markerId)
         const target = shipById(state, hit.targetShipId)
         if (!marker || !target) continue
@@ -3460,10 +3478,15 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       }
 
       // A marker that attacked is spent (6.3); one that found nothing flies on.
-      const spent = new Set(acquired.acquisitions.map((a) => a.markerId))
+      // A rocket marker is spent either way from reading 17: it attacked, or
+      // the hull it sat on is gone (6.7).
+      const spent = new Set(attacks.map((a) => a.markerId))
+      const rocketsSpent = rulesReading(state) >= 17
       setOrdnance(
         state,
-        acquired.markers.filter((marker) => !spent.has(marker.id)),
+        acquired.markers.filter(
+          (marker) => !spent.has(marker.id) && !(rocketsSpent && marker.kind === 'rocket'),
+        ),
       )
       projectOrdnance(state)
       detonateBolts(state)
@@ -9167,6 +9190,7 @@ function projectOrdnance(state: GameState): void {
     grade: marker.grade === 'extended' ? 'extended' : 'standard',
     missiles: marker.missiles,
     position: marker.position,
+    facing: marker.facing,
     launchedTurn: marker.launchedTurn,
     stagesRemaining: 0,
     targetShipId: null,
@@ -11667,6 +11691,10 @@ export function endPhase(state: GameState, depth = 0, passed: Phase[] = []): voi
     if (last && last.kind === 'phase' && last.phase === state.phase && last.turn === state.turn) {
       state.log.pop()
     }
+    // 6.3: the phase-10 sweep is also where a marker that finds nothing is
+    // "removed from play". A phase passed with markers still flying owes that
+    // bookkeeping, or a wasted salvo would sit on the table for ever.
+    if (state.phase === 'ordnance-vs-ships') expireWastedOrdnance(state)
     endPhase(state, depth + 1, [...passed, state.phase])
     return
   }
@@ -11685,10 +11713,23 @@ export function endPhase(state: GameState, depth = 0, passed: Phase[] = []): voi
 /**
  * Whether the phase the sequence has just entered has anything for anyone to
  * do (2.6). Phases where a player always decides something — orders, the
- * roll, movement, fire — are never empty; the rest are empty when nothing on
- * the table can take part in them.
+ * roll, movement — are never empty; the rest are empty when nothing on the
+ * table can take part in them.
+ *
+ * Two readings of "nothing". Reading 16 asked whether the phase had anything
+ * *in* it: a wing aboard kept phase 4 whether or not its carrier could launch
+ * it, a marker anywhere on the table kept phase 9, and two fleets sixty MU
+ * apart still walked phase 11. Reading 17 asks what a player could actually
+ * press. Each test in the `…Possible` functions below is the guard the
+ * matching action refuses on — reach, arc, ammunition, endurance, a FireCon
+ * — so a phase is passed only when every action in it would be refused.
+ * Where a handler is laxer than the rule it serves (a shot 11.4 or 12.7
+ * forbids that the handler never checks for) the test follows the rule.
+ * Gated, because a phase passed is a phase an older journal's next action
+ * expects to be standing in.
  */
 function phaseIsEmpty(state: GameState): boolean {
+  const strict = rulesReading(state) >= 17
   const live = activeShips(state)
   const flying = [...state.fighterGroups, ...state.gunboatSquadrons].filter(
     (group) => group.status === 'in-flight',
@@ -11699,24 +11740,32 @@ function phaseIsEmpty(state: GameState): boolean {
   const markers = ordnanceOf(state).length + boltsOf(state).length
   switch (state.phase) {
     case 'launch-missiles':
-      return !live.some((ship) =>
-        ship.design.weapons.some(
-          (weapon) =>
-            !ship.destroyedSystems.has(weapon.id) &&
-            ((ORDNANCE_CLASSES.has(weapon.weaponClass) &&
-              (weapon.ammo === undefined || shotsLeft(ship, weapon.id) > 0)) ||
-              (weapon.flak === true && canMountFlak(weapon))),
-        ),
-      ) && !anyCraft
+      if (strict) return !ordnanceLaunchPossible(state)
+      return (
+        !live.some((ship) =>
+          ship.design.weapons.some(
+            (weapon) =>
+              !ship.destroyedSystems.has(weapon.id) &&
+              ((ORDNANCE_CLASSES.has(weapon.weaponClass) &&
+                (weapon.ammo === undefined || shotsLeft(ship, weapon.id) > 0)) ||
+                (weapon.flak === true && canMountFlak(weapon))),
+          ),
+        ) && !anyCraft
+      )
     case 'move-fighters':
+      return strict ? !flightOperationsPossible(state) : !anyCraft
     case 'secondary-fighter-moves':
-      return !anyCraft
+      return strict ? !secondaryFlightMovePossible(state) : !anyCraft
     case 'allocate-attacks':
+      return strict ? !attackDeclarationPossible(state) : flying.length === 0
     case 'fighter-vs-fighter':
-      return flying.length === 0
+      return strict ? !dogfightPossible(state) : flying.length === 0
     case 'point-defence':
+      return strict ? !pointDefencePossible(state) : markers === 0 && flying.length === 0
     case 'ordnance-vs-ships':
-      return markers === 0 && flying.length === 0
+      return strict ? !ordnanceAttackPossible(state) : markers === 0 && flying.length === 0
+    case 'ship-fire':
+      return strict && !shipFirePossible(state)
     case 'boarding':
       return !state.ships.some(
         (ship) => !ship.destroyed && boardingContinues(ship.side, ship.boarders, ship.captured),
@@ -11734,6 +11783,551 @@ function phaseIsEmpty(state: GameState): boolean {
     default:
       return false
   }
+}
+
+// ── What a phase actually offers (reading 17) ───────────────────────────────
+
+/** Hulls on the table: what a shot, a run or a seeker can be aimed at. */
+function hullsOnTable(state: GameState): ShipState[] {
+  return state.ships.filter((ship) => !ship.destroyed && !ship.offTable)
+}
+
+function flyingGroups(state: GameState): FighterGroupState[] {
+  return state.fighterGroups.filter((group) => group.status === 'in-flight')
+}
+
+function flyingSquadrons(state: GameState): GunboatSquadronState[] {
+  return state.gunboatSquadrons.filter((squadron) => squadron.status === 'in-flight')
+}
+
+/** 6.6: whether the magazine behind a launcher has a load it can draw. */
+function magazineCanFeed(ship: ShipState, launcherId: string): boolean {
+  const fed = (ship.design.magazines ?? []).find((magazine) =>
+    magazine.launcherIds.includes(launcherId),
+  )
+  if (!fed || ship.destroyedSystems.has(fed.id)) return false
+  const held = ship.magazines.get(fed.id) ?? []
+  const draw = drawMagazineLoad(
+    { id: fed.id, mass: fed.mass, loads: [...held], launcherIds: fed.launcherIds },
+    launcherId,
+  )
+  return draw.load !== null
+}
+
+/**
+ * Phase 3: a mount can put a marker on the table — the guards of
+ * `launch-ordnance`, `fire-rocket-pod`, `launch-plasma-bolt` and
+ * `fire-flak-barrage`, less the point of aim, which is the player's — or a
+ * Missile Fighter group has its salvo and a hull inside 12 MU (8.15).
+ */
+function ordnanceLaunchPossible(state: GameState): boolean {
+  const hulls = hullsOnTable(state)
+  for (const ship of activeShips(state)) {
+    // 7.23: an armed Nova Cannon has the power, and every launcher is refused.
+    if (novaPoweredDown(state, ship)) continue
+    const fireCons = availableFireCons(ship, state.phase)
+    const at = ship.placement.position
+    for (const weapon of ship.design.weapons) {
+      // Knocked out, fired, offline, or a rack with nothing left on it.
+      if (!canWeaponFire(ship, weapon.id)) continue
+      if (missileKindOf(weapon.weaponClass) !== null) {
+        // 6.3: one FireCon to launch; 6.6: an SML fires what its magazine holds.
+        if (fireCons < 1) continue
+        if (weapon.weaponClass !== 'salvo-missile-launcher') return true
+        if (magazineCanFeed(ship, weapon.id)) return true
+        continue
+      }
+      if (weapon.weaponClass === 'plasma-bolt-launcher') {
+        // 6.8: "a PBL may only fire every other turn."
+        if (plasmaBoltMayFire(ship.weaponLastFiredTurn.get(weapon.id) ?? null, state.turn)) {
+          return true
+        }
+        continue
+      }
+      if (weapon.weaponClass === 'rocket-pod') {
+        // 6.7: a hull within 18 MU and in arc, or the pod has nothing to shoot.
+        const arcs = weaponArcs(ship, weapon)
+        if (
+          hulls.some(
+            (target) =>
+              target.side !== ship.side &&
+              rocketPodToHit(distance(at, target.placement.position)) !== null &&
+              arcs.includes(arcTo(at, ship.placement.facing, target.placement.position)),
+          )
+        ) {
+          return true
+        }
+        continue
+      }
+      // 5.16: a K-Gun with Flak loaded throws a barrage, on one FireCon.
+      if (weapon.flak === true && canMountFlak(weapon) && !ship.captured && fireCons >= 1) {
+        return true
+      }
+    }
+  }
+  for (const flight of flyingGroups(state)) {
+    if (groupProfile(flight).payload !== 'salvo-missile' || flight.payloadSpent === true) continue
+    if (flight.cef < 1 || isEngaged(flight)) continue
+    if (
+      hulls.some(
+        (target) =>
+          target.side !== flight.side &&
+          distance(flight.position, target.placement.position) <= MISSILE_FIGHTER_RANGE + 1e-9,
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Phase 4: a group or squadron is in the air — it can move, screen, pursue
+ * or land — or a wing or squadron sits aboard a carrier that can launch it:
+ * `canLaunch` and `canLaunchSquadron` are what `launch-flight` and
+ * `launch-gunboats` refuse on (8.1, 8.2, 9.1).
+ */
+function flightOperationsPossible(state: GameState): boolean {
+  if (flyingGroups(state).length > 0 || flyingSquadrons(state).length > 0) return true
+  for (const carrier of activeShips(state)) {
+    if (isOutOfControl(carrier, state.turn)) continue
+    const deck = carrierFlightState(state, carrier)
+    if (
+      state.fighterGroups.some(
+        (group) => group.carrierId === carrier.id && canLaunch(group, deck, state.turn).allowed,
+      )
+    ) {
+      return true
+    }
+    const racks = gunboatCarrierState(state, carrier)
+    if (
+      state.gunboatSquadrons.some(
+        (squadron) =>
+          squadron.carrierId === carrier.id && canLaunchSquadron(squadron, racks).allowed,
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Phase 6: a group can make its secondary move (8.5: endurance left and not
+ * engaged), a squadron its 9 MU (9.1), or a carrier that did not thrust
+ * could take its wings aboard in a combat landing (8.4).
+ */
+function secondaryFlightMovePossible(state: GameState): boolean {
+  const carriers = new Map(activeShips(state).map((ship) => [ship.id, ship]))
+  for (const group of flyingGroups(state)) {
+    if (!isExhausted(group) && !isEngaged(group)) return true
+    const carrier = group.carrierId ? carriers.get(group.carrierId) : undefined
+    if (carrier && !carrierUnderThrust(carrier)) return true
+  }
+  return flyingSquadrons(state).some((squadron) => !isSquadronExhausted(squadron))
+}
+
+/**
+ * Phase 7: a group in the air can declare an attack run on a hull —
+ * `canDeclareAttack`, at the lock-on electronic warfare leaves it, which is
+ * what `flight-declare-target` refuses on (8.7, 7.17 – 7.20).
+ */
+function attackDeclarationPossible(state: GameState): boolean {
+  const hulls = hullsOnTable(state)
+  return flyingGroups(state).some((flight) =>
+    hulls.some(
+      (target) =>
+        target.side !== flight.side &&
+        canDeclareAttack(flight, target.placement.position, {
+          kind: 'ship',
+          lockOn: fighterLockOnRange(state, target),
+        }).allowed,
+    ),
+  )
+}
+
+/**
+ * Phase 8: two groups on opposite sides are close enough to dogfight (8.10):
+ * in reach, in the front arc, with endurance left and not yet fought.
+ */
+function dogfightPossible(state: GameState): boolean {
+  const flying = flyingGroups(state)
+  return flying.some(
+    (flight) =>
+      !flight.attackedThisTurn &&
+      flying.some(
+        (enemy) =>
+          enemy.side !== flight.side &&
+          canDeclareAttack(flight, enemy.position, { kind: 'fighter' }).allowed,
+      ),
+  )
+}
+
+/**
+ * Phase 9: a point-defence mount could reach a threat, or a group in the air
+ * could intercept a salvo (8.12). A marker is a threat only once 6.3's seeker
+ * has a hull to take (7.10 puts every mount on the marker's own target or,
+ * under an ADFC, a neighbour's), and then it lies within 6 MU of that hull —
+ * so inside 7.13's 12 MU of any ship whose mounts could reach it, its target
+ * or a coverer within 6 MU of the target. A bolt and a squadron are shot at
+ * from 6 MU (6.8, 9.1); a group that declared against this hull from 6 MU
+ * too (8.8).
+ */
+function pointDefencePossible(state: GameState): boolean {
+  const reading = rulesReading(state)
+  const seeking = prospectiveMissileTargets(state)
+  const markers = ordnanceOf(state).filter(
+    (marker) => marker.missiles > 0 && (reading < 8 || seeking.has(marker.id)),
+  )
+  const bolts = boltsOf(state)
+  const squadrons = flyingSquadrons(state)
+  const flying = flyingGroups(state)
+  for (const ship of hullsOnTable(state)) {
+    if (isOutOfControl(ship, state.turn)) continue
+    const ftlStage = ftlStageOf(ship, state.turn)
+    if (ftlStage !== null && !ftlExitRestrictions(ftlStage).mayUsePds) continue
+    if (pdMountsOf(ship, reading).length === 0) continue
+    const at = ship.placement.position
+    if (
+      markers.some(
+        (marker) => marker.owner !== ship.side && distance(at, marker.position) <= ADS_LONG_RANGE,
+      )
+    ) {
+      return true
+    }
+    if (bolts.some((bolt) => bolt.owner !== ship.side && distance(at, bolt.position) <= PDS_RANGE)) {
+      return true
+    }
+    if (
+      reading >= 13 &&
+      squadrons.some(
+        (squadron) =>
+          squadron.side !== ship.side &&
+          squadron.boats.length > 0 &&
+          distance(at, squadron.position) <= PDS_RANGE,
+      )
+    ) {
+      return true
+    }
+    if (
+      !ship.captured &&
+      flying.some(
+        (group) =>
+          group.side !== ship.side &&
+          group.strength > 0 &&
+          group.targetId === ship.id &&
+          distance(group.position, at) <= PDS_RANGE,
+      )
+    ) {
+      return true
+    }
+  }
+  const salvoes = ordnanceOf(state).filter((marker) => marker.missiles > 0)
+  return flying.some((flight) =>
+    salvoes.some(
+      (marker) =>
+        marker.owner !== flight.side &&
+        canDeclareAttack(flight, marker.position, { kind: 'missile' }).allowed,
+    ),
+  )
+}
+
+/**
+ * Phase 10: a marker will take a hull (6.3), a bolt is due to go off (6.8),
+ * a rocket marker sits on a hull that is still there (6.7), or a group or
+ * squadron in the air has an attack run (8.7, 9.1).
+ */
+function ordnanceAttackPossible(state: GameState): boolean {
+  if (boltsOf(state).length > 0) return true
+  const markers = ordnanceOf(state)
+  const hulls = hullsOnTable(state)
+  if (
+    markers.some(
+      (marker) =>
+        marker.kind === 'rocket' &&
+        marker.missiles > 0 &&
+        hulls.some((ship) => ship.id === marker.targetShipId && ship.carriedBy === null),
+    )
+  ) {
+    return true
+  }
+  if (markers.length > 0 && prospectiveMissileTargets(state).size > 0) return true
+  return craftAttackPossible(state)
+}
+
+/** A group or squadron in the air with a hull in reach of its run (8.7, 9.1). */
+function craftAttackPossible(state: GameState): boolean {
+  const hulls = hullsOnTable(state)
+  for (const flight of flyingGroups(state)) {
+    if (flight.attackedThisTurn) continue
+    if (
+      hulls.some(
+        (target) =>
+          target.side !== flight.side &&
+          canDeclareAttack(flight, target.placement.position, {
+            kind: 'ship',
+            lockOn: fighterLockOnRange(state, target),
+          }).allowed,
+      )
+    ) {
+      return true
+    }
+  }
+  for (const squadron of flyingSquadrons(state)) {
+    if (
+      hulls.some(
+        (target) =>
+          target.side !== squadron.side &&
+          canSquadronAttack(squadron, distance(squadron.position, target.placement.position)).allowed,
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * The bookkeeping of a phase 10 passed over with markers still flying
+ * (reading 17). 6.3: a marker that finds nothing *"is removed from play"*; a
+ * two-stage one *"is not removed"* and keeps its turn of duration (6.6); a
+ * rocket marker with nothing left to sit on is spent (6.7). Only reached
+ * when no marker will take a hull — that is what made the phase empty — so
+ * nothing here throws a die.
+ */
+function expireWastedOrdnance(state: GameState): void {
+  const markers = ordnanceOf(state)
+  if (markers.length === 0) return
+  const alive = state.ships.filter(
+    (ship) => !ship.destroyed && !ship.offTable && ship.carriedBy === null,
+  )
+  const acquired = acquireMissileTargets(
+    markers,
+    alive.map((ship) => seekerTargetOf(state, ship)),
+  )
+  const kept = acquired.markers.filter((marker) => marker.kind !== 'rocket')
+  const gone = markers.length - kept.length
+  setOrdnance(state, kept)
+  projectOrdnance(state)
+  state.resolved['ordnance-vs-ships'] = state.turn
+  if (gone > 0) {
+    pushLog(state, {
+      kind: 'note',
+      text: `${few(gone, 'ordnance marker')} find${gone === 1 ? 's' : ''} nothing to attack and ${
+        gone === 1 ? 'is' : 'are'
+      } removed (6.3)`,
+    })
+  }
+}
+
+/** How far a ship's FireCons see a target: 7.4's passive limit, cut by 7.18's jamming. */
+function sensorReachTo(state: GameState, ship: ShipState, target: ShipState): number {
+  const scan = targetingRangeOf(ship)
+  if (rulesReading(state) < 11) return scan
+  const ew = ewDefencesOf(state, target)
+  return ecmSensorRange(scan, aggregateEcmLevel(ew.ecmLevel ?? 0, ew.areaEcmLevel ?? 0))
+}
+
+/**
+ * Phase 11: some ship can put a shot on something. Each test is the guard
+ * the matching action refuses on — `fire-weapon`, `fire-at-flight`,
+ * `fire-at-gunboats`, `fire-at-gate`, `fire-at-terrain`, `fire-point-defence`,
+ * `fire-spinal-mount`, `fire-wave-gun`, `fire-nova-cannon`, `commando-raid`
+ * and `fire-shaped-charge` — less the electronic-warfare stack a shot meets
+ * only once it is rolled, which can turn a shot into a miss but not into a
+ * refusal. A group or squadron with an attack run left counts too, since
+ * 8.7's runs may be resolved here. Holding fire is always possible and is
+ * never the point.
+ */
+function shipFirePossible(state: GameState): boolean {
+  if (craftAttackPossible(state)) return true
+  const reading = rulesReading(state)
+  const hulls = hullsOnTable(state)
+  const bodies = blockingTerrain(state)
+  const flights = flyingGroups(state).filter((flight) => !isEngaged(flight))
+  const squadrons = flyingSquadrons(state)
+  const gates = state.gates.filter((gate) => !gate.def.natural)
+  const rocks = state.terrain.filter(
+    (rock) => rock.damagePoints !== undefined && (rock.damageTaken ?? 0) < rock.damagePoints,
+  )
+
+  for (const ship of activeShips(state)) {
+    // 2.6, 10.3, 11.4, 12.7, 7.20, 7.25: a ship that has had its fire, or may
+    // not open one.
+    if (ship.hasFiredThisTurn || ship.captured || isOutOfControl(ship, state.turn)) continue
+    if (ftlStageOf(ship, state.turn) !== null) continue
+    if (ship.cloaked || ship.reflexFieldActive) continue
+    const at = ship.placement.position
+    const facing = ship.placement.facing
+
+    // 7.23, 7.24: an armed Nova Cannon or a charged Wave Gun fires down the
+    // bow line and names no target, so it is a shot whatever is out there.
+    for (const weapon of ship.design.weapons) {
+      if (ship.destroyedSystems.has(weapon.id)) continue
+      if (
+        weapon.weaponClass === 'nova-cannon' &&
+        novaMounts(state).get(novaKey(ship.id, weapon.id))?.state.armed === true
+      ) {
+        return true
+      }
+      if (
+        weapon.weaponClass === 'wave-gun' &&
+        ship.weaponsFired.size === 0 &&
+        !novaPoweredDown(state, ship)
+      ) {
+        const gun = waveGunStates(state).get(novaKey(ship.id, weapon.id))
+        if (gun !== undefined && isWaveGunCharged(gun)) return true
+      }
+    }
+    // Everything else opens a firing activation (2.6), which 7.23 and 7.24
+    // refuse outright.
+    if (novaPoweredDown(state, ship) || waveGunFrontOpen(state, ship)) continue
+
+    const fireCons = availableFireCons(ship, state.phase)
+    // 7.19: the emitter's own FireCons are down while it jams.
+    const jammingOwn =
+      reading >= 11 && areaEcmBlocks('firecon') && !ship.areaEcmOff && areaEcmLevelOf(ship) > 0
+    const enemies = hulls.filter((target) => target.side !== ship.side)
+
+    // 7.12, 7.13: a PDS or ADS raked across a hull with nothing left to stop it.
+    for (const mount of pdMountsOf(ship, reading)) {
+      if (mount.kind !== 'pds' && mount.kind !== 'ads') continue
+      const envelope = mount.kind === 'ads' ? ADS_LONG_RANGE : PDS_RANGE
+      if (
+        enemies.some(
+          (target) =>
+            distance(at, target.placement.position) <= envelope &&
+            mount.arcs.includes(arcTo(at, facing, target.placement.position)) &&
+            pointDefenceCanEngage(state, ship, target),
+        )
+      ) {
+        return true
+      }
+    }
+
+    for (const weapon of ship.design.weapons) {
+      if (!canWeaponFire(ship, weapon.id)) continue
+      if (weapon.weaponClass === 'nova-cannon' || weapon.weaponClass === 'wave-gun') continue
+      const arcs = weaponArcs(ship, weapon)
+      const bears = (point: Point): boolean => {
+        const arc = arcTo(at, facing, point)
+        return arcs.includes(arc) && !aftArcBlocked(state, ship, arc)
+      }
+      const reach = maxRangeOf(weapon)
+
+      // 5.23: laid on a point inside 30 degrees of the bow. A shot with
+      // nothing in the beam's reach is not one.
+      if (isSpinalMount(weapon)) {
+        if (!spinalCanFire(ship.weaponLastFiredTurn.get(weapon.id) ?? null, state.turn)) continue
+        const caught = (point: Point): boolean =>
+          distance(at, point) <= reach && isInSpinalArc(at, facing, point)
+        if (
+          enemies.some((target) => target.carriedBy === null && caught(target.placement.position)) ||
+          flights.some((flight) => flight.side !== ship.side && caught(flight.position)) ||
+          squadrons.some((squadron) => squadron.side !== ship.side && caught(squadron.position))
+        ) {
+          return true
+        }
+        continue
+      }
+      // 6.8: the shaped charge is the one launcher that fires here, when the
+      // table plays it.
+      if (ORDNANCE_CLASSES.has(weapon.weaponClass)) {
+        if (weapon.weaponClass !== 'plasma-bolt-launcher' || !optional(state).shapedCharges) continue
+        if (!plasmaBoltMayFire(ship.weaponLastFiredTurn.get(weapon.id) ?? null, state.turn)) continue
+        if (needsFireCon(weapon) && fireCons < 1) continue
+        if (
+          enemies.some(
+            (target) =>
+              distance(at, target.placement.position) <= PLASMA_BOLT_RANGE &&
+              arcs.includes(arcTo(at, facing, target.placement.position)),
+          )
+        ) {
+          return true
+        }
+        continue
+      }
+      if (reach <= 0) continue
+      // 5.9: a transporter with nobody left to send.
+      if (
+        weapon.weaponClass === 'transporter' &&
+        reading >= 13 &&
+        !canUseTransporters(ship.marinesAboard, damageControlParties(ship))
+      ) {
+        continue
+      }
+      // 4.4: a new target costs a FireCon, and nothing is engaged as the
+      // phase opens.
+      const conned = !needsFireCon(weapon) || fireCons >= 1
+      if (!conned) continue
+
+      if (!needsFireCon(weapon) || !jammingOwn) {
+        for (const target of enemies) {
+          if (target.carriedBy !== null) continue
+          if (
+            ship.orbit &&
+            !canFireFromOrbit(ship.orbit.marker, {
+              inOrbit: target.orbit?.featureId === ship.orbit.featureId,
+              marker: target.orbit?.marker,
+            })
+          ) {
+            continue
+          }
+          const alongTrack = ship.orbit !== null && target.orbit?.featureId === ship.orbit.featureId
+          const samePoint = alongTrack && target.orbit?.marker === ship.orbit?.marker
+          const range = samePoint ? ORBIT_SAME_POINT_RANGE : distance(at, target.placement.position)
+          if (range > reach) continue
+          if (reading >= 9 && range > sensorReachTo(state, ship, target)) continue
+          if (!samePoint && !bears(target.placement.position)) continue
+          if (!alongTrack && !hasLineOfFire(at, target.placement.position, bodies)) continue
+          return true
+        }
+      }
+      // 8.6: a group not engaged in a dogfight; 9.1: a squadron.
+      if (
+        flights.some(
+          (flight) =>
+            flight.side !== ship.side &&
+            distance(at, flight.position) <= reach &&
+            bears(flight.position) &&
+            hasLineOfFire(at, flight.position, bodies),
+        )
+      ) {
+        return true
+      }
+      if (
+        squadrons.some(
+          (squadron) =>
+            squadron.side !== ship.side &&
+            distance(at, squadron.position) <= reach &&
+            bears(squadron.position),
+        )
+      ) {
+        return true
+      }
+      // 11.9: an artificial gate; 17.1: a rock with a damage track.
+      if (
+        gates.some(
+          (gate) =>
+            distance(at, gate.def.position) <= reach &&
+            bears(gate.def.position) &&
+            hasLineOfFire(at, gate.def.position, bodies),
+        )
+      ) {
+        return true
+      }
+      if (
+        fireCons >= 1 &&
+        rocks.some(
+          (rock) =>
+            Math.max(0, distance(at, rock.position) - rock.radius) <= reach && bears(rock.position),
+        )
+      ) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 export function sidesAwaited(state: GameState): SideId[] {

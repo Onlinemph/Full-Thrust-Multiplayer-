@@ -90,8 +90,19 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             ready gate a phase ends when every console has said it may.
  *             Each of these refuses or advances where an older journal did
  *             not, so each moves the dice for everything after it.
+ *  17  2.6  — a phase is passed over when nothing in it is *possible*, not
+ *             merely when nothing is in it: a wing aboard a carrier that
+ *             cannot launch it, a marker no mount can reach, a run no group
+ *             can make, and phase 11 itself when no gun bears on anything
+ *             in reach. Passing phase 10 with markers still flying does the
+ *             sweep's bookkeeping (a salvo that finds nothing is removed),
+ *             and 6.7's rocket markers, which never seek, now attack the
+ *             hull they were placed on — the phase-10 loop only ever walked
+ *             the seekers' acquisitions, so a pod's hits sat on the SSD for
+ *             the rest of the battle. Both move the dice for everything
+ *             after them.
  */
-export const CURRENT_RULES_VERSION = 16
+export const CURRENT_RULES_VERSION = 17
 
 export interface GameSetup {
   scenarioId: string
