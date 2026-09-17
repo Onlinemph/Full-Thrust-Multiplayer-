@@ -46,7 +46,7 @@ export const ESU_CORVETTE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 41,
+  points: 61,
 }
 
 export const ESU_FRIGATE: ShipDesign = {
@@ -76,7 +76,7 @@ export const ESU_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 64,
+  points: 92,
 }
 
 export const ESU_DESTROYER: ShipDesign = {
@@ -109,7 +109,7 @@ export const ESU_DESTROYER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 97,
+  points: 137,
 }
 
 export const ESU_LIGHT_CRUISER: ShipDesign = {
@@ -143,7 +143,7 @@ export const ESU_LIGHT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 149,
+  points: 209,
 }
 
 export const ESU_HEAVY_CRUISER: ShipDesign = {
@@ -182,7 +182,7 @@ export const ESU_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 229,
+  points: 321,
 }
 
 export const ESU_BATTLECRUISER: ShipDesign = {
@@ -225,7 +225,7 @@ export const ESU_BATTLECRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 329,
+  points: 459,
 }
 
 export const ESU_BATTLESHIP: ShipDesign = {
@@ -270,7 +270,7 @@ export const ESU_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 443,
+  points: 613,
 }
 
 export const ESU_CARRIER: ShipDesign = {
@@ -315,7 +315,7 @@ export const ESU_CARRIER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 391,
+  points: 551,
 }
 
 export const ESU_TENDER: ShipDesign = {
@@ -356,7 +356,7 @@ export const ESU_TENDER: ShipDesign = {
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 586,
+  points: 856,
 }
 
 export const NAC_CORVETTE: ShipDesign = {
@@ -387,7 +387,7 @@ export const NAC_CORVETTE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 44,
+  points: 64,
 }
 
 export const NAC_FRIGATE: ShipDesign = {
@@ -418,7 +418,7 @@ export const NAC_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 63,
+  points: 91,
 }
 
 export const NAC_DESTROYER: ShipDesign = {
@@ -452,7 +452,7 @@ export const NAC_DESTROYER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 103,
+  points: 145,
 }
 
 export const NAC_LIGHT_CRUISER: ShipDesign = {
@@ -488,7 +488,7 @@ export const NAC_LIGHT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 179,
+  points: 249,
 }
 
 export const NAC_HEAVY_CRUISER: ShipDesign = {
@@ -528,7 +528,7 @@ export const NAC_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 275,
+  points: 385,
 }
 
 export const NAC_BATTLECRUISER: ShipDesign = {
@@ -571,7 +571,7 @@ export const NAC_BATTLECRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 361,
+  points: 505,
 }
 
 export const NAC_BATTLESHIP: ShipDesign = {
@@ -615,7 +615,7 @@ export const NAC_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 502,
+  points: 698,
 }
 
 export const NAC_CARRIER: ShipDesign = {
@@ -659,7 +659,7 @@ export const NAC_CARRIER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 371,
+  points: 521,
 }
 
 export const NAC_TENDER: ShipDesign = {
@@ -700,7 +700,7 @@ export const NAC_TENDER: ShipDesign = {
   gunboats: [{"typeId": "graser", "label": "Squadron 1"}, {"typeId": "graser", "label": "Squadron 2"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 548,
+  points: 802,
 }
 
 export const CYGNAN_PICKET: ShipDesign = {
@@ -733,7 +733,7 @@ export const CYGNAN_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 63,
+  points: 85,
 }
 
 export const CYGNAN_DESTROYER: ShipDesign = {
@@ -768,7 +768,7 @@ export const CYGNAN_DESTROYER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 94,
+  points: 126,
 }
 
 export const CYGNAN_CRUISER: ShipDesign = {
@@ -807,7 +807,7 @@ export const CYGNAN_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 230,
+  points: 306,
 }
 
 export const CYGNAN_COMMAND_CRUISER: ShipDesign = {
@@ -847,7 +847,7 @@ export const CYGNAN_COMMAND_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 232,
+  points: 306,
 }
 
 export const CYGNAN_BATTLESHIP: ShipDesign = {
@@ -892,7 +892,7 @@ export const CYGNAN_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 367,
+  points: 485,
 }
 
 export const SISTERHOOD_PICKET: ShipDesign = {
@@ -922,7 +922,7 @@ export const SISTERHOOD_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 81,
+  points: 107,
 }
 
 export const SISTERHOOD_FRIGATE: ShipDesign = {
@@ -953,7 +953,7 @@ export const SISTERHOOD_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 129,
+  points: 171,
 }
 
 export const SISTERHOOD_CRUISER: ShipDesign = {
@@ -988,7 +988,7 @@ export const SISTERHOOD_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 201,
+  points: 261,
 }
 
 export const SISTERHOOD_SENSOR_CRUISER: ShipDesign = {
@@ -1022,7 +1022,7 @@ export const SISTERHOOD_SENSOR_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 191,
+  points: 249,
 }
 
 export const SISTERHOOD_FLAGSHIP: ShipDesign = {
@@ -1059,7 +1059,7 @@ export const SISTERHOOD_FLAGSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 337,
+  points: 437,
 }
 
 export const IZOTROPE_PICKET: ShipDesign = {
@@ -1091,7 +1091,7 @@ export const IZOTROPE_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 64,
+  points: 90,
 }
 
 export const IZOTROPE_ESCORT: ShipDesign = {
@@ -1125,7 +1125,7 @@ export const IZOTROPE_ESCORT: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 114,
+  points: 158,
 }
 
 export const IZOTROPE_CRUISER: ShipDesign = {
@@ -1162,7 +1162,7 @@ export const IZOTROPE_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 185,
+  points: 253,
 }
 
 export const IZOTROPE_HEAVY_CRUISER: ShipDesign = {
@@ -1200,7 +1200,7 @@ export const IZOTROPE_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 246,
+  points: 336,
 }
 
 export const IZOTROPE_WAVEGUN: ShipDesign = {
@@ -1237,7 +1237,7 @@ export const IZOTROPE_WAVEGUN: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 295,
+  points: 407,
 }
 
 export const IZOTROPE_BATTLESHIP: ShipDesign = {
@@ -1280,7 +1280,7 @@ export const IZOTROPE_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 536,
+  points: 738,
 }
 
 export const VOID_CORSAIRS_CUTTER: ShipDesign = {
@@ -1313,7 +1313,7 @@ export const VOID_CORSAIRS_CUTTER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 72,
+  points: 98,
 }
 
 export const VOID_CORSAIRS_RAIDER: ShipDesign = {
@@ -1348,7 +1348,7 @@ export const VOID_CORSAIRS_RAIDER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 110,
+  points: 150,
 }
 
 export const VOID_CORSAIRS_GRAPPLE_CRUISER: ShipDesign = {
@@ -1388,7 +1388,7 @@ export const VOID_CORSAIRS_GRAPPLE_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 5,
-  points: 215,
+  points: 297,
 }
 
 export const VOID_CORSAIRS_CRIPPLER: ShipDesign = {
@@ -1429,7 +1429,7 @@ export const VOID_CORSAIRS_CRIPPLER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 1,
   marineParties: 4,
-  points: 237,
+  points: 327,
 }
 
 export const VOID_CORSAIRS_PRIZE_TAKER: ShipDesign = {
@@ -1472,7 +1472,7 @@ export const VOID_CORSAIRS_PRIZE_TAKER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 1,
   marineParties: 5,
-  points: 297,
+  points: 407,
 }
 
 export const XXCHA_PICKET: ShipDesign = {
@@ -1504,7 +1504,7 @@ export const XXCHA_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 110,
+  points: 150,
 }
 
 export const XXCHA_CRUISER: ShipDesign = {
@@ -1540,7 +1540,7 @@ export const XXCHA_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 206,
+  points: 280,
 }
 
 export const XXCHA_HEAVY_CRUISER: ShipDesign = {
@@ -1578,7 +1578,7 @@ export const XXCHA_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 253,
+  points: 343,
 }
 
 export const XXCHA_MONITOR: ShipDesign = {
@@ -1617,7 +1617,7 @@ export const XXCHA_MONITOR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 336,
+  points: 446,
 }
 
 export const XXCHA_BATTLESHIP: ShipDesign = {
@@ -1661,7 +1661,7 @@ export const XXCHA_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 493,
+  points: 663,
 }
 
 export const SOL_MARINES_FRIGATE: ShipDesign = {
@@ -1692,7 +1692,7 @@ export const SOL_MARINES_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 114,
+  points: 158,
 }
 
 export const SOL_MARINES_CRUISER: ShipDesign = {
@@ -1728,7 +1728,7 @@ export const SOL_MARINES_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 228,
+  points: 314,
 }
 
 export const SOL_MARINES_GUNBOAT_CRUISER: ShipDesign = {
@@ -1763,7 +1763,7 @@ export const SOL_MARINES_GUNBOAT_CRUISER: ShipDesign = {
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 232,
+  points: 322,
 }
 
 export const SOL_MARINES_COMMAND: ShipDesign = {
@@ -1807,7 +1807,7 @@ export const SOL_MARINES_COMMAND: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 453,
+  points: 629,
 }
 
 export const SOL_MARINES_AEGIS: ShipDesign = {
@@ -1842,7 +1842,7 @@ export const SOL_MARINES_AEGIS: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 250,
+  points: 340,
 }
 
 export const SOL_MARINES_TENDER: ShipDesign = {
@@ -1885,7 +1885,7 @@ export const SOL_MARINES_TENDER: ShipDesign = {
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 662,
+  points: 954,
 }
 
 export const GOLIATH_MONITOR: ShipDesign = {
@@ -1917,7 +1917,7 @@ export const GOLIATH_MONITOR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 110,
+  points: 154,
 }
 
 export const GOLIATH_CRUISER: ShipDesign = {
@@ -1952,7 +1952,7 @@ export const GOLIATH_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 233,
+  points: 323,
 }
 
 export const GOLIATH_LONGGUN: ShipDesign = {
@@ -1987,7 +1987,7 @@ export const GOLIATH_LONGGUN: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 207,
+  points: 285,
 }
 
 export const GOLIATH_BATTLESHIP: ShipDesign = {
@@ -2029,7 +2029,7 @@ export const GOLIATH_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 484,
+  points: 644,
 }
 
 export const GOLIATH_DREADNOUGHT: ShipDesign = {
@@ -2071,7 +2071,7 @@ export const GOLIATH_DREADNOUGHT: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 5,
-  points: 608,
+  points: 808,
 }
 
 export const AETHELGARD_LANCE: ShipDesign = {
@@ -2102,7 +2102,7 @@ export const AETHELGARD_LANCE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 123,
+  points: 173,
 }
 
 export const AETHELGARD_CRUISER: ShipDesign = {
@@ -2138,7 +2138,7 @@ export const AETHELGARD_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 214,
+  points: 292,
 }
 
 export const AETHELGARD_PLASMA: ShipDesign = {
@@ -2173,7 +2173,7 @@ export const AETHELGARD_PLASMA: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 190,
+  points: 258,
 }
 
 export const AETHELGARD_BATTLESHIP: ShipDesign = {
@@ -2213,7 +2213,7 @@ export const AETHELGARD_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 521,
+  points: 719,
 }
 
 export const AETHELGARD_PSP: ShipDesign = {
@@ -2253,7 +2253,7 @@ export const AETHELGARD_PSP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 329,
+  points: 447,
 }
 
 export const CHYTRID_SPORE: ShipDesign = {
@@ -2284,7 +2284,7 @@ export const CHYTRID_SPORE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 77,
+  points: 111,
 }
 
 export const CHYTRID_CRUISER: ShipDesign = {
@@ -2321,7 +2321,7 @@ export const CHYTRID_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 161,
+  points: 229,
 }
 
 export const CHYTRID_CARRIER: ShipDesign = {
@@ -2362,7 +2362,7 @@ export const CHYTRID_CARRIER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 234,
+  points: 338,
 }
 
 export const CHYTRID_HIVE: ShipDesign = {
@@ -2412,7 +2412,7 @@ export const CHYTRID_HIVE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 361,
+  points: 511,
 }
 
 export const DURANI_RAIDER: ShipDesign = {
@@ -2443,7 +2443,7 @@ export const DURANI_RAIDER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 92,
+  points: 132,
 }
 
 export const DURANI_CORSAIR: ShipDesign = {
@@ -2480,7 +2480,7 @@ export const DURANI_CORSAIR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 330,
+  points: 470,
 }
 
 export const DURANI_MINELAYER: ShipDesign = {
@@ -2517,7 +2517,7 @@ export const DURANI_MINELAYER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 151,
+  points: 211,
 }
 
 export const DURANI_SWEEPER: ShipDesign = {
@@ -2548,7 +2548,7 @@ export const DURANI_SWEEPER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 90,
+  points: 130,
 }
 
 export const DURANI_MOTHERSHIP: ShipDesign = {
@@ -2588,7 +2588,7 @@ export const DURANI_MOTHERSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 453,
+  points: 653,
 }
 
 export const DURANI_RIDER_LANCE: ShipDesign = {
@@ -2624,7 +2624,7 @@ export const DURANI_RIDER_LANCE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 138,
+  points: 194,
 }
 
 export const DURANI_RIDER_BOW: ShipDesign = {
@@ -2659,7 +2659,7 @@ export const DURANI_RIDER_BOW: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 124,
+  points: 174,
 }
 
 export const DURANI_FLAGSHIP: ShipDesign = {
@@ -2702,7 +2702,7 @@ export const DURANI_FLAGSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 546,
+  points: 774,
 }
 
 export const SHARD_MOTE: ShipDesign = {
@@ -2731,7 +2731,7 @@ export const SHARD_MOTE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 53,
+  points: 75,
 }
 
 export const SHARD_SPLINTER: ShipDesign = {
@@ -2763,7 +2763,7 @@ export const SHARD_SPLINTER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 98,
+  points: 138,
 }
 
 export const SHARD_LATTICE: ShipDesign = {
@@ -2798,7 +2798,7 @@ export const SHARD_LATTICE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 185,
+  points: 265,
 }
 
 export const SHARD_NEXUS: ShipDesign = {
@@ -2842,7 +2842,7 @@ export const SHARD_NEXUS: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 419,
+  points: 597,
 }
 
 export const TYRANT_PICKET: ShipDesign = {
@@ -2877,7 +2877,7 @@ export const TYRANT_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 166,
+  points: 236,
 }
 
 export const TYRANT_CRUISER: ShipDesign = {
@@ -2917,7 +2917,7 @@ export const TYRANT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 322,
+  points: 452,
 }
 
 export const TYRANT_ARSENAL: ShipDesign = {
@@ -2956,7 +2956,7 @@ export const TYRANT_ARSENAL: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 220,
+  points: 304,
 }
 
 export const TYRANT_BATTLESHIP: ShipDesign = {
@@ -3003,7 +3003,7 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 518,
+  points: 726,
 }
 
 export const SAMC_ESCORT: ShipDesign = {
@@ -3036,7 +3036,7 @@ export const SAMC_ESCORT: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 86,
+  points: 124,
 }
 
 export const SAMC_QSHIP: ShipDesign = {
@@ -3082,7 +3082,7 @@ export const SAMC_QSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 226,
+  points: 326,
 }
 
 export const SAMC_CONVOY_LEADER: ShipDesign = {
@@ -3124,7 +3124,7 @@ export const SAMC_CONVOY_LEADER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 239,
+  points: 339,
 }
 
 export const SAMC_LINER: ShipDesign = {
@@ -3188,7 +3188,7 @@ export const SAMC_LINER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 422,
+  points: 612,
 }
 
 export const ASKVARIAN_SCRAPPER: ShipDesign = {
@@ -3219,7 +3219,7 @@ export const ASKVARIAN_SCRAPPER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 62,
+  points: 88,
 }
 
 export const ASKVARIAN_SHADOW: ShipDesign = {
@@ -3250,7 +3250,7 @@ export const ASKVARIAN_SHADOW: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 73,
+  points: 99,
 }
 
 export const ASKVARIAN_MESON_CRUISER: ShipDesign = {
@@ -3286,7 +3286,7 @@ export const ASKVARIAN_MESON_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 151,
+  points: 207,
 }
 
 export const ASKVARIAN_GRASER_CRUISER: ShipDesign = {
@@ -3321,7 +3321,7 @@ export const ASKVARIAN_GRASER_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 178,
+  points: 244,
 }
 
 export const ASKVARIAN_FLAGSHIP: ShipDesign = {
@@ -3362,7 +3362,7 @@ export const ASKVARIAN_FLAGSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 399,
+  points: 523,
 }
 
 export const ORBITAL_SATELLITE: ShipDesign = {
@@ -3393,7 +3393,7 @@ export const ORBITAL_SATELLITE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 48,
+  points: 68,
 }
 
 export const ORBITAL_STARBASE: ShipDesign = {
@@ -3445,7 +3445,7 @@ export const ORBITAL_STARBASE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 6,
-  points: 646,
+  points: 884,
 }
 
 /** Every design the app ships with. */

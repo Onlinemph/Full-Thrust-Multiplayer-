@@ -104,6 +104,9 @@ export function App() {
   const [showOnline, setShowOnline] = useState(false)
   const [showSetup, setShowSetup] = useState(false)
   const [litArcs, setLitArcs] = useState<readonly Arc[] | undefined>(undefined)
+  /* Phase 11's rose round the firing ship. On by default; a player who knows
+     the hull can put it away for the phase. */
+  const [showRose, setShowRose] = useState(true)
   // Dismissed once, the result stays dismissed: a player who closes it to look
   // at the wreckage should not have it thrown back at them every phase.
   const [resultSeen, setResultSeen] = useState(false)
@@ -415,6 +418,8 @@ export function App() {
           onHoldCourse={holdCourse}
           onNextShip={selectNextOwing}
           litArcs={litArcs}
+          fireRose={showRose && selected !== undefined && canCommand(selected)}
+          onHoverArc={(arc) => setLitArcs(arc === null ? undefined : [arc])}
           selectedFlightId={selectedFlightId}
           onSelectFlight={setSelectedFlightId}
           deployWith={deployWith}
@@ -473,6 +478,9 @@ export function App() {
               ship={selected}
               canCommand={canCommand(selected)}
               onHoverWeapon={setLitArcs}
+              litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
+              showRose={showRose}
+              onToggleRose={() => setShowRose((on) => !on)}
               aiming={aiming}
               onAim={setAiming}
             />

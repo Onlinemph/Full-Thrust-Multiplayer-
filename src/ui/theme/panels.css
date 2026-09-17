@@ -413,6 +413,11 @@
 }
 
 /* Declared at this target (2.6): lit in the thrust colour until it is rolled. */
+.system-chip.weapon-fire.is-lit {
+  outline: 1px solid var(--side-a);
+  outline-offset: 1px;
+}
+
 .system-chip.is-planned {
   background: var(--thrust);
   border-color: var(--thrust);

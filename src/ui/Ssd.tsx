@@ -122,8 +122,8 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false, onMoveG
           <b className={`num${thrust < design.drive.thrust ? ' is-degraded' : ''}`}>{thrust}</b>
           {design.drive.advanced ? <span className="arcs"> ADV</span> : null}
         </span>
-        <span>
-          CPV <b className="num">{design.points}</b>
+        <span title="Points as built (14). Under 18.3 the Combat Points Value replaces the basic hull's mass with mass²/100.">
+          PTS <b className="num">{design.points}</b>
         </span>
         {design.screens.level > 0 ? (
           <span className="screen-level">

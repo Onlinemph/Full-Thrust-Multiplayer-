@@ -86,6 +86,11 @@ export function driveMass(mass: number, thrust: number): number {
 }
 
 /** An advanced drive weighs the same and costs more (13.10). */
+/** 14.1: the basic hull costs one point a mass — the "mass cost" of the ship. */
+export function basicHullPoints(mass: number): number {
+  return mass
+}
+
 export function drivePoints(mass: number, thrust: number, advanced: boolean): number {
   return driveMass(mass, thrust) * (advanced ? 3 : 2)
 }
@@ -321,7 +326,14 @@ export function priceDesign(design: ShipDesign): DesignCost {
     (design.magazines ?? []).reduce((sum, m) => sum + m.mass, 0) +
     design.systems.reduce((sum, s) => sum + s.mass, 0)
 
+  // 14.1's first line: "Basic hull — total mass of ship — ×1". The worked
+  // example prices its 86-mass cruiser as "Basic hull 86 mass 86 points"
+  // before the hull integrity, the drives and the fit-out are added, and the
+  // ship's cost "is the total of the mass cost, the hull cost, the drives
+  // cost, and the individual costs of all the systems". This is the mass
+  // cost, and it was missing: every design was its own mass too cheap.
   const points =
+    basicHullPoints(m) +
     design.hullBoxes * HULL_POINTS_PER_BOX[design.hullRows] +
     drivePoints(m, design.drive.thrust, design.drive.advanced) +
     ftlPackagePoints(design) +

@@ -952,3 +952,72 @@
   padding: 0.3em 0.7em;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.55);
 }
+
+/* ── The fire-arc rose ─────────────────────────────────────────────────────── */
+
+/* Phase 11's answer to the compass: six wedges round the firing ship, each
+   naming what bears into it. Positioned at the counter's screen point by
+   MapView; the container takes no pointer events, the wedges do. */
+.fire-rose {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 3;
+  pointer-events: none;
+  font-family: var(--font-mono);
+}
+
+.fire-rose svg {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.fire-wedge path {
+  pointer-events: auto;
+  fill: rgb(11 16 28 / 0.55);
+  stroke: var(--line);
+  stroke-width: 1;
+  transition: fill 90ms ease-out;
+}
+
+.fire-wedge.is-armed path {
+  fill: rgb(11 16 28 / 0.8);
+  stroke: var(--ink-faint);
+}
+
+.fire-wedge.has-target path {
+  stroke: var(--warn);
+}
+
+.fire-wedge.is-lit path,
+.fire-wedge:hover path {
+  fill: rgb(60 90 140 / 0.7);
+  stroke: var(--side-a);
+}
+
+.fire-wedge text {
+  pointer-events: none;
+  fill: var(--ink-dim);
+  font-size: 10px;
+}
+
+.fire-wedge-arc {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.fire-wedge.is-armed .fire-wedge-arc,
+.fire-wedge.is-armed .fire-wedge-guns {
+  fill: var(--ink);
+}
+
+.fire-wedge-guns {
+  font-size: 9px;
+}
+
+.fire-wedge-targets {
+  fill: var(--warn);
+  font-size: 9px;
+}

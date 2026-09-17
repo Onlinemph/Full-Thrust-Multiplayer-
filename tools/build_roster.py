@@ -342,6 +342,11 @@ def price(d):
             f"{rows} rows leaves a row with nothing in it, which is not a threshold point"
         )
     mass = pts = 0.0
+    # 14.1: "Basic hull — total mass of ship — x1". The mass cost, before the
+    # hull integrity: the book's 86-mass cruiser is "Basic hull 86 mass 86
+    # points". designPricing.basicHullPoints charges the same, and ships.test
+    # holds the two to each other.
+    pts += d['mass']
     boxes = math.floor(d['mass'] * HULL_FRACTION[d['hull']])
     mass += boxes; pts += boxes * HULL_PTS[d['rows']]
     dm = 0.05 * d['thrust'] * d['mass']; mass += dm; pts += dm * (3 if d.get('advDrive') else 2)

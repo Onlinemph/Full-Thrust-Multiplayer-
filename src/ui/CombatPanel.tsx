@@ -39,6 +39,10 @@ export interface CombatPanelProps {
   canCommand?: boolean
   /** Lets the map draw the arcs of whatever weapon is being considered. */
   onHoverWeapon?: (arcs: readonly Arc[] | undefined) => void
+  /** The arc the rose on the table has the pointer on: its mounts are picked out. */
+  litArc?: Arc | null
+  showRose?: boolean
+  onToggleRose?: () => void
   /** 5.23's Spinal Mount is laid on a point, so it goes in hand like a bolt. */
   aiming?: AimingMount | null
   onAim?: (mount: AimingMount | null) => void
@@ -64,6 +68,9 @@ export function CombatPanel({
   ship,
   canCommand = true,
   onHoverWeapon,
+  litArc = null,
+  showRose = true,
+  onToggleRose,
   aiming,
   onAim,
 }: CombatPanelProps) {
@@ -214,6 +221,16 @@ export function CombatPanel({
       ) : null}
       <div className="panel-row">
         <span>FireCon free</span>
+        {onToggleRose ? (
+          <button
+            className={showRose ? 'is-on' : undefined}
+            aria-pressed={showRose}
+            title="The arcs, drawn round the ship on the table: what bears where (4.2)"
+            onClick={onToggleRose}
+          >
+            {showRose ? 'Arcs shown' : 'Show arcs'}
+          </button>
+        ) : null}
         <span className="spacer" />
         <span className="num" style={{ color: fireCons > 0 ? 'var(--screens)' : 'var(--warn)' }}>
           {fireCons}
@@ -518,6 +535,11 @@ export function CombatPanel({
                         key={weapon.id}
                         className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
                           here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                        }${
+                          litArc !== null &&
+                          arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(litArc)
+                            ? ' is-lit'
+                            : ''
                         }`}
                         disabled={!canCommand || blocked !== null}
                         title={

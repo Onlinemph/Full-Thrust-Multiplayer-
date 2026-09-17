@@ -25,12 +25,13 @@ import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
 import { NOVA_SWEEPS } from '../engine/ew'
 import type { GameState, ShipState } from '../engine/game'
 import { advance, courseToDegrees, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
-import type { Course, MovementOrder, Point } from '../engine/types'
+import type { Arc, Course, MovementOrder, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
 import { OrderCompass } from './OrderCompass'
+import { FireRose } from './FireRose'
 import { Starfield } from './Starfield'
 import { outsideReach, reachOfAim, reachOfGroup, reachOfReturn, type Reach } from './reach'
 import { dispatch, refuseAtTable } from './store'
@@ -65,6 +66,9 @@ export interface MapViewProps {
   onNextShip?: (fromId: string) => void
   /** Arcs to light up on the selected ship — the weapon currently in hand. */
   litArcs?: readonly ('F' | 'FS' | 'AS' | 'A' | 'AP' | 'FP')[]
+  /** Phase 11's rose round the selected ship: what bears where (4.2). */
+  fireRose?: boolean
+  onHoverArc?: (arc: Arc | null) => void
   /** The fighter group in hand, if any (8.5). */
   selectedFlightId?: string | null
   onSelectFlight?: (flightId: string | null) => void
@@ -116,6 +120,8 @@ export function MapView({
   onHoldCourse,
   onNextShip,
   litArcs,
+  fireRose = false,
+  onHoverArc,
   placingTerrain = null,
   onTerrainPlaced,
   selectedFlightId = null,
@@ -904,6 +910,21 @@ export function MapView({
           in a ring round the selected ship (3.5). HTML rather than SVG so the
           buttons are buttons — focusable, hoverable, the same as every other
           control — and drawn over the plot at the counter's screen position. */}
+      {/* Phase 11's rose: what bears into each arc, drawn round the ship the
+          way the compass is drawn round it in phase 1 (4.2). */}
+      {fireRose && selected && roseFor(selected) ? (
+        <FireRose
+          key={`rose-${selected.id}`}
+          game={game}
+          ship={selected}
+          x={originX + (drawnAt.get(selected.id)?.x ?? 0) * scale}
+          y={originY + (drawnAt.get(selected.id)?.y ?? 0) * scale}
+          clearance={counterRadius(selected.design.mass) * scale}
+          litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
+          onHoverArc={(arc) => onHoverArc?.(arc)}
+        />
+      ) : null}
+
       {compassFor(selected) ? (
         <OrderCompass
           key={selected?.id}
@@ -930,6 +951,14 @@ export function MapView({
    * console can see the orders of. An enemy hull gets its sheet, not its
    * order form.
    */
+  /** The rose is for a ship of ours, on the table, in the phase it fires. */
+  function roseFor(ship: ShipState): boolean {
+    if (game.phase !== 'ship-fire') return false
+    if (ship.destroyed || ship.offTable || ship.captured) return false
+    if (viewingSide !== null && ship.side !== viewingSide) return false
+    return true
+  }
+
   function compassFor(ship: ShipState | undefined): boolean {
     if (!ship || game.phase !== 'orders' || vector) return false
     if (ship.destroyed || ship.offTable || ship.captured) return false

@@ -377,24 +377,23 @@ Both are reproduced exactly by the tests, which is the check on the reconstructi
 ### [reading] — how the change is applied to a Continuum design
 
 18.3 says the substitution replaces a hull cost that is *"equal to mass"*, citing "section 11.2".
-No section 11.2 of *Project Continuum* prices a hull — 11 is Faster Than Light — so the citation is
-inherited from *Full Thrust* 2nd edition, where the hull did cost its mass in points. Continuum
-prices a hull differently: 13.7 charges per **hull box**, at 3, 2, 1.5 or 1 points a box depending
-on how many rows the track is split into. There is no quantity in a Continuum design equal to the
-ship's mass to substitute for.
+The citation is inherited from *Full Thrust* 2nd edition (11 is Faster Than Light here), but the
+quantity is still in Continuum: 14.1's first line prices the **basic hull** at *"total mass of
+ship × 1"*, and the worked example in 13 lists *"Basic hull 86 mass 86 points"* before the hull
+integrity, the drives and the fit-out. The ship's cost *"is the total of the mass cost, the hull
+cost, the drives cost, and the individual costs of all the systems"*. `designPricing.priceDesign`
+charges that mass cost (`basicHullPoints`), and so does the roster generator.
 
-So the engine applies 18.3's own arithmetic instead of its substitution:
+So the engine applies 18.3 as written:
 
 ```
-CPV total = printed points + (CPV hull cost − mass)
+CPV total = printed points − mass + round(mass² / 100)
 ```
 
-which is precisely *"the change to the point value can be calculated by subtracting the actual ship
-mass from the CPV hull value"*, and precisely what both worked examples do — they start from the
-Fleet Book's printed total and add the delta. The alternative was to substitute `round(mass²/100)`
-for `hullBoxes × pointsPerBox`. It was rejected because it silently swallows 13.7's row-count
-pricing (a 3-row hull costs three times a 6-row hull per box, and the substitution would erase that
-difference), and because it does not reproduce the printed examples, which never mention hull boxes.
+which is the substitution, and precisely *"the change to the point value can be calculated by
+subtracting the actual ship mass from the CPV hull value"* — what both worked examples do, starting
+from the Fleet Book's printed total and adding the delta. 13.7's per-box hull integrity pricing is
+untouched by it: only the mass cost is swapped.
 
 ### CPV and the rest of a fleet
 

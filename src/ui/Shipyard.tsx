@@ -70,6 +70,7 @@ import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
 import { CounterPreview } from './CounterPreview'
 import { defaultArcs } from '../data/arcs'
+import { cpvPoints } from '../engine/battles'
 import { isCounterArtUrl } from '../data/designFile'
 
 
@@ -299,7 +300,8 @@ export function Shipyard({
             style={{ width: `${Math.min(100, (cost.massUsed / cost.massAvailable) * 100)}%` }}
           />
           <span className="mass-readout num">
-            {cost.massUsed} / {cost.massAvailable} mass · {cost.points} CPV
+            {cost.massUsed} / {cost.massAvailable} mass · {cost.points} points ·{' '}
+            {cpvPoints(cost.points, design.mass)} CPV
             {cost.spare >= 0 ? ` · ${cost.spare} spare` : ` · ${-cost.spare} over`}
           </span>
         </div>
