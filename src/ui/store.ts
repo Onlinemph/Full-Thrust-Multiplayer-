@@ -7,7 +7,7 @@ import {
   type ActionOutcome,
   type GameAction,
 } from '../engine/actions'
-import { shipsAwaitingDeployment, type GameState } from '../engine/game'
+import { canShipFire, shipsAwaitingDeployment, type GameState } from '../engine/game'
 import {
   buildGame,
   CURRENT_RULES_VERSION,
@@ -487,9 +487,24 @@ function runAi(): void {
       const actions = aiActions(game, side)
       if (actions.length === 0) continue
       acted = true
+      const sequence = game.fire.sequence
       for (const action of actions) {
         applyJournaled(action)
         net?.onAction(action, journal.length)
+      }
+      // 2.6: in phase 11 the computer's turn holds everyone else's. If nothing
+      // it tried was taken — a volley refused for a reason the plan could not
+      // see — it holds fire with a ship instead, so play moves on rather than
+      // waiting on a console that has already had its say and will not be
+      // asked again until the sequence moves.
+      if (game.phase === 'ship-fire' && game.fire.side === side && game.fire.sequence === sequence) {
+        for (const ship of game.ships) {
+          if (ship.side !== side || ship.captured || !canShipFire(ship)) continue
+          const held: GameAction = { type: 'pass-fire', shipId: ship.id }
+          const outcome = applyJournaled(held)
+          net?.onAction(held, journal.length)
+          if (outcome.refused === undefined) break
+        }
       }
     }
   }

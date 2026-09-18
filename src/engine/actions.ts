@@ -2903,7 +2903,13 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
       const open = FIRING_ACTIVATION.get(state)
       const mine = open !== undefined && open.turn === state.turn && open.phase === state.phase && open.shipId === ship.id
       if (!mine) {
-        const activation = openFiringActivation(state, ship)
+        // 7.23 and 7.24 take a ship's power and its other guns for the turn;
+        // neither takes its right to hold fire, which spends nothing. From
+        // reading 18 only the turn order stands in the way (2.6): a ship that
+        // cannot shoot must still be able to say so, or the phase waits on it
+        // for ever. Gated, because an older journal recorded the refusal.
+        const activation =
+          rulesReading(state) >= 18 ? firingTurnRefusal(state, ship) : openFiringActivation(state, ship)
         if (activation) return activation
         claimFiringActivation(state, ship)
       }
@@ -6753,15 +6759,41 @@ function openFiringActivation(state: GameState, ship: ShipState): ActionOutcome 
   const live = open !== undefined && open.turn === state.turn && open.phase === state.phase
   if (live && open.shipId === ship.id) return ship.hasFiredThisTurn ? spent(ship) : null
   if (ship.hasFiredThisTurn) return spent(ship)
-  // 2.6: "Starting with the player who won initiative, each player alternates
-  // in firing any/all weapon systems on one ship." Opening a ship's fire out
-  // of turn is refused; a ship whose fire is already open goes on firing.
-  if (rulesReading(state) >= 16 && state.phase === 'ship-fire') {
-    const turn = state.fire.side
-    if (turn !== null && turn !== ship.side) {
-      const name = state.sides.find((s) => s.id === turn)?.name ?? turn
-      return refuse(`It is ${name}'s turn to fire a ship (2.6)`)
-    }
+  return firingTurnRefusal(state, ship)
+}
+
+/**
+ * 2.6: *"Starting with the player who won initiative, each player alternates
+ * in firing any/all weapon systems on one ship."* Opening a ship's fire out
+ * of turn is refused; a ship whose fire is already open goes on firing.
+ */
+function firingTurnRefusal(state: GameState, ship: ShipState): ActionOutcome | null {
+  if (rulesReading(state) < 16 || state.phase !== 'ship-fire') return null
+  const turn = state.fire.side
+  if (turn === null || turn === ship.side) return null
+  const name = state.sides.find((s) => s.id === turn)?.name ?? turn
+  return refuse(`It is ${name}'s turn to fire a ship (2.6)`)
+}
+
+/**
+ * Why this ship can open no fire at all this phase, or null (7.20, 7.25,
+ * 10.3, 11.4, 12.7).
+ *
+ * The guards every phase-11 shot shares, for a console that has to decide
+ * whether to plan a volley or hold fire: a plan built for a hull that cannot
+ * shoot is a volley refused, and a volley refused leaves the turn where it
+ * was — with this side, and everyone else waiting on it (2.6).
+ */
+export function fireOpeningRefusal(state: GameState, ship: ShipState): string | null {
+  if (ship.destroyed || ship.offTable) return 'Ship is out of the battle'
+  if (ship.captured) return `${ship.name} is a prize and out of the fight (12.7)`
+  if (ship.reflexFieldActive) return `${ship.name} is running its Reflex Field (7.25)`
+  if (ship.cloaked) return `${ship.name} is cloaked and cannot fire (7.20)`
+  if (isOutOfControl(ship, state.turn)) {
+    return `${ship.name} is out of control and cannot fire (10.3)`
+  }
+  if (ftlStageOf(ship, state.turn) !== null) {
+    return `${ship.name} is entering hyperspace and cannot fire (11.4)`
   }
   return null
 }

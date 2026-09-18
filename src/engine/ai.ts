@@ -77,6 +77,7 @@ import { arcsWhenInverted, coursesMatched } from './specialmoves'
 import {
   antiShipPdMounts,
   deployingSide,
+  fireOpeningRefusal,
   novaArmedOn,
   optional,
   pointDefenceCanEngage,
@@ -748,6 +749,13 @@ export function aiActions(
       if (inTurns && game.fire.side !== null && game.fire.side !== side) break
       const shooters = inTurns ? mine.filter((ship) => canShipFire(ship) && !ship.captured) : mine
       for (const ship of shooters) {
+        // A hull that can open no fire at all holds it, which is what passes
+        // the turn on (2.6): a volley planned for it would be refused, and a
+        // volley refused leaves the whole phase waiting on this side.
+        if (inTurns && fireOpeningRefusal(game, ship) !== null) {
+          actions.push({ type: 'pass-fire', shipId: ship.id })
+          break
+        }
         // 7.23: an armed cannon fires and nothing else does, so the shot is
         // taken instead of the fire plan rather than alongside it.
         const nova = ship.design.weapons.find(

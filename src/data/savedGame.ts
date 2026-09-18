@@ -101,8 +101,14 @@ import { SCENARIOS, scenarioById, setEmbeddedScenario, startScenario, type Scena
  *             the seekers' acquisitions, so a pod's hits sat on the SSD for
  *             the rest of the battle. Both move the dice for everything
  *             after them.
+ *  18  2.6  — holding fire is refused for the turn order alone. 7.23's
+ *             power-down and 7.24's spent turn took `pass-fire` with the
+ *             guns, so a ship that could not shoot could not say so either,
+ *             and phase 11 waited on it for ever; a computer console whose
+ *             volley was refused sat on the turn the same way. A pass that
+ *             was refused before is taken now, so it is stamped.
  */
-export const CURRENT_RULES_VERSION = 17
+export const CURRENT_RULES_VERSION = 18
 
 export interface GameSetup {
   scenarioId: string

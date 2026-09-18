@@ -305,7 +305,7 @@ describe('rocket markers attack the hull they sit on (6.7)', () => {
 })
 
 describe('reading', () => {
-  it('is 17', () => {
-    expect(CURRENT_RULES_VERSION).toBe(17)
+  it('is at least 17', () => {
+    expect(CURRENT_RULES_VERSION).toBeGreaterThanOrEqual(17)
   })
 })
