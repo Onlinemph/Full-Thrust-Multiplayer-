@@ -7,7 +7,7 @@ import {
   type ActionOutcome,
   type GameAction,
 } from '../engine/actions'
-import { canShipFire, shipsAwaitingDeployment, type GameState } from '../engine/game'
+import { canShipFire, type GameState } from '../engine/game'
 import {
   buildGame,
   CURRENT_RULES_VERSION,
@@ -180,7 +180,6 @@ export function enterMatch(role: 'host' | 'guest', fresh: boolean): void {
     journal = []
     game = buildGame(setup)
     embedLobbyDesigns()
-    aiActed = new Set()
     clearFx()
     preview = null
   }
@@ -205,7 +204,6 @@ export function leaveMatch(): void {
       setup = home.setup
       journal = home.actions
       game = replayPartial(home, home.actions.length)
-      aiActed = new Set()
       clearFx()
       preview = null
     } catch {
@@ -361,7 +359,6 @@ export function startMatch(): boolean {
   journal = []
   game = buildGame(setup)
   clearFx()
-  aiActed = new Set()
   preview = null
   autosave()
   net?.onReplace(saved())
@@ -444,23 +441,16 @@ function applyJournaled(action: GameAction): ActionOutcome {
 // ---------------------------------------------------------------------------
 
 /**
- * Phases the computer has already acted in, keyed `turn:phase:side`.
- *
- * The computer acts once when a phase opens, and its actions go through the
- * same `dispatch` a human's clicks do — so they are journalled, they replay,
- * and a player can undo the computer's turn. Held off the game state because it
- * is about this console's driver, not about the battle: a save that reached
- * another machine must not arrive thinking the AI has already moved.
- */
-let aiActed = new Set<string>()
-
-/**
  * Let the computer take its turn in the current phase.
  *
  * Called after every dispatch rather than on a timer, because the thing that
- * opens a phase is always an action. The `aiActed` guard is what stops it
- * recursing: the computer's own actions call back in here and find the phase
- * already done.
+ * opens a phase is always an action. Each computer side is asked what it
+ * wants to do and asked again while its last answer got something taken:
+ * 18.1's deployment alternates within one phase, 2.6's fire phase hands out
+ * one ship at a time, and a strike that kills its target leaves the next
+ * group wanting a new one. The planners are written to have nothing more to
+ * say once their work is done, which is what ends the loop — and a bound on
+ * the rounds is what ends it if one of them has not been.
  */
 function runAi(): void {
   const sides = setup.aiSides ?? []
@@ -469,54 +459,38 @@ function runAi(): void {
   // creator's — or both ends would journal its orders twice.
   if (matchSide !== null && matchSide !== game.sides[0]?.id) return
 
-  // 18.1's deployment alternates within one phase, so the computer has to be
-  // able to act several times in the same turn and phase — once per placement
-  // — and 2.6's fire phase alternates ship by ship, so it acts once per turn
-  // of the firing. The guard therefore keys on how far the deployment, or the
-  // firing, has got, and the loop runs until nobody moves, which terminates
-  // because every such action advances the counter it keys on and every other
-  // phase acts at most once per side.
-  let guard = 200
-  let acted = true
-  while (acted && guard-- > 0) {
-    acted = false
+  for (let round = 0; round < 60; round += 1) {
+    let progressed = false
     for (const side of sides) {
-      const key = aiKey(side)
-      if (aiActed.has(key)) continue
-      aiActed.add(key)
       const actions = aiActions(game, side)
       if (actions.length === 0) continue
-      acted = true
       const sequence = game.fire.sequence
+      let taken = 0
       for (const action of actions) {
-        applyJournaled(action)
+        const outcome = applyJournaled(action)
         net?.onAction(action, journal.length)
+        if (outcome.refused === undefined) taken += 1
       }
+      if (taken > 0) progressed = true
       // 2.6: in phase 11 the computer's turn holds everyone else's. If nothing
       // it tried was taken — a volley refused for a reason the plan could not
       // see — it holds fire with a ship instead, so play moves on rather than
-      // waiting on a console that has already had its say and will not be
-      // asked again until the sequence moves.
-      if (game.phase === 'ship-fire' && game.fire.side === side && game.fire.sequence === sequence) {
+      // waiting on a console that has already had its say.
+      if (game.phase === 'ship-fire' && game.fire.side === side && game.fire.sequence === sequence && taken === 0) {
         for (const ship of game.ships) {
           if (ship.side !== side || ship.captured || !canShipFire(ship)) continue
           const held: GameAction = { type: 'pass-fire', shipId: ship.id }
           const outcome = applyJournaled(held)
           net?.onAction(held, journal.length)
-          if (outcome.refused === undefined) break
+          if (outcome.refused === undefined) {
+            progressed = true
+            break
+          }
         }
       }
     }
+    if (!progressed) break
   }
-}
-
-function aiKey(side: string): string {
-  const deployment = game.deployment
-  if (deployment && shipsAwaitingDeployment(game).length > 0) {
-    return `${game.turn}:${game.phase}:${side}:d${deployment.order.length}:${deployment.placed.length}`
-  }
-  if (game.phase === 'ship-fire') return `${game.turn}:${game.phase}:${side}:f${game.fire.sequence}`
-  return `${game.turn}:${game.phase}:${side}`
 }
 
 /** Apply an action, journal it, autosave, notify. The only way state changes. */
@@ -656,7 +630,6 @@ export function applyRemoteSave(next: SavedGame): void {
   settleMatchSide()
   embedLobbyDesigns()
   clearFx()
-  aiActed = new Set()
   preview = null
   autosave()
   emit()
@@ -675,7 +648,6 @@ export function undo(): boolean {
   journal = journal.slice(0, -1)
   game = replayPartial({ version: 1, setup, actions: journal }, journal.length)
   clearFx()
-  aiActed = new Set()
   preview = null
   autosave()
   net?.onUndo(journal.length)
@@ -694,7 +666,6 @@ export function newGame(next: GameSetup): void {
   journal = []
   game = buildGame(setup)
   clearFx()
-  aiActed = new Set()
   preview = null
   autosave()
   net?.onReplace(saved())
@@ -709,7 +680,6 @@ export function loadGame(text: string): string | null {
   journal = parsed.actions
   game = replayPartial(parsed, parsed.actions.length)
   clearFx()
-  aiActed = new Set()
   preview = null
   autosave()
   net?.onReplace(saved())

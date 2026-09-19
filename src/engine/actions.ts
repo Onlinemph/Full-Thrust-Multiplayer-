@@ -587,9 +587,16 @@ export type GameAction =
       shots: Array<{
         weaponId: string
         targetId: string
-        /** What the target is; a ship unless said otherwise. */
-        kind?: 'ship' | 'flight' | 'gunboats'
+        /**
+         * What the target is; a ship unless said otherwise. A
+         * `point-defence` shot is 7.12's rake of a stripped hull, made by the
+         * mount named as `weaponId`, and rides in the volley because it is
+         * part of the ship's one declared fire (2.6).
+         */
+        kind?: 'ship' | 'flight' | 'gunboats' | 'point-defence' | 'spinal'
         systemId?: string
+        /** 5.23: where a `spinal` shot is laid; `targetId` is then unused. */
+        aim?: Point
       }>
     }
   /** Fire at a fighter group, which costs a FireCon like a ship (4.4). */
@@ -2943,7 +2950,11 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
             ? { type: 'fire-at-flight', shipId: ship.id, weaponId: shot.weaponId, flightId: shot.targetId }
             : shot.kind === 'gunboats'
               ? { type: 'fire-at-gunboats', shipId: ship.id, weaponId: shot.weaponId, squadronId: shot.targetId }
-              : {
+              : shot.kind === 'point-defence'
+                ? { type: 'fire-point-defence', shipId: ship.id, systemId: shot.weaponId, targetId: shot.targetId }
+                : shot.kind === 'spinal' && shot.aim !== undefined
+                  ? { type: 'fire-spinal-mount', shipId: ship.id, weaponId: shot.weaponId, aimPoint: shot.aim }
+                  : {
                   type: 'fire-weapon',
                   shipId: ship.id,
                   weaponId: shot.weaponId,
@@ -2953,7 +2964,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         const outcome = applyAction(state, single)
         if (outcome.refused !== undefined) {
           const weapon = ship.design.weapons.find((w) => w.id === shot.weaponId)
-          refusals.push(`${weapon?.label ?? shot.weaponId}: ${outcome.refused}`)
+          const mount = ship.design.systems.find((system) => system.id === shot.weaponId)
+          refusals.push(`${weapon?.label ?? mount?.label ?? shot.weaponId}: ${outcome.refused}`)
         } else {
           fired += 1
         }
@@ -11384,6 +11396,51 @@ function thresholdOptions(state: GameState): { driveDamage?: boolean; coreSystem
  * that needed it is also the one that makes it work.
  */
 export { rulesReading, setRulesReading } from './game'
+
+// ---------------------------------------------------------------------------
+// What the computer's captains may ask (read-only)
+// ---------------------------------------------------------------------------
+//
+// The planner in `ai.ts` used to keep its own copy of the rules a shot
+// answers to, and every place the copy drifted from the handler's was a
+// volley refused — and a refused volley is a turn nobody else can take. These
+// hand it the handler's own answers instead, so a plan is built on the same
+// facts the action will be judged by.
+
+/** The carrier's deck as `launch-flight` sees it (8.1, 8.2). */
+export function carrierDeck(state: GameState, carrier: ShipState): CarrierFlightState {
+  return carrierFlightState(state, carrier)
+}
+
+/** The tender's racks and bays as `launch-gunboats` sees them (9.1). */
+export function gunboatDeck(state: GameState, carrier: ShipState): GunboatCarrierState {
+  return gunboatCarrierState(state, carrier)
+}
+
+/** How far a group can lock on this hull, electronic warfare included (8.7, 7.17 – 7.20). */
+export function flightLockOnRange(
+  state: GameState,
+  target: ShipState,
+  payloadAttack = false,
+): number | null {
+  return fighterLockOnRange(state, target, payloadAttack)
+}
+
+/** 6.6: whether a launcher has anything behind it to launch. */
+export function launcherFed(ship: ShipState, weapon: WeaponDef): boolean {
+  if (weapon.weaponClass !== 'salvo-missile-launcher') return true
+  return magazineCanFeed(ship, weapon.id)
+}
+
+/** How far this ship's FireCons see this target (7.4, 7.18). */
+export function sensorReach(state: GameState, ship: ShipState, target: ShipState): number {
+  return sensorReachTo(state, ship, target)
+}
+
+/** 7.24: whether the capacitors have already taken this turn's charge. */
+export function waveGunChargedThisTurn(state: GameState, ship: ShipState, weaponId: string): boolean {
+  return waveGunChargedTurns(state).get(novaKey(ship.id, weaponId)) === state.turn
+}
 
 /**
  * Sides that have to say so before a phase ends under the ready gate (2.6,

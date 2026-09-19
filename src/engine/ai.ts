@@ -89,9 +89,37 @@ import {
 } from './actions'
 import { canShipFire } from './game'
 import { isGateActive } from './ftl'
-import { isInSpinalArc, isSpinalMount, spinalCanFire } from './weapons/kinetics'
+import { isInSpinalArc, isSpinalMount, spinalBeamCatches, spinalCanFire, spinalSize } from './weapons/kinetics'
 import type { MovementOrder, Point, TurnDirection, WeaponDef } from './types'
 import type { Rng } from './dice'
+import {
+  areaEcmLevelOf,
+  carrierDeck,
+  effectiveScreenLevel,
+  flightLockOnRange,
+  gunboatDeck,
+  launcherFed,
+  sensorReach,
+  shipsAwaitingOrders,
+  stealthLevelOf,
+  waveGunChargedThisTurn,
+  weaponArcs,
+} from './actions'
+import {
+  canDeclareAttack,
+  canLaunch,
+  groupProfile,
+  isEngaged,
+  takesSecondaryMoveInPhaseFour,
+  MISSILE_FIGHTER_RANGE,
+} from './fighters'
+import { canLaunchSquadron } from './gunboats'
+import { isOrdnance } from './weapons'
+import { canUseTransporters, NEEDLE_BEAM_FORBIDDEN_TARGETS } from './weapons/beams'
+import { availableDamageControlParties, damageControlParties, type FighterGroupState } from './game'
+import { stealthMaxRange, STEALTH_PASSIVE_TARGET_RANGE } from './defences'
+import { plasmaBoltMayFire } from './ordnance'
+import { repairTargets } from './threshold'
 
 /**
  * How close the computer lets an enemy get before it lets its riders go (11.7).
@@ -198,7 +226,11 @@ export function pickTarget(game: GameState, ship: ShipState): ShipState | undefi
     // (4.12), and range is the thing a turn of manoeuvre can least afford to
     // spend fixing.
     const hurt = enemy.design.hullBoxes > 0 ? enemy.hullMarked / enemy.design.hullBoxes : 0
-    const score = hurt * 40 - range
+    // And the near-dead over the merely hurt: what is left to take off a hull
+    // is what the whole fleet's fire should be going at, so that ships die
+    // rather than everything being wounded (4.12).
+    const left = Math.max(0, enemy.design.hullBoxes - enemy.hullMarked)
+    const score = hurt * 40 - range - left * 0.4
     if (score > bestScore) {
       bestScore = score
       best = enemy
@@ -265,6 +297,32 @@ export function scoreOrder(
   // knife range and hardly at all at 36.
   let score = -(((range - want) / BEAM_RANGE_BAND) ** 2) * 10
 
+  // And the turn after, flown straight on from there: a ship that arrives at
+  // the range it wants at a speed that carries it 20 MU past next turn has
+  // not arrived, it is passing through. Half the weight, because the enemy
+  // gets a turn of orders in between.
+  const onward = courseVector(result.placement.facing)
+  const then = {
+    x: result.placement.position.x + onward.x * result.velocity,
+    y: result.placement.position.y + onward.y * result.velocity,
+  }
+  const rangeThen = distance(then, predict(target, (settings.lookahead ?? 1) + 1))
+  score -= (((rangeThen - want) / BEAM_RANGE_BAND) ** 2) * 5
+  // A second turn that runs straight into a rock, or deeper into its well,
+  // is not a second turn (17.6, 17.9).
+  if (optional(game).terrainHazards) {
+    for (const feature of game.terrain) {
+      if (feature.kind === 'planet' || feature.kind === 'planetoid') {
+        if (distance(then, feature.position) <= feature.radius + 2) score -= 400
+      }
+      if (feature.gravity !== undefined) {
+        const well = createGravityWell(feature.position, feature.radius, feature.gravity)
+        const zone = gravityZoneAt(well, then)
+        if (zone) score -= zone.strength * 25
+      }
+    }
+  }
+
   // Guns bearing. The arc the target will be in, counted by how much of the
   // ship's surviving armament can fire into it (4.2). The aft arc counts for
   // nothing: this is a position the ship is about to manoeuvre into, so it
@@ -274,6 +332,26 @@ export function scoreOrder(
   if (arc === 'A') return score - edgePenalty(game, result.placement.position)
   for (const weapon of ship.design.weapons) {
     if (ship.destroyedSystems.has(weapon.id)) continue
+    // 5.23: a Spinal Mount lays on a point inside 30 degrees of the bow, not
+    // its arc; 7.24: a charged Wave Gun is worth a turn's fire only where its
+    // front will actually touch the hull. Both are worth steering for.
+    if (isSpinalMount(weapon)) {
+      if (isInSpinalArc(result.placement.position, result.placement.facing, enemyAt) && range <= maxRangeOf(weapon)) {
+        score += weapon.rating * 8
+      }
+      continue
+    }
+    if (weapon.weaponClass === 'wave-gun') {
+      if (
+        waveGunCharge(game, ship, weapon.id) >= WAVE_GUN_CHARGE_TARGET &&
+        WAVE_GUN_BANDS.some((wave) =>
+          templateContacts(result.placement.position, result.placement.facing, wave.fromMu, wave.toMu, wave.diameter, enemyAt),
+        )
+      ) {
+        score += 40
+      }
+      continue
+    }
     if (!bearsOn(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted), arc)) continue
     // A weapon out of range contributes nothing, and one deep inside its range
     // contributes its full class (4.5).
@@ -430,8 +508,9 @@ export function aiActions(
   settings: AiSettings = {},
   _rng?: Rng,
 ): GameAction[] {
+  // 12.7: a prize "cannot be used in that combat" — no orders, no move, no fire.
   const mine = game.ships.filter(
-    (ship) => ship.side === side && !ship.destroyed && !ship.offTable,
+    (ship) => ship.side === side && !ship.destroyed && !ship.offTable && !ship.captured,
   )
   const actions: GameAction[] = []
 
@@ -531,6 +610,56 @@ export function aiActions(
         })
       }
 
+      // The switches that are written with the orders, each only when the
+      // setting has to change — the planner is asked again after every action
+      // it takes, and an answer that never changes is an answer that is never
+      // done.
+      const foes = enemiesOf(game, side).filter((enemy) => !enemy.destroyed && !enemy.offTable)
+      for (const ship of mine) {
+        const here = predict(ship, 1)
+        // 7.19: the umbrella costs the emitter its own FireCons, so it comes
+        // down for a turn the ship expects to shoot in and goes back up when
+        // there is nothing in reach.
+        if (areaEcmLevelOf(ship) > 0) {
+          const shooting = foes.some((enemy) => distance(here, predict(enemy, 1)) <= longestReach(ship))
+          if (ship.areaEcmOff !== shooting) {
+            actions.push({ type: 'set-area-ecm', shipId: ship.id, on: !shooting })
+          }
+        }
+        // 7.4: a Stealth-2 hull sees 24 MU on passive. It goes active — and
+        // shows as Stealth-1 — for a turn in which its guns outreach that.
+        if (stealthLevelOf(ship) === 2 || ship.activeScan) {
+          const wantActive = foes.some((enemy) => {
+            const range = distance(here, predict(enemy, 1))
+            return range > STEALTH_PASSIVE_TARGET_RANGE && range <= longestReach(ship)
+          })
+          if (ship.activeScan !== wantActive) {
+            actions.push({ type: 'set-active-scan', shipId: ship.id, on: wantActive })
+          }
+        }
+        // 6.10: a minelayer drops its mines along this turn's course, so it
+        // lays when an enemy is close enough to be crossing it soon.
+        const racks = ship.design.weapons.filter(
+          (weapon) => weapon.weaponClass === 'mine-rack' && !ship.destroyedSystems.has(weapon.id),
+        )
+        if (racks.length > 0 && ship.order === null) {
+          const wantMines = foes.some(
+            (enemy) => distance(ship.placement.position, enemy.placement.position) <= 18,
+          )
+          if (ship.layingMines !== wantMines) {
+            actions.push({ type: 'plot-mines', shipId: ship.id, on: wantMines })
+          }
+        }
+      }
+
+      // Only a ship that still owes an order is plotted: the phase asks the
+      // same question of every ship until each has answered, and this is
+      // asked again after each answer.
+      const owing = new Set(
+        shipsAwaitingOrders(game)
+          .filter((ship) => ship.side === side)
+          .map((ship) => ship.id),
+      )
       for (const ship of mine) {
         // 7.23: arming the Nova Cannon costs the whole ship for a turn, so it
         // is decided before the course is, and it tears up any course written.
@@ -557,8 +686,10 @@ export function aiActions(
           if (gun.weaponClass !== 'wave-gun') continue
           if (ship.destroyedSystems.has(gun.id)) continue
           if (waveGunCharge(game, ship, gun.id) >= WAVE_GUN_CHARGE_TARGET) continue
+          if (waveGunChargedThisTurn(game, ship, gun.id)) continue
           actions.push({ type: 'charge-wave-gun', shipId: ship.id, weaponId: gun.id })
         }
+        if (!owing.has(ship.id)) continue
         // 8.1: a carrier with a wing still in the bay writes "Launch" and
         // nothing else — 8.2 refuses the launch outright if it spent thrust.
         // Holding station for a turn is what the launch costs, and a carrier
@@ -590,62 +721,63 @@ export function aiActions(
       // "straight on". Every one of those is an order to hold course, so it
       // is written down as one, and the phase can end.
       for (const ship of mine) {
-        if (ship.order !== null) continue
+        if (!owing.has(ship.id) || ship.order !== null) continue
+        // A cannon armed a moment ago has taken the ship's power with it
+        // (7.23), and the order sheet with it: 2.6 does not wait on that hull.
         const spoken = actions.some(
           (action) =>
-            (action.type === 'plot-turn' || action.type === 'plot-accel') &&
+            (action.type === 'plot-turn' ||
+              action.type === 'plot-accel' ||
+              action.type === 'arm-nova-cannon') &&
             action.shipId === ship.id,
         )
         if (!spoken) actions.push({ type: 'plot-accel', shipId: ship.id, accel: 0 })
       }
       break
 
-    case 'launch-missiles':
+    case 'launch-missiles': {
       // 6.3: a missile is aimed at a point, not at a ship, and attacks whatever
       // it finds within 6 MU of that point after movement — so the aim point is
-      // where the target will BE, not where it is.
+      // where the target will BE, not where it is. Each test here is the one
+      // the launch action makes: a FireCon to launch (6.3), a magazine with a
+      // load behind an SML (6.6), the mount's arc, and the PBL's reload (6.8).
       for (const ship of mine) {
-        for (const weapon of ship.design.weapons) {
-          if (ship.destroyedSystems.has(weapon.id)) continue
-          if (!LAUNCHER_CLASSES.has(weapon.weaponClass)) continue
-          if (!canWeaponFire(ship, weapon.id)) continue
-          const target = pickTarget(game, ship)
-          if (!target) continue
-          const aim = predict(target, 1)
-          if (distance(ship.placement.position, aim) > maxRangeOf(weapon)) continue
-          actions.push({
-            type: 'launch-ordnance',
-            shipId: ship.id,
-            weaponId: weapon.id,
-            aimPoint: aim,
-          })
-        }
-
-        // 6.7 and 6.8 launch in the same phase and neither is aimed like a
-        // missile: a rocket pod names a ship and rolls now, a plasma bolt puts
-        // a marker on the table and waits for phase 10.
-        for (const weapon of ship.design.weapons) {
+        // 7.23: a ship with its power in the Nova Cannon launches nothing.
+        if (novaArmedOn(game, ship)) continue
+        const target = pickTarget(game, ship)
+        const at = ship.placement.position
+        const facing = ship.placement.facing
+        let fireCons = availableFireCons(ship, game.phase)
+        for (const weapon of target ? ship.design.weapons : []) {
+          if (!target) break
           if (ship.destroyedSystems.has(weapon.id)) continue
           if (!canWeaponFire(ship, weapon.id)) continue
-          const target = pickTarget(game, ship)
-          if (!target) continue
+          const arcs = weaponArcs(ship, weapon)
+          if (LAUNCHER_CLASSES.has(weapon.weaponClass)) {
+            if (fireCons < 1 || !launcherFed(ship, weapon)) continue
+            const aim = predict(target, 1)
+            if (distance(at, aim) > maxRangeOf(weapon)) continue
+            if (!arcs.includes(arcTo(at, facing, aim))) continue
+            fireCons -= 1
+            actions.push({ type: 'launch-ordnance', shipId: ship.id, weaponId: weapon.id, aimPoint: aim })
+            continue
+          }
+          // 6.7 and 6.8 launch in the same phase and neither is aimed like a
+          // missile: a rocket pod names a ship and rolls now, a plasma bolt
+          // puts a marker on the table and waits for phase 10.
           if (weapon.weaponClass === 'rocket-pod') {
-            if (distance(ship.placement.position, target.placement.position) > maxRangeOf(weapon)) {
-              continue
-            }
-            actions.push({
-              type: 'fire-rocket-pod',
-              shipId: ship.id,
-              weaponId: weapon.id,
-              targetId: target.id,
-            })
+            if (distance(at, target.placement.position) > maxRangeOf(weapon)) continue
+            if (!arcs.includes(arcTo(at, facing, target.placement.position))) continue
+            actions.push({ type: 'fire-rocket-pod', shipId: ship.id, weaponId: weapon.id, targetId: target.id })
             continue
           }
           if (weapon.weaponClass !== 'plasma-bolt-launcher') continue
+          if (!plasmaBoltMayFire(ship.weaponLastFiredTurn.get(weapon.id) ?? null, game.turn)) continue
           // The bubble is 6 MU across, so a bolt put where the target will be
           // catches it even if the prediction is a move out.
           const aim = predict(target, 1)
-          if (distance(ship.placement.position, aim) > maxRangeOf(weapon)) continue
+          if (distance(at, aim) > maxRangeOf(weapon)) continue
+          if (!arcs.includes(arcTo(at, facing, aim))) continue
           // 6.8 does not care whose ships are inside the blast. A computer that
           // drops one on its own line has not understood the weapon.
           const friendlyInBlast = game.ships.some(
@@ -656,17 +788,24 @@ export function aiActions(
               distance(predict(other, 1), aim) <= PLASMA_BOLT_BLAST_RADIUS,
           )
           if (friendlyInBlast) continue
-          actions.push({
-            type: 'launch-plasma-bolt',
-            shipId: ship.id,
-            weaponId: weapon.id,
-            aimPoint: aim,
-          })
+          actions.push({ type: 'launch-plasma-bolt', shipId: ship.id, weaponId: weapon.id, aimPoint: aim })
         }
 
         for (const shot of flakBarrages(game, ship)) actions.push(shot)
       }
+      // 8.15: a Missile Fighter group looses its salvo here, out to 12 MU,
+      // once, and not while it is engaged.
+      for (const group of game.fighterGroups) {
+        if (group.side !== side || group.status !== 'in-flight' || group.strength <= 0) continue
+        if (groupProfile(group).payload !== 'salvo-missile') continue
+        if (group.payloadSpent || group.cef < 1 || isEngaged(group)) continue
+        const prey = nearestEnemyHull(game, side, group.position)
+        if (!prey) continue
+        if (distance(group.position, prey.placement.position) > MISSILE_FIGHTER_RANGE) continue
+        actions.push({ type: 'launch-flight-missiles', flightId: group.id, targetId: prey.id })
+      }
       break
+    }
 
     case 'move-ships':
       // 11.9: the announcement the order in phase 1 was written for, and then
@@ -678,7 +817,10 @@ export function aiActions(
       }
       // 2.6 phase 5: the ships fly first; anything entering or leaving FTL —
       // a gate entry, an arrival dropping out of hyperspace — is placed last.
-      for (const ship of mine) actions.push({ type: 'move-ship', shipId: ship.id })
+      for (const ship of mine) {
+        if (ship.lastKnown?.turn === game.turn || ship.carriedBy !== null || ship.tow?.linked) continue
+        actions.push({ type: 'move-ship', shipId: ship.id })
+      }
       for (const ship of shipsAwaitingGateEntry(game)) {
         if (ship.side !== side) continue
         const gate = game.gates.find((candidate) => candidate.def.id === ship.awaitingGate)
@@ -714,8 +856,16 @@ export function aiActions(
       // happens; the gunners just never see it coming.
       for (const flight of game.fighterGroups) {
         if (flight.side !== side || flight.status !== 'in-flight' || flight.strength <= 0) continue
+        // 8.13: a group with no endurance left may not attack, so it declares
+        // nothing; and a declaration already made is not made again.
+        if (isExhausted(flight)) continue
         const target = nearestEnemyShipTo(game, flight.position, side, FIGHTER_ATTACK_RANGE)
-        if (!target) continue
+        if (!target || flight.targetId === target.id) continue
+        const allowed = canDeclareAttack(flight, target.placement.position, {
+          kind: 'ship',
+          lockOn: flightLockOnRange(game, target),
+        })
+        if (!allowed.allowed) continue
         actions.push({ type: 'flight-declare-target', flightId: flight.id, targetId: target.id })
       }
       break
@@ -723,7 +873,7 @@ export function aiActions(
     case 'point-defence':
       // Resolved once for the table: every ship shoots at what is coming for
       // it, and a marker killed is killed for everyone (2.6 phase 9).
-      if (side === game.sides[0]?.id) {
+      if (side === game.sides[0]?.id && game.resolved['point-defence'] !== game.turn) {
         actions.push({ type: 'resolve-point-defence' })
         // 8.8 is its own sweep, because it draws its own dice.
         actions.push({ type: 'resolve-point-defence-at-flights' })
@@ -733,7 +883,9 @@ export function aiActions(
     case 'ordnance-vs-ships':
       // Resolved once for the table rather than per side: a marker attacks
       // whatever it acquires, whoever launched it.
-      if (side === game.sides[0]?.id) actions.push({ type: 'resolve-ordnance-attacks' })
+      if (side === game.sides[0]?.id && game.resolved['ordnance-vs-ships'] !== game.turn) {
+        actions.push({ type: 'resolve-ordnance-attacks' })
+      }
       // Attack runs and gunboat attacks are this side's own, and belong here:
       // 8.7 resolves them after point defence, and 9.1 puts gunboats in the
       // same phase.
@@ -746,6 +898,13 @@ export function aiActions(
       // is its own and comes back for the next when the turn comes round —
       // the console driving it re-asks each time the sequence moves on.
       const inTurns = rulesReading(game) >= 16
+      // 8.7 lets a run that phase 10 did not resolve be resolved here, and a
+      // group's run is outside the ships' turn order.
+      const runs = planSmallCraftAttacks(game, side)
+      if (runs.length > 0) {
+        actions.push(...runs)
+        break
+      }
       if (inTurns && game.fire.side !== null && game.fire.side !== side) break
       const shooters = inTurns ? mine.filter((ship) => canShipFire(ship) && !ship.captured) : mine
       for (const ship of shooters) {
@@ -785,17 +944,35 @@ export function aiActions(
         // first on its own, and every shot at a ship or a group rides in the
         // volley. A ship with nothing worth firing holds its fire, which is
         // what passes the turn on.
-        const shots: Array<{ weaponId: string; targetId: string; kind?: 'ship' | 'flight' | 'gunboats' }> = []
+        // 7.12's rakes ride in the volley with the rest: a rake that finishes
+        // the hull leaves the guns after it refused one by one, and the volley
+        // still stands on what fired.
+        const shots: Array<{
+          weaponId: string
+          targetId: string
+          kind?: 'ship' | 'flight' | 'gunboats' | 'point-defence' | 'spinal'
+          aim?: Point
+        }> = []
         for (const action of plan) {
-          if (action.type === 'fire-weapon') shots.push({ weaponId: action.weaponId, targetId: action.targetId })
+          if (action.type === 'fire-spinal-mount') {
+            shots.push({ weaponId: action.weaponId, targetId: '', kind: 'spinal', aim: action.aimPoint })
+          } else if (action.type === 'fire-weapon') shots.push({ weaponId: action.weaponId, targetId: action.targetId })
           else if (action.type === 'fire-at-flight') {
             shots.push({ weaponId: action.weaponId, targetId: action.flightId, kind: 'flight' })
           } else if (action.type === 'fire-at-gunboats') {
             shots.push({ weaponId: action.weaponId, targetId: action.squadronId, kind: 'gunboats' })
+          } else if (action.type === 'fire-point-defence') {
+            shots.push({ weaponId: action.systemId, targetId: action.targetId, kind: 'point-defence' })
           } else actions.push(action)
         }
-        if (shots.length > 0) actions.push({ type: 'fire-volley', shipId: ship.id, shots })
-        else if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
+        if (shots.length > 0) {
+          // 7.19: the emitter's own FireCons are down while it jams, so the
+          // umbrella comes down for the shot.
+          if (areaEcmLevelOf(ship) > 0 && !ship.areaEcmOff) {
+            actions.push({ type: 'set-area-ecm', shipId: ship.id, on: false })
+          }
+          actions.push({ type: 'fire-volley', shipId: ship.id, shots })
+        } else if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
         break
       }
       break
@@ -813,10 +990,55 @@ export function aiActions(
       actions.push(...planDogfights(game, side))
       break
 
+    case 'damage-control':
+      actions.push(...planRepairs(game, side))
+      break
+
     default:
       break
   }
 
+  return actions
+}
+
+/**
+ * Repair parties, one to a system, best first (10.4).
+ *
+ * FireCon before drive before screens before guns: a ship with no FireCon
+ * fires at nothing, a ship with no drive goes nowhere, and a screen buys more
+ * hull than any one gun does. A ship whose parties are already assigned is
+ * left alone — the sweep resolves them and the phase asks again next turn.
+ */
+function planRepairs(game: GameState, side: string): GameAction[] {
+  const actions: GameAction[] = []
+  const weight = (ship: ShipState, id: string, label: string): number => {
+    if (/Main drive/.test(label)) return 90
+    const system = ship.design.systems.find((candidate) => candidate.id === id)
+    if (system) {
+      if (system.kind === 'firecon' || system.kind === 'advanced-firecon') return 100
+      if (system.kind === 'screen-generator') return 80
+      if (system.kind === 'pds' || system.kind === 'ads') return 40
+      return 30
+    }
+    const weapon = ship.design.weapons.find((candidate) => candidate.id === id)
+    if (weapon) return 50 + weapon.rating * 5
+    if (/Bridge|Power core|Life support/.test(label)) return 95
+    return 20
+  }
+  for (const ship of game.ships) {
+    if (ship.side !== side || ship.destroyed || ship.offTable || ship.captured) continue
+    if (ship.damageControl.length > 0) continue
+    let parties = availableDamageControlParties(ship)
+    if (parties <= 0) continue
+    const targets = repairTargets(ship).sort(
+      (x, y) => weight(ship, y.id, y.label) - weight(ship, x.id, x.label),
+    )
+    for (const target of targets) {
+      if (parties <= 0) break
+      actions.push({ type: 'assign-damage-control', shipId: ship.id, systemId: target.id, parties: 1 })
+      parties -= 1
+    }
+  }
   return actions
 }
 
@@ -858,7 +1080,20 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
           distance(ship.placement.position, a.placement.position) -
           distance(ship.placement.position, b.placement.position),
       )
-    const aim = inArc[0]
+    // 5.23: the beam catches everything along the line, friend as much as
+    // foe, so an aim with a friendly hull in the swathe is not taken.
+    const size = spinalSize(weapon)
+    const aim = inArc.find(
+      (enemy) =>
+        !game.ships.some(
+          (friend) =>
+            friend.side === ship.side &&
+            friend.id !== ship.id &&
+            !friend.destroyed &&
+            !friend.offTable &&
+            spinalBeamCatches(ship.placement.position, enemy.placement.position, friend.placement.position, size),
+        ),
+    )
     if (!aim) continue
     actions.push({
       type: 'fire-spinal-mount',
@@ -867,6 +1102,22 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
       aimPoint: { ...aim.placement.position },
     })
   }
+
+  // The hull a spinal beam is laid on may not be there once it has fired
+  // (5.23), so the guns go at another when there is another to go at.
+  const laidOn = new Set(
+    actions
+      .filter((action) => action.type === 'fire-spinal-mount')
+      .map((action) =>
+        enemies.find(
+          (enemy) =>
+            action.type === 'fire-spinal-mount' &&
+            enemy.placement.position.x === action.aimPoint.x &&
+            enemy.placement.position.y === action.aimPoint.y,
+        )?.id,
+      )
+      .filter((id): id is string => id !== undefined),
+  )
 
   // 17.1: a target behind a planet cannot be shot at, so it is not a target.
   // Filtering here rather than at the shot keeps the computer from spending
@@ -892,14 +1143,32 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
       // at a ship, and `fire-weapon` refuses it (5.23).
       .filter((weapon) => !isSpinalMount(weapon))
       .filter((weapon) => canWeaponFire(ship, weapon.id))
+      // Ordnance launches in phase 3 (6.1); the Nova Cannon and the Wave Gun
+      // fire down the bow line on their own actions (7.23, 7.24); a
+      // transporter with nobody aboard sends nobody (5.9).
+      .filter((weapon) => !isOrdnance(weapon))
+      .filter((weapon) => weapon.weaponClass !== 'nova-cannon' && weapon.weaponClass !== 'wave-gun')
+      .filter(
+        (weapon) =>
+          weapon.weaponClass !== 'transporter' ||
+          canUseTransporters(ship.marinesAboard, damageControlParties(ship)),
+      )
       // 16.2: an inverted ship's port batteries bear to starboard, so the
       // computer has to read its own attitude before it decides what bears.
       .filter((weapon) => arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(arc))
       .filter((weapon) => range <= maxRangeOf(weapon))
+      // 7.4, 7.18: what the FireCon can see, and what stealth leaves of the
+      // range brackets; 7.20: a cloaked hull is shot at twice the range.
+      .filter(() => range <= sensorReach(game, ship, enemy))
+      .filter((weapon) => range <= stealthMaxRange(maxRangeOf(weapon), stealthLevelOf(enemy)))
+      .filter((weapon) => !enemy.cloaked || range * 2 <= maxRangeOf(weapon))
       .map((weapon) => ({ weapon, dice: Math.max(1, weapon.rating - (rangeBand(range) - 1)) }))
     if (able.length > 0) shots.set(enemy.id, able)
   }
   if (shots.size === 0) return actions
+  if (laidOn.size > 0 && [...shots.keys()].some((id) => !laidOn.has(id))) {
+    for (const id of laidOn) shots.delete(id)
+  }
 
   // Rank by weight of fire this ship can put on them, breaking ties towards
   // the one already hurt — the difference between two damaged cruisers and one
@@ -933,7 +1202,18 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
       // bound by the engagement list.
       if (needsFireCon(weapon) && !engagedNow.has(id)) continue
       spent.add(weapon.id)
-      actions.push({ type: 'fire-weapon', shipId: ship.id, weaponId: weapon.id, targetId: id })
+      // 5.13: a needle beam is aimed at one system, and without one named it
+      // scores a point and kills nothing. The FireCon first — a hull that
+      // cannot aim cannot answer — then a screen, then its biggest gun.
+      const enemy = enemies.find((candidate) => candidate.id === id)
+      const systemId = weapon.weaponClass === 'needle-beam' && enemy ? needlePick(enemy) : undefined
+      actions.push({
+        type: 'fire-weapon',
+        shipId: ship.id,
+        weaponId: weapon.id,
+        targetId: id,
+        ...(systemId !== undefined ? { systemId } : {}),
+      })
     }
   }
 
@@ -944,6 +1224,22 @@ export function planFire(game: GameState, ship: ShipState): GameAction[] {
 
   if (actions.length === 0) actions.push({ type: 'pass-fire', shipId: ship.id })
   return actions
+}
+
+/** The system a needle beam is worth picking out of this hull (5.13). */
+function needlePick(target: ShipState): string | undefined {
+  const live = target.design.systems.filter(
+    (system) =>
+      !target.destroyedSystems.has(system.id) && !NEEDLE_BEAM_FORBIDDEN_TARGETS.includes(system.kind),
+  )
+  const firecon = live.find((system) => system.kind === 'firecon' || system.kind === 'advanced-firecon')
+  if (firecon) return firecon.id
+  const screen = live.find((system) => system.kind === 'screen-generator')
+  if (screen) return screen.id
+  const gun = [...target.design.weapons]
+    .filter((weapon) => !target.destroyedSystems.has(weapon.id))
+    .sort((x, y) => y.rating - x.rating)[0]
+  return gun?.id
 }
 
 /**
@@ -1069,36 +1365,46 @@ const SQUADRON_FORM_RANGE = 12
  */
 function planSmallCraftMoves(game: GameState, side: string, secondary: boolean): GameAction[] {
   const actions: GameAction[] = []
+  // Launches planned for a carrier in this batch count against its tubes as
+  // they will once they are applied (8.1).
+  const launches = new Map<string, number>()
 
   for (const group of game.fighterGroups) {
-    if (group.side !== side) continue
+    if (group.side !== side || group.strength <= 0) continue
     const carrier = group.carrierId ? game.ships.find((s) => s.id === group.carrierId) : undefined
-    if (group.status === 'aboard' && !secondary && carrier) {
-      // A launch the carrier cannot make is refused and costs nothing (8.2),
-      // and the move that follows it is refused with it. Both go in the list:
-      // the actions are applied in order, so a group that gets out of the
-      // tube still gets its half move in the same phase (8.1).
+    if (group.status === 'aboard') {
+      if (secondary || !carrier || carrier.destroyed || carrier.offTable) continue
+      // 8.1, 8.2: only a launch the deck can make — `carrierDeck` is what the
+      // action reads — and the half move that follows it in the same phase.
+      const deck = carrierDeck(game, carrier)
+      const planned = launches.get(carrier.id) ?? 0
+      const check = canLaunch(group, { ...deck, facilitiesUsed: deck.facilitiesUsed + planned }, game.turn)
+      if (!check.allowed) continue
+      launches.set(carrier.id, planned + 1)
       actions.push({ type: 'launch-flight', carrierId: carrier.id, flightId: group.id })
-      const prey = nearestEnemyHull(game, group.side, carrier.placement.position)
+      const prey = nearestEnemyHull(game, side, carrier.placement.position)
       if (prey) {
         const to = standoff(
           carrier.placement.position,
           prey.placement.position,
           mainMoveAllowance(group, game.turn) / 2,
-          FIGHTER_ATTACK_RANGE,
+          keepFor(game, group, prey),
         )
         if (to) actions.push({ type: 'move-flight', flightId: group.id, to })
       }
       continue
     }
     if (group.status !== 'in-flight') continue
-    if (secondary && isExhausted(group)) continue
-    const prey = nearestEnemyHull(game, group.side, group.position)
+    if (secondary ? group.secondaryMovedThisTurn : group.movedThisTurn) continue
+    // 8.5, 8.15: no second move for a group out of endurance, one already in
+    // a dogfight, or a Robot group, whose second move came at the end of
+    // phase 4; 8.6: a screen or a pursuit moves with its charge.
+    if (secondary && (isExhausted(group) || isEngaged(group) || takesSecondaryMoveInPhaseFour(group))) continue
+    if (!secondary && group.mission !== 'free') continue
+    const prey = nearestEnemyHull(game, side, group.position)
     if (!prey) continue
-    const allowance = secondary
-      ? secondaryMoveAllowance(group)
-      : mainMoveAllowance(group, game.turn)
-    const to = standoff(group.position, prey.placement.position, allowance, FIGHTER_ATTACK_RANGE)
+    const allowance = secondary ? secondaryMoveAllowance(group) : mainMoveAllowance(group, game.turn)
+    const to = standoff(group.position, prey.placement.position, allowance, keepFor(game, group, prey))
     if (!to) continue
     actions.push(
       secondary
@@ -1107,36 +1413,31 @@ function planSmallCraftMoves(game: GameState, side: string, secondary: boolean):
     )
   }
 
+  const rackLaunches = new Map<string, number>()
   for (const squadron of game.gunboatSquadrons) {
-    if (squadron.side !== side) continue
-    const tender = squadron.carrierId
-      ? game.ships.find((s) => s.id === squadron.carrierId)
-      : undefined
-    if (squadron.status === 'aboard' && !secondary && tender) {
+    if (squadron.side !== side || squadron.boats.length === 0) continue
+    const tender = squadron.carrierId ? game.ships.find((s) => s.id === squadron.carrierId) : undefined
+    if (squadron.status === 'aboard') {
+      if (secondary || !tender || tender.destroyed || tender.offTable) continue
+      const deck = gunboatDeck(game, tender)
+      const planned = rackLaunches.get(tender.id) ?? 0
+      if (!canLaunchSquadron(squadron, { ...deck, used: deck.used + planned }).allowed) continue
+      rackLaunches.set(tender.id, planned + 1)
       actions.push({ type: 'launch-gunboats', carrierId: tender.id, squadronId: squadron.id })
-      const prey = nearestEnemyHull(game, squadron.side, tender.placement.position)
+      const prey = nearestEnemyHull(game, side, tender.placement.position)
       if (prey) {
-        const to = standoff(
-          tender.placement.position,
-          prey.placement.position,
-          GUNBOAT_MOVE,
-          GUNBOAT_FIRE_CONTROL,
-        )
+        const to = standoff(tender.placement.position, prey.placement.position, GUNBOAT_MOVE, GUNBOAT_FIRE_CONTROL)
         if (to) actions.push({ type: 'move-gunboats', squadronId: squadron.id, to })
       }
       continue
     }
     if (squadron.status !== 'in-flight') continue
+    if (secondary ? squadron.secondaryMovedThisTurn : squadron.movedThisTurn) continue
     if (secondary && squadron.cef <= 0) continue
-    const prey = nearestEnemyHull(game, squadron.side, squadron.position)
+    const prey = nearestEnemyHull(game, side, squadron.position)
     if (!prey) continue
     const allowance = secondary ? GUNBOAT_SECONDARY_MOVE : GUNBOAT_MOVE
-    const to = standoff(
-      squadron.position,
-      prey.placement.position,
-      allowance,
-      GUNBOAT_FIRE_CONTROL,
-    )
+    const to = standoff(squadron.position, prey.placement.position, allowance, GUNBOAT_FIRE_CONTROL)
     if (!to) continue
     actions.push({ type: 'move-gunboats', squadronId: squadron.id, to })
   }
@@ -1144,29 +1445,61 @@ function planSmallCraftMoves(game: GameState, side: string, secondary: boolean):
   return actions
 }
 
-/** Attack runs and gunboat attacks, once everything is where it is going. */
-function planSmallCraftAttacks(game: GameState, side: string): GameAction[] {
-  const actions: GameAction[] = []
+/**
+ * How close a group wants to be to the hull it is going for: the range it
+ * can lock on at, which electronic warfare may have cut to 2 MU (7.17 – 7.20),
+ * or 12 MU for a Missile Fighter with its salvo still slung (8.15).
+ */
+function keepFor(game: GameState, group: FighterGroupState, prey: ShipState): number {
+  const profile = groupProfile(group)
+  const salvo = profile.payload === 'salvo-missile' && !group.payloadSpent
+  const lockOn = flightLockOnRange(game, prey, salvo)
+  return lockOn ?? (salvo ? MISSILE_FIGHTER_RANGE : FIGHTER_ATTACK_RANGE)
+}
 
+/**
+ * One attack run or gunboat attack, once everything is where it is going.
+ *
+ * One, because a run that kills its target leaves the next group wanting a
+ * new one, and the console asks again after each. The run a group makes is
+ * the one its type has (8.15): a torpedo or MKP load first, a boarding type
+ * runs in with its parties, and everything else strafes with its guns.
+ */
+function planSmallCraftAttacks(game: GameState, side: string): GameAction[] {
   for (const group of game.fighterGroups) {
-    if (group.side !== side || group.status !== 'in-flight') continue
+    if (group.side !== side || group.status !== 'in-flight' || group.strength <= 0) continue
     if (isExhausted(group) || group.attackedThisTurn) continue
+    const profile = groupProfile(group)
     const prey = nearestEnemyHull(game, side, group.position)
     if (!prey) continue
-    if (distance(group.position, prey.placement.position) > FIGHTER_ATTACK_RANGE) continue
-    actions.push({ type: 'flight-strike', flightId: group.id, targetId: prey.id })
+    const allowed = canDeclareAttack(group, prey.placement.position, {
+      kind: 'ship',
+      lockOn: flightLockOnRange(game, prey),
+    })
+    if (!allowed.allowed) continue
+    if (!group.payloadSpent && (profile.payload === 'pulse-torpedo' || profile.payload === 'mkp')) {
+      return [{ type: 'flight-launch-payload', flightId: group.id, targetId: prey.id }]
+    }
+    if (profile.payload === 'boarding') {
+      // 8.15: "Advanced Screens stop an Assault Shuttle attack" — a run at a
+      // hull with them up is a run refused.
+      if (prey.design.screens.advanced && effectiveScreenLevel(prey) > 0) continue
+      return [{ type: 'flight-boarding-run', flightId: group.id, targetId: prey.id }]
+    }
+    if (profile.antiShip === null) continue
+    return [{ type: 'flight-strike', flightId: group.id, targetId: prey.id }]
   }
 
   for (const squadron of game.gunboatSquadrons) {
-    if (squadron.side !== side || squadron.status !== 'in-flight') continue
+    if (squadron.side !== side || squadron.status !== 'in-flight' || squadron.boats.length === 0) continue
     if (squadron.cef <= 0 || squadron.attackedThisTurn) continue
     const prey = nearestEnemyHull(game, side, squadron.position)
     if (!prey) continue
     if (distance(squadron.position, prey.placement.position) > GUNBOAT_FIRE_CONTROL) continue
-    actions.push({ type: 'gunboat-attack', squadronId: squadron.id, targetId: prey.id })
+    return [{ type: 'gunboat-attack', squadronId: squadron.id, targetId: prey.id }]
   }
 
-  return actions
+  return []
 }
 
 /**

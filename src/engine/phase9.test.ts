@@ -324,14 +324,21 @@ describe('point defence against a ship (7.12, 7.13)', () => {
     ])
     strip(shipOf(soft, 'hulk'))
     advanceTo(soft, 'ship-fire')
-    expect(aiActions(soft, 'a').some((act) => act.type === 'fire-point-defence')).toBe(true)
+    // The rake rides in the ship's volley with the rest of its fire (2.6).
+    const rakes = (game: GameState) =>
+      aiActions(game, 'a').some(
+        (act) =>
+          act.type === 'fire-point-defence' ||
+          (act.type === 'fire-volley' && act.shots.some((shot) => shot.kind === 'point-defence')),
+      )
+    expect(rakes(soft)).toBe(true)
 
     const fresh = battle([
       ship('pd', 'a', 'izotrope-heavy-cruiser', { x: 20, y: 50 }),
       ship('mark', 'b', 'goliath-battleship', { x: 24, y: 50 }, 9),
     ])
     advanceTo(fresh, 'ship-fire')
-    expect(aiActions(fresh, 'a').some((act) => act.type === 'fire-point-defence')).toBe(false)
+    expect(rakes(fresh)).toBe(false)
   })
 })
 

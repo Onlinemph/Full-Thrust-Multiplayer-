@@ -217,6 +217,21 @@ takes it — its carriers hold station on the turn they launch, as 8.1 requires,
 and its wings and gunboat squadrons fly to the range their guns work at rather
 than onto the hull.
 
+### Playtests
+
+`src/engine/playtest` plays whole battles with the computer on both sides and keeps a
+referee's books: what each weapon class fired and what it marked, every computer action the
+engine refused, and whether the sequence of play ever stopped. One eight-turn battle runs with
+`npm test`; the full matrix, every fleet against the next and every fleet against a mirror of
+itself that holds course and fire, runs on demand:
+
+```bash
+PLAYTEST=1 npx vitest run src/engine/playtest
+```
+
+A refusal in that report is the computer's copy of the rules disagreeing with the engine's,
+and a weapon class listed as present but never fired is a gun the computer has not been taught.
+
 ## Playing
 
 A battle is **(setup + action journal)**: the engine is deterministic and the dice are seeded, so
