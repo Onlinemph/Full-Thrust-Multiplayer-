@@ -364,6 +364,11 @@ winner and lets the phase end. *Let the computers fight it* does the same withou
 table, through `src/engine/playtest/autoplay.ts`. The campaign autosaves to this browser and
 saves to a file from the header.
 
+Ground battles are the next engine. `docs/rules/dirtside.md` is a page-by-page digest of *Dirtside II*, the
+1/300-scale ground combat rules from the same publisher, with the damage-chit pot's exact contents from a 1998
+probability analysis; it is the reference for a standalone Dirtside game that the campaign will later hand its
+planetary battles to, through the same battle-file-in, result-file-out seam.
+
 Two readings to know about: a computer player's fleets are fought by the computer at the table but
 are not moved by it between battles (whoever runs the campaign moves them from the console), and
 an assault takes a colony when the landing brings more Marine parties than its defences are worth
