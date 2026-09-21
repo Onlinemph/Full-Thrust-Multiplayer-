@@ -15,6 +15,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # For the wait below: reading this repository's own workflow runs.
+  actions: read
 
 # One deployment at a time, and never cancel one that is already publishing —
 # a half-uploaded artifact is a broken site, which is worse than an old one.
@@ -86,6 +88,25 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      # While Settings → Pages → Source is still "Deploy from a branch", GitHub
+      # runs its own Jekyll build of the branch on every push as well, and the
+      # site is whichever of the two deployments finishes LAST. Jekyll cannot
+      # build this app, so when its deployment lands after ours the site is a
+      # 404. Wait for that build to finish before publishing, so this one is
+      # always the last word. With the source set to "GitHub Actions" there is
+      # no such build and this step finds nothing to wait for.
+      - name: Let GitHub's own branch build finish first
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 36); do
+            busy=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&per_page=20" \
+              --jq '[.workflow_runs[] | select(.name == "pages build and deployment" and .status != "completed")] | length')
+            echo "branch builds still running: $busy"
+            [ "$busy" = "0" ] && break
+            sleep 10
+          done
 
       - name: Deploy
         id: pages-deploy
