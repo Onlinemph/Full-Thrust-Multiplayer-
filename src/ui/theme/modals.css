@@ -562,6 +562,103 @@
   color: var(--damage);
 }
 
+/* ── Scenario builder ─────────────────────────────────────────────────────── */
+
+/* A scenario drawn up on the form (18): the plan of the table is an SVG in
+   table units, so a click on it is a point in MU and a feature's radius is a
+   radius, at whatever size the modal gives it. */
+.scenario-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.scenario-builder textarea {
+  font: inherit;
+  font-size: var(--text-sm);
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+  resize: vertical;
+}
+
+.scenario-preview {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--void);
+}
+
+.scenario-table {
+  fill: var(--bg);
+  stroke: var(--line);
+  stroke-width: 0.3;
+}
+
+.scenario-station {
+  fill: var(--side-neutral);
+}
+
+.scenario-station.side-a {
+  fill: var(--side-a);
+}
+
+.scenario-station.side-b {
+  fill: var(--side-b);
+}
+
+.scenario-station.side-c {
+  fill: var(--side-c);
+}
+
+.scenario-feature circle {
+  fill: rgb(147 160 189 / 0.18);
+  stroke: var(--ink-dim);
+  stroke-width: 0.3;
+  cursor: pointer;
+}
+
+.scenario-feature.is-planet circle,
+.scenario-feature.is-planetoid circle {
+  fill: rgb(147 160 189 / 0.45);
+  stroke: var(--ink);
+}
+
+.scenario-feature.is-asteroid-field circle,
+.scenario-feature.is-debris circle {
+  stroke-dasharray: 1 0.6;
+}
+
+.scenario-feature.is-picked circle {
+  stroke: var(--thrust);
+  stroke-width: 0.6;
+}
+
+.scenario-feature text {
+  fill: var(--ink);
+  font-size: 2.2px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+.scenario-terrain input,
+.scenario-terrain select {
+  width: 100%;
+  min-width: 4rem;
+}
+
+.scenario-terrain input.num {
+  width: 4.5rem;
+}
+
+.scenario-terrain tr.is-picked td {
+  background: var(--panel-3);
+}
+
 /* A fault is stated in the rulebook's terms and does not stop you building:
    half a design is a legitimate thing to have on the bench. */
 .faults {

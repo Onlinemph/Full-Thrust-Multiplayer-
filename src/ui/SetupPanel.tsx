@@ -1,7 +1,16 @@
 import type { ShipDesign } from '../engine/types'
 import { useState } from 'react'
 
-import { scenarioById, SCENARIOS } from '../data/scenarios'
+import { SCENARIOS, type Scenario } from '../data/scenarios'
+import {
+  newCustomScenario,
+  picksOf,
+  scenarioFor,
+  scenarioProblem,
+  withForces,
+} from '../data/customScenario'
+import { deleteScenario, saveScenario, savedScenarios } from '../data/scenarioStore'
+import { ScenarioBuilder } from './ScenarioBuilder'
 import type { GameSetup } from '../data/savedGame'
 import { BATTLE_TYPE_LABELS, type BattleType } from '../engine/battles'
 import { TECH_BASE_OPTIONS, type TechBaseChoice } from '../data/techBaseCheck'
@@ -245,25 +254,80 @@ export function SetupForm({
     setDraft((d) => ({ ...d, bannedSystems: [...next] }))
   }
 
+  /* The scenario the draft names: one of the shipped ones, or the one it
+     carries. A custom scenario is edited in place on this form, and its
+     forces are written from the picks so it is complete on its own. */
+  const scenario = scenarioFor(draft)
+  const custom =
+    draft.customScenario !== undefined && draft.customScenario.id === draft.scenarioId
+      ? draft.customScenario
+      : null
+  const [shelf, setShelf] = useState<readonly Scenario[]>(() => savedScenarios())
+  const onShelf =
+    custom !== null &&
+    shelf.some((kept) => kept.id === custom.id && JSON.stringify(kept) === JSON.stringify(custom))
+  const chooseScenario = (value: string) => {
+    if (value === '__new__') {
+      const fresh = newCustomScenario(Date.now())
+      setDraft((d) => ({ ...d, scenarioId: fresh.id, customScenario: fresh, forces: {} }))
+      return
+    }
+    const kept = shelf.find((s) => s.id === value)
+    if (kept) {
+      const copy = structuredClone(kept)
+      setDraft((d) => ({ ...d, scenarioId: copy.id, customScenario: copy, forces: picksOf(copy) }))
+      return
+    }
+    setDraft((d) => ({ ...d, scenarioId: value, forces: undefined, customScenario: undefined }))
+  }
+
   return (
     <fieldset className="setup-form" disabled={readOnly}>
       <section>
         <label className="code-field">
           Scenario
-          <select
-            aria-label="Scenario"
-            value={draft.scenarioId}
-            onChange={(event) =>
-              setDraft((d) => ({ ...d, scenarioId: event.target.value, forces: undefined }))
-            }
-          >
-            {SCENARIOS.map((scenario) => (
-              <option key={scenario.id} value={scenario.id}>
-                {scenario.name}
+          <select aria-label="Scenario" value={draft.scenarioId} onChange={(event) => chooseScenario(event.target.value)}>
+            {SCENARIOS.map((shipped) => (
+              <option key={shipped.id} value={shipped.id}>
+                {shipped.name}
               </option>
             ))}
+            {shelf.length > 0 ? (
+              <optgroup label="My scenarios">
+                {shelf.map((kept) => (
+                  <option key={kept.id} value={kept.id}>
+                    {kept.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {custom !== null && !shelf.some((kept) => kept.id === custom.id) ? (
+              <option value={custom.id}>{custom.name} (unsaved)</option>
+            ) : null}
+            <option value="__new__">New custom scenario…</option>
           </select>
         </label>
+        {custom !== null ? (
+          <ScenarioBuilder
+            scenario={custom}
+            saved={onShelf}
+            onChange={(next) =>
+              setDraft((d) => ({ ...d, customScenario: next, scenarioId: next.id }))
+            }
+            onSave={() => {
+              saveScenario(custom)
+              setShelf([...savedScenarios()])
+            }}
+            onDelete={
+              shelf.some((kept) => kept.id === custom.id)
+                ? () => {
+                    deleteScenario(custom.id)
+                    setShelf([...savedScenarios()])
+                  }
+                : undefined
+            }
+          />
+        ) : null}
 
         <label className="code-field">
           Dice seed
@@ -295,7 +359,7 @@ export function SetupForm({
             }
           >
             {(() => {
-              const table = scenarioById(draft.scenarioId)?.table ?? { width: 72, height: 48 }
+              const table = scenario?.table ?? { width: 72, height: 48 }
               return [
                 { k: 1, label: 'As written' },
                 { k: 1.5, label: 'Large' },
@@ -390,7 +454,7 @@ export function SetupForm({
               typed and not yet read by anything.`
           })()}
         </p>
-        {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => {
+        {(scenario?.sides ?? []).map((side) => {
           const chosen = draft.factions?.[side.id] ?? ''
           const faction = chosen ? factionById(chosen) : undefined
           return (
@@ -455,7 +519,7 @@ export function SetupForm({
           plays unrestricted unless you pick one — and picking one tells you which of the ships
           you have chosen could not have been built.
         </p>
-        {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => (
+        {(scenario?.sides ?? []).map((side) => (
           <label key={side.id} className="code-field">
             {side.name}
             <select
@@ -520,6 +584,7 @@ export function SetupForm({
       <section>
         <FleetPicker
           scenarioId={draft.scenarioId}
+          scenario={scenario}
           forces={draft.forces ?? {}}
           techBases={draft.techBases ?? {}}
           customTechBases={draft.customTechBases ?? {}}
@@ -527,7 +592,18 @@ export function SetupForm({
           bannedSystems={draft.bannedSystems}
           factions={draft.factions ?? {}}
           clans={draft.clans ?? {}}
-          onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
+          onChange={(forces) =>
+            setDraft((d) => ({
+              ...d,
+              forces,
+              // A custom scenario carries its fleets as its own forces, so a
+              // file of the battle, or a lobby, has them without the picks.
+              customScenario:
+                d.customScenario !== undefined && d.customScenario.id === d.scenarioId
+                  ? withForces(d.customScenario, forces)
+                  : d.customScenario,
+            }))
+          }
           onPrint={onPrint}
         />
       </section>
@@ -540,7 +616,7 @@ export function SetupForm({
           A fleet the computer commands is flown by the same rules you play by — it writes its
           orders in phase 1 like everyone else, and you can take its turn back with Undo.
         </p>
-        {(scenarioById(draft.scenarioId)?.sides ?? []).map((side) => {
+        {(scenario?.sides ?? []).map((side) => {
           const ai = (draft.aiSides ?? []).includes(side.id)
           return (
             <label key={side.id} className="rule-toggle">
@@ -636,6 +712,9 @@ export function SetupPanel({
   onPrint?: (title: string, designs: ShipDesign[]) => void
 }) {
   const [draft, setDraft] = useState<GameSetup>(() => ({ ...currentSetup() }))
+  // A scenario of the players' own has to have fleets before it can start.
+  const custom = draft.customScenario?.id === draft.scenarioId ? draft.customScenario : undefined
+  const problem = custom ? scenarioProblem(custom) : null
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -647,8 +726,11 @@ export function SetupPanel({
         <div className="panel-row">
           <button onClick={onClose}>Cancel</button>
           <span className="spacer" />
+          {problem ? <span className="rule-detail" style={{ color: 'var(--warn)' }}>{problem}</span> : null}
           <button
             className="primary"
+            disabled={problem !== null}
+            title={problem ?? undefined}
             onClick={() => {
               newGame(draft)
               onClose()

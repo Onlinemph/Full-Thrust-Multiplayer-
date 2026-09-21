@@ -1,6 +1,6 @@
+import { scenarioFor } from '../data/customScenario'
 import { useState } from 'react'
 
-import { scenarioById } from '../data/scenarios'
 import { designById } from '../data/ships'
 import { designCost } from '../data/fleetList'
 import { hangUp, useNet } from './link'
@@ -43,7 +43,7 @@ export function LobbyPanel({ onOpenYard, onOpenLibrary }: LobbyPanelProps) {
   const setup = currentSetup()
   const role = currentMatchRole()
   const mySide = currentMatchSide()
-  const scenario = scenarioById(setup.scenarioId)
+  const scenario = scenarioFor(setup)
   const [armed, setArmed] = useState(false)
 
   if (lobby === null) return null

@@ -298,9 +298,11 @@
 }
 
 /* A classed weapon keeps the digit the sheet printed unless the ship's own
-   number is drawn over it — a Beam-5 on a sheet that stops at 4. */
-.ssd-glyph.has-value .ssd-digit {
-  display: none;
+   number is drawn over it — a Beam-5 on a sheet that stops at 4. The digit
+   sits inside a <use>, where a selector cannot follow it but an inherited
+   custom property can: the sprite's digits read their display off this. */
+.ssd-glyph.has-value {
+  --ssd-digit: none;
 }
 
 .ssd-value {

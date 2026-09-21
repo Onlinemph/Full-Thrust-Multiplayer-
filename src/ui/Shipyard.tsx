@@ -11,12 +11,13 @@ import { TechBasePanel } from './TechBasePanel'
 import { FACTIONS, factionById } from '../data/factions'
 import {
   describeFault,
-  hullBoxesFor,
+  minimumHullBoxes,
+  nearestHullClass,
   priceDesign,
   proportionalCost,
   repriceProportional,
+  roundMassShare,
   validateDesign,
-  HULL_CLASS_OPTIONS,
   HULL_ROW_OPTIONS,
 } from '../data/designPricing'
 import {
@@ -53,7 +54,7 @@ import {
   wingPoints,
 } from '../data/smallCraftBuild'
 import { crewFactors } from '../engine/game'
-import type { HullClass, HullRows, ShipDesign, SystemKind, WeaponClass } from '../engine/types'
+import type { HullRows, ShipDesign, SystemKind, WeaponClass } from '../engine/types'
 import { checkMagazine, MAGAZINE_LOAD_MASS, MULTI_STAGE_EXTRA_MASS } from '../engine/ordnance'
 import {
   describeLoads,
@@ -232,14 +233,23 @@ export function Shipyard({
   const faction = factionId ? factionById(factionId) : undefined
   const offBase = designProblems(techBase, design, customBase)
 
-  /** Any edit that changes mass has to re-derive the hull box count with it. */
+  /** Any edit that changes mass has to re-derive what scales with it. */
   const edit = (patch: Partial<ShipDesign>) =>
     setDesign((d) => {
       // Order matters: hull boxes and the proportional systems both scale with
       // mass, and the points are the sum of what they become — not of what
       // they were before the slider moved.
       const next = repriceProportional({ ...d, ...patch })
-      next.hullBoxes = hullBoxesFor(next.mass, next.hullClass)
+      // 13.7: the hull boxes are the designer's own number — "as many or as
+      // few hull boxes as the designer wishes". A change of mass keeps the
+      // share they chose, so 26 of 86 stays three-tenths of whatever the hull
+      // becomes; a change of boxes is taken as written. The integrity class
+      // is the name 13.7 gives that share, and nothing more.
+      if (patch.hullBoxes === undefined && patch.mass !== undefined && d.mass > 0) {
+        next.hullBoxes = roundMassShare(next.mass * (d.hullBoxes / d.mass))
+      }
+      next.hullBoxes = Math.max(minimumHullBoxes(next.mass), Math.min(next.mass, next.hullBoxes))
+      next.hullClass = nearestHullClass(next.mass, next.hullBoxes)
       next.points = priceDesign(next).points
       return next
     })
@@ -422,19 +432,18 @@ export function Shipyard({
               />
 
               <div className="yard-pair">
-                <label className="code-field">
-                  Hull integrity
-                  <select
-                    value={design.hullClass}
-                    onChange={(event) => edit({ hullClass: event.target.value as HullClass })}
-                  >
-                    {HULL_CLASS_OPTIONS.map((option) => (
-                      <option key={option.hullClass} value={option.hullClass}>
-                        {option.hullClass} — {Math.round(option.fraction * 100)}% of mass
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {/* 13.7: "There are no fixed percentage limits on hull
+                    integrity … subject only to a lower limit of a minimum of
+                    10% of the total ship mass." The number is the designer's;
+                    fragile to super are what the book calls the round ones. */}
+                <Slider
+                  label="Hull boxes"
+                  value={design.hullBoxes}
+                  detail={`${Math.round((design.hullBoxes / design.mass) * 100)}% of mass — ${design.hullClass} (13.7)`}
+                  min={minimumHullBoxes(design.mass)}
+                  max={design.mass}
+                  onChange={(hullBoxes) => edit({ hullBoxes })}
+                />
                 <label className="code-field">
                   Hull rows
                   <select

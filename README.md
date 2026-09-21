@@ -263,6 +263,12 @@ that one fact.
 - **Ship library.** *Ships* in the top bar shows every design's real SSD on three shelves: the
   fleet book, your own yard, and the community shelf. A design file can be uploaded into the
   yard, and a yard design published for anyone to use.
+- **Scenarios of your own.** *New custom scenario…* in the scenario menu opens a builder on the
+  New battle form: the situation as a briefing, the table, a turn limit, two sides and what each
+  may spend, rocks and clouds placed by clicking a plan of the table, and 4.12's ladder of what a
+  hull is worth. Fleets are picked against the budget with the fleet picker, deployment is the
+  setup's own 18.1 choice, and a saved scenario sits under *My scenarios* in the menu. A battle
+  file carries the scenario whole.
 - **After-action report.** *Report* in the top bar, and the result screen at the end, show how the
   battle went hull by hull: shots fired, damage put through, damage taken, kills, drawn from a
   ledger the engine keeps as the damage goes through it. It copies as text or downloads as
@@ -273,7 +279,9 @@ that one fact.
   every hull to one block.
 - **Your own designs.** *Shipyard* builds a hull against the section 14 tables, with the mass bar
   fighting you the whole way, the points working a click below it, and saves the result into the
-  fleet picker beside the shipped roster. The
+  fleet picker beside the shipped roster. Hull integrity is a number of boxes you pick (13.7 sets
+  a floor of a tenth of the mass and nothing else), and the class name is what the book calls
+  that share. The
   symbols can be dragged about the sheet to give it a look of its own, and a counter image URL
   puts your own picture on the table in place of the silhouette. A battle that uses a yard
   design carries its own copy, so the save file opens on a browser that has never seen it.

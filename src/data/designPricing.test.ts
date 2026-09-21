@@ -9,6 +9,7 @@ import {
   ftlMass,
   hullBoxesFor,
   minimumHullBoxes,
+  nearestHullClass,
   priceDesign,
   printedWeaponCost,
   proportionalCost,
@@ -80,6 +81,15 @@ describe('hull integrity (13.7)', () => {
     expect(hullBoxesFor(100, 'average')).toBe(30)
     expect(hullBoxesFor(100, 'strong')).toBe(40)
     expect(hullBoxesFor(100, 'super')).toBe(50)
+  })
+
+  it('names any number of boxes by the nearest class', () => {
+    // The designer picks the number; the class is what the book calls it.
+    expect(nearestHullClass(86, 26)).toBe('average')
+    expect(nearestHullClass(100, 17)).toBe('weak')
+    expect(nearestHullClass(100, 44)).toBe('strong')
+    expect(nearestHullClass(60, 30)).toBe('super')
+    expect(nearestHullClass(40, 4)).toBe('fragile')
   })
 })
 

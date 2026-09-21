@@ -130,6 +130,12 @@ export interface Scenario {
   victory: VictoryLadder
   /** Turn limit, if the scenario states one (4.12: "6 rounds or 90 minutes"). */
   turnLimit?: number
+  /**
+   * Points a side, for a scenario that lets the players pick their fleets
+   * (18.2). A scenario that writes its forces has no need of one: the budget
+   * is what the written force costs.
+   */
+  budget?: number
   /** Restrict the sequence of play, as the introductory scenario does (2.6). */
   introductoryPhases?: boolean
   /** Hull groups the scenario allows, for a scenario that limits the force. */

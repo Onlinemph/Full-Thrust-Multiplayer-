@@ -191,6 +191,25 @@ export function minimumHullBoxes(mass: number): number {
 }
 
 /**
+ * The name 13.7 gives a hull with this many boxes: the class whose share of
+ * the mass is nearest. The classes are descriptions, not a menu — the
+ * designer picks a number, and this is what the number is called.
+ */
+export function nearestHullClass(mass: number, boxes: number): HullClass {
+  const share = mass > 0 ? boxes / mass : 0
+  let best: HullClass = 'fragile'
+  let nearest = Number.POSITIVE_INFINITY
+  for (const hullClass of ['fragile', 'weak', 'average', 'strong', 'super'] as const) {
+    const gap = Math.abs(share - HULL_FRACTION[hullClass])
+    if (gap < nearest - 1e-9) {
+      nearest = gap
+      best = hullClass
+    }
+  }
+  return best
+}
+
+/**
  * Hull boxes at an integrity class (13.7). One box costs one mass.
  *
  * The classes are *descriptions* — "the following terms may be used to
@@ -541,7 +560,7 @@ export function costLines(design: ShipDesign): CostLine[] {
     '13.7',
     boxes === byClass
       ? `${design.hullClass}: ${pct(fraction)} of ${m} = ${rounded(m * fraction, byClass)} boxes × ${perBox} (${design.hullRows} rows)`
-      : `${boxes} boxes as built (${design.hullClass} would be ${byClass}) × ${perBox} (${design.hullRows} rows)`,
+      : `${boxes} boxes (${pct(boxes / m)} of ${m}, ${nearestHullClass(m, boxes)}) × ${perBox} (${design.hullRows} rows)`,
     boxes,
     boxes * perBox,
   )

@@ -189,11 +189,19 @@ def number_slot(sym, semantic_id, label):
             # phasers) has to be replaced by a hole, not by ink.
             'ink': el.get('fill') != 'var(--ssd-paper)',
         }
+        # A <use> clones the symbol into a shadow tree the document's
+        # selectors cannot reach, so `.has-value .ssd-digit { display: none }`
+        # never hid anything: a Beam-5 drew its 5 over the sheet's 4. What does
+        # reach in is inheritance, custom properties included, so the digit
+        # reads its display off a variable the glyph sets. The sample number
+        # on a variable symbol is never wanted and is hidden outright.
         if klass is not None:
             el.set('class', 'ssd-digit')
+            el.set('style', 'display:var(--ssd-digit,inline)')
             slot['means'] = 'class'
         else:
             el.set('class', 'ssd-sample')
+            el.set('style', 'display:none')
             slot['means'] = VARIABLE_NUMBER[semantic_id]
             if semantic_id in CENTRE_ON_OUTLINE:
                 centre = polygon_centroid(sym)

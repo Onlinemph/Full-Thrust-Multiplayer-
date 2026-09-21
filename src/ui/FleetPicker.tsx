@@ -44,6 +44,8 @@ import {
  */
 export interface FleetPickerProps {
   scenarioId: string
+  /** The scenario itself, when it is not on the shipped list: a custom one being drawn up. */
+  scenario?: Scenario
   /** Current picks per side, by design id. Empty means the scenario's own. */
   forces: Partial<Record<string, string[]>>
   /** The tech base each side plays under (15). Absent means unrestricted. */
@@ -81,6 +83,7 @@ const GROUP_LABEL: Record<string, string> = {
 
 export function FleetPicker({
   scenarioId,
+  scenario: given,
   forces,
   techBases,
   customTechBases,
@@ -92,7 +95,7 @@ export function FleetPicker({
   onChange,
   onlySide,
 }: FleetPickerProps) {
-  const scenario = scenarioById(scenarioId)
+  const scenario = given ?? scenarioById(scenarioId)
   const [chosenSide, setSide] = useState(scenario?.sides[0]?.id ?? 'a')
   const side = onlySide ?? chosenSide
   // 18.2 names five kinds of battle and restricts the list differently for
@@ -107,7 +110,9 @@ export function FleetPicker({
   // sides of the sum are in whichever currency the table is playing in, and
   // both include what the hulls carry (18.2: "including their fighters").
   const picked = forces[side] ?? defaultPicks(scenario, side)
-  const budget = budgetFor(scenario, side, designs, cpv)
+  // A scenario that lets the players pick says what a side may spend (18.2);
+  // one that writes its forces is worth what they cost.
+  const budget = scenario.budget ?? budgetFor(scenario, side, designs, cpv)
   const pickedDesigns = picked
     .map((id) => byId(designs, id))
     .filter((d): d is ShipDesign => Boolean(d))
