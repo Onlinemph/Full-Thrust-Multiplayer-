@@ -541,6 +541,7 @@ export function App() {
                 <Ssd
                   design={selected.design}
                   name={selected.name}
+                  pricing={setup.cpv ? 'cpv' : 'points'}
                   redacted={
                     viewingSide !== null &&
                     selected.side !== viewingSide &&

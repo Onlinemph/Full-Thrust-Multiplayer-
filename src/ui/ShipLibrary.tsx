@@ -10,6 +10,7 @@ import {
   publishDesign,
   type CommunityDesign,
 } from './community'
+import { cpvPoints } from '../engine/battles'
 import { CounterPreview } from './CounterPreview'
 import { Ssd } from './Ssd'
 
@@ -65,8 +66,11 @@ export function ShipLibrary({ onClose, onOpenInYard }: ShipLibraryProps) {
       byFaction.set(design.faction, list)
     }
     // Within a fleet, smallest first: that is the order a player reads a fleet
-    // list in, and it makes the point ladder visible.
-    for (const list of byFaction.values()) list.sort((a, b) => a.points - b.points)
+    // list in, and it makes the point ladder visible. In CPV, the currency
+    // the shelf prices in (18.3).
+    for (const list of byFaction.values()) {
+      list.sort((a, b) => cpvPoints(a.points, a.mass) - cpvPoints(b.points, b.mass))
+    }
     return [...byFaction.entries()]
   }, [book])
 
@@ -366,7 +370,12 @@ function ShelfRow({
         {detail ? <span className="library-detail">{detail}</span> : null}
       </span>
       <span className="spacer" />
-      <span className="num">{design.points}</span>
+      <span
+        className="num"
+        title={`${cpvPoints(design.points, design.mass)} Combat Points Value (18.3); ${design.points} points as built`}
+      >
+        {cpvPoints(design.points, design.mass)}
+      </span>
     </button>
   )
 }

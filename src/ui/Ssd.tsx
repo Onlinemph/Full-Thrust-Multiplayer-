@@ -1,4 +1,5 @@
 import { crewFactorBoxes, crewFactors } from '../engine/game'
+import { cpvPoints } from '../engine/battles'
 import type { ShipDesign } from '../engine/types'
 import { HullPlan } from './ssd/HullPlan'
 import { Tracks, hullRows } from './ssd/Tracks'
@@ -60,6 +61,12 @@ export interface SsdProps {
   redacted?: boolean
   /** The shipyard's hand: symbols may be dragged about the plan. */
   onMoveGlyph?: (key: string, x: number, y: number) => void
+  /**
+   * The currency the hull's price is printed in: 18.3's Combat Points Value
+   * unless the battle was set up in printed points. A sheet outside a battle
+   * shows CPV, which is what the table prices in by default.
+   */
+  pricing?: 'cpv' | 'points'
 }
 
 const PRISTINE: SsdDamage = {
@@ -74,7 +81,14 @@ const PRISTINE: SsdDamage = {
  */
 export { hullRows }
 
-export function Ssd({ design, damage = PRISTINE, name, redacted = false, onMoveGlyph }: SsdProps) {
+export function Ssd({
+  design,
+  damage = PRISTINE,
+  name,
+  redacted = false,
+  onMoveGlyph,
+  pricing = 'cpv',
+}: SsdProps) {
   // The working screen level is what the generators still standing can hold up
   // (7.2), read from the same set of losses as everything else on the sheet.
   const generators = design.systems.filter((s) => s.kind === 'screen-generator')
@@ -122,9 +136,19 @@ export function Ssd({ design, damage = PRISTINE, name, redacted = false, onMoveG
           <b className={`num${thrust < design.drive.thrust ? ' is-degraded' : ''}`}>{thrust}</b>
           {design.drive.advanced ? <span className="arcs"> ADV</span> : null}
         </span>
-        <span title="Points as built (14). Under 18.3 the Combat Points Value replaces the basic hull's mass with mass²/100.">
-          PTS <b className="num">{design.points}</b>
-        </span>
+        {pricing === 'cpv' ? (
+          <span
+            title={`Combat Points Value (18.3): the basic hull costs mass²/100 in place of its mass. ${design.points} points as built (14).`}
+          >
+            CPV <b className="num">{cpvPoints(design.points, design.mass)}</b>
+          </span>
+        ) : (
+          <span
+            title={`Points as built (14). ${cpvPoints(design.points, design.mass)} under 18.3's Combat Points Value, which this battle is not priced in.`}
+          >
+            PTS <b className="num">{design.points}</b>
+          </span>
+        )}
         {design.screens.level > 0 ? (
           <span className="screen-level">
             SCR

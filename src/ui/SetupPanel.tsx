@@ -182,8 +182,9 @@ export const OPTIONAL_RULES: Toggle[] = [
     label: 'Combat Points Value',
     rule: '18.3',
     detail:
-      'Reprice every hull by its mass rather than by the printed figure. Small ships get dearer, ' +
-      'big ones cheaper, and the scoreboard counts in the same currency.',
+      'Reprice every hull by its mass rather than by the printed figure. Small ships get cheaper, ' +
+      'big ones dearer, and the scoreboard counts in the same currency. On for a new battle; off ' +
+      'prices and scores in the printed points instead.',
   },
   {
     key: 'sensorRules',

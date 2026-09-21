@@ -146,7 +146,11 @@ export interface GameSetup {
   sensorRules?: boolean
   /** 17 — rock, dust and meteor fields do something when you fly into them. */
   terrainHazards?: boolean
-  /** 18.3 — price and score the battle in Combat Points Value, not printed points. */
+  /**
+   * 18.3 — price and score the battle in Combat Points Value, not printed
+   * points. On for a new battle; a file that does not say was priced in
+   * printed points, and stays so.
+   */
   cpv?: boolean
   /**
    * 12.12 — *"a completely OPTIONAL alternative movement system, which players

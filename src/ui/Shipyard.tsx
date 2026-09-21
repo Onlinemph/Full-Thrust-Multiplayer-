@@ -301,8 +301,8 @@ export function Shipyard({
             style={{ width: `${Math.min(100, (cost.massUsed / cost.massAvailable) * 100)}%` }}
           />
           <span className="mass-readout num">
-            {cost.massUsed} / {cost.massAvailable} mass · {cost.points} points ·{' '}
-            {cpvPoints(cost.points, design.mass)} CPV
+            {cost.massUsed} / {cost.massAvailable} mass · {cpvPoints(cost.points, design.mass)} CPV ·{' '}
+            {cost.points} points
             {cost.spare >= 0 ? ` · ${cost.spare} spare` : ` · ${-cost.spare} over`}
           </span>
         </div>

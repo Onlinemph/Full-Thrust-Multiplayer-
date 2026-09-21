@@ -181,7 +181,7 @@ what closes the gap; the short version of what is missing:
 | 15 Imperial Tech Base | The tables and the availability predicate are in `techbase.ts`; the fleet picker does not yet enforce them |
 | 16 Special moves | Implemented and tested in `specialmoves.ts`; ramming is wired to orders and phase 5, the rest wait on a phase to call them |
 | 17 Terrain | Implemented and tested in `terrain.ts`; a planet or planetoid now blocks fire, and the border skirmish has a rock to hide behind |
-| 18 Battles and CPV | Points are computed; deployment and tournament composition are in `battles.ts` and advisory in the picker |
+| 18 Battles and CPV | Points are computed and CPV is the default currency; deployment and tournament composition are in `battles.ts` and advisory in the picker |
 
 Section 9's own gap: the extract stops mid-way through the list of gunboat types, so whatever 9.2
 catalogues after the Needle Gunboat is missing. The five types that are quoted are implemented.
@@ -289,6 +289,11 @@ its mass and points and the sum beside it ("10% of 86 = 8.6 → 9 × 2"), sub-to
 Combat Points Value in 18.3's three steps, and carried craft listed apart from the hull the way
 the Fleet Books print a carrier. The rows are what the header adds up, so a total that disagrees
 with a printed fleet list can be run down to the line that differs.
+
+Combat Points Value (18.3) is the currency the table prices in: it is the figure a hull shows
+first in the shipyard, the library, on its sheet and in the fleet picker, and a new battle is
+bought and scored in it unless the setup switches it off, in which case everything reads in the
+printed points instead. The printed figure is always alongside, since the Fleet Books print it.
 
 ## Factions
 

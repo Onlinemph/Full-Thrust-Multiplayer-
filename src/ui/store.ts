@@ -49,6 +49,12 @@ const DEFAULT_SETUP: GameSetup = {
   // A 6' × 4' board is a knife fight at these ranges; half again is where
   // manoeuvre starts to matter. The scenario's own size is still on offer.
   tableScale: 1.5,
+  // 18.3: the currency a new table prices and scores in. The printed points
+  // system "does not fully reflect the advantages of increasing ship size";
+  // CPV is the book's own correction, and it is what every hull shows first
+  // everywhere it is priced. A file saved before this was the default still
+  // reads as printed points, which is what its scoreboard was kept in.
+  cpv: true,
 }
 
 let setup: GameSetup = DEFAULT_SETUP

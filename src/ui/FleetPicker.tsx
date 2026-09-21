@@ -82,7 +82,7 @@ export function FleetPicker({
   forces,
   techBases,
   customTechBases,
-  cpv = false,
+  cpv = true,
   bannedSystems,
   factions,
   clans,

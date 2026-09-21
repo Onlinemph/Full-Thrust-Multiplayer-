@@ -25,8 +25,8 @@ export function CostSheet({ design }: { design: ShipDesign }) {
         <span className="rule-detail">13.14, 18.3</span>
         <span className="spacer" />
         <span className="num">
-          {cost.points} points · {cpv.points} CPV
-          {embarked.points > 0 ? ` · ${sheet.listed} with craft` : ''}
+          {cpv.points} CPV · {cost.points} points
+          {embarked.points > 0 ? ` · ${cpv.points + embarked.points} CPV with craft` : ''}
         </span>
       </summary>
       <div className="cost-scroll">
@@ -116,8 +116,8 @@ export function CostSheet({ design }: { design: ShipDesign }) {
                 <th colSpan={2}>
                   Hull and craft on a fleet list <span className="rule-ref">18.2</span>
                 </th>
-                <td className="num" />
-                <td className="num">{fmt(sheet.listed)}</td>
+                <td className="cost-working">{fmt(sheet.listed)} in printed points</td>
+                <td className="num">{fmt(cpv.points + embarked.points)} CPV</td>
               </tr>
             </tbody>
           ) : null}
