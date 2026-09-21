@@ -1133,3 +1133,71 @@
     max-height: none;
   }
 }
+
+/* ── House rules: the preset editor ───────────────────────────────────────── */
+
+.preset-editor {
+  width: min(64rem, 100%);
+}
+
+.preset-gear {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--gap-2);
+  width: 100%;
+}
+
+.preset-group h4 {
+  margin: 0 0 0.3rem;
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.preset-group h4 button {
+  font-size: var(--text-xs);
+  padding: 0.1em 0.5em;
+}
+
+.preset-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+  font-size: var(--text-sm);
+}
+
+.preset-ticks label.is-barred {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.preset-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.3rem var(--gap-2);
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+.preset-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A catalogue entry the active preset bars stays on the page, greyed and
+   named, so the designer sees what the table has ruled out. */
+.catalogue-row.is-barred .catalogue-name,
+.design-chip.is-barred {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.catalogue-row.is-barred .mount-btn,
+.design-chip.is-barred {
+  opacity: 0.5;
+}

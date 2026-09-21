@@ -137,3 +137,63 @@ $$;
 revoke all on public.designs from anon, authenticated;
 grant execute on function public.publish_design(jsonb, text) to anon, authenticated;
 grant execute on function public.list_designs(integer) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Rules presets: the gear a table allows and the options it plays under
+-- (src/data/rulesPreset.ts), published to a shelf the way designs are.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.rules_presets (
+  id          uuid primary key default gen_random_uuid(),
+  preset      jsonb not null,
+  name        text not null,
+  author      text not null default '',
+  created_at  timestamptz not null default now()
+);
+
+alter table public.rules_presets enable row level security;
+
+-- Anyone: put a preset on the shelf. Refuses anything too big to be one.
+create or replace function public.publish_preset(p_preset jsonb, p_author text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  if pg_column_size(p_preset) > 32768 then
+    raise exception 'preset too large';
+  end if;
+  insert into public.rules_presets (preset, name, author)
+  values (
+    p_preset,
+    left(coalesce(p_preset->>'name', 'Unnamed preset'), 80),
+    left(coalesce(p_author, ''), 40)
+  )
+  returning id into new_id;
+  return new_id;
+end;
+$$;
+
+-- Anyone: the shelf, newest first.
+create or replace function public.list_presets(p_limit integer default 200)
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(jsonb_agg(to_jsonb(p) order by p.created_at desc), '[]'::jsonb)
+    from (
+      select id, name, author, created_at, preset
+        from public.rules_presets
+       order by created_at desc
+       limit least(greatest(coalesce(p_limit, 200), 1), 500)
+    ) p;
+$$;
+
+revoke all on public.rules_presets from anon, authenticated;
+grant execute on function public.publish_preset(jsonb, text) to anon, authenticated;
+grant execute on function public.list_presets(integer) to anon, authenticated;

@@ -35,6 +35,8 @@ import { battleEnd, BattleResult } from './BattleResult'
 import { CampaignScreen } from './CampaignScreen'
 import { CampaignSetupPanel } from './CampaignSetupPanel'
 import { MotorPool } from './dirtside/MotorPool'
+import { PresetEditor } from './PresetEditor'
+import { presetFromHash, type RulesPreset } from '../data/rulesPreset'
 import { battleOnTable, campaignDispatch, setBattleOnTable, useCampaign } from './campaignStore'
 import { systemById } from '../campaign/campaign'
 import { CAMPAIGN_PHASE_LABELS } from '../campaign/turn'
@@ -164,6 +166,24 @@ export function App() {
   const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign'>('menu')
   const [showCampaignSetup, setShowCampaignSetup] = useState(false)
   const [showMotorPool, setShowMotorPool] = useState(false)
+  /* House rules: the preset editor, opened from the menu or by a link that
+     carries a preset. A link is read once, then taken off the address so a
+     reload does not open it again. */
+  const [presetEditor, setPresetEditor] = useState<{ initial?: RulesPreset } | null>(null)
+  useEffect(() => {
+    const read = () => {
+      const carried = presetFromHash(window.location.hash)
+      if (carried === null) return
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+      if (typeof carried === 'string') window.alert(carried)
+      else setPresetEditor({ initial: carried })
+    }
+    read()
+    // A link pasted into a tab the app is already open in changes only the
+    // fragment, which is no reload; listen for that too.
+    window.addEventListener('hashchange', read)
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
   /* The campaign in this browser, if one is under way, and the pending battle
      of it that is on the table, if the table is fighting one. */
   const campaign = useCampaign()
@@ -346,6 +366,7 @@ export function App() {
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showMotorPool ? <MotorPool onClose={() => setShowMotorPool(false)} /> : null}
+      {presetEditor ? <PresetEditor initial={presetEditor.initial} onClose={() => setPresetEditor(null)} /> : null}
       {showCampaignSetup ? (
         <CampaignSetupPanel
           onClose={() => setShowCampaignSetup(false)}
@@ -432,6 +453,7 @@ export function App() {
           onContinueCampaign={() => setScreen('campaign')}
           onNewCampaign={() => setShowCampaignSetup(true)}
           onMotorPool={() => setShowMotorPool(true)}
+          onHouseRules={() => setPresetEditor({})}
           continueLabel={
             underway
               ? `${scenario?.name ?? game.scenario} · turn ${game.turn}, ${PHASE_LABELS[game.phase].toLowerCase()}`

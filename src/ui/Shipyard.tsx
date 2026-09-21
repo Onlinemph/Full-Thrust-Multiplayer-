@@ -76,6 +76,9 @@ import { cpvPoints } from '../engine/battles'
 import { isCounterArtUrl } from '../data/designFile'
 
 
+import { activePresetId, allPresets, setActivePreset } from '../data/presetStore'
+import { effectiveBans, isBarred, type RulesPreset } from '../data/rulesPreset'
+
 /**
  * The weapon catalogue, in the families a designer thinks in (5, 6).
  *
@@ -225,10 +228,18 @@ export function Shipyard({
   const [arranging, setArranging] = useState(false)
   const [artInput, setArtInput] = useState(design.art ?? '')
   const artOk = artInput.trim() === '' || isCounterArtUrl(artInput.trim())
+  /* The rules preset the yard designs under: what a table has barred is
+     greyed in the catalogue and refused by the validator, so a hull built
+     here is a hull that table will accept. */
+  const [presetId, setPresetId] = useState<string>(() => activePresetId() ?? '')
+  const presets = allPresets()
+  const preset: RulesPreset | undefined = presets.find((p) => p.id === presetId)
+  const barred = (id: string) => preset !== undefined && isBarred(preset, id)
   const cost = priceDesign(design)
   const faults = validateDesign(design, {
     factionId: factionId || undefined,
     clanId: clanId || undefined,
+    bannedSystems: preset ? effectiveBans(preset) : undefined,
   })
   const faction = factionId ? factionById(factionId) : undefined
   const offBase = designProblems(techBase, design, customBase)
@@ -303,6 +314,24 @@ export function Shipyard({
       <div className="modal is-wide yard-modal" onClick={(event) => event.stopPropagation()}>
         <div className="yard-head">
           <h2>Shipyard</h2>
+          <label className="ds-shelf" title="What this table allows: barred gear is greyed in the catalogue and refused by the validator">
+            Rules{' '}
+            <select
+              aria-label="Rules preset"
+              value={presetId}
+              onChange={(event) => {
+                setPresetId(event.target.value)
+                setActivePreset(event.target.value || null)
+              }}
+            >
+              <option value="">Whole catalogue</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="spacer" />
           <button onClick={onClose}>Close</button>
         </div>
@@ -631,8 +660,9 @@ export function Shipyard({
                           // identify a button. The mass is what tells them
                           // apart, on screen and here.
                           key={`${entry.kind}-${entry.label}-${entry.mass}`}
-                          className="design-chip"
-                          title={`${entry.mass} mass, ${entry.points} points`}
+                          className={`design-chip${barred(entry.kind) ? ' is-barred' : ''}`}
+                          disabled={barred(entry.kind)}
+                          title={barred(entry.kind) ? `Barred by ${preset?.name}` : `${entry.mass} mass, ${entry.points} points`}
                           onClick={() => addSystem(entry)}
                         >
                           {entry.label}
@@ -668,8 +698,9 @@ export function Shipyard({
               <div className="catalogue">
                 {CATALOGUE_WEAPONS.filter((e) => familyOf(e.weaponClass) === family).map((entry) => (
                   <div
-                    className="catalogue-row"
+                    className={`catalogue-row${barred(entry.weaponClass) ? ' is-barred' : ''}`}
                     key={`${entry.weaponClass}-${entry.variant}-${entry.rating}`}
+                    title={barred(entry.weaponClass) ? `Barred by ${preset?.name}` : undefined}
                   >
                     <span className="catalogue-name">{entry.label}</span>
                     <span className="catalogue-mounts">
@@ -677,6 +708,7 @@ export function Shipyard({
                         <button
                           key={mounting.arcs}
                           className="mount-btn"
+                          disabled={barred(entry.weaponClass)}
                           title={`${mounting.arcs} arc${mounting.arcs > 1 ? 's' : ''}: ${mounting.mass} mass, ${mounting.points} points`}
                           onClick={() => addWeapon(entry, mounting)}
                         >

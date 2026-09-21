@@ -184,6 +184,14 @@ export interface GameSetup {
   bannedSystems?: string[]
 
   /**
+   * The rules preset the table was set up from (`data/rulesPreset.ts`), by
+   * name, for the record. The bans and the options it applied are written
+   * into this setup field by field, so a file replays the same whether or
+   * not the preset still exists anywhere.
+   */
+  rulesPreset?: { id: string; name: string }
+
+  /**
    * The campaign faction each side flies under (`docs/rules/factions.md`), by
    * side id. Absent means plain Continuum, which is what every battle fought
    * before this field was read plays as.

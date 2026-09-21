@@ -27,6 +27,8 @@ export interface MainMenuProps {
   onNewCampaign: () => void
   /** Dirtside II's vehicle designer. */
   onMotorPool: () => void
+  /** Rules presets: what a table allows and plays under. */
+  onHouseRules: () => void
 }
 
 const MENU_TABLE = { width: 160, height: 100 }
@@ -43,6 +45,7 @@ export function MainMenu({
   onContinueCampaign,
   onNewCampaign,
   onMotorPool,
+  onHouseRules,
 }: MainMenuProps) {
   const [size, setSize] = useState({ width: 1280, height: 800 })
   useEffect(() => {
@@ -96,6 +99,9 @@ export function MainMenu({
           </button>
           <button onClick={onLibrary}>Ship library</button>
           <button onClick={onShipyard}>Shipyard</button>
+          <button onClick={onHouseRules}>
+            House rules <span className="menu-hint">presets of gear and rules</span>
+          </button>
           <label className="file-button menu-file">
             Load a battle file
             <input

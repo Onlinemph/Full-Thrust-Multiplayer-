@@ -327,6 +327,32 @@ Fourteen factions with mechanical traits, from the campaign supplements, are wri
 outright prohibition. Several are strong enough to bend the points model, which is why they are
 written down before being wired in.
 
+## House rules: presets of gear and rules
+
+Full Thrust has been played many ways since 1992, and Continuum keeps all of it in one catalogue. A
+**rules preset** is how a table says which of it is on: a named list of what may be fitted and
+fielded, by the catalogue's own ids, and which of the optional rules are on. It is data, not code
+(`src/data/rulesPreset.ts`), so it can be kept, sent and clicked.
+
+- **House rules** on the main menu opens the editor: tick the gear a table allows (as a ban list or
+  as an allow list, whichever reads better), set each optional rule on, off or "leave as the table
+  has it", the table size, the movement system, 11.8's non-FTL hulls and a tech base. Save it to this
+  browser's shelf, save it as a `.rules.json` file, open a file, or copy a link: anyone who opens
+  the link gets the editor with the preset in it, ready to save.
+- Four presets ship: the whole Continuum catalogue, the Stellar Imperium campaign's bans, our reading
+  of the Fleet Books' kit, and our reading of the 1992 second edition. Edit any of them and save; your
+  version takes the shipped one's place on your shelf.
+- The **Shipyard** designs under the active preset (the Rules select in its header): barred gear is
+  greyed in the catalogue and refused by the validator, so a hull built there is a hull the table
+  will accept.
+- The **New battle** form and the match **lobby** apply a preset to the table with one select. Applying
+  writes the preset's bans and options into the setup field by field, so the battle file carries them
+  and replays the same whether or not the preset still exists; an edit to any rule takes the table
+  off the preset and the select reads "custom". The fleet picker refuses hulls carrying barred gear.
+- With a Supabase project configured (see "Multiplayer through Supabase"), presets can be published
+  to a community shelf and taken from it, the way designs are; `supabase/schema.sql` carries the two
+  functions.
+
 ## Campaign
 
 The strategic layer above the tactical one — economy, FTL movement, exploration, production,
