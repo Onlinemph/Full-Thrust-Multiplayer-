@@ -63,11 +63,24 @@ src/
     ships.ts           Ship designs
     scenarios.ts       Scenarios and force setup
     savedGame.ts       (setup + actions) — build, replay, parse, embed custom designs
-  ui/              React. The only mutable-state boundary is store.ts
+  ui/              React. The only mutable-state boundary is store.ts (campaignStore.ts for the campaign)
   campaign/        The strategic layer, above the tactical one
+    types.ts         The campaign schema: the star map, colonies, task forces, moves, the file
+    map.ts           Hex arithmetic, FTL legs, command range, the d100 generation tables
+    economy.ts       Prices, yards, production, unrest, integration
+    research.ts      The research tables and the FTL rate they raise
+    intel.ts         Admirals, detection, espionage
+    turn.ts          The eight-phase clock, the meeting matrix, the engagement scenario
+    campaign.ts      createCampaign, applyMove, the turn, and the bridge to the table
 ```
 
 The dependency arrow never reverses: `ui` may import `engine` and `data`; `engine` imports neither.
+`campaign` sits beside `engine` and above it: it imports the engine to open a battle
+(`battleSetup` builds an ordinary `GameSetup`) and to read one back (`resolve-battle` replays a
+battle file with `applyAction` and folds the end state onto its hulls), and the engine knows
+nothing of it. A campaign is `(setup + move journal)` as a battle is `(setup + action journal)`,
+with the same rule for the journal: a move carries ids and choices, never a price or a roll, and
+refused moves are journalled too, so `replayCampaign` rebuilds any campaign file exactly.
 
 ## What was taken unchanged
 

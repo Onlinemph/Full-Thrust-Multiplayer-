@@ -53,11 +53,14 @@ export function BattleResult({
   scenario,
   end,
   onClose,
+  onReturn,
 }: {
   game: GameState
   scenario: Scenario
   end: Extract<BattleEnd, { over: true }>
   onClose: () => void
+  /** A campaign battle: fold the result back and go back to the star map. */
+  onReturn?: () => void
 }) {
   // 11.7's riders are written off here and only here: the battle is over.
   const score = scoreBattle(game, scenario.victory, {
@@ -101,12 +104,20 @@ export function BattleResult({
         <AfterAction game={game} title={`${scenario.name} — after-action report`} />
 
         <p>
-          The battle is still here — close this and you can rewind it with Undo, save it, or keep
-          playing past the limit.
+          {onReturn
+            ? 'Return to the campaign to write this result onto the fleets, or close this to look over the wreckage first.'
+            : 'The battle is still here — close this and you can rewind it with Undo, save it, or keep playing past the limit.'}
         </p>
-        <button className="primary" onClick={onClose}>
-          Close
-        </button>
+        <div className="campaign-inline">
+          {onReturn ? (
+            <button className="primary" onClick={onReturn}>
+              Return to campaign
+            </button>
+          ) : null}
+          <button className={onReturn ? undefined : 'primary'} onClick={onClose}>
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )

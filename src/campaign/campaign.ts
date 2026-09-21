@@ -148,11 +148,16 @@ export function createCampaign(setup: CampaignSetup): CampaignState {
     const system = systemAt(map, entry.home)
     if (!system) throw new Error(`${entry.name}'s home hex ${hexKey(entry.home)} holds no star`)
     // "a home system holding at least one habitable planet" (Economy): the
-    // GM's guarantee, so a home rolled without one is given one, and the
-    // ruling is on the record.
-    let body = system.bodies.find((b) => b.type === 'terran') ?? system.bodies.find((b) => b.type === 'sub-terran' || b.type === 'minimal-terran')
+    // GM's guarantee. Every player's home world is a terran one, so no seat
+    // starts a year behind another; a home rolled without one has its best
+    // world made terran, and the ruling is on the record.
+    let body = system.bodies.find((b) => b.type === 'terran')
     if (!body) {
-      body = system.bodies[0]
+      body =
+        system.bodies.find((b) => (b.type === 'sub-terran' || b.type === 'minimal-terran') && b.parentId === null) ??
+        system.bodies.find((b) => b.type === 'sub-terran' || b.type === 'minimal-terran') ??
+        system.bodies.find((b) => b.type !== 'gas-giant' && b.parentId === null) ??
+        system.bodies[0]
       if (!body) {
         body = { id: `${system.id}-b1`, name: `${system.name} I`, type: 'terran', trait: 'none', parentId: null, colonyId: null }
         system.bodies.push(body)

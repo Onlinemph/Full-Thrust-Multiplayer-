@@ -243,6 +243,15 @@ npx vite --port 5199 --strictPort &
 node tools/drive_vs_computer.mjs 6
 ```
 
+`tools/drive_campaign.mjs` drives the campaign console the same way: sets one up from the menu,
+ends the phases of a turn, plots a course on the chart, buys and researches on turn 4, has the
+computers fight a meeting, opens another on the table and brings it back, and reloads the page to
+check the campaign came back the same.
+
+```
+node tools/drive_campaign.mjs
+```
+
 ## Playing
 
 A battle is **(setup + action journal)**: the engine is deterministic and the dice are seeded, so
@@ -328,10 +337,39 @@ points model is also the strategic price list.
 `src/campaign/` implements the *Stellar Imperium* strategic layer: the star map and its d100
 generation tables, the economy and production phase, the eight-phase campaign turn with its
 Engage/Stand Off/FTL Move encounter matrix, research, admirals, detection and espionage. A campaign
-is `(setup + move journal)` exactly as a battle is `(setup + action journal)`, and it hands battles
-to the tactical engine as ordinary scenarios.
+is `(setup + move journal)` exactly as a battle is `(setup + action journal)`: `campaign.ts` holds
+`createCampaign`, `applyMove` (the one door every change goes through, refused moves journalled
+too) and `replayCampaign`, so a campaign file is its setup and its moves and nothing else.
 
-**It has no user interface yet** — it is a tested library, not a playable campaign.
+**Campaign** on the main menu sets one up: two to four players, hot-seat from one console, each
+with a name, a faction, a home world (population, factories and an orbital yard — the rules leave
+the home system to the GM, so it is on the form), 2,000 RP of ships picked with the fleet picker
+and 20 colony transports; a map radius, a star count and a seed. The console is a hex chart on
+the left — stars, colonies as rings in their owner's colour, task-force counters, plotted tracks
+— and the books on the right: what the phase has done and what it asks, the selected hex with its
+worlds, colonies and forces, the player's RP and research, and the log. Courses are plotted by
+clicking the chart hex by hex, held to the admiral's lead (or three turns ahead without one) and
+the FTL rate; orders, flags, detaching and merging, detection checks, landings, command posts,
+assaults, purchases at the price schedule, research and admirals are all buttons on the panels,
+and every refusal is shown with the rule that refused it. *End phase* turns the clock: fleets fly,
+systems are explored, meetings become battles, colonies produce every fourth turn.
+
+**Battles.** When fleets meet, the combat phase lists the battle. *Fight on the table* opens it on
+the battle screen as an ordinary Continuum battle — the fleets as they stand in the campaign,
+damage carried over, the system's terrain, the campaign's bans, the computer at the helm of any
+side marked as such — with a banner naming the campaign it belongs to. *Return to campaign* hands
+the battle file back: the campaign replays it, writes the end state onto its hulls (losses struck
+off, damage kept until a yard mends it, an admiral rolled for when a flagship is lost), names the
+winner and lets the phase end. *Let the computers fight it* does the same without opening the
+table, through `src/engine/playtest/autoplay.ts`. The campaign autosaves to this browser and
+saves to a file from the header.
+
+Two readings to know about: a computer player's fleets are fought by the computer at the table but
+are not moved by it between battles (whoever runs the campaign moves them from the console), and
+an assault takes a colony when the landing brings more Marine parties than its defences are worth
+— one a PDU, two an advanced PDU — since the rules say a landing is repulsed by PDUs and nothing
+about how they are reduced. Espionage, emigration and technology trading are in the library and
+not yet on the console.
 
 One thing to flag about the source: the campaign document's economy section says *1 million
 population = 20 RP*, and its production phase says *50 RP for every 1 million population*.

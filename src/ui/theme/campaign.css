@@ -1,0 +1,389 @@
+/* The campaign console: a star chart and the books kept beside it.
+   ────────────────────────────────────────────────────────────────────────────
+   The chart is drawn as the plotting table is — thin luminous rules on the
+   void, one hex a parsec — and the panels beside it reuse the battle
+   console's chrome, so a player moves between the two without relearning
+   anything. Player colour is the side colour of the seat. */
+
+.campaign-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--side-a);
+}
+
+.campaign-body {
+  grid-template-columns: 1fr minmax(22rem, 27rem);
+}
+
+.campaign-chart {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--void);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.campaign-map {
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 3.5rem);
+  user-select: none;
+}
+
+.campaign-cell polygon {
+  fill: transparent;
+  stroke: var(--line-soft);
+  stroke-width: 0.8;
+  cursor: pointer;
+}
+
+.campaign-cell:hover polygon {
+  fill: rgb(100 210 255 / 0.06);
+}
+
+.campaign-cell.is-selected polygon {
+  stroke: var(--side-a);
+  stroke-width: 1.6;
+  fill: rgb(100 210 255 / 0.1);
+}
+
+.campaign-star {
+  cursor: pointer;
+}
+
+.campaign-sun {
+  fill: var(--ink-faint);
+}
+
+.campaign-sun.is-explored {
+  fill: var(--ink);
+}
+
+.campaign-star-name {
+  fill: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  pointer-events: none;
+}
+
+.campaign-colony-ring {
+  fill: none;
+  stroke-width: 1.4;
+}
+
+.campaign-nebula {
+  fill: rgb(147 160 189 / 0.14);
+  stroke: var(--ink-faint);
+  stroke-width: 0.6;
+  stroke-dasharray: 2 2;
+}
+
+.campaign-rocks {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 0.8;
+  stroke-dasharray: 1 1.5;
+}
+
+.campaign-post {
+  fill: var(--side-a);
+}
+
+.campaign-force {
+  cursor: pointer;
+}
+
+.campaign-force polygon,
+.campaign-force circle {
+  fill: var(--void);
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.campaign-force.is-mine polygon,
+.campaign-force.is-mine circle {
+  fill: currentColor;
+}
+
+.campaign-force text {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 6px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.campaign-force.is-mine text {
+  fill: var(--on-bright);
+}
+
+.campaign-battle path {
+  stroke: var(--damage);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.campaign-track path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+
+.campaign-track circle {
+  fill: currentColor;
+}
+
+.campaign-track.is-drafting path {
+  stroke-width: 1.8;
+  opacity: 1;
+}
+
+.campaign-track-turn {
+  fill: currentColor;
+  font-family: var(--font-mono);
+  font-size: 6px;
+}
+
+.campaign-legend {
+  position: absolute;
+  left: var(--gap);
+  bottom: var(--gap);
+  display: flex;
+  gap: var(--gap-2);
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  pointer-events: none;
+}
+
+/* ── The panels ───────────────────────────────────────────────────────────── */
+
+.campaign-dim {
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+
+.campaign-damage {
+  color: var(--damage);
+}
+
+.campaign-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--side-neutral);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: var(--gap);
+  margin-top: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  font-size: var(--text-sm);
+}
+
+.campaign-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.campaign-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem var(--gap-2);
+  font-size: var(--text-xs);
+}
+
+.campaign-facts dt {
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.campaign-facts dd {
+  margin: 0;
+}
+
+.campaign-bodies,
+.campaign-ships,
+.campaign-queue,
+.campaign-research,
+.campaign-battles,
+.campaign-legs {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.campaign-ships,
+.campaign-queue,
+.campaign-research,
+.campaign-battles {
+  list-style: none;
+  padding-left: 0;
+}
+
+.campaign-ships li,
+.campaign-queue li,
+.campaign-research li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.campaign-research li.is-known {
+  color: var(--screens);
+}
+
+.campaign-battles li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: var(--gap) 0;
+  border-top: 1px solid var(--line);
+}
+
+.campaign-actions,
+.campaign-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  align-items: center;
+}
+
+.campaign-inline input.num {
+  width: 4.5rem;
+}
+
+.campaign-plot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--text-xs);
+}
+
+.campaign-form {
+  border-top: 1px solid var(--line);
+  padding-top: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.campaign-form h4 {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.campaign-form select {
+  max-width: 14rem;
+}
+
+.campaign-player details summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.campaign-holdings h3 {
+  margin-top: var(--gap);
+}
+
+.campaign-log-dock {
+  height: 12rem;
+}
+
+.campaign-log {
+  flex: 1;
+  min-height: 0;
+  padding: var(--gap);
+}
+
+/* ── Setup ────────────────────────────────────────────────────────────────── */
+
+.campaign-setup {
+  width: min(56rem, 100%);
+}
+
+.campaign-seat {
+  flex-wrap: wrap;
+}
+
+.campaign-swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.campaign-setup-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  align-items: flex-end;
+}
+
+.campaign-setup-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+}
+
+.campaign-setup-grid input.num {
+  width: 7rem;
+}
+
+.campaign-preview {
+  width: 100%;
+  max-height: 14rem;
+  background: var(--void);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.campaign-preview circle {
+  fill: var(--ink-dim);
+}
+
+.campaign-preview-edge {
+  fill: none !important;
+  stroke: var(--line);
+}
+
+/* ── The battle table, during a campaign battle ───────────────────────────── */
+
+.campaign-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  padding: 0.3rem var(--gap-2);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+
+.campaign-banner b {
+  color: var(--side-a);
+}
+
+.campaign-banner .spacer {
+  flex: 1;
+}

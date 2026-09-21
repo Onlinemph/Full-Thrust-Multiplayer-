@@ -21,6 +21,10 @@ export interface MainMenuProps {
   onLibrary: () => void
   onShipyard: () => void
   onLoadFile: (text: string) => void
+  /** A campaign is under way and can be picked back up. */
+  campaignLabel: string | null
+  onContinueCampaign: () => void
+  onNewCampaign: () => void
 }
 
 const MENU_TABLE = { width: 160, height: 100 }
@@ -33,6 +37,9 @@ export function MainMenu({
   onLibrary,
   onShipyard,
   onLoadFile,
+  campaignLabel,
+  onContinueCampaign,
+  onNewCampaign,
 }: MainMenuProps) {
   const [size, setSize] = useState({ width: 1280, height: 800 })
   useEffect(() => {
@@ -61,7 +68,8 @@ export function MainMenu({
         <h1 className="menu-title">Full Thrust</h1>
         <p className="menu-sub">
           Fleet actions in deep space, fought by the book: written orders, a fifteen-phase turn,
-          threshold checks and all. Hot-seat on one screen or two browsers over a code.
+          threshold checks and all. Hot-seat on one screen or two browsers over a code, or a
+          campaign across a star map with battles fought at the table.
         </p>
 
         <div className="menu-actions">
@@ -74,6 +82,12 @@ export function MainMenu({
             New battle
           </button>
           <button onClick={onRemotePlay}>Remote play</button>
+          {campaignLabel ? (
+            <button onClick={onContinueCampaign}>
+              Continue campaign <span className="menu-hint">{campaignLabel}</span>
+            </button>
+          ) : null}
+          <button onClick={onNewCampaign}>{campaignLabel ? 'New campaign' : 'Campaign'}</button>
           <button onClick={onLibrary}>Ship library</button>
           <button onClick={onShipyard}>Shipyard</button>
           <label className="file-button menu-file">

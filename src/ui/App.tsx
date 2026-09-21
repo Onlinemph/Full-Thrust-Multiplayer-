@@ -32,6 +32,11 @@ import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { AfterAction } from './AfterAction'
 import { battleEnd, BattleResult } from './BattleResult'
+import { CampaignScreen } from './CampaignScreen'
+import { CampaignSetupPanel } from './CampaignSetupPanel'
+import { battleOnTable, campaignDispatch, setBattleOnTable, useCampaign } from './campaignStore'
+import { systemById } from '../campaign/campaign'
+import { CAMPAIGN_PHASE_LABELS } from '../campaign/turn'
 import { PrintSheets, type PrintJob } from './PrintSheets'
 import { CombatPanel } from './CombatPanel'
 import { DamageControlPanel } from './DamageControlPanel'
@@ -64,6 +69,7 @@ import {
   exportGame,
   journalLength,
   loadGame,
+  newGame,
   undo,
   useGame,
   clearRefusal,
@@ -154,7 +160,13 @@ export function App() {
   /* The front of the house. The app opens on it rather than on whatever
      battle was last on the table; a connected remote match goes straight to
      the table, since the other console is waiting. */
-  const [screen, setScreen] = useState<'menu' | 'battle'>('menu')
+  const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign'>('menu')
+  const [showCampaignSetup, setShowCampaignSetup] = useState(false)
+  /* The campaign in this browser, if one is under way, and the pending battle
+     of it that is on the table, if the table is fighting one. */
+  const campaign = useCampaign()
+  const tableBattleId = battleOnTable()
+  const campaignBattle = campaign?.battles.find((b) => b.id === tableBattleId && !b.resolved) ?? null
   const net = useNet()
   useEffect(() => {
     if (net.phase === 'connected') setScreen('battle')
@@ -213,6 +225,21 @@ export function App() {
       )
     : game.log
   const end = battleEnd(game, scenario)
+
+  /* A campaign battle comes back to the star map as a battle file: the
+     campaign replays it and writes the end state onto its hulls. */
+  const returnToCampaign = () => {
+    if (!campaignBattle) return
+    if (!end.over && !window.confirm('The battle is not over. Fold it back into the campaign as it stands?')) return
+    const outcome = campaignDispatch({ kind: 'resolve-battle', battle: campaignBattle.id, savedGame: exportGame() })
+    if (outcome.refused) {
+      window.alert(outcome.refused)
+      return
+    }
+    setBattleOnTable(null)
+    setResultSeen(true)
+    setScreen('campaign')
+  }
 
   const debt = phaseDebt(game)
   const phaseKey = `${game.turn}:${game.phase}`
@@ -316,6 +343,15 @@ export function App() {
         />
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
+      {showCampaignSetup ? (
+        <CampaignSetupPanel
+          onClose={() => setShowCampaignSetup(false)}
+          onStarted={() => {
+            setShowCampaignSetup(false)
+            setScreen('campaign')
+          }}
+        />
+      ) : null}
       {showSetup ? (
         <SetupPanel
           onClose={() => setShowSetup(false)}
@@ -350,11 +386,48 @@ export function App() {
     </>
   )
 
-  if (screen === 'menu') {
+  if (screen === 'campaign' && campaign) {
+    return (
+      <>
+        <CampaignScreen
+          key={`${campaign.seed}-${campaign.players.map((p) => p.id).join('/')}`}
+          onMenu={() => setScreen('menu')}
+          onFight={(battleSetup, battle) => {
+            newGame(battleSetup)
+            setBattleOnTable(battle.id)
+            setResultSeen(false)
+            setSelectedId(null)
+            setScreen('battle')
+          }}
+          onResume={() => setScreen('battle')}
+          onReview={(text) => {
+            const error = loadGame(text)
+            if (error) window.alert(error)
+            else {
+              setBattleOnTable(null)
+              setResultSeen(true)
+              setSelectedId(null)
+              setScreen('battle')
+            }
+          }}
+        />
+        {modals}
+      </>
+    )
+  }
+
+  if (screen === 'menu' || screen === 'campaign') {
     const underway = journalLength() > 0 || game.turn > 1
     return (
       <>
         <MainMenu
+          campaignLabel={
+            campaign
+              ? `turn ${campaign.turn}, ${CAMPAIGN_PHASE_LABELS[campaign.phase].toLowerCase()}`
+              : null
+          }
+          onContinueCampaign={() => setScreen('campaign')}
+          onNewCampaign={() => setShowCampaignSetup(true)}
           continueLabel={
             underway
               ? `${scenario?.name ?? game.scenario} · turn ${game.turn}, ${PHASE_LABELS[game.phase].toLowerCase()}`
@@ -461,6 +534,21 @@ export function App() {
         </button>
       </header>
 
+      {campaignBattle && campaign ? (
+        <div className="campaign-banner">
+          <b>Campaign battle</b>
+          <span>
+            {campaignBattle.systemId ? systemById(campaign, campaignBattle.systemId)?.name : 'Deep space'}, campaign turn {campaign.turn}:{' '}
+            {campaignBattle.sides.map((side) => campaign.players.find((p) => p.id === side.playerId)?.name ?? side.playerId).join(' against ')}.
+            The result goes back to the star map when you return.
+          </span>
+          <span className="spacer" />
+          <button onClick={() => setScreen('campaign')}>Star map</button>
+          <button className="primary" onClick={returnToCampaign}>
+            Return to campaign
+          </button>
+        </div>
+      ) : null}
       <main className="app-body">
         <MapView
           game={game}
@@ -680,6 +768,7 @@ export function App() {
           scenario={scenario}
           end={end}
           onClose={() => setResultSeen(true)}
+          onReturn={campaignBattle ? returnToCampaign : undefined}
         />
       ) : null}
       {showReport ? (
