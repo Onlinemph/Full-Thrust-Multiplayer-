@@ -645,14 +645,33 @@
   pointer-events: none;
 }
 
+/* The name and the kind get the room; a coordinate needs four characters. */
+.scenario-terrain td {
+  padding: 0.2rem 0.3rem;
+}
+
+.scenario-terrain td:first-child {
+  width: 30%;
+}
+
 .scenario-terrain input,
 .scenario-terrain select {
   width: 100%;
-  min-width: 4rem;
+  min-width: 0;
+}
+
+.scenario-terrain select {
+  min-width: 7rem;
+}
+
+.scenario-terrain td.num {
+  width: 4.2rem;
 }
 
 .scenario-terrain input.num {
-  width: 4.5rem;
+  width: 100%;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
 }
 
 .scenario-terrain tr.is-picked td {

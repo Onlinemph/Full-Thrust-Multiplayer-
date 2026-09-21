@@ -58,16 +58,15 @@ export function ScenarioBuilder({ scenario, onChange, onSave, onDelete, saved }:
     const preset = TERRAIN.find((t) => t.kind === kind)!
     const n = terrain.filter((f) => f.kind === kind).length + 1
     const id = nextId(terrain)
-    setTerrain([
-      ...terrain,
-      {
-        id,
-        kind,
-        position: { x: Math.round(table.width / 2), y: Math.round(table.height / 2) },
-        radius: preset.radius,
-        label: `${preset.label} ${n}`,
-      },
-    ])
+    // Each new feature lands on a different spot of a three-by-two grid
+    // across the middle of the table, so two added in a row do not sit on
+    // top of each other with their names run together.
+    const slot = terrain.length
+    const position = {
+      x: Math.round((table.width * ((slot % 3) + 1)) / 4),
+      y: Math.round((table.height * ((Math.floor(slot / 3) % 2) + 1)) / 3),
+    }
+    setTerrain([...terrain, { id, kind, position, radius: preset.radius, label: `${preset.label} ${n}` }])
     setPicked(id)
   }
   const update = (id: string, patch: Partial<TerrainFeature>) =>
