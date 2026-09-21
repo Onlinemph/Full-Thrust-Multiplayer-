@@ -72,6 +72,12 @@ src/
     intel.ts         Admirals, detection, espionage
     turn.ts          The eight-phase clock, the meeting matrix, the engagement scenario
     campaign.ts      createCampaign, applyMove, the turn, and the bridge to the table
+  dirtside/        Dirtside II, the ground game, to the same rules as engine/
+    types.ts         The vehicle and infantry element as designed
+    data/            Weapons, ranges and chit validity; mobility and terrain; the cost tables; the book's vehicles
+    design.ts        Capacity, the fit limits, the power plant's constraints, signatures
+    pricing.ts       The points value system, line by line
+    recordCard.ts    The record card read off a design
 ```
 
 The dependency arrow never reverses: `ui` may import `engine` and `data`; `engine` imports neither.

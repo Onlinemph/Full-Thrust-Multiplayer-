@@ -25,6 +25,8 @@ export interface MainMenuProps {
   campaignLabel: string | null
   onContinueCampaign: () => void
   onNewCampaign: () => void
+  /** Dirtside II's vehicle designer. */
+  onMotorPool: () => void
 }
 
 const MENU_TABLE = { width: 160, height: 100 }
@@ -40,6 +42,7 @@ export function MainMenu({
   campaignLabel,
   onContinueCampaign,
   onNewCampaign,
+  onMotorPool,
 }: MainMenuProps) {
   const [size, setSize] = useState({ width: 1280, height: 800 })
   useEffect(() => {
@@ -88,6 +91,9 @@ export function MainMenu({
             </button>
           ) : null}
           <button onClick={onNewCampaign}>{campaignLabel ? 'New campaign' : 'Campaign'}</button>
+          <button onClick={onMotorPool}>
+            Motor Pool <span className="menu-hint">Dirtside II vehicle designer</span>
+          </button>
           <button onClick={onLibrary}>Ship library</button>
           <button onClick={onShipyard}>Shipyard</button>
           <label className="file-button menu-file">

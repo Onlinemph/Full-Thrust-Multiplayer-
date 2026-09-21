@@ -34,6 +34,7 @@ import { AfterAction } from './AfterAction'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CampaignScreen } from './CampaignScreen'
 import { CampaignSetupPanel } from './CampaignSetupPanel'
+import { MotorPool } from './dirtside/MotorPool'
 import { battleOnTable, campaignDispatch, setBattleOnTable, useCampaign } from './campaignStore'
 import { systemById } from '../campaign/campaign'
 import { CAMPAIGN_PHASE_LABELS } from '../campaign/turn'
@@ -162,6 +163,7 @@ export function App() {
      the table, since the other console is waiting. */
   const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign'>('menu')
   const [showCampaignSetup, setShowCampaignSetup] = useState(false)
+  const [showMotorPool, setShowMotorPool] = useState(false)
   /* The campaign in this browser, if one is under way, and the pending battle
      of it that is on the table, if the table is fighting one. */
   const campaign = useCampaign()
@@ -343,6 +345,7 @@ export function App() {
         />
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
+      {showMotorPool ? <MotorPool onClose={() => setShowMotorPool(false)} /> : null}
       {showCampaignSetup ? (
         <CampaignSetupPanel
           onClose={() => setShowCampaignSetup(false)}
@@ -428,6 +431,7 @@ export function App() {
           }
           onContinueCampaign={() => setScreen('campaign')}
           onNewCampaign={() => setShowCampaignSetup(true)}
+          onMotorPool={() => setShowMotorPool(true)}
           continueLabel={
             underway
               ? `${scenario?.name ?? game.scenario} · turn ${game.turn}, ${PHASE_LABELS[game.phase].toLowerCase()}`

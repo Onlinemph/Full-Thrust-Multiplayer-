@@ -366,8 +366,34 @@ saves to a file from the header.
 
 Ground battles are the next engine. `docs/rules/dirtside.md` is a page-by-page digest of *Dirtside II*, the
 1/300-scale ground combat rules from the same publisher, with the damage-chit pot's exact contents from a 1998
-probability analysis; it is the reference for a standalone Dirtside game that the campaign will later hand its
-planetary battles to, through the same battle-file-in, result-file-out seam.
+probability analysis; it is the reference for the Dirtside game being built in `src/dirtside/`, which the
+campaign will later hand its planetary battles to through the same battle-file-in, result-file-out seam.
+
+## Dirtside II
+
+The ground game, built in the same repository and to the same rules as the fleet game: a pure engine under
+`src/dirtside/`, content as data, every figure tested against the printed page. What exists so far is the
+first step of the plan: vehicle design (Chapter 3) and the points value system (Appendix), and the **Motor
+Pool** on the main menu to use them.
+
+- `design.ts` is the design system: capacity (five points a size class), what a weapon takes (3 × class for
+  the primary in a turret, 2 × class otherwise), the "no more weapon systems than the size class" limit, the
+  power plant's say over GEV size and over lasers and mass drivers, armour ceilings ashore, afloat and in the
+  air, the walkers' and air vehicles' provisions. `validateDesign` names the page for every refusal and marks
+  the book's recommendations as advisory rather than refusing them.
+- `pricing.ts` is the points value system line by line, each line rounded to the nearest point before it is
+  added, as the book's own worked hull is (9.6 to 10). All eight vehicles on p. 53 price to the printed figure,
+  the DEIMOS to 356 with p. 16's working, and the three unit totals on p. 53 add up.
+- `recordCard.ts` fills the record card of p. 55 from a design: signatures and the target die, the firer's
+  die in each range band by fire control, the range bands themselves and which chits count, missiles, point
+  defence and the notes box.
+- The Motor Pool is the Shipyard's shape: the decisions down the left in the book's order, the card, the
+  capacity bar, the faults and the cost sheet on the right, a shelf that always carries the book's eight
+  vehicles and keeps your own in this browser, and record cards on paper one at a time or the whole shelf.
+
+One reading to know about: the book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT,
+which p. 10 forbids. It is kept as printed and the Motor Pool shows the fault. The next steps are the dice,
+the chit pot and the direct-fire resolver with the spreadsheet as its oracle, then the table.
 
 Two readings to know about: a computer player's fleets are fought by the computer at the table but
 are not moved by it between battles (whoever runs the campaign moves them from the console), and
@@ -391,6 +417,7 @@ src/
   data/      Game content, authored as data: the construction catalogue, ships, scenarios
   ui/        React. The only mutable-state boundary is store.ts
   campaign/  The strategic layer
+  dirtside/  Dirtside II: the ground game's engine, so far its design and pricing
 docs/rules/  Where every rule in the engine comes from, and what is missing
 ```
 
