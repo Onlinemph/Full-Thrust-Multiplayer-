@@ -1029,6 +1029,13 @@ export interface GameState {
    */
   fire: { side: SideId | null; sequence: number }
   log: LogEntry[]
+  /**
+   * The after-action ledger: every hull and armour box marked and every shot
+   * a ship took, with who did it. Filled by the same chokepoints the damage
+   * goes through, so it is derived state — rebuilt by replay, never saved —
+   * and it is what the report at the end of the battle is drawn from.
+   */
+  ledger: Ledger
 }
 
 export interface GameOptions {
@@ -1100,6 +1107,7 @@ export function createGame(opts: GameOptions): GameState {
     fire: { side: null, sequence: 0 },
     deployment: opts.deployment ?? null,
     log: [],
+    ledger: { damage: [], shots: [] },
   }
   pushLog(state, { kind: 'phase', text: `Turn 1 — ${PHASE_LABELS[state.phase]}` })
   return state
@@ -1810,6 +1818,9 @@ export function spendShot(ship: ShipState, weaponId: string): void {
  */
 export function markWeaponFired(ship: ShipState, weaponId: string, phase: Phase): void {
   ship.weaponsFired.set(weaponId, phase)
+  if (acting) {
+    acting.state.ledger.shots.push({ turn: acting.state.turn, phase, shipId: ship.id, weaponId })
+  }
   // 6.6: "Once fired, it is crossed off and cannot be used again." Spending
   // the shot here rather than at each of the eleven places a weapon fires
   // means a mount added later cannot forget to.
@@ -2079,6 +2090,7 @@ export function markHullBoxes(
     ship.destroyed = true
     ship.pendingThresholdRows = 0
     ship.excessDamage = 0
+    recordDamage(ship, standing, 0, true)
     return { marked: standing, rowsCrossed: 0, destroyed: true }
   }
   const rowsBefore = hullRowsCompleted(ship)
@@ -2092,10 +2104,112 @@ export function markHullBoxes(
     // 17.5 needs the overkill, and this is the only place both halves of it
     // are in scope: what the blow was worth and what was left to absorb it.
     ship.excessDamage = Math.max(0, points - (ship.design.hullBoxes - before))
+    recordDamage(ship, ship.hullMarked - before, 0, true)
     return { marked: ship.hullMarked - before, rowsCrossed, destroyed: true }
   }
   ship.pendingThresholdRows += rowsCrossed
+  recordDamage(ship, ship.hullMarked - before, 0, false)
   return { marked: ship.hullMarked - before, rowsCrossed, destroyed: false }
+}
+
+// ---------------------------------------------------------------------------
+// The after-action ledger
+// ---------------------------------------------------------------------------
+
+/** How damage was done, as the report groups it. */
+export type DamageKind =
+  | 'guns'
+  | 'ordnance'
+  | 'fighters'
+  | 'gunboats'
+  | 'boarding'
+  | 'collision'
+  | 'other'
+
+/** Who is doing damage: the hull it is credited to, its side, and by what means. */
+export interface DamageSource {
+  side: SideId | null
+  shipId: string | null
+  kind: DamageKind
+}
+
+export interface DamageRecord {
+  turn: number
+  phase: Phase
+  targetId: string
+  hull: number
+  armour: number
+  by: DamageSource
+  /** This was the blow that finished the hull. */
+  destroyed: boolean
+}
+
+export interface ShotRecord {
+  turn: number
+  phase: Phase
+  shipId: string
+  weaponId: string
+}
+
+export interface Ledger {
+  damage: DamageRecord[]
+  shots: ShotRecord[]
+}
+
+/**
+ * The action under way, for the ledger.
+ *
+ * `markHullBoxes` is the one function every damage path ends at, and it is
+ * handed a ship and a number and nothing else — twelve callers, and the
+ * thirteenth would forget the extra argument. So instead of threading the
+ * source through them, `applyAction` says who is acting before it dispatches,
+ * and the chokepoints read it. A resolver that acts for several sources in
+ * one action (phase 10 walks every missile on the table) names each one as
+ * it comes to it with `noteDamageSource`. Outside any action nothing is
+ * acting, and nothing is recorded.
+ */
+let acting: { state: GameState; by: DamageSource } | null = null
+
+export function withDamageSource<T>(state: GameState, by: DamageSource, run: () => T): T {
+  const previous = acting
+  acting = { state, by }
+  try {
+    return run()
+  } finally {
+    acting = previous
+  }
+}
+
+/** Refine the source within an action: the missile now being resolved, say. */
+export function noteDamageSource(state: GameState, by: DamageSource): void {
+  if (acting && acting.state === state) acting = { state, by }
+}
+
+function recordDamage(ship: ShipState, hull: number, armour: number, destroyed: boolean): void {
+  if (!acting || (hull <= 0 && armour <= 0 && !destroyed)) return
+  acting.state.ledger.damage.push({
+    turn: acting.state.turn,
+    phase: acting.state.phase,
+    targetId: ship.id,
+    hull,
+    armour,
+    by: acting.by,
+    destroyed,
+  })
+}
+
+/** Armour boxes crossed off outside `markHullBoxes`, which owns only the hull. */
+export function noteArmourDamage(ship: ShipState, boxes: number): void {
+  recordDamage(ship, 0, boxes, false)
+}
+
+/**
+ * A hull written off without a blow to count: a reactor explosion (10.3)
+ * marks every box at once. Recorded so that what the ledger says a ship took
+ * is what its track shows.
+ */
+export function noteHullWiped(ship: ShipState, standing: number): void {
+  recordDamage(ship, standing, 0, true)
 }
 
 /**

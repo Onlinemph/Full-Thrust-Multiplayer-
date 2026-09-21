@@ -263,6 +263,14 @@ that one fact.
 - **Ship library.** *Ships* in the top bar shows every design's real SSD on three shelves: the
   fleet book, your own yard, and the community shelf. A design file can be uploaded into the
   yard, and a yard design published for anyone to use.
+- **After-action report.** *Report* in the top bar, and the result screen at the end, show how the
+  battle went hull by hull: shots fired, damage put through, damage taken, kills, drawn from a
+  ledger the engine keeps as the damage goes through it. It copies as text or downloads as
+  Markdown for the group chat.
+- **Sheets on paper.** *Print sheets* in the top bar prints the fleet as it stands, damage and
+  all, with a roster page in front; the shipyard, the library and the fleet picker each print
+  their own. The print stylesheet turns the plotting table's colours into ink on paper and keeps
+  every hull to one block.
 - **Your own designs.** *Shipyard* builds a hull against the section 14 tables, with the mass bar
   fighting you the whole way, the points working a click below it, and saves the result into the
   fleet picker beside the shipped roster. The

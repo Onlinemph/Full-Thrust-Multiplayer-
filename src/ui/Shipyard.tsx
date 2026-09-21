@@ -194,10 +194,13 @@ const SYSTEM_GROUPS: ReadonlyArray<{ label: string; kinds: readonly SystemKind[]
 export function Shipyard({
   onClose,
   initial = null,
+  onPrint,
 }: {
   onClose: () => void
   /** A design to open on — from the library — rather than a bare hull. */
   initial?: ShipDesign | null
+  /** The sheet on paper, as it stands on the bench. */
+  onPrint?: (design: ShipDesign) => void
 }) {
   const [design, setDesign] = useState<ShipDesign>(() =>
     initial ? structuredClone(initial) : startingPoint(),
@@ -1019,6 +1022,14 @@ export function Shipyard({
               >
                 Download
               </button>
+              {onPrint ? (
+                <button
+                  title="The sheet and its specification, on paper"
+                  onClick={() => onPrint(design)}
+                >
+                  Print
+                </button>
+              ) : null}
             </div>
             {saved ? (
               <p className="rule-detail yard-legal">

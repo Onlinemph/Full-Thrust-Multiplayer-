@@ -32,7 +32,10 @@ import {
   markHullBoxes,
   markShipFired,
   markWeaponFired,
+  noteArmourDamage,
+  noteDamageSource,
   pushLog,
+  withDamageSource,
   rollInitiative,
   setInitiativeOrder,
   shipById,
@@ -56,6 +59,7 @@ import {
   rulesReading,
   phaseNumber,
 } from './game'
+import type { DamageKind, DamageSource } from './game'
 import {
   applyOrder,
   departureEdge,
@@ -1132,7 +1136,48 @@ function editOrder(
  * Apply one action. The single door every mutation goes through — the human,
  * the computer opponent and a remote peer all arrive here.
  */
+/**
+ * The one door every change to a battle goes through.
+ *
+ * Before the action is dispatched it is named as the source of whatever
+ * damage it does, for the after-action ledger: the ship named in it, the
+ * carrier of the wing, the means. A refused action does no damage and
+ * records nothing.
+ */
 export function applyAction(state: GameState, action: GameAction): ActionOutcome {
+  return withDamageSource(state, sourceOf(state, action), () => dispatch(state, action))
+}
+
+/** How an action does its damage, by its name (for the ledger). */
+function damageKindOf(type: GameAction['type']): DamageKind {
+  if (type.startsWith('fire-') || type === 'commando-raid') return 'guns'
+  if (type.startsWith('launch-') || type.includes('ordnance') || type.includes('detonate')) return 'ordnance'
+  if (type.startsWith('flight-') || type.includes('dogfight') || type.includes('craft')) return 'fighters'
+  if (type.includes('gunboat')) return 'gunboats'
+  if (type.includes('board')) return 'boarding'
+  if (type.startsWith('move-') || type.includes('ram') || type.includes('collision')) return 'collision'
+  return 'other'
+}
+
+/** Who an action acts for: the hull it names, or the carrier of the craft it names. */
+function sourceOf(state: GameState, action: GameAction): DamageSource {
+  const kind = damageKindOf(action.type)
+  if ('shipId' in action && typeof action.shipId === 'string') {
+    const ship = shipById(state, action.shipId)
+    return { side: ship?.side ?? null, shipId: action.shipId, kind }
+  }
+  if ('flightId' in action && typeof action.flightId === 'string') {
+    const group = state.fighterGroups.find((g) => g.id === action.flightId)
+    return { side: group?.side ?? null, shipId: group?.carrierId ?? null, kind: 'fighters' }
+  }
+  if ('squadronId' in action && typeof action.squadronId === 'string') {
+    const squadron = state.gunboatSquadrons.find((s) => s.id === action.squadronId)
+    if (squadron) return { side: squadron.side, shipId: squadron.carrierId ?? null, kind: 'gunboats' }
+  }
+  return { side: null, shipId: null, kind }
+}
+
+function dispatch(state: GameState, action: GameAction): ActionOutcome {
   switch (action.type) {
     // ── Sequence ──────────────────────────────────────────────────────────
     case 'advance-phase': {
@@ -3416,6 +3461,8 @@ export function applyAction(state: GameState, action: GameAction): ActionOutcome
         const marker = acquired.markers.find((m) => m.id === hit.markerId)
         const target = shipById(state, hit.targetShipId)
         if (!marker || !target) continue
+        // The ledger credits each salvo to the hull that launched it.
+        noteDamageSource(state, { side: marker.owner, shipId: marker.sourceShipId, kind: 'ordnance' })
 
         // 6.6: an antimatter warhead is a blast with a radius, so it cannot be
         // one target's damage roll — it is resolved against everything within
@@ -11218,9 +11265,12 @@ function targetStateOf(target: ShipState): DamageableTarget {
 /** Write armour back; hull goes through markHullBoxes, which owns the rows. */
 function writeBackDamage(target: ShipState, after: DamageableTarget): void {
   const ship = damageBearer(target)
+  const before = ship.armourMarked.reduce((sum, marked) => sum + marked, 0)
   ship.armourMarked = ship.design.armour.layers.map(
     (boxes, layer) => boxes - (after.armourRemaining[layer] ?? boxes),
   )
+  const marked = ship.armourMarked.reduce((sum, boxes) => sum + boxes, 0) - before
+  if (marked > 0) noteArmourDamage(ship, marked)
 }
 
 // ---------------------------------------------------------------------------

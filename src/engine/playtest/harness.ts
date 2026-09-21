@@ -64,6 +64,12 @@ export interface BattleReport {
   /** Turns in which nobody marked a box. */
   quietTurns: number
   log: string[]
+  /**
+   * The after-action ledger agrees with the damage tracks: every hull box a
+   * ship shows marked is a box the ledger says was marked on it. False means
+   * a damage path the ledger does not hear about.
+   */
+  ledgerOk: boolean
 }
 
 const TABLE_SWEEPS: Partial<Record<string, GameAction[]>> = {
@@ -216,6 +222,7 @@ export function playBattle(spec: BattleSpec): BattleReport {
     closest: [],
     quietTurns: 0,
     log: [],
+    ledgerOk: true,
   }
   const marks: Record<SideId, number> = { a: marksOf(game, 'a'), b: marksOf(game, 'b') }
   let turnDamage = 0
@@ -307,6 +314,12 @@ export function playBattle(spec: BattleSpec): BattleReport {
     report.pointsLost[side] = lost.points
   }
   report.log = game.log.map((entry) => `T${entry.turn} ${entry.phase}: ${entry.text}`)
+  report.ledgerOk = game.ships.every((ship) => {
+    const hull = game.ledger.damage
+      .filter((record) => record.targetId === ship.id)
+      .reduce((sum, record) => sum + record.hull, 0)
+    return hull === ship.hullMarked
+  })
   return report
 }
 

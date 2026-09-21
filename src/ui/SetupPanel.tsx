@@ -1,3 +1,4 @@
+import type { ShipDesign } from '../engine/types'
 import { useState } from 'react'
 
 import { scenarioById, SCENARIOS } from '../data/scenarios'
@@ -221,6 +222,8 @@ export interface SetupFormProps {
   showFleets?: boolean
   /** Handing a fleet to the computer is a home-table thing. */
   showAi?: boolean
+  /** A picked fleet's sheets on paper (the picker's button). */
+  onPrint?: (title: string, designs: ShipDesign[]) => void
 }
 
 export function SetupForm({
@@ -229,6 +232,7 @@ export function SetupForm({
   readOnly = false,
   showFleets = true,
   showAi = true,
+  onPrint,
 }: SetupFormProps) {
   const toggle = (key: keyof GameSetup) =>
     setDraft((d) => ({ ...d, [key]: !d[key] } as GameSetup))
@@ -524,6 +528,7 @@ export function SetupForm({
           factions={draft.factions ?? {}}
           clans={draft.clans ?? {}}
           onChange={(forces) => setDraft((d) => ({ ...d, forces }))}
+          onPrint={onPrint}
         />
       </section>
       ) : null}
@@ -622,10 +627,13 @@ export function SetupForm({
 export function SetupPanel({
   onClose,
   onStarted,
+  onPrint,
 }: {
   onClose: () => void
   /** Called once a battle has actually been started from here. */
   onStarted?: () => void
+  /** A picked fleet's sheets on paper. */
+  onPrint?: (title: string, designs: ShipDesign[]) => void
 }) {
   const [draft, setDraft] = useState<GameSetup>(() => ({ ...currentSetup() }))
 
@@ -634,7 +642,7 @@ export function SetupPanel({
       <div className="modal" onClick={(event) => event.stopPropagation()}>
         <h2>New battle</h2>
 
-        <SetupForm draft={draft} setDraft={setDraft} />
+        <SetupForm draft={draft} setDraft={setDraft} onPrint={onPrint} />
 
         <div className="panel-row">
           <button onClick={onClose}>Cancel</button>

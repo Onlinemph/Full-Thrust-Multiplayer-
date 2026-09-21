@@ -2,6 +2,7 @@ import type { GameState } from '../engine/game'
 import { optional } from '../engine/actions'
 import { damageLevelOf, scoreBattle } from '../engine/victory'
 import type { Scenario } from '../data/scenarios'
+import { AfterAction } from './AfterAction'
 
 /**
  * How a battle ends (4.12).
@@ -95,6 +96,9 @@ export function BattleResult({
             </div>
           </section>
         ))}
+
+        {/* 4.12 scores the losses; this is how they happened. */}
+        <AfterAction game={game} title={`${scenario.name} — after-action report`} />
 
         <p>
           The battle is still here — close this and you can rewind it with Undo, save it, or keep

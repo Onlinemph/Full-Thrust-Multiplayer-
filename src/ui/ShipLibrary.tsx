@@ -38,12 +38,14 @@ const AUTHOR_KEY = 'ftpc.author'
 const ROSTER_IDS = new Set(SHIP_DESIGNS.map((d) => d.id))
 
 export interface ShipLibraryProps {
+  /** The selected sheet on paper. */
+  onPrint?: (design: ShipDesign) => void
   onClose: () => void
   /** Take a design to the shipyard, to build on. */
   onOpenInYard?: (design: ShipDesign) => void
 }
 
-export function ShipLibrary({ onClose, onOpenInYard }: ShipLibraryProps) {
+export function ShipLibrary({ onClose, onOpenInYard, onPrint }: ShipLibraryProps) {
   const [shelf, setShelf] = useState<Shelf>('book')
   const [yard, setYard] = useState<readonly ShipDesign[]>(() => savedDesigns())
   const [community, setCommunity] = useState<CommunityDesign[] | null>(null)
@@ -286,6 +288,11 @@ export function ShipLibrary({ onClose, onOpenInYard }: ShipLibraryProps) {
                       <button onClick={() => onOpenInYard(selected)}>Open in the shipyard</button>
                     ) : null}
                     <button onClick={() => download(selected)}>Download</button>
+                    {onPrint ? (
+                      <button title="This sheet on paper" onClick={() => onPrint(selected)}>
+                        Print
+                      </button>
+                    ) : null}
                     {shelf !== 'yard' ? (
                       <button onClick={() => addToYard(selected)}>Add to my yard</button>
                     ) : null}

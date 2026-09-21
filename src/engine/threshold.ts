@@ -33,6 +33,7 @@ import {
   type GameState,
   type OngoingEffect,
   type ShipState,
+  noteHullWiped,
 } from './game'
 import { ANTIMATTER_CHARGE_THRESHOLD_DRM } from './defences'
 import type { CoreSystemsDef, SystemKind } from './types'
@@ -1089,8 +1090,10 @@ export function reactorExplosionPhase(state: GameState): ReactorExplosionResult[
     results.push({ shipId: ship.id, roll, exploded, blast })
 
     if (exploded) {
+      const standing = ship.design.hullBoxes - ship.hullMarked
       ship.destroyed = true
       ship.hullMarked = ship.design.hullBoxes
+      noteHullWiped(ship, standing)
       ship.pendingThresholdRows = 0
       ship.core.reactorExplosionPending = false
       blast.push(...rollReactorBlast(state, ship, state.rng))

@@ -535,6 +535,33 @@
   font-size: var(--text-xs);
 }
 
+/* 4.12's report: the cost table's shape, a row a hull, dimmed once the hull
+   is gone. */
+.after-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.after-action section {
+  border-top: none;
+  padding-top: 0;
+}
+
+.report-table .report-state {
+  color: var(--ink-dim);
+  text-transform: capitalize;
+}
+
+.report-table tr.is-destroyed td {
+  color: var(--ink-faint);
+}
+
+.report-table tr.is-destroyed .report-state,
+.report-table tr.is-crippled .report-state {
+  color: var(--damage);
+}
+
 /* A fault is stated in the rulebook's terms and does not stop you building:
    half a design is a legitimate thing to have on the bench. */
 .faults {

@@ -83,6 +83,7 @@ describe.skipIf(!process.env.PLAYTEST)('faction playtests', () => {
       )
     }
     expect(reports.filter((report) => report.stuck).length).toBe(0)
+    expect(reports.filter((report) => !report.ledgerOk).map((report) => report.spec)).toEqual([])
     // Every refusal is the computer's copy of the rules disagreeing with the
     // engine's; a handful across the matrix is a fresh divergence to look at.
     expect(reports.reduce((sum, report) => sum + report.refusals.length, 0)).toBeLessThanOrEqual(6)
@@ -117,6 +118,8 @@ describe('one battle, always', () => {
     })
     expect(report.stuck).toBeNull()
     expect(report.refusals.map((refusal) => `${refusal.type}: ${refusal.text}`)).toEqual([])
+    // Every box on every track is a box the after-action ledger accounts for.
+    expect(report.ledgerOk).toBe(true)
     expect(report.taken.a + report.taken.b).toBeGreaterThan(0)
     expect(report.fired['beam'] ?? 0).toBeGreaterThan(0)
   })

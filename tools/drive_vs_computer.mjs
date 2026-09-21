@@ -166,5 +166,14 @@ console.log('stuck', JSON.stringify(stuck))
 console.log('trail', trail.slice(0, 40).join('; '))
 console.log('errors', errors)
 if (process.env.DRIVE_SHOT) await page.screenshot({ path: process.env.DRIVE_SHOT })
+// The after-action report, as the console shows it (4.12).
+if (process.env.DRIVE_REPORT_SHOT) {
+  const dialog = page.locator('.modal-backdrop button', { hasText: /^Close$/ })
+  if ((await dialog.count()) > 0) await dialog.first().click()
+  await page.getByRole('button', { name: 'Report' }).click()
+  await page.waitForSelector('.after-action')
+  console.log('report:', (await page.locator('.after-action').innerText()).replace(/\s+/g, ' ').slice(0, 400))
+  await page.locator('.modal').screenshot({ path: process.env.DRIVE_REPORT_SHOT })
+}
 await browser.close()
 process.exit(stuck.length === 0 && hangs.length === 0 && errors.length === 0 ? 0 : 1)

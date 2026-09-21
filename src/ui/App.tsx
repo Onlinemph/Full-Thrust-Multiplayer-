@@ -30,7 +30,9 @@ import {
 import { BEAM_RANGE_BAND } from '../engine/geometry'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
+import { AfterAction } from './AfterAction'
 import { battleEnd, BattleResult } from './BattleResult'
+import { PrintSheets, type PrintJob } from './PrintSheets'
 import { CombatPanel } from './CombatPanel'
 import { DamageControlPanel } from './DamageControlPanel'
 import { FlightPanel } from './FlightPanel'
@@ -51,7 +53,7 @@ import { KEY_HELP, useKeyboard } from './useKeyboard'
 import { OrderPanel } from './OrderPanel'
 import { OrdnancePanel, type AimingMount } from './OrdnancePanel'
 import { VectorOrderPanel } from './VectorOrderPanel'
-import { Ssd } from './Ssd'
+import { Ssd, type SsdDamage } from './Ssd'
 import {
   canUndo,
   commandedSides,
@@ -110,6 +112,40 @@ export function App() {
   // Dismissed once, the result stays dismissed: a player who closes it to look
   // at the wreckage should not have it thrown back at them every phase.
   const [resultSeen, setResultSeen] = useState(false)
+  /* 4.12's report, on demand: how the battle has gone so far. */
+  const [showReport, setShowReport] = useState(false)
+  /* Sheets on their way to paper. Rendered into the document only while the
+     print dialog is up; the print stylesheet does the rest. */
+  const [printJob, setPrintJob] = useState<PrintJob | null>(null)
+  useEffect(() => {
+    if (!printJob) return
+    const done = () => setPrintJob(null)
+    window.addEventListener('afterprint', done)
+    // A frame later, so the sheets are in the document before the dialog
+    // takes its snapshot of it.
+    const id = window.setTimeout(() => window.print(), 60)
+    return () => {
+      window.clearTimeout(id)
+      window.removeEventListener('afterprint', done)
+    }
+  }, [printJob])
+  const printDesign = (design: ShipDesign) =>
+    setPrintJob({ title: design.name, sheets: [{ design }] })
+  /* The fleet as it stands: this console's side, or both on an open table. */
+  const printFleet = () => {
+    const ships = game.ships.filter(
+      (ship) => !ship.destroyed && (viewingSide === null || ship.side === viewingSide),
+    )
+    const sideName =
+      viewingSide === null
+        ? 'both fleets'
+        : (game.sides.find((s) => s.id === viewingSide)?.name ?? viewingSide)
+    setPrintJob({
+      title: `${scenario?.name ?? game.scenario} — ${sideName}, turn ${game.turn}`,
+      sheets: ships.map((ship) => ({ design: ship.design, name: ship.name, damage: sheetDamageOf(ship) })),
+      pricing: setup.cpv ? 'cpv' : 'points',
+    })
+  }
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
@@ -281,11 +317,18 @@ export function App() {
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showSetup ? (
-        <SetupPanel onClose={() => setShowSetup(false)} onStarted={() => setScreen('battle')} />
+        <SetupPanel
+          onClose={() => setShowSetup(false)}
+          onStarted={() => setScreen('battle')}
+          onPrint={(title, designs) =>
+            setPrintJob({ title, sheets: designs.map((design) => ({ design })) })
+          }
+        />
       ) : null}
       {showLibrary ? (
         <ShipLibrary
           onClose={() => setShowLibrary(false)}
+          onPrint={printDesign}
           onOpenInYard={(design) => {
             setYardDesign(design)
             setShowLibrary(false)
@@ -296,12 +339,14 @@ export function App() {
       {showYard ? (
         <Shipyard
           initial={yardDesign}
+          onPrint={printDesign}
           onClose={() => {
             setShowYard(false)
             setYardDesign(null)
           }}
         />
       ) : null}
+      {printJob ? <PrintSheets job={printJob} /> : null}
     </>
   )
 
@@ -383,6 +428,15 @@ export function App() {
           Undo
         </button>
         <button onClick={() => download(exportGame())}>Save file</button>
+        <button
+          title="What each hull has fired, put through, taken and finished (4.12)"
+          onClick={() => setShowReport(true)}
+        >
+          Report
+        </button>
+        <button title="This fleet's sheets and roster, as they stand, on paper" onClick={printFleet}>
+          Print sheets
+        </button>
         <label className="file-button">
           Load file
           <input
@@ -547,21 +601,7 @@ export function App() {
                     selected.side !== viewingSide &&
                     Boolean(setup.sensorRules)
                   }
-                  damage={{
-                    hullMarked: selected.hullMarked,
-                    armourMarked: selected.armourMarked,
-                    armourBurntOut: selected.armourBurntOut,
-                    destroyed: selected.destroyedSystems,
-                    fired: new Set(selected.weaponsFired.keys()),
-                    // `currentThrust` and not a copy of its arithmetic: the
-                    // copy that was here knew about drive hits and not about
-                    // ongoing effects, so an EMP'd ship printed a thrust
-                    // rating on its own sheet that the engine would not honour.
-                    thrust: currentThrust(selected),
-                    magazineLoads: new Map(
-                      [...selected.magazines].map(([id, loads]) => [id, loads.length]),
-                    ),
-                  }}
+                  damage={sheetDamageOf(selected)}
                 />
               </div>
 
@@ -642,8 +682,43 @@ export function App() {
           onClose={() => setResultSeen(true)}
         />
       ) : null}
+      {showReport ? (
+        <div className="modal-backdrop" onClick={() => setShowReport(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <h2>After-action report</h2>
+            <p className="rule-detail">
+              {scenario?.name ?? game.scenario}, turn {game.turn}: what each hull has fired, put
+              through, taken and finished so far.
+            </p>
+            <AfterAction
+              game={game}
+              title={`${scenario?.name ?? game.scenario} — after-action report, turn ${game.turn}`}
+            />
+            <button className="primary" onClick={() => setShowReport(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
+}
+
+/** A ship's damage as its sheet draws it (4.9, 4.11). */
+function sheetDamageOf(ship: ShipState): SsdDamage {
+  return {
+    hullMarked: ship.hullMarked,
+    armourMarked: ship.armourMarked,
+    armourBurntOut: ship.armourBurntOut,
+    destroyed: ship.destroyedSystems,
+    fired: new Set(ship.weaponsFired.keys()),
+    // `currentThrust` and not a copy of its arithmetic: the copy that was
+    // here knew about drive hits and not about ongoing effects, so an EMP'd
+    // ship printed a thrust rating on its own sheet that the engine would
+    // not honour.
+    thrust: currentThrust(ship),
+    magazineLoads: new Map([...ship.magazines].map(([id, loads]) => [id, loads.length])),
+  }
 }
 
 /**

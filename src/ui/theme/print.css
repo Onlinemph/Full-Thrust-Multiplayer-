@@ -1,0 +1,132 @@
+/* ── Paper ─────────────────────────────────────────────────────────────────
+   A fleet's sheets and roster, printed. On screen the print view does not
+   exist; on paper it is the only thing that does. The tokens that carry game
+   state are redefined here to ink on paper, because a sheet printed in the
+   plotting table's colours is a black rectangle. */
+
+.print-sheets {
+  display: none;
+}
+
+@media print {
+  /* The app goes; the symbol sheet stays, since every sheet refers to it. */
+  #root > :not(.ssd-sprite) {
+    display: none !important;
+  }
+
+  html,
+  body {
+    height: auto;
+    background: #fff;
+    color: #000;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+
+  .print-sheets {
+    display: block;
+    --bg: #fff;
+    --void: #fff;
+    --panel: #fff;
+    --panel-2: #f2f2f2;
+    --panel-3: #e6e6e6;
+    --line: #666;
+    --line-soft: #bbb;
+    --ink: #000;
+    --ink-dim: #333;
+    --ink-faint: #555;
+    --on-bright: #fff;
+    --ssd-paper: #fff;
+    --ssd-dim: #666;
+    --ssd-regen: #444;
+    --hull: #000;
+    --armour: #000;
+    --screens: #000;
+    --damage: #000;
+    --warn: #444;
+    --thrust: #000;
+    --ordnance: #000;
+    --fighters: #000;
+    --side-a: #000;
+    --side-b: #000;
+    --side-c: #000;
+    --side-neutral: #000;
+    color: #000;
+    background: #fff;
+    font-family: var(--font-body);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-sheets h1 {
+    color: #000;
+    font-size: 16pt;
+    margin: 0 0 4mm;
+  }
+
+  .print-roster {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-roster table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+
+  .print-roster th,
+  .print-roster td {
+    border-bottom: 1px solid #999;
+    padding: 2pt 4pt;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .print-roster th {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 8pt;
+  }
+
+  .print-roster .num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* One hull, one block: never cut across a page. */
+  .print-sheet {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 5mm 0;
+    border-bottom: 1px dashed #999;
+  }
+
+  .print-sheet .ssd {
+    color: #000;
+    gap: 2mm;
+  }
+
+  .print-sheet .ssd-plan {
+    max-height: 110mm;
+  }
+
+  .print-spec {
+    font-size: 9pt;
+    line-height: 1.4;
+    margin: 2mm 0 0;
+  }
+
+  .print-spec b {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 8pt;
+    margin-right: 0.4em;
+  }
+}

@@ -52,6 +52,8 @@ export interface FleetPickerProps {
   customTechBases?: Partial<Record<string, TechBase>>
   /** 18.3: price the fleet in Combat Points Value rather than printed points. */
   cpv?: boolean
+  /** The picked fleet's sheets and roster on paper, under the side's name. */
+  onPrint?: (title: string, designs: ShipDesign[]) => void
   /**
    * Systems the table has barred for this battle. The campaign rules bar three
    * outright and a tournament may bar a different set; either way a hull that
@@ -83,6 +85,7 @@ export function FleetPicker({
   techBases,
   customTechBases,
   cpv = true,
+  onPrint,
   bannedSystems,
   factions,
   clans,
@@ -191,6 +194,20 @@ export function FleetPicker({
         <span className={`num budget${spent > budget ? ' is-over' : ''}`}>
           {spent} / {budget} {cpv ? 'CPV' : 'points'}
         </span>
+        {onPrint ? (
+          <button
+            disabled={pickedDesigns.length === 0}
+            title="This fleet's sheets and roster, on paper"
+            onClick={() =>
+              onPrint(
+                `${scenario.name} — ${scenario.sides.find((s) => s.id === side)?.name ?? side}`,
+                pickedDesigns,
+              )
+            }
+          >
+            Print sheets
+          </button>
+        ) : null}
       </div>
 
       <div className="panel-row">
