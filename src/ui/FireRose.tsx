@@ -16,7 +16,12 @@ import { describeReady, fireArcs } from './fireArcs'
  *
  * Like the compass it is HTML over the plot, positioned by the map at the
  * counter's screen point, and it reads only; every shot is still declared on
- * the panel, and the journal never sees it.
+ * the panel, and the journal never sees it. It takes no pointer events at
+ * all: the map works out which wedge the pointer is on from its position
+ * (`roseRing`), so a counter standing under the ring, or the point in front
+ * of the bow a Spinal Mount is laid to, is still there to be clicked. When
+ * the wedges took the pointer themselves, they swallowed those clicks — the
+ * next ship to fire sat under the last one's rose and could not be picked.
  */
 export interface FireRoseProps {
   game: GameState
@@ -27,7 +32,16 @@ export interface FireRoseProps {
   clearance: number
   /** The arc the pointer is on, lit on the rose too. */
   litArc: Arc | null
-  onHoverArc: (arc: Arc | null) => void
+}
+
+/**
+ * The ring the wedges occupy, in pixels from the counter's centre: clear of
+ * the hull and of the name written under it, and 58 deep. The map uses the
+ * same ring to tell which wedge the pointer is on.
+ */
+export function roseRing(clearance: number): { inner: number; outer: number } {
+  const inner = Math.max(44, clearance + 28)
+  return { inner, outer: inner + 58 }
 }
 
 /** Where a wedge's label goes: the wedge's middle, so far out. */
@@ -47,11 +61,9 @@ function wedgePath(startDegrees: number, inner: number, outer: number): string {
   )
 }
 
-export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: FireRoseProps) {
+export function FireRose({ game, ship, x, y, clearance, litArc }: FireRoseProps) {
   const summaries = fireArcs(game, ship)
-  // Clear of the hull and of the name written under it (Counter's label).
-  const inner = Math.max(44, clearance + 28)
-  const outer = inner + 58
+  const { inner, outer } = roseRing(clearance)
   const base = courseToDegrees(ship.placement.facing) - DEGREES_PER_ARC / 2
   const size = outer * 2 + 4
 
@@ -61,8 +73,6 @@ export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: Fi
       style={{ left: x, top: y }}
       role="group"
       aria-label={`Fire arcs of ${ship.name}`}
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => event.stopPropagation()}
     >
       {/* Inline geometry, because the plot styles every svg under it as the
           plot itself — full width, pinned to the corner — and a rose given
@@ -80,7 +90,6 @@ export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: Fi
           transform: 'none',
           overflow: 'visible',
         }}
-        onPointerLeave={() => onHoverArc(null)}
       >
         {ARC_ORDER.map((arc, index) => {
           const summary = summaries[index]!
@@ -101,15 +110,8 @@ export function FireRose({ game, ship, x, y, clearance, litArc, onHoverArc }: Fi
               : ''
           }`
           return (
-            <g
-              key={arc}
-              className={classes.join(' ')}
-              onPointerEnter={() => onHoverArc(arc)}
-              onPointerMove={() => (litArc === arc ? undefined : onHoverArc(arc))}
-            >
-              <path d={wedgePath(start, inner, outer)}>
-                <title>{title}</title>
-              </path>
+            <g key={arc} className={classes.join(' ')} aria-label={title}>
+              <path d={wedgePath(start, inner, outer)} />
               <text
                 className="fire-wedge-arc"
                 x={at.x.toFixed(1)}

@@ -1006,13 +1006,14 @@
 }
 
 /* The plot's own `svg` rule reaches in here; the rose sets its geometry
-   inline and this only keeps the pointer off the box between the wedges. */
+   inline. Nothing in the rose takes the pointer — the map reads the wedge
+   off the pointer's position — so a counter under the ring is still a
+   counter, and a point under it is still a point to lay a beam to. */
 .plot .fire-rose svg {
   pointer-events: none;
 }
 
 .fire-wedge path {
-  pointer-events: auto;
   fill: rgb(11 16 28 / 0.55);
   stroke: var(--line);
   stroke-width: 1;

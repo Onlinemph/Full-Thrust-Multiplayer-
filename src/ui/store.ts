@@ -769,3 +769,13 @@ export function useGame(): GameState {
   useGameVersion()
   return preview ?? game
 }
+
+/**
+ * A handle for a browser drive in development: a script at the console reads
+ * the battle the way the panels do, and can act through the same door. Not
+ * built into the app — `import.meta.env.DEV` is false in a production build —
+ * and nothing in the app reads it.
+ */
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __fullThrust?: unknown }).__fullThrust = { currentGame, currentSetup, dispatch }
+}

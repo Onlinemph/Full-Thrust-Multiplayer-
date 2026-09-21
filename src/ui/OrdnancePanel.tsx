@@ -8,7 +8,7 @@ import {
 } from '../engine/weapons/kinetics'
 import { magazineFor } from '../data/magazines'
 import { dispatch } from './store'
-import type { WeaponDef } from '../engine/types'
+import type { WeaponDef, Point } from '../engine/types'
 
 /**
  * Phase 3, from the player's side of the table (6).
@@ -25,6 +25,12 @@ export type AimingMount = {
   weaponId: string
   /** 5.23's Spinal Mount is aimed like a bolt: at a point, not a ship. */
   kind: 'missile' | 'plasma-bolt' | 'spinal' | 'flak'
+  /**
+   * Where the point goes instead of the table's own action for the mount: a
+   * Spinal Mount in a phase-11 plan is laid now and fired with the rest of the
+   * ship's declaration (2.6), so the click declares rather than shoots.
+   */
+  onPlace?: (point: Point) => void
 }
 
 export interface OrdnancePanelProps {

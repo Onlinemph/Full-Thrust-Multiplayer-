@@ -13,7 +13,7 @@ import {
 import { WAVE_GUN_CHARGE_TARGET } from '../engine/ew'
 import { PLASMA_BOLT_RANGE } from '../engine/ordnance'
 import { COMMANDO_RAID_FORBIDDEN } from '../engine/weapons/beams'
-import type { Arc, WeaponDef } from '../engine/types'
+import type { Arc, Point, WeaponDef } from '../engine/types'
 import {
   isSpinalMount,
   spinalCanFire,
@@ -56,11 +56,23 @@ interface Reach {
   dice: number
 }
 
-/** One shot in the declaration: a weapon, and what it is at. */
+/**
+ * One shot in the declaration: a weapon, and what it is at.
+ *
+ * A point-defence rake (7.12) and a Spinal Mount (5.23) are shots like any
+ * other and ride in the same plan, for two reasons. 2.6 has the player
+ * "declare all the fire for his ship, before any dice are rolled", so they
+ * belong in the declaration. And a shot fired on its own opens the ship's
+ * fire and passes the turn (2.6): against the computer, a rake clicked ahead
+ * of the volley let the computer fire a ship in between, and that closed this
+ * ship's fire with its guns still loaded.
+ */
 interface PlannedShot {
   targetId: string
-  kind: 'ship' | 'flight' | 'gunboats'
+  kind: 'ship' | 'flight' | 'gunboats' | 'point-defence' | 'spinal'
   label: string
+  /** 5.23: where a spinal shot is laid. */
+  aim?: Point
 }
 
 export function CombatPanel({
@@ -93,6 +105,7 @@ export function CombatPanel({
       weaponId,
       targetId: shot.targetId,
       kind: shot.kind,
+      ...(shot.aim ? { aim: shot.aim } : {}),
     }))
     const outcome = dispatch({ type: 'fire-volley', shipId: ship.id, shots })
     if (outcome.refused === undefined) setPlan({})
@@ -263,8 +276,14 @@ export function CombatPanel({
           <ul className="fire-plan-list">
             {Object.entries(plan).map(([weaponId, shot]) => (
               <li key={weaponId}>
-                <span>{ship.design.weapons.find((w) => w.id === weaponId)?.label ?? weaponId}</span>
-                <span className="fire-plan-at">at {shot.label}</span>
+                <span>
+                  {ship.design.weapons.find((w) => w.id === weaponId)?.label ??
+                    ship.design.systems.find((system) => system.id === weaponId)?.label ??
+                    weaponId}
+                </span>
+                <span className="fire-plan-at">
+                  {shot.kind === 'spinal' ? shot.label : `at ${shot.label}`}
+                </span>
               </li>
             ))}
           </ul>
@@ -331,25 +350,62 @@ export function CombatPanel({
         const lastFired = ship.weaponLastFiredTurn.get(weapon.id) ?? null
         const ready = spinalCanFire(lastFired, game.turn)
         const held = aiming?.weaponId === weapon.id
+        const laid = plan[weapon.id]?.aim
+        // The click on the table lays the beam into the plan; it is fired
+        // with the rest of the declaration, not on its own (2.6).
+        const lay = () =>
+          onAim?.(
+            held
+              ? null
+              : {
+                  shipId: ship.id,
+                  weaponId: weapon.id,
+                  kind: 'spinal',
+                  onPlace: (aim) =>
+                    setPlan((current) => ({
+                      ...current,
+                      [weapon.id]: {
+                        targetId: '',
+                        kind: 'spinal',
+                        label: `laid to (${aim.x.toFixed(0)}, ${aim.y.toFixed(0)})`,
+                        aim,
+                      },
+                    })),
+                },
+          )
         return (
           <div className="panel-row" key={weapon.id}>
             <span>{weapon.label}</span>
             <span className="spacer" />
             <span className="num">{SPINAL_MOUNT_PROFILE[spinalSize(weapon)].range} MU</span>
             <button
-              className={held ? 'primary' : undefined}
-              disabled={!ready || !canWeaponFire(ship, weapon.id)}
+              className={held ? 'primary' : laid ? 'is-on' : undefined}
+              disabled={!canCommand || !ready || !canWeaponFire(ship, weapon.id)}
               title={
-                ready
-                  ? 'Click a point on the table; the beam catches everything it crosses'
-                  : `Fired on turn ${lastFired} — a Spinal Mount reloads every other turn (5.23)`
+                !ready
+                  ? `Fired on turn ${lastFired} — a Spinal Mount reloads every other turn (5.23)`
+                  : laid
+                    ? `Declared ${plan[weapon.id]?.label}; click to lay it again`
+                    : 'Click a point on the table; the beam catches everything it crosses'
               }
-              onClick={() =>
-                onAim?.(held ? null : { shipId: ship.id, weaponId: weapon.id, kind: 'spinal' })
-              }
+              onClick={lay}
             >
-              {held ? 'Click a point…' : ready ? 'Lay the beam' : 'Reloading'}
+              {held ? 'Click a point…' : laid ? 'Laid' : ready ? 'Lay the beam' : 'Reloading'}
             </button>
+            {laid ? (
+              <button
+                title="Take the beam out of the declaration"
+                onClick={() =>
+                  setPlan((current) => {
+                    const next = { ...current }
+                    delete next[weapon.id]
+                    return next
+                  })
+                }
+              >
+                Clear
+              </button>
+            ) : null}
             <span className="rule-detail">
               30° off the bow, and the ship holds course next turn (5.23)
             </span>
@@ -413,24 +469,36 @@ export function CombatPanel({
                   would think to look for it. */}
               {pointDefenceCanEngage(game, ship, target) ? (
                 <div className="ssd-systems">
-                  {antiShipPdMounts(game, ship, target).map((mount) => (
-                    <button
-                      key={mount.id}
-                      className="system-chip weapon-fire"
-                      title={`One die at ${range.toFixed(1)} MU; a 6 puts one point through (7.12)`}
-                      onClick={() =>
-                        dispatch({
-                          type: 'fire-point-defence',
-                          shipId: ship.id,
-                          systemId: mount.id,
-                          targetId: target.id,
-                        })
-                      }
-                    >
-                      {mount.label}
-                      <span className="num">1D6</span>
-                    </button>
-                  ))}
+                  {antiShipPdMounts(game, ship, target).map((mount) => {
+                    const here = plan[mount.id]?.targetId === target.id
+                    const elsewhere = plan[mount.id] !== undefined && !here
+                    return (
+                      <button
+                        key={mount.id}
+                        className={`system-chip weapon-fire${
+                          here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                        }`}
+                        disabled={!canCommand}
+                        title={
+                          here
+                            ? 'Declared at this target — click to take it off'
+                            : elsewhere
+                              ? `Declared at ${plan[mount.id]?.label}; click to move it here`
+                              : `One die at ${range.toFixed(1)} MU; a 6 puts one point through (7.12) — click to declare`
+                        }
+                        onClick={() =>
+                          declare(mount.id, {
+                            targetId: target.id,
+                            kind: 'point-defence',
+                            label: target.name,
+                          })
+                        }
+                      >
+                        {mount.label}
+                        <span className="num">1D6</span>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : null}
 

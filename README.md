@@ -232,6 +232,17 @@ PLAYTEST=1 npx vitest run src/engine/playtest
 A refusal in that report is the computer's copy of the rules disagreeing with the engine's,
 and a weapon class listed as present but never fired is a gun the computer has not been taught.
 
+`tools/drive_vs_computer.mjs` plays the other kind of game: a person against the computer,
+through the real console in a browser. It ends every phase with the header button, fires every
+one of our ships from the phase-11 panel by clicking its counter and its weapon chips, and fails
+if the turn ever sits with the computer while our guns are loaded, or a phase cannot be ended
+with nothing left to do:
+
+```bash
+npx vite --port 5199 --strictPort &
+node tools/drive_vs_computer.mjs 6
+```
+
 ## Playing
 
 A battle is **(setup + action journal)**: the engine is deterministic and the dice are seeded, so

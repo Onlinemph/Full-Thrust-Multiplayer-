@@ -24,7 +24,7 @@ import { isGateActive } from '../engine/ftl'
 import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
 import { NOVA_SWEEPS } from '../engine/ew'
 import type { GameState, ShipState } from '../engine/game'
-import { advance, courseToDegrees, courseVector, BEAM_RANGE_BAND } from '../engine/geometry'
+import { advance, arcTo, courseToDegrees, courseVector, distance, BEAM_RANGE_BAND } from '../engine/geometry'
 import type { Arc, Course, MovementOrder, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
@@ -32,7 +32,7 @@ import { useFx } from './useFx'
 import { Counter, counterRadius } from './Counter'
 import { OrderCompass } from './OrderCompass'
 import { OrdnanceGlyph } from './OrdnanceGlyph'
-import { FireRose } from './FireRose'
+import { FireRose, roseRing } from './FireRose'
 import { Starfield } from './Starfield'
 import { outsideReach, reachOfAim, reachOfGroup, reachOfReturn, type Reach } from './reach'
 import { dispatch, refuseAtTable } from './store'
@@ -87,6 +87,8 @@ export interface MapViewProps {
     shipId: string
     weaponId: string
     kind: 'missile' | 'plasma-bolt' | 'spinal' | 'flak'
+    /** Takes the point instead of the table's own action for the mount. */
+    onPlace?: (point: Point) => void
   } | null
   /** Called once the aim point is taken, so the launcher leaves the hand. */
   onAimed?: () => void
@@ -183,12 +185,48 @@ export function MapView({
   }
 
   const onPointerMove = (event: React.PointerEvent) => {
+    litArcUnderPointer(event)
     const start = drag.current
     if (!start) return
     setPan({
       x: start.panX + (event.clientX - start.x),
       y: start.panY + (event.clientY - start.y),
     })
+  }
+
+  /**
+   * 4.2's rose lights the arc the pointer is on. The rose is drawn over the
+   * table but takes no pointer events of its own — a counter under it, or a
+   * point in front of the bow, must still take the click — so the arc is
+   * worked out from where the pointer is: within the ring, and on which side
+   * of the ship. Reported only when it changes, since it is state up in App.
+   */
+  const lastLit = useRef<Arc | null>(null)
+  const litArcUnderPointer = (event: React.PointerEvent) => {
+    if (!onHoverArc) return
+    let arc: Arc | null = null
+    if (fireRose && selected && roseFor(selected)) {
+      const box = host.current?.getBoundingClientRect()
+      if (!box) return
+      const at = {
+        x: (event.clientX - box.left - originX) / scale,
+        y: (event.clientY - box.top - originY) / scale,
+      }
+      const centre = drawnAt.get(selected.id) ?? selected.placement.position
+      const ring = roseRing(counterRadius(selected.design.mass) * scale)
+      const px = distance(centre, at) * scale
+      if (px >= ring.inner && px <= ring.outer) {
+        arc = arcTo(centre, selected.placement.facing, at)
+      }
+    }
+    if (arc === lastLit.current) return
+    lastLit.current = arc
+    onHoverArc(arc)
+  }
+  const unlitArc = () => {
+    if (lastLit.current === null) return
+    lastLit.current = null
+    onHoverArc?.(null)
   }
 
   /**
@@ -231,6 +269,14 @@ export function MapView({
     // An aim point is what a launcher wants and nothing else does, so a mount
     // in hand takes the click ahead of everything (6.3, 6.8).
     if (aimWith) {
+      // A mount being declared into a plan wants the point, not a shot: the
+      // panel that holds the plan fires it with the rest of the ship's
+      // declaration (2.6).
+      if (aimWith.onPlace) {
+        aimWith.onPlace(to)
+        onAimed?.()
+        return
+      }
       dispatch(
         aimWith.kind === 'plasma-bolt'
           ? { type: 'launch-plasma-bolt', shipId: aimWith.shipId, weaponId: aimWith.weaponId, aimPoint: to }
@@ -469,6 +515,7 @@ export function MapView({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerLeave={unlitArc}
       onPointerCancel={onPointerUp}
       role="application"
       aria-label="Plotting surface"
@@ -914,7 +961,6 @@ export function MapView({
           y={originY + (drawnAt.get(selected.id)?.y ?? 0) * scale}
           clearance={counterRadius(selected.design.mass) * scale}
           litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
-          onHoverArc={(arc) => onHoverArc?.(arc)}
         />
       ) : null}
 
