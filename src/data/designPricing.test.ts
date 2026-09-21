@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  breakdownDesign,
+  costLines,
+  cpvWorking,
   describeFault,
+  driveMass,
+  ftlMass,
   hullBoxesFor,
   minimumHullBoxes,
   priceDesign,
@@ -9,6 +14,8 @@ import {
   proportionalCost,
   protectionBoxes,
   repriceProportional,
+  roundMassShare,
+  screenMass,
   validateDesign,
 } from './designPricing'
 import { ARC_ORDER, type ShipDesign } from '../engine/types'
@@ -281,5 +288,191 @@ describe('mountings priced by formula, not by row', () => {
     const fault = validateDesign(overmounted).find((f) => f.kind === 'too-many-plasma-bolts')
     expect(fault).toBeDefined()
     expect(describeFault(fault!)).toContain('50 mass')
+  })
+})
+
+/**
+ * 13.5: *"decimals of .49 and less should be rounded down, while those of .5
+ * or higher should be rounded up"*, and *"No single system can ever be
+ * rounded down to mass 0"*. The book works its own examples, which is what
+ * makes this testable to the digit — and none of it was being done, which
+ * priced the design example a point under the book and a mass light.
+ */
+describe('rounding a share of the hull (13.5)', () => {
+  it('rounds to the nearest whole mass, and never to nothing', () => {
+    // "the 10% required for the FTL drive will be 6.4, which will round down
+    // to 6. If the same ship's main drive is thrust-4, however, this will take
+    // 20% = 12.8 which will round up to 13 mass." And 13.9: "Main drive
+    // rating 6 would be 30% of 64 = 19.2, rounded down to 19."
+    expect(ftlMass(64)).toBe(6)
+    expect(driveMass(64, 4)).toBe(13)
+    expect(driveMass(64, 6)).toBe(19)
+    // "A very tiny ship of (say) mass 4 will still have to pay 1 mass for an
+    // FTL Drive, even though 10% for it is only 0.4."
+    expect(ftlMass(4)).toBe(1)
+    expect(roundMassShare(0)).toBe(0)
+    // A share is rounded to six places first, so a tenth held as a binary
+    // float a hair under the half still rounds the way 13.5 says.
+    expect(roundMassShare(25.4999999)).toBe(26)
+    expect(roundMassShare(25.49)).toBe(25)
+    expect(roundMassShare(0.3 * 85)).toBe(26)
+  })
+
+  it('gives the design example its printed hull, drives and screen', () => {
+    // 13.14: "26 mass (actually 25.8, rounded up)", "8.6, rounded up to 9",
+    // "17.2, rounded down to 17", "5% of 86 = 4.3, rounded down to 4".
+    expect(hullBoxesFor(86, 'average')).toBe(26)
+    expect(ftlMass(86)).toBe(9)
+    expect(driveMass(86, 4)).toBe(17)
+    expect(screenMass(86, 1, false)).toBe(4)
+  })
+
+  it('rounds the drive once at its full rating, and each screen generator on its own', () => {
+    // 13.9 says "add the percentages together and then determine the mass";
+    // 7.2 prices a generator a level and puts one symbol on the sheet each.
+    expect(driveMass(64, 6)).toBe(19)
+    expect(driveMass(64, 1) * 6).toBe(18)
+    expect(screenMass(86, 2, false)).toBe(8)
+  })
+
+  it('floors the hull at a tenth of the mass, rounded the same way', () => {
+    expect(minimumHullBoxes(86)).toBe(9)
+    expect(minimumHullBoxes(84)).toBe(8)
+    expect(minimumHullBoxes(4)).toBe(1)
+  })
+})
+
+/**
+ * The book's own design (13.14): an 86-mass heavy cruiser, priced row by
+ * row to "Totals mass 86, 294 points". This is the one design whose every
+ * line is printed, so it is the one the sums are held to.
+ */
+describe('the design example (13.14)', () => {
+  const six = ARC_ORDER.slice(0, 6)
+  const beam = (id: string, rating: number, arcs: number, mass: number, points: number): ShipDesign['weapons'][number] => ({
+    id,
+    label: `Beam-${rating}`,
+    weaponClass: 'beam',
+    rating,
+    variant: 'standard',
+    arcs: arcs === 3 ? ['FP', 'F', 'FS'] : [...six],
+    mass,
+    points,
+  })
+  const cruiser = hull({
+    mass: 86,
+    hullClass: 'average',
+    hullRows: 4,
+    hullBoxes: 26,
+    drive: { thrust: 4, advanced: false },
+    ftl: 'standard',
+    screens: { level: 1, generators: 1, advanced: false },
+    weapons: [
+      beam('b3a', 3, 3, 6, 18),
+      beam('b3b', 3, 3, 6, 18),
+      beam('b2', 2, 6, 3, 9),
+      beam('b1a', 1, 6, 1, 3),
+      beam('b1b', 1, 6, 1, 3),
+      {
+        id: 'sml',
+        label: 'SML',
+        weaponClass: 'salvo-missile-launcher',
+        rating: 1,
+        variant: 'standard',
+        arcs: ['FP', 'F', 'FS'],
+        mass: 3,
+        points: 9,
+      },
+    ],
+    magazines: [
+      {
+        id: 'm1',
+        mass: 6,
+        points: 18,
+        loads: [{ grade: 'standard' }, { grade: 'standard' }, { grade: 'standard' }],
+        launcherIds: ['sml'],
+      },
+    ],
+    systems: [
+      { id: 'fc-1', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 },
+      { id: 'fc-2', kind: 'firecon', label: 'FireCon', mass: 1, points: 4 },
+      { id: 'pds-1', kind: 'pds', label: 'PDS', mass: 1, points: 3 },
+      { id: 'pds-2', kind: 'pds', label: 'PDS', mass: 1, points: 3 },
+      { id: 'screen-gen-1', kind: 'screen-generator', label: 'Screen Gen', mass: 0, points: 0 },
+    ],
+  })
+
+  it('comes to 86 mass exactly and 294 points', () => {
+    const cost = priceDesign(cruiser)
+    expect(cost.massUsed).toBe(86)
+    expect(cost.spare).toBe(0)
+    expect(cost.points).toBe(294)
+    expect(validateDesign(cruiser)).toEqual([])
+  })
+
+  it('tabulates the book’s own sub-totals, with the arithmetic beside each row', () => {
+    // "Sub-totals 52 mass 190 points" for the hull and drives, "Sub-totals 34
+    // mass 104 points" for everything fitted to it.
+    const sheet = breakdownDesign(cruiser)
+    const hullGroup = sheet.groups.find((g) => g.id === 'hull')
+    expect(hullGroup?.mass).toBe(52)
+    expect(hullGroup?.points).toBe(190)
+    const fitted = sheet.groups.filter((g) => g.id !== 'hull')
+    expect(fitted.reduce((sum, g) => sum + g.mass, 0)).toBe(34)
+    expect(fitted.reduce((sum, g) => sum + g.points, 0)).toBe(104)
+    expect(sheet.subtotal).toBe(294)
+    expect(sheet.cost.points).toBe(294)
+
+    const row = (label: string) => hullGroup?.lines.find((l) => l.label === label)
+    expect(row('Basic hull')).toMatchObject({ mass: 0, points: 86, working: 'mass 86 × 1' })
+    expect(row('Hull integrity')).toMatchObject({
+      mass: 26,
+      points: 52,
+      working: 'average: 30% of 86 = 25.8 → 26 boxes × 2 (4 rows)',
+    })
+    expect(row('FTL drive')).toMatchObject({ mass: 9, points: 18, working: '10% of 86 = 8.6 → 9 × 2' })
+    expect(row('Main drive')).toMatchObject({
+      mass: 17,
+      points: 34,
+      working: 'thrust 4: 20% of 86 = 17.2 → 17 × 2',
+    })
+    const screens = sheet.groups.find((g) => g.id === 'defences')?.lines.find((l) => l.label === 'Screens')
+    expect(screens).toMatchObject({ mass: 4, points: 12, working: '5% of 86 = 4.3 → 4 × 3' })
+    // Two FireCons are one row, and the free generator symbol is none.
+    const systems = sheet.groups.find((g) => g.id === 'systems')?.lines ?? []
+    expect(systems.map((l) => [l.label, l.count, l.mass, l.points])).toEqual([
+      ['FireCon', 2, 2, 8],
+      ['PDS', 2, 2, 6],
+    ])
+  })
+
+  it('is the sum of its rows and nothing else', () => {
+    const lines = costLines(cruiser)
+    expect(lines.reduce((sum, l) => sum + l.mass, 0)).toBe(priceDesign(cruiser).massUsed)
+    expect(lines.reduce((sum, l) => sum + l.points, 0)).toBe(priceDesign(cruiser).points)
+  })
+
+  it('writes 18.3 out on the book’s two examples', () => {
+    // "the Suffren class light cruiser … has mass 54 and a points cost of
+    // 181 … a reduction of 25 points for a new total points cost of 156. …
+    // an Excalibur class dreadnought has a mass of 140 and points cost of
+    // 472 … An increase of 56 for a new total points cost of 528."
+    expect(cpvWorking(181, 54)).toMatchObject({ hullCost: 29, adjustment: -25, points: 156 })
+    expect(cpvWorking(472, 140)).toMatchObject({ hullCost: 196, adjustment: 56, points: 528 })
+    expect(cpvWorking(181, 54).steps).toEqual([
+      'hull under CPV: 54² ÷ 100 = 29.16 → 29',
+      'change: 29 − 54 = −25',
+      '181 − 25 = 156 CPV',
+    ])
+    expect(cpvWorking(20, 4).steps[0]).toBe('hull under CPV: 4² ÷ 100 = 0.16 → 1 (never below 1)')
+  })
+
+  it('discounts a flawed design after the rows are totalled (13.13)', () => {
+    const flawed = { ...cruiser, flawed: true }
+    const sheet = breakdownDesign(flawed)
+    expect(sheet.subtotal).toBe(294)
+    expect(sheet.cost.points).toBe(235)
+    expect(sheet.cost.massAvailable).toBe(94.6)
+    expect(sheet.flawed?.points).toBe('20% off: 294 × 0.8 = 235.2 → 235')
   })
 })

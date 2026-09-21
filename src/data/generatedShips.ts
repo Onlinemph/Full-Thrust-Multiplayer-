@@ -7,8 +7,9 @@
  *
  * Hull integrity, the drive, FTL and screens are all fractions of total mass
  * (13.7 – 13.10), so fitting a design is a fixed point rather than a sum: the
- * generator solves for the smallest hull that carries the loadout, then spends
- * the remainder on armour and cargo the way a designer would.
+ * generator solves for the smallest hull that carries the loadout, rounds each
+ * share to whole mass as 13.5 says, then spends the remainder on armour and
+ * cargo the way a designer would.
  *
  * The two introductory hulls are separate: the rulebook prints them as SSD
  * images and states them in prose at 4.11, so they are reconstructions and are
@@ -76,7 +77,7 @@ export const ESU_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 92,
+  points: 93,
 }
 
 export const ESU_DESTROYER: ShipDesign = {
@@ -154,7 +155,7 @@ export const ESU_HEAVY_CRUISER: ShipDesign = {
   mass: 92,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 27,
+  hullBoxes: 28,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -182,7 +183,7 @@ export const ESU_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 321,
+  points: 323,
 }
 
 export const ESU_BATTLECRUISER: ShipDesign = {
@@ -225,7 +226,7 @@ export const ESU_BATTLECRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 459,
+  points: 460,
 }
 
 export const ESU_BATTLESHIP: ShipDesign = {
@@ -240,7 +241,7 @@ export const ESU_BATTLESHIP: ShipDesign = {
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [7, 3], regenerative: false },
+  armour: { layers: [6, 3], regenerative: false },
   screens: { level: 2, generators: 2, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-4", "weaponClass": "beam", "rating": 4, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 12, "points": 36},
@@ -270,7 +271,7 @@ export const ESU_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 613,
+  points: 615,
 }
 
 export const ESU_CARRIER: ShipDesign = {
@@ -346,9 +347,9 @@ export const ESU_TENDER: ShipDesign = {
     {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
-    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
-    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
-    {"id": "gunboat-rack-3", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
+    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
+    {"id": "gunboat-rack-3", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
     {"id": "gunboat-bay-1", "kind": "gunboat-bay", "label": "Gunboat Bay", "mass": 24, "points": 0},
     {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
   ],
@@ -356,7 +357,7 @@ export const ESU_TENDER: ShipDesign = {
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 856,
+  points: 695,
 }
 
 export const NAC_CORVETTE: ShipDesign = {
@@ -398,7 +399,7 @@ export const NAC_FRIGATE: ShipDesign = {
   mass: 28,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 5,
+  hullBoxes: 6,
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -429,11 +430,11 @@ export const NAC_DESTROYER: ShipDesign = {
   mass: 42,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 12,
+  hullBoxes: 13,
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
@@ -488,7 +489,7 @@ export const NAC_LIGHT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 249,
+  points: 250,
 }
 
 export const NAC_HEAVY_CRUISER: ShipDesign = {
@@ -496,10 +497,10 @@ export const NAC_HEAVY_CRUISER: ShipDesign = {
   name: "Victoria-class Heavy Cruiser",
   faction: "New Anglian Confederation",
   group: "cruiser",
-  mass: 110,
+  mass: 112,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 33,
+  hullBoxes: 34,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -528,7 +529,7 @@ export const NAC_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 385,
+  points: 392,
 }
 
 export const NAC_BATTLECRUISER: ShipDesign = {
@@ -543,7 +544,7 @@ export const NAC_BATTLECRUISER: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [4], regenerative: false },
+  armour: { layers: [5], regenerative: false },
   screens: { level: 2, generators: 2, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-4", "weaponClass": "beam", "rating": 4, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 12, "points": 36},
@@ -582,11 +583,11 @@ export const NAC_BATTLESHIP: ShipDesign = {
   mass: 196,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 58,
+  hullBoxes: 59,
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [7, 2], regenerative: false },
+  armour: { layers: [6, 2], regenerative: false },
   screens: { level: 2, generators: 2, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-4", "weaponClass": "beam", "rating": 4, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 12, "points": 36},
@@ -615,7 +616,7 @@ export const NAC_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 698,
+  points: 699,
 }
 
 export const NAC_CARRIER: ShipDesign = {
@@ -630,7 +631,7 @@ export const NAC_CARRIER: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [5], regenerative: false },
+  armour: { layers: [4], regenerative: false },
   screens: { level: 2, generators: 2, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 2, "points": 6},
@@ -659,7 +660,7 @@ export const NAC_CARRIER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 521,
+  points: 522,
 }
 
 export const NAC_TENDER: ShipDesign = {
@@ -690,8 +691,8 @@ export const NAC_TENDER: ShipDesign = {
     {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
-    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
-    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
+    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
     {"id": "gunboat-bay-1", "kind": "gunboat-bay", "label": "Gunboat Bay", "mass": 24, "points": 0},
     {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
     {"id": "screen-gen-2", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
@@ -700,7 +701,7 @@ export const NAC_TENDER: ShipDesign = {
   gunboats: [{"typeId": "graser", "label": "Squadron 1"}, {"typeId": "graser", "label": "Squadron 2"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 802,
+  points: 695,
 }
 
 export const CYGNAN_PICKET: ShipDesign = {
@@ -733,7 +734,7 @@ export const CYGNAN_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 85,
+  points: 87,
 }
 
 export const CYGNAN_DESTROYER: ShipDesign = {
@@ -748,7 +749,7 @@ export const CYGNAN_DESTROYER: ShipDesign = {
   drive: { thrust: 6, advanced: true },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [], regenerative: false },
+  armour: { layers: [1], regenerative: false },
   screens: { level: 1, generators: 1, advanced: true },
   weapons: [
     {"id": "w1", "label": "Grav-2", "weaponClass": "gravitic-gun", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
@@ -768,7 +769,7 @@ export const CYGNAN_DESTROYER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 126,
+  points: 127,
 }
 
 export const CYGNAN_CRUISER: ShipDesign = {
@@ -776,10 +777,10 @@ export const CYGNAN_CRUISER: ShipDesign = {
   name: "Libration-class Cruiser",
   faction: "Cygnan Assembly",
   group: "cruiser",
-  mass: 76,
+  mass: 78,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 15,
+  hullBoxes: 16,
   drive: { thrust: 6, advanced: true },
   ftl: "standard",
   streamlining: "none",
@@ -807,7 +808,7 @@ export const CYGNAN_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 306,
+  points: 314,
 }
 
 export const CYGNAN_COMMAND_CRUISER: ShipDesign = {
@@ -818,7 +819,7 @@ export const CYGNAN_COMMAND_CRUISER: ShipDesign = {
   mass: 74,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 14,
+  hullBoxes: 15,
   drive: { thrust: 6, advanced: true },
   ftl: "standard",
   streamlining: "none",
@@ -841,13 +842,13 @@ export const CYGNAN_COMMAND_CRUISER: ShipDesign = {
     {"id": "ecm-1", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "ecm-2", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "advanced-adfc-1", "kind": "advanced-adfc", "label": "Adv ADFC", "mass": 2, "points": 10},
-    {"id": "holofield-1", "kind": "holofield", "label": "Holofield", "mass": 7.4, "points": 37},
+    {"id": "holofield-1", "kind": "holofield", "label": "Holofield", "mass": 7, "points": 35},
   ],
   fighterBays: [],
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 306,
+  points: 305,
 }
 
 export const CYGNAN_BATTLESHIP: ShipDesign = {
@@ -858,11 +859,11 @@ export const CYGNAN_BATTLESHIP: ShipDesign = {
   mass: 118,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 23,
+  hullBoxes: 24,
   drive: { thrust: 6, advanced: true },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Grav-3", "weaponClass": "gravitic-gun", "rating": 3, "variant": "standard", "arcs": ["F"], "mass": 4, "points": 12},
@@ -886,7 +887,7 @@ export const CYGNAN_BATTLESHIP: ShipDesign = {
     {"id": "ecm-1", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "ecm-2", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "advanced-adfc-1", "kind": "advanced-adfc", "label": "Adv ADFC", "mass": 2, "points": 10},
-    {"id": "holofield-1", "kind": "holofield", "label": "Holofield", "mass": 11.8, "points": 59},
+    {"id": "holofield-1", "kind": "holofield", "label": "Holofield", "mass": 12, "points": 60},
   ],
   fighterBays: [],
   gunboats: [],
@@ -916,13 +917,13 @@ export const SISTERHOOD_PICKET: ShipDesign = {
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
-    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 2.6, "points": 26},
+    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 3, "points": 30},
   ],
   fighterBays: [],
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 107,
+  points: 111,
 }
 
 export const SISTERHOOD_FRIGATE: ShipDesign = {
@@ -937,7 +938,7 @@ export const SISTERHOOD_FRIGATE: ShipDesign = {
   drive: { thrust: 8, advanced: false },
   ftl: "advanced",
   streamlining: "none",
-  armour: { layers: [], regenerative: false },
+  armour: { layers: [1], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Needle-1", "weaponClass": "needle-beam", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
@@ -947,7 +948,7 @@ export const SISTERHOOD_FRIGATE: ShipDesign = {
   systems: [
     {"id": "firecon-1", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
-    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 4.2, "points": 42},
+    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 4, "points": 40},
   ],
   fighterBays: [],
   gunboats: [],
@@ -982,7 +983,7 @@ export const SISTERHOOD_CRUISER: ShipDesign = {
     {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "ecm-1", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "enhanced-sensors-1", "kind": "enhanced-sensors", "label": "Enh Sensors", "mass": 2, "points": 8},
-    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 6.0, "points": 60},
+    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 6, "points": 60},
   ],
   fighterBays: [],
   gunboats: [],
@@ -999,11 +1000,11 @@ export const SISTERHOOD_SENSOR_CRUISER: ShipDesign = {
   mass: 58,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 11,
+  hullBoxes: 12,
   drive: { thrust: 6, advanced: false },
   ftl: "advanced",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Needle-2", "weaponClass": "needle-beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 8, "points": 24},
@@ -1016,13 +1017,13 @@ export const SISTERHOOD_SENSOR_CRUISER: ShipDesign = {
     {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "ecm-1", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "superior-sensors-1", "kind": "superior-sensors", "label": "Sup Sensors", "mass": 4, "points": 16},
-    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 5.8, "points": 58},
+    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 6, "points": 60},
   ],
   fighterBays: [],
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 249,
+  points: 251,
 }
 
 export const SISTERHOOD_FLAGSHIP: ShipDesign = {
@@ -1053,7 +1054,7 @@ export const SISTERHOOD_FLAGSHIP: ShipDesign = {
     {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "ecm-1", "kind": "ecm", "label": "ECM", "mass": 1, "points": 3},
     {"id": "superior-sensors-1", "kind": "superior-sensors", "label": "Sup Sensors", "mass": 4, "points": 16},
-    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 10.0, "points": 100},
+    {"id": "tuffley-cloak-1", "kind": "tuffley-cloak", "label": "Tuffley Cloak", "mass": 10, "points": 100},
   ],
   fighterBays: [],
   gunboats: [],
@@ -1070,11 +1071,11 @@ export const IZOTROPE_PICKET: ShipDesign = {
   mass: 26,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 7,
+  hullBoxes: 8,
   drive: { thrust: 6, advanced: false },
   ftl: "none",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [], regenerative: false },
   screens: { level: 1, generators: 1, advanced: true },
   weapons: [
     {"id": "w1", "label": "Plasma-1", "weaponClass": "plasma-cannon", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 2, "points": 6},
@@ -1091,7 +1092,7 @@ export const IZOTROPE_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 90,
+  points: 91,
 }
 
 export const IZOTROPE_ESCORT: ShipDesign = {
@@ -1106,7 +1107,7 @@ export const IZOTROPE_ESCORT: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [2], regenerative: false },
   screens: { level: 1, generators: 1, advanced: true },
   weapons: [
     {"id": "w1", "label": "Plasma-2", "weaponClass": "plasma-cannon", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 4, "points": 12},
@@ -1177,7 +1178,7 @@ export const IZOTROPE_HEAVY_CRUISER: ShipDesign = {
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [2], regenerative: false },
+  armour: { layers: [1], regenerative: false },
   screens: { level: 2, generators: 2, advanced: true },
   weapons: [
     {"id": "w1", "label": "Plasma-3", "weaponClass": "plasma-cannon", "rating": 3, "variant": "standard", "arcs": ["F"], "mass": 8, "points": 24},
@@ -1200,7 +1201,7 @@ export const IZOTROPE_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 336,
+  points: 337,
 }
 
 export const IZOTROPE_WAVEGUN: ShipDesign = {
@@ -1211,11 +1212,11 @@ export const IZOTROPE_WAVEGUN: ShipDesign = {
   mass: 112,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 33,
+  hullBoxes: 34,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [1], regenerative: false },
+  armour: { layers: [2], regenerative: false },
   screens: { level: 2, generators: 2, advanced: true },
   weapons: [
     {"id": "w1", "label": "Wave Gun", "weaponClass": "wave-gun", "rating": 1, "variant": "standard", "arcs": ["F"], "mass": 12, "points": 36},
@@ -1248,7 +1249,7 @@ export const IZOTROPE_BATTLESHIP: ShipDesign = {
   mass: 202,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 60,
+  hullBoxes: 61,
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -1313,7 +1314,7 @@ export const VOID_CORSAIRS_CUTTER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 98,
+  points: 99,
 }
 
 export const VOID_CORSAIRS_RAIDER: ShipDesign = {
@@ -1356,14 +1357,14 @@ export const VOID_CORSAIRS_GRAPPLE_CRUISER: ShipDesign = {
   name: "Cutlass-class Grapple Cruiser",
   faction: "Void-Corsairs of the Crimson Axis",
   group: "cruiser",
-  mass: 82,
+  mass: 84,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 24,
+  hullBoxes: 25,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [], regenerative: false },
+  armour: { layers: [1], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "EMP-3", "weaponClass": "emp", "rating": 3, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 6, "points": 18},
@@ -1388,7 +1389,7 @@ export const VOID_CORSAIRS_GRAPPLE_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 5,
-  points: 297,
+  points: 304,
 }
 
 export const VOID_CORSAIRS_CRIPPLER: ShipDesign = {
@@ -1396,10 +1397,10 @@ export const VOID_CORSAIRS_CRIPPLER: ShipDesign = {
   name: "Hangman-class Crippler",
   faction: "Void-Corsairs of the Crimson Axis",
   group: "cruiser",
-  mass: 90,
+  mass: 92,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 27,
+  hullBoxes: 28,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -1429,7 +1430,7 @@ export const VOID_CORSAIRS_CRIPPLER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 1,
   marineParties: 4,
-  points: 327,
+  points: 332,
 }
 
 export const VOID_CORSAIRS_PRIZE_TAKER: ShipDesign = {
@@ -1519,7 +1520,7 @@ export const XXCHA_CRUISER: ShipDesign = {
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [14], regenerative: true },
+  armour: { layers: [15], regenerative: true },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-3", "weaponClass": "beam", "rating": 3, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 6, "points": 18},
@@ -1540,7 +1541,7 @@ export const XXCHA_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 280,
+  points: 283,
 }
 
 export const XXCHA_HEAVY_CRUISER: ShipDesign = {
@@ -1578,7 +1579,7 @@ export const XXCHA_HEAVY_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 343,
+  points: 344,
 }
 
 export const XXCHA_MONITOR: ShipDesign = {
@@ -1676,7 +1677,7 @@ export const SOL_MARINES_FRIGATE: ShipDesign = {
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [4], regenerative: false },
+  armour: { layers: [5], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Pulser", "weaponClass": "pulser", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 15},
@@ -1692,7 +1693,7 @@ export const SOL_MARINES_FRIGATE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 158,
+  points: 159,
 }
 
 export const SOL_MARINES_CRUISER: ShipDesign = {
@@ -1707,7 +1708,7 @@ export const SOL_MARINES_CRUISER: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [5], regenerative: false },
+  armour: { layers: [6], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "Pulser", "weaponClass": "pulser", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 15},
@@ -1728,7 +1729,7 @@ export const SOL_MARINES_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 314,
+  points: 315,
 }
 
 export const SOL_MARINES_GUNBOAT_CRUISER: ShipDesign = {
@@ -1756,14 +1757,14 @@ export const SOL_MARINES_GUNBOAT_CRUISER: ShipDesign = {
     {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "adfc-1", "kind": "adfc", "label": "ADFC", "mass": 2, "points": 8},
-    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
     {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
   ],
   fighterBays: [],
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 322,
+  points: 269,
 }
 
 export const SOL_MARINES_COMMAND: ShipDesign = {
@@ -1807,7 +1808,7 @@ export const SOL_MARINES_COMMAND: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 629,
+  points: 631,
 }
 
 export const SOL_MARINES_AEGIS: ShipDesign = {
@@ -1822,7 +1823,7 @@ export const SOL_MARINES_AEGIS: ShipDesign = {
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [5], regenerative: false },
+  armour: { layers: [4], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false, area: { advanced: false, level: 1 } },
   weapons: [
     {"id": "w1", "label": "Pulser", "weaponClass": "pulser", "rating": 1, "variant": "standard", "arcs": ["FP", "AP", "A"], "mass": 3, "points": 15},
@@ -1853,7 +1854,7 @@ export const SOL_MARINES_TENDER: ShipDesign = {
   mass: 292,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 87,
+  hullBoxes: 88,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -1875,9 +1876,9 @@ export const SOL_MARINES_TENDER: ShipDesign = {
     {"id": "ads6-1", "kind": "ads", "label": "ADS", "mass": 3, "points": 9},
     {"id": "ads6-2", "kind": "ads", "label": "ADS", "mass": 3, "points": 9},
     {"id": "advanced-adfc-1", "kind": "advanced-adfc", "label": "Adv ADFC", "mass": 2, "points": 10},
-    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
-    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
-    {"id": "gunboat-rack-3", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 54},
+    {"id": "gunboat-rack-1", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
+    {"id": "gunboat-rack-2", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
+    {"id": "gunboat-rack-3", "kind": "gunboat-rack", "label": "Gunboat Rack", "mass": 18, "points": 0},
     {"id": "gunboat-bay-1", "kind": "gunboat-bay", "label": "Gunboat Bay", "mass": 24, "points": 0},
     {"id": "screen-gen-1", "kind": "screen-generator", "label": "Screen Gen", "mass": 0, "points": 0},
   ],
@@ -1885,7 +1886,7 @@ export const SOL_MARINES_TENDER: ShipDesign = {
   gunboats: [{"typeId": "beam", "label": "Squadron 1"}, {"typeId": "beam", "label": "Squadron 2"}, {"typeId": "beam", "label": "Squadron 3"}],
   additionalDamageControlParties: 0,
   marineParties: 4,
-  points: 954,
+  points: 794,
 }
 
 export const GOLIATH_MONITOR: ShipDesign = {
@@ -1896,7 +1897,7 @@ export const GOLIATH_MONITOR: ShipDesign = {
   mass: 44,
   hullClass: "strong",
   hullRows: 4,
-  hullBoxes: 17,
+  hullBoxes: 18,
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -1917,7 +1918,7 @@ export const GOLIATH_MONITOR: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 154,
+  points: 156,
 }
 
 export const GOLIATH_CRUISER: ShipDesign = {
@@ -1987,7 +1988,7 @@ export const GOLIATH_LONGGUN: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 285,
+  points: 286,
 }
 
 export const GOLIATH_BATTLESHIP: ShipDesign = {
@@ -2102,7 +2103,7 @@ export const AETHELGARD_LANCE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 173,
+  points: 174,
 }
 
 export const AETHELGARD_CRUISER: ShipDesign = {
@@ -2110,14 +2111,14 @@ export const AETHELGARD_CRUISER: ShipDesign = {
   name: "Aurelian-class Lance Cruiser",
   faction: "Aethelgard Ascendancy",
   group: "cruiser",
-  mass: 78,
+  mass: 80,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 15,
+  hullBoxes: 16,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [], regenerative: false },
+  armour: { layers: [1], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "Spinal Beam-2", "weaponClass": "spinal-beam", "rating": 2, "variant": "standard", "arcs": ["F"], "mass": 16, "points": 64},
@@ -2138,7 +2139,7 @@ export const AETHELGARD_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 292,
+  points: 300,
 }
 
 export const AETHELGARD_PLASMA: ShipDesign = {
@@ -2149,7 +2150,7 @@ export const AETHELGARD_PLASMA: ShipDesign = {
   mass: 68,
   hullClass: "weak",
   hullRows: 4,
-  hullBoxes: 13,
+  hullBoxes: 14,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2173,7 +2174,7 @@ export const AETHELGARD_PLASMA: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 1,
-  points: 258,
+  points: 259,
 }
 
 export const AETHELGARD_BATTLESHIP: ShipDesign = {
@@ -2213,7 +2214,7 @@ export const AETHELGARD_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 719,
+  points: 721,
 }
 
 export const AETHELGARD_PSP: ShipDesign = {
@@ -2253,7 +2254,7 @@ export const AETHELGARD_PSP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 447,
+  points: 449,
 }
 
 export const CHYTRID_SPORE: ShipDesign = {
@@ -2268,7 +2269,7 @@ export const CHYTRID_SPORE: ShipDesign = {
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [4], regenerative: true },
+  armour: { layers: [5], regenerative: true },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Rocket Pod", "weaponClass": "rocket-pod", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 1, "points": 3},
@@ -2284,7 +2285,7 @@ export const CHYTRID_SPORE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 111,
+  points: 114,
 }
 
 export const CHYTRID_CRUISER: ShipDesign = {
@@ -2321,7 +2322,7 @@ export const CHYTRID_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 229,
+  points: 230,
 }
 
 export const CHYTRID_CARRIER: ShipDesign = {
@@ -2336,7 +2337,7 @@ export const CHYTRID_CARRIER: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [6], regenerative: true },
+  armour: { layers: [7], regenerative: true },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-2", "weaponClass": "beam", "rating": 2, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 6},
@@ -2362,7 +2363,7 @@ export const CHYTRID_CARRIER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 338,
+  points: 342,
 }
 
 export const CHYTRID_HIVE: ShipDesign = {
@@ -2412,7 +2413,7 @@ export const CHYTRID_HIVE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 511,
+  points: 512,
 }
 
 export const DURANI_RAIDER: ShipDesign = {
@@ -2599,13 +2600,13 @@ export const DURANI_RIDER_LANCE: ShipDesign = {
   mass: 56,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 16,
+  hullBoxes: 17,
   drive: { thrust: 6, advanced: false },
   ftl: "none",
   battlerider: true,
   mothershipId: "durani-mothership",
   streamlining: "none",
-  armour: { layers: [4], regenerative: false },
+  armour: { layers: [3], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Pulse Torp", "weaponClass": "pulse-torpedo", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 6, "points": 18},
@@ -2674,7 +2675,7 @@ export const DURANI_FLAGSHIP: ShipDesign = {
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [8], regenerative: false },
+  armour: { layers: [9], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
@@ -2702,7 +2703,7 @@ export const DURANI_FLAGSHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 774,
+  points: 775,
 }
 
 export const SHARD_MOTE: ShipDesign = {
@@ -2842,7 +2843,7 @@ export const SHARD_NEXUS: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 597,
+  points: 598,
 }
 
 export const TYRANT_PICKET: ShipDesign = {
@@ -2850,10 +2851,10 @@ export const TYRANT_PICKET: ShipDesign = {
   name: "Lictor-class Picket",
   faction: "Tyrant Star Hegemony",
   group: "escort",
-  mass: 70,
+  mass: 72,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 21,
+  hullBoxes: 22,
   drive: { thrust: 5, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -2877,7 +2878,7 @@ export const TYRANT_PICKET: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 236,
+  points: 242,
 }
 
 export const TYRANT_CRUISER: ShipDesign = {
@@ -2917,7 +2918,7 @@ export const TYRANT_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 452,
+  points: 453,
 }
 
 export const TYRANT_ARSENAL: ShipDesign = {
@@ -2932,7 +2933,7 @@ export const TYRANT_ARSENAL: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [4], regenerative: false },
+  armour: { layers: [5], regenerative: false },
   screens: { level: 1, generators: 1, advanced: false },
   weapons: [
     {"id": "w1", "label": "AM Missile", "weaponClass": "antimatter-missile", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 2, "points": 10, "ammo": 1},
@@ -2956,7 +2957,7 @@ export const TYRANT_ARSENAL: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 304,
+  points: 305,
 }
 
 export const TYRANT_BATTLESHIP: ShipDesign = {
@@ -2971,7 +2972,7 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [8], regenerative: false },
+  armour: { layers: [9], regenerative: false },
   screens: { level: 2, generators: 2, advanced: false },
   weapons: [
     {"id": "w1", "label": "SML", "weaponClass": "salvo-missile-launcher", "rating": 1, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 3, "points": 9},
@@ -3003,7 +3004,7 @@ export const TYRANT_BATTLESHIP: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 726,
+  points: 727,
 }
 
 export const SAMC_ESCORT: ShipDesign = {
@@ -3018,7 +3019,7 @@ export const SAMC_ESCORT: ShipDesign = {
   drive: { thrust: 6, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [2], regenerative: false },
+  armour: { layers: [3], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Beam-1", "weaponClass": "beam", "rating": 1, "variant": "standard", "arcs": ["F", "FS", "AS", "A", "AP", "FP"], "mass": 1, "points": 3},
@@ -3036,7 +3037,7 @@ export const SAMC_ESCORT: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 124,
+  points: 126,
 }
 
 export const SAMC_QSHIP: ShipDesign = {
@@ -3132,10 +3133,10 @@ export const SAMC_LINER: ShipDesign = {
   name: "Cape Town-class Armed Liner",
   faction: "South African Mercantile Confederation",
   group: "capital",
-  mass: 190,
+  mass: 192,
   hullClass: "average",
   hullRows: 4,
-  hullBoxes: 57,
+  hullBoxes: 58,
   drive: { thrust: 3, advanced: false },
   ftl: "standard",
   streamlining: "none",
@@ -3188,7 +3189,7 @@ export const SAMC_LINER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 612,
+  points: 618,
 }
 
 export const ASKVARIAN_SCRAPPER: ShipDesign = {
@@ -3219,7 +3220,7 @@ export const ASKVARIAN_SCRAPPER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 88,
+  points: 89,
 }
 
 export const ASKVARIAN_SHADOW: ShipDesign = {
@@ -3250,7 +3251,7 @@ export const ASKVARIAN_SHADOW: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 0,
-  points: 99,
+  points: 100,
 }
 
 export const ASKVARIAN_MESON_CRUISER: ShipDesign = {
@@ -3286,7 +3287,7 @@ export const ASKVARIAN_MESON_CRUISER: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 2,
-  points: 207,
+  points: 208,
 }
 
 export const ASKVARIAN_GRASER_CRUISER: ShipDesign = {
@@ -3315,7 +3316,7 @@ export const ASKVARIAN_GRASER_CRUISER: ShipDesign = {
     {"id": "firecon-2", "kind": "firecon", "label": "FireCon", "mass": 1, "points": 4},
     {"id": "pds-1", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "pds-2", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
-    {"id": "stealth-field-1", "kind": "stealth-field", "label": "Stealth Field", "mass": 3.3, "points": 20},
+    {"id": "stealth-field-1", "kind": "stealth-field", "label": "Stealth Field", "mass": 3, "points": 18},
   ],
   fighterBays: [],
   gunboats: [],
@@ -3336,7 +3337,7 @@ export const ASKVARIAN_FLAGSHIP: ShipDesign = {
   drive: { thrust: 4, advanced: false },
   ftl: "standard",
   streamlining: "none",
-  armour: { layers: [6], regenerative: false },
+  armour: { layers: [7], regenerative: false },
   screens: { level: 0, generators: 0, advanced: false },
   weapons: [
     {"id": "w1", "label": "Phaser-3", "weaponClass": "phaser", "rating": 3, "variant": "standard", "arcs": ["FP", "F", "FS"], "mass": 12, "points": 38},
@@ -3356,13 +3357,13 @@ export const ASKVARIAN_FLAGSHIP: ShipDesign = {
     {"id": "pds-3", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "pds-4", "kind": "pds", "label": "PDS", "mass": 1, "points": 3},
     {"id": "area-ecm-1", "kind": "area-ecm", "label": "Area ECM", "mass": 2, "points": 6},
-    {"id": "stealth-hull-1", "kind": "stealth-hull", "label": "Stealth Hull", "mass": 0, "points": 86},
+    {"id": "stealth-hull-1", "kind": "stealth-hull", "label": "Stealth Hull", "mass": 0, "points": 88},
   ],
   fighterBays: [],
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 3,
-  points: 523,
+  points: 527,
 }
 
 export const ORBITAL_SATELLITE: ShipDesign = {
@@ -3445,7 +3446,7 @@ export const ORBITAL_STARBASE: ShipDesign = {
   gunboats: [],
   additionalDamageControlParties: 0,
   marineParties: 6,
-  points: 884,
+  points: 885,
 }
 
 /** Every design the app ships with. */

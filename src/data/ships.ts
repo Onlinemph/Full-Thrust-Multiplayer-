@@ -16,6 +16,7 @@
  */
 
 import type { ShipDesign, WeaponDef } from '../engine/types'
+import { priceDesign } from './designPricing'
 import { savedDesigns } from './shipyard'
 import { GENERATED_DESIGNS } from './generatedShips'
 
@@ -169,7 +170,27 @@ export function setEmbeddedDesigns(designs: ShipDesign[]): void {
  * imported battle's hull may exist nowhere else on this machine.
  */
 function yardDesigns(): ShipDesign[] {
-  return savedDesigns().filter((d) => !SHIP_DESIGNS.some((canon) => canon.id === d.id))
+  return savedDesigns()
+    .filter((d) => !SHIP_DESIGNS.some((canon) => canon.id === d.id))
+    .map(repriced)
+}
+
+/**
+ * A yard design at what the tables say it costs today, not what they said
+ * when it was saved. The tables are the authority on a hull's price — the
+ * design file importer reprices for the same reason — and a design kept from
+ * before a reading changed a sum would otherwise carry its old price into
+ * the fleet picker beside hulls priced the new way.
+ */
+function repriced(design: ShipDesign): ShipDesign {
+  try {
+    const points = priceDesign(design).points
+    return points === design.points ? design : { ...design, points }
+  } catch {
+    // A half-written entry from a hand-edited store: shown as saved rather
+    // than dropped, and the shipyard's validation will say what is wrong.
+    return design
+  }
 }
 
 export function designById(id: string): ShipDesign | undefined {

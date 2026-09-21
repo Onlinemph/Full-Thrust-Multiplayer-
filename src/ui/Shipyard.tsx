@@ -66,6 +66,7 @@ import {
   withLoadDropped,
   withoutMagazine,
 } from '../data/magazines'
+import { CostSheet } from './CostSheet'
 import { FittedWeapons } from './FittedWeapons'
 import { Ssd } from './Ssd'
 import { CounterPreview } from './CounterPreview'
@@ -305,6 +306,10 @@ export function Shipyard({
             {cost.spare >= 0 ? ` · ${cost.spare} spare` : ` · ${-cost.spare} over`}
           </span>
         </div>
+
+        {/* 13.14: the readout's working, a row a decision, so a total that
+            disagrees with a printed fleet list can be run down to the line. */}
+        <CostSheet design={design} />
 
         {faults.length > 0 ? (
           <ul className="faults">

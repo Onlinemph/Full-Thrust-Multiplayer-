@@ -534,13 +534,15 @@ describe('tug drives (11.6)', () => {
     expect(tugTransferMass(60, 28)).toBe(110)
   })
 
-  it('rounds both halves of the package up — [reading] R7', () => {
-    // 21.6 becoming 22 is the book's own arithmetic; 10% of 55 is the same
-    // decision applied to the half the book left exact.
+  it('rounds the spare up (11.6) and the own drive to the nearest mass (13.5)', () => {
+    // 21.6 becoming 22 is the book's own arithmetic for the tow. The drive
+    // itself is a share of the hull like any other, and 13.5 rounds those to
+    // the nearest whole mass, never below 1: 5.5 up, 5.1 down, 0.4 to 1.
     expect(tugSpareDriveMassFor(106)).toBe(22)
     expect(tugOwnDriveMass(55)).toBe(6)
-    expect(tugOwnDriveMass(51)).toBe(6)
+    expect(tugOwnDriveMass(51)).toBe(5)
     expect(tugOwnDriveMass(50)).toBe(5)
+    expect(tugOwnDriveMass(4)).toBe(1)
   })
 
   it('gives a tug with no spare drive no towing capacity at all', () => {

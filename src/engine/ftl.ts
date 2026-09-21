@@ -38,7 +38,7 @@
 
 import { d6, rollD6, type Rng } from './dice'
 import { arcTo, distance, moveShip } from './geometry'
-import type { Course, FtlKind, Point, ShipDesign } from './types'
+import { roundMassShare, type Course, type FtlKind, type Point, type ShipDesign } from './types'
 
 const EPSILON = 1e-9
 
@@ -816,16 +816,16 @@ export function tenderBayPoints(bayMass: number): number {
 }
 
 /**
- * A tug's own FTL drive (11.6), before any towing capacity.
- *
- * **[reading]** Rounds up, as does `tugSpareDriveMassFor`. The book rounds the
- * spare capacity up in its own worked example (108/5 = 21.6 becomes 22) and its
- * own-drive example, 10% of 60, is exact and settles nothing. A tug is either
- * strong enough for the tow or it is not, and the alternative — fractional
- * drive mass — would print a mass-10.8 FTL drive on an SSD.
+ * A tug's own FTL drive (11.6), before any towing capacity: 10% of the hull,
+ * rounded as 13.5 rounds every share of the hull — to the nearest whole mass,
+ * never below 1. It used to round up, on the strength of the spare capacity
+ * doing so; but the book's own FTL example is *"6.4, which will round down to
+ * 6"*, and a tug's drive is an FTL drive. The spare is a different sum:
+ * `tugSpareDriveMassFor` still rounds *up*, because the book does (108/5 =
+ * 21.6 becomes 22) and a tug is either strong enough for the tow or it is not.
  */
 export function tugOwnDriveMass(tugMass: number): number {
-  return Math.ceil(Math.max(0, tugMass) * TUG_OWN_FTL_FRACTION)
+  return roundMassShare(Math.max(0, tugMass) * TUG_OWN_FTL_FRACTION)
 }
 
 /** Spare drive mass to tow `transferMass` — *"to tow a ship of mass 108 … mass 22"* (11.6). */

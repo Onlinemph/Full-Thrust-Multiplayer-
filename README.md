@@ -253,7 +253,8 @@ that one fact.
   fleet book, your own yard, and the community shelf. A design file can be uploaded into the
   yard, and a yard design published for anyone to use.
 - **Your own designs.** *Shipyard* builds a hull against the section 14 tables, with the mass bar
-  fighting you the whole way, and saves it into the fleet picker beside the shipped roster. The
+  fighting you the whole way, the points working a click below it, and saves the result into the
+  fleet picker beside the shipped roster. The
   symbols can be dragged about the sheet to give it a look of its own, and a counter image URL
   puts your own picture on the table in place of the silhouette. A battle that uses a yard
   design carries its own copy, so the save file opens on a browser that has never seen it.
@@ -266,9 +267,17 @@ rulebook's missing sections state.
 
 Fitting a hull is a fixed point rather than a sum, because hull boxes, the main drive, FTL,
 streamlining and screens are all fractions of *total mass*: a thrust-6 drive is 30% of the ship
-whatever the ship, and hull boxes are 10–50% by integrity class. `tools/build_roster.py` solves for
+whatever the ship, and hull boxes are 10–50% by integrity class. Each of those shares is then
+rounded to whole mass the way 13.5 says — nearest, never below 1 — which is what makes the book's
+86-mass design example come to 86 mass exactly and 294 points. `tools/build_roster.py` solves for
 the smallest hull that carries a declared loadout and emits `src/data/generatedShips.ts`, so no mass
 or points figure in the roster is hand-written and a design cannot drift from what it costs.
+
+The shipyard's *Points working* sheet is that arithmetic written out: a row for each decision with
+its mass and points and the sum beside it ("10% of 86 = 8.6 → 9 × 2"), sub-totals by group, the
+Combat Points Value in 18.3's three steps, and carried craft listed apart from the hull the way
+the Fleet Books print a carrier. The rows are what the header adds up, so a total that disagrees
+with a printed fleet list can be run down to the line that differs.
 
 ## Factions
 

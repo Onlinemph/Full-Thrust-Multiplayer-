@@ -7,6 +7,22 @@ mass or points figure in the roster is ever typed by hand.
 """
 import json, math
 
+
+def round_mass(share):
+    """13.5: a share of the hull in whole mass — nearest, and never below 1.
+
+    "decimals of .49 and less should be rounded down, while those of .5 or
+    higher should be rounded up" ... "No single system can ever be rounded down
+    to mass 0." The book's sums are the check: 6.4 rounds to 6, 12.8 to 13,
+    25.8 to 26, 17.2 to 17. Rounded to six places first, because a tenth held
+    as a binary float can sit a hair under the half. designPricing's
+    roundMassShare is the same function, and ships.test.ts holds the two to
+    each other on every hull.
+    """
+    if share <= 0:
+        return 0
+    return max(1, int(math.floor(round(share, 6) + 0.5)))
+
 # --- Construction tables (section 14) --------------------------------------
 # Weapon cost by (class key, number of arcs) -> (mass, points)
 WEAPONS = {
@@ -175,20 +191,15 @@ PROPORTIONAL = {
 def proportional_cost(key, ship_mass, boxes):
     """Mass and points of one proportional fitting on a hull of this size."""
     spec = PROPORTIONAL[key]
-    mass = spec['massFraction'] * ship_mass if 'massFraction' in spec else spec['mass']
+    mass = round_mass(spec['massFraction'] * ship_mass) if 'massFraction' in spec else spec['mass']
     if 'pointsPerBox' in spec:
         pts = spec['pointsPerBox'] * boxes
     elif 'pointsFraction' in spec:
         pts = spec['pointsFraction'] * ship_mass
     else:
         pts = mass * spec['pointsPerMass']
-    return round(mass, 2), int(math.floor(pts + 0.5))
+    return mass, int(math.floor(pts + 0.5))
 
-
-# 9.2, per gunboat. A rack always carries six, so a rack costs six of these.
-GUNBOAT_POINTS = {
-    'beam': 9, 'plasma': 9, 'graser': 9, 'gatling': 15, 'needle': 9,
-}
 LABELS = {
     'firecon': 'FireCon', 'advanced-firecon': 'Adv FireCon', 'pds': 'PDS',
     'adfc': 'ADFC', 'advanced-adfc': 'Adv ADFC', 'ads3': 'ADS', 'ads6': 'ADS',
@@ -336,9 +347,9 @@ def price(d):
     if d.get('rows', 4) not in HULL_PTS:
         raise SystemExit(f"{d['id']}: {d['rows']} hull rows; 13.7 prices 3 to 6")
     rows = d.get('rows', 4)
-    if math.floor(d['mass'] * HULL_FRACTION[d['hull']]) < rows:
+    if round_mass(d['mass'] * HULL_FRACTION[d['hull']]) < rows:
         raise SystemExit(
-            f"{d['id']}: {math.floor(d['mass'] * HULL_FRACTION[d['hull']])} hull boxes in "
+            f"{d['id']}: {round_mass(d['mass'] * HULL_FRACTION[d['hull']])} hull boxes in "
             f"{rows} rows leaves a row with nothing in it, which is not a threshold point"
         )
     mass = pts = 0.0
@@ -347,11 +358,16 @@ def price(d):
     # points". designPricing.basicHullPoints charges the same, and ships.test
     # holds the two to each other.
     pts += d['mass']
-    boxes = math.floor(d['mass'] * HULL_FRACTION[d['hull']])
+    # 13.5: every share of the hull is whole mass — "26 mass (actually 25.8,
+    # rounded up)" for the hull, "8.6, rounded up to 9" for the FTL drive,
+    # "17.2, rounded down to 17" for the main drive, which 13.9 rounds once at
+    # its full rating. designPricing does the same, and every roster hull
+    # is priced again there by ships.test.ts.
+    boxes = round_mass(d['mass'] * HULL_FRACTION[d['hull']])
     mass += boxes; pts += boxes * HULL_PTS[d['rows']]
-    dm = 0.05 * d['thrust'] * d['mass']; mass += dm; pts += dm * (3 if d.get('advDrive') else 2)
+    dm = round_mass(0.05 * d['thrust'] * d['mass']); mass += dm; pts += dm * (3 if d.get('advDrive') else 2)
     if d.get('ftl', True):
-        fm = 0.1 * d['mass']
+        fm = round_mass(0.1 * d['mass'])
         # 11.6's tug package: "its own mass 6 FTL Drive plus the additional 22".
         # 13.10 prices a drive by its own mass, so the spare costs the same
         # rate as the rest of it — otherwise the tow capacity is free.
@@ -359,7 +375,7 @@ def price(d):
             fm += math.ceil(d['tug'] / 5)
         mass += fm; pts += fm * (3 if d.get('advFtl') else 2)
     if d.get('stream'):
-        mass += (0.05 if d['stream'] == 'partial' else 0.1) * d['mass']
+        mass += round_mass((0.05 if d['stream'] == 'partial' else 0.1) * d['mass'])
     # 7.8: regenerative armour is the same mass and 2 points more a box, which
     # is what designPricing.armourPoints charges. The two must agree or
     # ships.test.ts fails, which is the point of it.
@@ -367,12 +383,14 @@ def price(d):
     for i, layer in enumerate(d.get('armour', [])):
         mass += layer; pts += layer * (ARMOUR_PTS[i] + regen)
     if d.get('screens'):
-        adv = d.get('advScreens'); per = (0.075 if adv else 0.05) * d['mass']
+        # 7.2: one generator symbol per level, each a system of its own, so
+        # each is rounded on its own (designPricing.screenGeneratorMass).
+        adv = d.get('advScreens'); per = round_mass((0.075 if adv else 0.05) * d['mass'])
         sm = per * d['screens']; mass += sm; pts += sm * (4 if adv else 3)
     if d.get('areaScreens'):
         aadv = d.get('areaAdv')
         am = max(20 if aadv else 15,
-                 (0.3 if aadv else 0.2) * d['mass'] * d['areaScreens'])
+                 round_mass((0.3 if aadv else 0.2) * d['mass'] * d['areaScreens']))
         mass += am; pts += am * 3.5
     mag_mass = magazine_mass(d)
     if mag_mass:
@@ -408,13 +426,12 @@ def price(d):
         sm, sp = SYSTEMS[key]
         if key in PROPORTIONAL:
             sm, sp = proportional_cost(key, d['mass'], boxes + sum(d.get('armour', [])))
-        # 9.1: "The cost of the rack is included in the gunboat cost." Read the
-        # other way round, which is the way that makes a tender cost what it is
-        # worth: you buy six gunboats and the rack comes with them. So a rack
-        # carries the squadron's points, or a tender fields 162 points of
-        # gunboats for nothing.
-        if key == 'gunboat-rack':
-            sp = GUNBOAT_POINTS[d.get('gunboatType', 'beam')] * 6
+        # 9.1: "The cost of the rack is included in the gunboat cost." The
+        # squadron is priced with the craft: `racks=` becomes the design's
+        # `gunboats`, and fleetList.embarkedPointsOf charges 9.2's price for
+        # each of them, so the rack itself is the table's "None" — the same
+        # as the catalogue sells it. Charging the squadron here as well, as
+        # this used to, counted every tender's boats twice on a fleet list.
         for i in range(count):
             systems.append({'id': f'{key}-{i+1}', 'kind': KIND.get(key, key),
                             'label': LABELS[key], 'mass': sm, 'points': sp})
@@ -433,18 +450,8 @@ def price(d):
     pts += d.get('dcp', 0) * 5 + d.get('marines', 0) * 5
     # floor(x + 0.5), not Python's round(): round() is half-to-even, so a total
     # of 348.5 comes out 348 here and 349 in the TypeScript that checks it. A
-    # screen level is 5% of mass, so halves are common.
-    # An overweight hull is a design mistake, and designPricing reports it a long
-    # way from here — in a TypeScript test, about a file this script generated.
-    # Fail at the point the mistake was made instead. `solve_mass` is not the
-    # test: it over-reserves, because it works off the unfloored hull fraction,
-    # so a design two mass under what it suggests can still fit.
-    if round(mass, 2) > d['mass'] + 1e-6:
-        raise SystemExit(
-            f"{d['id']}: declared mass {d['mass']} but the loadout weighs {round(mass, 2)}; "
-            f"solve_mass suggests {solve_mass(d)}"
-        )
-    return boxes, round(mass, 2), int(math.floor(pts + 0.5)), weapons, systems
+    # five-row hull is a point and a half a box, so halves are common.
+    return boxes, round(mass, 2), int(math.floor(round(pts, 6) + 0.5)), weapons, systems
 
 DESIGNS = [
   # ── Eurasian Solar Union ─────────────────────────────────────────────────
@@ -1150,10 +1157,16 @@ DESIGNS = [
 ]
 
 import sys
-out, over = [], []
+out, over, bumped = [], [], []
 for d in DESIGNS:
     # The declared mass is the designer's intent; the solver is the arithmetic.
     d['mass'] = max(d['mass'], solve_mass(d))
+    # solve_mass works off the unrounded fractions, and 13.5's rounding can
+    # land a loadout a mass or two over its estimate. The next even hull up
+    # is what a designer does about that, and it is reported so it is seen.
+    while price(d)[1] > d['mass'] + 1e-6:
+        d['mass'] += 2
+        bumped.append(d['id'])
     # Spend whatever mass is left over on armour, which is what a designer does
     # with a few spare tons: it is the only system that comes in units of one
     # mass and always has somewhere to go (7.6). A hull that carries 14 mass of
@@ -1182,6 +1195,8 @@ for d in DESIGNS:
 if over:
     print('\n'.join(over), file=sys.stderr)
     raise SystemExit(1)
+if bumped:
+    print('hulls grown to fit 13.5\'s rounding: ' + ', '.join(sorted(set(bumped))), file=sys.stderr)
 
 # --- Emit TypeScript --------------------------------------------------------
 def ts(value):
@@ -1196,8 +1211,9 @@ lines = ['''/**
  *
  * Hull integrity, the drive, FTL and screens are all fractions of total mass
  * (13.7 – 13.10), so fitting a design is a fixed point rather than a sum: the
- * generator solves for the smallest hull that carries the loadout, then spends
- * the remainder on armour and cargo the way a designer would.
+ * generator solves for the smallest hull that carries the loadout, rounds each
+ * share to whole mass as 13.5 says, then spends the remainder on armour and
+ * cargo the way a designer would.
  *
  * The two introductory hulls are separate: the rulebook prints them as SSD
  * images and states them in prose at 4.11, so they are reconstructions and are

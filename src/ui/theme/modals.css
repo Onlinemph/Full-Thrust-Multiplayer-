@@ -422,6 +422,119 @@
   color: var(--ink);
 }
 
+/* The working behind the readout (13.14): the book's own table — a row a
+   decision, the arithmetic in words, the mass and points it came to — so a
+   total can be checked against a printed fleet list a line at a time. Folded
+   by default; the summary line carries the totals so it costs nothing open
+   or shut. */
+.cost-sheet {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: var(--text-sm);
+}
+
+.cost-sheet summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink-dim);
+}
+
+.cost-sheet summary::-webkit-details-marker {
+  display: none;
+}
+
+.cost-sheet summary::before {
+  content: '▸';
+  color: var(--ink-faint);
+}
+
+.cost-sheet[open] summary::before {
+  content: '▾';
+}
+
+.cost-sheet .cost-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: var(--text-xs);
+}
+
+.cost-sheet summary .num {
+  color: var(--ink);
+}
+
+/* The sheet sits above the yard, which has its own scroll, so it may not
+   grow past a third of the screen or the sheet it explains disappears. */
+.cost-scroll {
+  max-height: 38vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cost-table th,
+.cost-table td {
+  padding: 0.2rem 0.7rem;
+  text-align: left;
+  vertical-align: baseline;
+  border-top: 1px solid var(--line-soft);
+  font-weight: normal;
+}
+
+.cost-table thead th {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-top: none;
+}
+
+.cost-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cost-table .cost-group th {
+  padding-top: 0.55rem;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cost-table .cost-group td,
+.cost-table .cost-total td,
+.cost-table .cost-total th {
+  color: var(--ink);
+}
+
+.cost-table .cost-total th {
+  padding-top: 0.55rem;
+}
+
+.cost-table .cost-working,
+.cost-table .cost-count {
+  color: var(--ink-dim);
+}
+
+.cost-table .rule-ref {
+  margin-left: 0.3em;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
 /* A fault is stated in the rulebook's terms and does not stop you building:
    half a design is a legitimate thing to have on the bench. */
 .faults {

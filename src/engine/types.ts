@@ -77,6 +77,36 @@ export const HULL_POINTS_PER_BOX: Record<HullRows, number> = {
 }
 
 /**
+ * A share of the hull, in whole mass (13.5).
+ *
+ * Hull boxes, drives, FTL, streamlining, screens and the fields are all
+ * fractions of total mass, and *"choosing a hull size that is not an exact
+ * multiple of 10 will mean that some system masses may not be whole numbers.
+ * Some of these will be rounded up and some down: in general terms, decimals
+ * of .49 and less should be rounded down, while those of .5 or higher should
+ * be rounded up."* With a floor: *"No single system can ever be rounded down
+ * to mass 0. A very tiny ship of (say) mass 4 will still have to pay 1 mass
+ * for an FTL Drive, even though 10% for it is only 0.4."*
+ *
+ * The book's own sums are the check. A mass-64 hull's FTL drive is *"6.4,
+ * which will round down to 6"* and its thrust-4 drive *"12.8 which will
+ * round up to 13"*; 13.14's 86-mass cruiser has *"26 mass (actually 25.8,
+ * rounded up)"* of hull, an FTL drive of *"8.6, rounded up to 9"*, a thrust-4
+ * drive of *"17.2, rounded down to 17"* and a screen of *"4.3, rounded down
+ * to 4"*. None of it was being done: every fraction rode unrounded into the
+ * total, which priced that cruiser at 293 against the printed 294 and left
+ * it 85.1 mass on an 86 hull.
+ *
+ * Rounded to six places first, because a share is a tenth or a twentieth
+ * held as a binary float: 0.3 × 85 comes back as 25.499999999999996, and
+ * 13.5 says that is 26.
+ */
+export function roundMassShare(share: number): number {
+  if (share <= 0) return 0
+  return Math.max(1, Math.floor(Math.round(share * 1e6) / 1e6 + 0.5))
+}
+
+/**
  * Armour (4.8, 7.6). `layers[0]` is the inner layer; further entries are
  * shell/layered armour (7.7), outermost last. Up to half the damage in a
  * volley may be taken on the outermost intact layer, then half of what remains

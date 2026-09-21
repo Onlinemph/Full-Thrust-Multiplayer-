@@ -58,7 +58,7 @@ src/
     actions.ts       Every mutation the game accepts, as a named serializable record
   data/            Game content, authored as data
     buildCatalog.ts    Every hull, drive, system and weapon/arc combination with its mass and points
-    designPricing.ts   The construction model: the mass fixed point, points, validation
+    designPricing.ts   The construction model: the mass fixed point, 13.5's rounding, the cost rows, validation
     generatedShips.ts  The roster, emitted by tools/build_roster.py — never hand-edited
     ships.ts           Ship designs
     scenarios.ts       Scenarios and force setup

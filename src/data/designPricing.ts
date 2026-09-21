@@ -11,7 +11,14 @@
  * streamlining and screens are fractions of TOTAL SHIP MASS**, not flat costs
  * (13.7 – 13.11). A thrust-6 drive is 30% of the ship whatever the ship. So
  * fitting a design is a fixed point rather than a sum, and `solveMass` is the
- * function that resolves it.
+ * function that resolves it. Every one of those shares is then **rounded to
+ * whole mass** (13.5: nearest, never below 1) — see `roundMassShare` — which
+ * is why the book's 86-mass cruiser is 86 mass exactly and 294 points, and
+ * why this file prices it the same.
+ *
+ * `costLines` is the sum written out a row at a time, the way 13.14's worked
+ * example tabulates it; `priceDesign` is nothing but the total of those rows,
+ * so the working the shipyard shows can never disagree with its own header.
  *
  * `tools/build_roster.py` does the same arithmetic in Python to generate the
  * shipped roster offline; `ships.test.ts` asserts the two agree on every hull,
@@ -23,16 +30,19 @@ import {
   gunboatMods,
 } from './smallCraftMods'
 import {
+  fighterProfile,
   validateFighterBuild,
   FIGHTER_TYPES,
   type FighterTypeId,
 } from '../engine/fighters'
 import {
+  squadronPoints,
   validateGunboatBuild,
   GUNBOAT_SQUADRON_SIZE,
   GUNBOAT_TYPES,
   type GunboatTypeId,
 } from '../engine/gunboats'
+import { cpvAdjustment, cpvHullCost, CPV_MASS_DIVISOR } from '../engine/battles'
 import {
   canMountFlak,
   FLAK_UPGRADE_POINTS,
@@ -55,6 +65,8 @@ import {
   tenderBayPoints,
   tenderCapacityFor,
   tugDriveMass,
+  tugOwnDriveMass,
+  tugSpareDriveMassFor,
   validateBattleriderDesign,
 } from '../engine/ftl'
 import {
@@ -65,24 +77,35 @@ import {
   SPINAL_CLASSES,
 } from './factions'
 import {
+  roundMassShare,
   HULL_FRACTION,
   HULL_POINTS_PER_BOX,
   type ArmourDef,
   type HullClass,
+  type MagazineDef,
   type ScreenDef,
   type HullRows,
   type ShipDesign,
+  type SystemDef,
   type SystemKind,
+  type WeaponClass,
 } from '../engine/types'
 import { crewFactors } from '../engine/game'
 
 // ---------------------------------------------------------------------------
-// The proportional systems (13.7 – 13.11)
+// The proportional systems (13.5, 13.7 – 13.11)
 // ---------------------------------------------------------------------------
 
-/** Mass of the main drive: 5% of the ship per point of thrust (13.9). */
+export { roundMassShare }
+
+/**
+ * Mass of the main drive: 5% of the ship per point of thrust (13.9), rounded
+ * once at the full rating — *"Add the percentages together and then determine
+ * the mass required"*. Thrust-6 on a mass-64 hull is *"30% of 64 = 19.2,
+ * rounded down to 19"*, not six lots of 3.2 rounded up to 24.
+ */
 export function driveMass(mass: number, thrust: number): number {
-  return 0.05 * thrust * mass
+  return roundMassShare(0.05 * thrust * mass)
 }
 
 /** An advanced drive weighs the same and costs more (13.10). */
@@ -95,20 +118,44 @@ export function drivePoints(mass: number, thrust: number, advanced: boolean): nu
   return driveMass(mass, thrust) * (advanced ? 3 : 2)
 }
 
-/** FTL is a tenth of the hull, whatever the hull (13.10). */
+/** FTL is a tenth of the hull, whatever the hull (13.9): *"6.4, which will round down to 6"*. */
 export function ftlMass(mass: number): number {
-  return 0.1 * mass
+  return roundMassShare(0.1 * mass)
 }
 
-/** Atmospheric streamlining: 5% partial, 10% full, and free in points (13.11). */
+/**
+ * Atmospheric streamlining: 5% partial, 10% full (13.11), rounded like any
+ * other share of the hull.
+ *
+ * **[reading]** No points. 14.1 prints both rows at 0 and the roster has
+ * always been priced so; 13.11's prose says *"2 points per mass used for the
+ * aerodynamics"*, and the two cannot both be right. The table is followed
+ * because it is the summary a designer is told to price from, and the
+ * shipyard's working names the rule on the row so a table can decide
+ * otherwise with its eyes open.
+ */
 export function streamliningMass(mass: number, kind: ShipDesign['streamlining']): number {
   if (kind === 'none') return 0
-  return (kind === 'partial' ? 0.05 : 0.1) * mass
+  return roundMassShare((kind === 'partial' ? 0.05 : 0.1) * mass)
 }
 
-/** One level of screens is 5% of the hull, or 7.5% advanced (7.2, 7.3). */
+/**
+ * One screen generator is 5% of the hull, or 7.5% advanced (7.2, 7.3).
+ *
+ * **[reading]** Rounded per generator rather than on the level's total. 7.2
+ * prices screens *"5% of the total ship mass per level"* and 4.7 puts one
+ * generator symbol on the sheet per level, so each generator is a system of
+ * its own and 13.5 rounds it on its own: two generators on an 86-mass hull
+ * are 4 mass each, not 8.6 rounded to 9 between them. The main drive goes
+ * the other way only because 13.9 says so in terms; 7.2 does not.
+ */
+export function screenGeneratorMass(mass: number, advanced: boolean): number {
+  return roundMassShare((advanced ? 0.075 : 0.05) * mass)
+}
+
+/** The generators a ship at this level carries, priced one by one. */
 export function screenMass(mass: number, level: number, advanced: boolean): number {
-  return (advanced ? 0.075 : 0.05) * mass * level
+  return level * screenGeneratorMass(mass, advanced)
 }
 
 export function screenPoints(mass: number, level: number, advanced: boolean): number {
@@ -125,7 +172,7 @@ export function screenPoints(mass: number, level: number, advanced: boolean): nu
 export function areaScreenMass(mass: number, area: ScreenDef['area']): number {
   if (!area) return 0
   const level = area.level ?? 1
-  const share = (area.advanced ? 0.3 : 0.2) * mass * level
+  const share = roundMassShare((area.advanced ? 0.3 : 0.2) * mass * level)
   return Math.max(area.advanced ? 20 : 15, share)
 }
 
@@ -137,10 +184,10 @@ export function areaScreenPoints(mass: number, area: ScreenDef['area']): number 
 /**
  * The fewest boxes a hull may have (13.7): *"a lower limit of a minimum of 10%
  * of the total ship mass"* — the fragile hull, which is the floor rather than
- * one option among five.
+ * one option among five, and rounded as 13.5 rounds every share of the hull.
  */
 export function minimumHullBoxes(mass: number): number {
-  return Math.floor(mass * HULL_FRACTION.fragile)
+  return hullBoxesFor(mass, 'fragile')
 }
 
 /**
@@ -149,10 +196,12 @@ export function minimumHullBoxes(mass: number): number {
  * The classes are *descriptions* — "the following terms may be used to
  * describe the kind of structure a ship has" — so this is what a designer gets
  * by picking a round number, not what the rules require of them. Validation
- * enforces `minimumHullBoxes` and nothing more.
+ * enforces `minimumHullBoxes` and nothing more. The number is 13.5's rounding
+ * of the share — *"26 mass (actually 25.8, rounded up)"* — where it used to
+ * be the floor, which gave that cruiser 25.
  */
 export function hullBoxesFor(mass: number, hullClass: HullClass): number {
-  return Math.floor(mass * HULL_FRACTION[hullClass])
+  return roundMassShare(mass * HULL_FRACTION[hullClass])
 }
 
 /**
@@ -231,7 +280,8 @@ export function proportionalCost(
   const spec = PROPORTIONAL_SYSTEMS[kind]
   if (!spec) return null
   const shipMass = design.mass
-  const mass = spec.mass === 'fraction' ? (spec.massFraction ?? 0) * shipMass : spec.mass
+  const mass =
+    spec.mass === 'fraction' ? roundMassShare((spec.massFraction ?? 0) * shipMass) : spec.mass
   const points =
     spec.pointsPerProtectionBox !== undefined
       ? spec.pointsPerProtectionBox * protectionBoxes(design)
@@ -309,56 +359,510 @@ export function ftlPackagePoints(design: ShipDesign): number {
 }
 
 export function priceDesign(design: ShipDesign): DesignCost {
-  const m = design.mass
-  const massUsed =
-    design.hullBoxes +
-    driveMass(m, design.drive.thrust) +
-    ftlPackageMass(design) +
-    streamliningMass(m, design.streamlining) +
-    armourMass(design.armour) +
-    screenMass(m, design.screens.level, design.screens.advanced) +
-    areaScreenMass(m, design.screens.area) +
-    design.weapons.reduce((sum, w) => sum + w.mass, 0) +
-    design.turrets.reduce((sum, t) => sum + t.mass, 0) +
-    // 6.6: the mass set aside for Salvo Missile loads, which is what an SML
-    // fires from. A launcher with no magazine behind it is not cheaper, it is
-    // useless.
-    (design.magazines ?? []).reduce((sum, m) => sum + m.mass, 0) +
-    design.systems.reduce((sum, s) => sum + s.mass, 0)
-
   // 14.1's first line: "Basic hull — total mass of ship — ×1". The worked
   // example prices its 86-mass cruiser as "Basic hull 86 mass 86 points"
   // before the hull integrity, the drives and the fit-out are added, and the
   // ship's cost "is the total of the mass cost, the hull cost, the drives
-  // cost, and the individual costs of all the systems". This is the mass
-  // cost, and it was missing: every design was its own mass too cheap.
-  const points =
-    basicHullPoints(m) +
-    design.hullBoxes * HULL_POINTS_PER_BOX[design.hullRows] +
-    drivePoints(m, design.drive.thrust, design.drive.advanced) +
-    ftlPackagePoints(design) +
-    armourPoints(design.armour) +
-    screenPoints(m, design.screens.level, design.screens.advanced) +
-    areaScreenPoints(m, design.screens.area) +
-    design.weapons.reduce((sum, w) => sum + w.points, 0) +
-    design.turrets.reduce((sum, t) => sum + t.points, 0) +
-    (design.magazines ?? []).reduce((sum, m) => sum + m.points, 0) +
-    design.systems.reduce((sum, s) => sum + s.points, 0) +
-    (design.additionalDamageControlParties + design.marineParties) * CREW_PARTY_POINTS
+  // cost, and the individual costs of all the systems". `costLines` is that
+  // list, one row a decision; this is its total and nothing more.
+  const lines = costLines(design)
+  const massUsed = lines.reduce((sum, line) => sum + line.mass, 0)
+  const points = lines.reduce((sum, line) => sum + line.points, 0)
 
   // Flawed Design: 10% more mass to fill, 20% off the points, and a standing
   // penalty on every threshold check (13.13).
-  const massAvailable = design.flawed ? m * 1.1 : m
+  const massAvailable = design.flawed ? design.mass * 1.1 : design.mass
   const finalPoints = design.flawed ? points * 0.8 : points
 
   return {
     massUsed: round2(massUsed),
     massAvailable: round2(massAvailable),
     // floor(x + 0.5), not Math.round's banker's cousin in other languages: a
-    // screen level is 5% of mass, so exact halves are common and the Python
-    // generator has to agree with this to the point.
-    points: Math.floor(finalPoints + 0.5),
+    // five-row hull is a point and a half a box, so exact halves are common
+    // and the Python generator has to agree with this to the point.
+    points: Math.floor(round6(finalPoints) + 0.5),
     spare: round2(massAvailable - massUsed),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The working (13.14, 18.3)
+// ---------------------------------------------------------------------------
+
+/** The decisions a design's cost is grouped under, in the order 13.14 makes them. */
+export type CostGroup = 'hull' | 'defences' | 'weapons' | 'systems' | 'crew'
+
+export const COST_GROUPS: ReadonlyArray<{ id: CostGroup; label: string; rule: string }> = [
+  { id: 'hull', label: 'Hull and drives', rule: '13.5, 13.7 – 13.11' },
+  { id: 'defences', label: 'Defences', rule: '7.2 – 7.16, 14.2' },
+  { id: 'weapons', label: 'Weapons', rule: '14.4 – 14.6' },
+  { id: 'systems', label: 'Systems', rule: '14.1 – 14.3' },
+  { id: 'crew', label: 'Crew', rule: '13.13, 14.3' },
+]
+
+/**
+ * One row of a design's working. The book's worked example (13.14) ends in a
+ * table with a row for each decision, its mass and its points; this is that
+ * row with the arithmetic written beside it, so a total can be checked
+ * against a printed fleet list a line at a time.
+ */
+export interface CostLine {
+  group: CostGroup
+  label: string
+  /** The section the row answers to. */
+  rule: string
+  /** The sum in the book's terms: "10% of 86 = 8.6 → 9 × 2". */
+  working: string
+  /** Mass the row uses of the hull's rating. The basic hull uses none. */
+  mass: number
+  points: number
+  /** Identical fittings tallied into one row. */
+  count?: number
+}
+
+const ORDINAL = ['first', 'second', 'third', 'fourth'] as const
+
+/** The section a fitting is priced under, for the rows that have one. */
+const SYSTEM_RULES: Partial<Record<SystemKind, string>> = {
+  firecon: '4.4, 14.1',
+  'advanced-firecon': '5.2, 14.1',
+  pds: '7.12, 14.2',
+  adfc: '7.10, 14.2',
+  'advanced-adfc': '7.11, 14.2',
+  ads: '7.13, 14.2',
+  scattergun: '7.14, 14.2',
+  grapeshot: '7.15, 14.2',
+  ecm: '7.18, 14.2',
+  'area-ecm': '7.19, 14.2',
+  holofield: '7.17, 14.2',
+  'cloaking-device': '7.20, 14.2',
+  'cloaking-field': '7.21, 14.2',
+  'tuffley-cloak': '7.22',
+  'reflex-field': '7.25',
+  'stealth-hull': '7.4, 14.1',
+  'stealth-field': '7.5, 14.2',
+  'hangar-bay': '8.1, 14.1',
+  'launch-tube': '8.2, 14.1',
+  catapult: '8.2, 14.1',
+  'gunboat-rack': '9.1, 14.1',
+  'gunboat-bay': '9.1, 14.1',
+  tender: '11.6',
+  cargo: '14.1',
+}
+
+function pct(fraction: number): string {
+  return `${Math.round(fraction * 1000) / 10}%`
+}
+
+/** "8.6 → 9", or just "9" when the share was whole already. */
+function rounded(raw: number, to: number): string {
+  const r = round2(raw)
+  return r === to ? `${to}` : `${r} → ${to}`
+}
+
+function loadsDescribed(loads: MagazineDef['loads']): string {
+  const parts: string[] = []
+  const standard = loads.filter((l) => l.grade === 'standard' && !l.multiStage).length
+  const extended = loads.filter((l) => l.grade === 'extended' && !l.multiStage).length
+  const staged = loads.filter((l) => l.multiStage).length
+  if (standard) parts.push(`${standard} standard`)
+  if (extended) parts.push(`${extended} ER`)
+  if (staged) parts.push(`${staged} multi-stage`)
+  return parts.join(', ') || 'empty'
+}
+
+function weaponRule(weaponClass: WeaponClass): string {
+  if ((SPINAL_CLASSES as readonly string[]).includes(weaponClass)) return '14.5'
+  if (ORDNANCE_MOUNTS.some((mount) => mount.weaponClass === weaponClass)) return '14.6'
+  return '14.4'
+}
+
+/** The arithmetic behind a fitting's row, where there is any to show. */
+function systemWorking(system: SystemDef, count: number, design: ShipDesign): string {
+  const m = design.mass
+  const spec = PROPORTIONAL_SYSTEMS[system.kind]
+  if (spec) {
+    if (spec.pointsPerProtectionBox !== undefined) {
+      return `${spec.pointsPerProtectionBox} × ${protectionBoxes(design)} hull and armour boxes`
+    }
+    if (spec.pointsFraction !== undefined) {
+      return spec.pointsFraction === 1
+        ? `mass ${system.mass}; the ship’s mass, ${m}, in points`
+        : `mass ${system.mass}; ${spec.pointsFraction} × the ship’s mass ${m} = ${round2(spec.pointsFraction * m)}`
+    }
+    const share = spec.massFraction ?? 0
+    return `${pct(share)} of ${m} = ${rounded(share * m, system.mass)} × ${spec.pointsPerMass ?? 0}`
+  }
+  if (system.kind === 'gunboat-rack' || system.kind === 'gunboat-bay') {
+    return 'the squadron it carries is priced with the craft (9.1)'
+  }
+  if (system.kind === 'tender') {
+    return `bay for ${round2(tenderCapacityFor(system.mass))} mass of ship at 1.5 a mass, × 3`
+  }
+  const each = `${system.mass} mass, ${system.points} points`
+  if (count > 1) return `${count} × (${each})`
+  return system.points === 0 ? 'no points' : ''
+}
+
+/**
+ * Every row of a design's cost, in the order the book's worked example lists
+ * them (13.14). `priceDesign` is the sum of these and nothing else.
+ */
+export function costLines(design: ShipDesign): CostLine[] {
+  const m = design.mass
+  const lines: CostLine[] = []
+  const add = (
+    group: CostGroup,
+    label: string,
+    rule: string,
+    working: string,
+    mass: number,
+    points: number,
+    count?: number,
+  ) => {
+    lines.push(
+      count === undefined
+        ? { group, label, rule, working, mass, points }
+        : { group, label, rule, working, mass, points, count },
+    )
+  }
+
+  // 14.1's first row: "Basic hull — total mass of ship — ×1".
+  add('hull', 'Basic hull', '14.1', `mass ${m} × 1`, 0, basicHullPoints(m))
+
+  // 13.7: the hull boxes, at what a box costs in this many rows.
+  const perBox = HULL_POINTS_PER_BOX[design.hullRows]
+  const fraction = HULL_FRACTION[design.hullClass]
+  const byClass = hullBoxesFor(m, design.hullClass)
+  const boxes = design.hullBoxes
+  add(
+    'hull',
+    'Hull integrity',
+    '13.7',
+    boxes === byClass
+      ? `${design.hullClass}: ${pct(fraction)} of ${m} = ${rounded(m * fraction, byClass)} boxes × ${perBox} (${design.hullRows} rows)`
+      : `${boxes} boxes as built (${design.hullClass} would be ${byClass}) × ${perBox} (${design.hullRows} rows)`,
+    boxes,
+    boxes * perBox,
+  )
+
+  // 13.9: the main drive, rounded once at its full rating.
+  const thrust = design.drive.thrust
+  if (thrust > 0) {
+    const dm = driveMass(m, thrust)
+    const rate = design.drive.advanced ? 3 : 2
+    add(
+      'hull',
+      design.drive.advanced ? 'Advanced main drive' : 'Main drive',
+      design.drive.advanced ? '13.9, 13.10' : '13.9',
+      `thrust ${thrust}: ${pct(0.05 * thrust)} of ${m} = ${rounded(0.05 * thrust * m, dm)} × ${rate}`,
+      dm,
+      dm * rate,
+    )
+  } else {
+    add('hull', 'Main drive', '16.1', 'thrust 0: nothing to fit', 0, 0)
+  }
+
+  // 13.9, 11.6: the FTL package.
+  if (design.ftl !== 'none') {
+    const rate = design.ftl === 'advanced' ? 3 : 2
+    const fm = ftlPackageMass(design)
+    if (design.ftl === 'tug') {
+      const own = tugOwnDriveMass(m)
+      const tow = design.ftlTransferMass ?? 0
+      add(
+        'hull',
+        'Tug FTL drive',
+        '11.6',
+        `10% of ${m} = ${rounded(0.1 * m, own)}, + ${tugSpareDriveMassFor(tow)} to tow ${tow} (1 per 5) = ${fm} × ${rate}`,
+        fm,
+        fm * rate,
+      )
+    } else {
+      add(
+        'hull',
+        design.ftl === 'advanced' ? 'Advanced FTL drive' : 'FTL drive',
+        design.ftl === 'advanced' ? '13.9, 13.10' : '13.9',
+        `10% of ${m} = ${rounded(0.1 * m, fm)} × ${rate}`,
+        fm,
+        fm * rate,
+      )
+    }
+  } else if (design.battlerider === true) {
+    add('hull', 'FTL drive', '11.7', 'battlerider: carried by its Mothership, no drive to pay for', 0, 0)
+  }
+
+  // 13.11, 14.1: streamlining.
+  if (design.streamlining !== 'none') {
+    const share = design.streamlining === 'partial' ? 0.05 : 0.1
+    const sm = streamliningMass(m, design.streamlining)
+    add(
+      'hull',
+      design.streamlining === 'partial' ? 'Partial streamlining' : 'Full streamlining',
+      '13.11, 14.1',
+      `${pct(share)} of ${m} = ${rounded(share * m, sm)} mass; 14.1 prices it at 0`,
+      sm,
+      0,
+    )
+  }
+
+  // 7.6 – 7.8: armour, a row a layer.
+  design.armour.layers.forEach((layer, i) => {
+    if (layer <= 0) return
+    const surcharge = design.armour.regenerative ? REGENERATIVE_SURCHARGE : 0
+    const per = ARMOUR_POINTS_PER_BOX[i] + surcharge
+    add(
+      'defences',
+      i === 0 ? 'Hull armour' : `${ORDINAL[i - 1] ?? `${i}th`} shell of armour`,
+      i === 0 ? (surcharge ? '7.6, 7.8' : '7.6') : surcharge ? '7.7, 7.8' : '7.7',
+      `${layer} boxes × ${per}${surcharge ? ` (${ARMOUR_POINTS_PER_BOX[i]} + ${surcharge} regenerative)` : ''}`,
+      layer,
+      layer * per,
+    )
+  })
+
+  // 7.2, 7.3: screens, a generator at a time. Backups beyond the level are
+  // generators too, and cost what a generator costs.
+  const generators = Math.max(design.screens.level, design.screens.generators)
+  if (generators > 0) {
+    const advanced = design.screens.advanced
+    const each = screenGeneratorMass(m, advanced)
+    const share = advanced ? 0.075 : 0.05
+    const rate = advanced ? 4 : 3
+    const one = `${pct(share)} of ${m} = ${rounded(share * m, each)}`
+    add(
+      'defences',
+      advanced ? 'Advanced screens' : 'Screens',
+      advanced ? '7.3, 14.2' : '7.2, 14.2',
+      generators === 1 ? `${one} × ${rate}` : `${generators} generators × (${one}) × ${rate}`,
+      generators * each,
+      generators * each * rate,
+      generators,
+    )
+  }
+
+  // 7.16: an area screen projector, with its floor.
+  if (design.screens.area) {
+    const area = design.screens.area
+    const level = area.level ?? 1
+    const share = area.advanced ? 0.3 : 0.2
+    const raw = share * m * level
+    const am = areaScreenMass(m, area)
+    const floor = area.advanced ? 20 : 15
+    add(
+      'defences',
+      area.advanced ? 'Advanced area screen' : 'Area screen',
+      '7.16, 14.2',
+      `${pct(share)} of ${m}${level > 1 ? ` × level ${level}` : ''} = ${rounded(raw, roundMassShare(raw))}${am > roundMassShare(raw) ? `, minimum ${floor}` : ''} × 3.5`,
+      am,
+      am * 3.5,
+    )
+  }
+
+  // 14.4 – 14.6: every mounting, one row each.
+  for (const weapon of design.weapons) {
+    const printed = weapon.turretId ? null : printedWeaponCost(weapon)
+    const notes = [
+      weapon.turretId
+        ? `bare, in turret ${weapon.turretId}`
+        : weapon.broadside
+          ? 'broadside'
+          : `${weapon.arcs.length}-arc mounting`,
+    ]
+    if (weapon.flak === true) notes.push(`flak shells +${FLAK_UPGRADE_POINTS}`)
+    if (weapon.ammo !== undefined) notes.push(weapon.ammo === 1 ? 'one shot' : `${weapon.ammo} shots`)
+    add(
+      'weapons',
+      weapon.label,
+      printed?.rule ?? weaponRule(weapon.weaponClass),
+      notes.join(', '),
+      weapon.mass,
+      weapon.points,
+    )
+  }
+  for (const turret of design.turrets) {
+    add(
+      'weapons',
+      'Turret',
+      '5.22',
+      `${turret.arcs.length} arcs, room for ${turret.capacity} mass of guns`,
+      turret.mass,
+      turret.points,
+    )
+  }
+  for (const magazine of design.magazines ?? []) {
+    add(
+      'weapons',
+      'Magazine',
+      '6.6',
+      `${magazine.loads.length} loads (${loadsDescribed(magazine.loads)}) × 3 a mass`,
+      magazine.mass,
+      magazine.points,
+    )
+  }
+
+  // 14.1 – 14.3: the fittings, identical ones tallied. A screen generator
+  // symbol stands for what the Screens row already paid (7.2), so a free one
+  // is not a row of its own.
+  const tally = new Map<string, { system: SystemDef; count: number }>()
+  for (const system of design.systems) {
+    if (system.kind === 'screen-generator' && system.mass === 0 && system.points === 0) continue
+    const key = `${system.kind}|${system.label}|${system.mass}|${system.points}`
+    const entry = tally.get(key)
+    if (entry) entry.count += 1
+    else tally.set(key, { system, count: 1 })
+  }
+  for (const { system, count } of tally.values()) {
+    add(
+      'systems',
+      system.label,
+      SYSTEM_RULES[system.kind] ?? '14',
+      systemWorking(system, count, design),
+      system.mass * count,
+      system.points * count,
+      count,
+    )
+  }
+
+  // 13.13, 14.3: parties bought on top of the crew.
+  const crew = crewFactors(m, design.group === 'civilian')
+  if (design.additionalDamageControlParties > 0) {
+    const n = design.additionalDamageControlParties
+    add(
+      'crew',
+      'Extra damage control parties',
+      '13.13, 14.3',
+      `${n} × ${CREW_PARTY_POINTS}, on top of the ${crew} the crew gives (10.4)`,
+      0,
+      n * CREW_PARTY_POINTS,
+      n,
+    )
+  }
+  if (design.marineParties > 0) {
+    const n = design.marineParties
+    add('crew', 'Marine parties', '12.7, 14.3', `${n} × ${CREW_PARTY_POINTS}`, 0, n * CREW_PARTY_POINTS, n)
+  }
+  return lines
+}
+
+export interface CostGroupSummary {
+  id: CostGroup
+  label: string
+  rule: string
+  lines: CostLine[]
+  mass: number
+  points: number
+}
+
+export interface CpvWorking {
+  hullCost: number
+  adjustment: number
+  points: number
+  /** 18.3's three steps, in the book's terms. */
+  steps: string[]
+}
+
+/**
+ * 18.3 written out: the hull cost from mass, the adjustment that is its
+ * difference from the mass, and the printed total moved by it. The book's own
+ * examples: the Suffren (mass 54, 181 points) is 29, −25, 156; the Excalibur
+ * (mass 140, 472 points) is 196, +56, 528.
+ */
+export function cpvWorking(points: number, mass: number): CpvWorking {
+  const hullCost = cpvHullCost(mass)
+  const adjustment = cpvAdjustment(mass)
+  const raw = round2((mass * mass) / CPV_MASS_DIVISOR)
+  const sign = adjustment >= 0 ? '+' : '−'
+  return {
+    hullCost,
+    adjustment,
+    points: points + adjustment,
+    steps: [
+      `hull under CPV: ${mass}² ÷ ${CPV_MASS_DIVISOR} = ${rounded(raw, hullCost)}${raw < 0.5 ? ' (never below 1)' : ''}`,
+      `change: ${hullCost} − ${mass} = ${sign}${Math.abs(adjustment)}`,
+      `${points} ${sign} ${Math.abs(adjustment)} = ${points + adjustment} CPV`,
+    ],
+  }
+}
+
+export interface DesignBreakdown {
+  groups: CostGroupSummary[]
+  cost: DesignCost
+  /** The rows' sum before 13.13's flawed-design discount, as the book totals it. */
+  subtotal: number
+  /** The discount written out, when the design is flawed (13.13). */
+  flawed: { points: string; mass: string } | null
+  cpv: CpvWorking
+  /**
+   * Fighter wings and gunboat squadrons: bought with the hull and priced apart
+   * from it (14.7, 9.2), the way the Fleet Books print a carrier.
+   */
+  embarked: { lines: CostLine[]; points: number }
+  /** Hull and craft together, which is what 18.2 counts against a fleet's total. */
+  listed: number
+}
+
+/** The whole of a design's working: the rows, their totals, and 18.3 on the result. */
+export function breakdownDesign(design: ShipDesign): DesignBreakdown {
+  const lines = costLines(design)
+  const cost = priceDesign(design)
+  const groups = COST_GROUPS.map((group) => {
+    const rows = lines.filter((line) => line.group === group.id)
+    return {
+      ...group,
+      lines: rows,
+      mass: round2(rows.reduce((sum, line) => sum + line.mass, 0)),
+      points: round2(rows.reduce((sum, line) => sum + line.points, 0)),
+    }
+  }).filter((group) => group.lines.length > 0)
+  const subtotal = round2(lines.reduce((sum, line) => sum + line.points, 0))
+  const flawed = design.flawed
+    ? {
+        points: `20% off: ${subtotal} × 0.8 = ${round2(subtotal * 0.8)} → ${cost.points}`,
+        mass: `10% more to fill: ${design.mass} × 1.1 = ${cost.massAvailable}`,
+      }
+    : null
+
+  const embarkedLines: CostLine[] = []
+  for (const bay of design.fighterBays) {
+    const typeId = bay.typeId as FighterTypeId
+    if (!(typeId in FIGHTER_TYPES)) continue
+    const profile = fighterProfile(typeId, fighterMods(bay.modifiers))
+    embarkedLines.push({
+      group: 'systems',
+      label: bay.label,
+      rule: '8.15, 14.7',
+      working: `a wing of ${profile.groupSize}`,
+      mass: 0,
+      points: profile.points,
+    })
+  }
+  for (const rack of design.gunboats) {
+    const typeId = rack.typeId as GunboatTypeId
+    if (!(typeId in GUNBOAT_TYPES)) continue
+    const points = squadronPoints(
+      Array<GunboatTypeId>(GUNBOAT_SQUADRON_SIZE).fill(typeId),
+      gunboatMods(rack.modifiers),
+    )
+    embarkedLines.push({
+      group: 'systems',
+      label: rack.label,
+      rule: '9.2, 14.8',
+      working: `a squadron of ${GUNBOAT_SQUADRON_SIZE}`,
+      mass: 0,
+      points,
+    })
+  }
+  const embarkedPoints = embarkedLines.reduce((sum, line) => sum + line.points, 0)
+
+  return {
+    groups,
+    cost,
+    subtotal,
+    flawed,
+    cpv: cpvWorking(cost.points, design.mass),
+    embarked: { lines: embarkedLines, points: embarkedPoints },
+    listed: cost.points + embarkedPoints,
   }
 }
 
@@ -943,6 +1447,10 @@ function countKind(design: ShipDesign, kind: SystemKind): number {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100
+}
+
+function round6(value: number): number {
+  return Math.round(value * 1e6) / 1e6
 }
 
 /** Hull row options and what a box costs in each (13.7). */
