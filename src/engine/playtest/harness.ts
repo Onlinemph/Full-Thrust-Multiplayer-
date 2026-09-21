@@ -72,7 +72,7 @@ export interface BattleReport {
   ledgerOk: boolean
 }
 
-const TABLE_SWEEPS: Partial<Record<string, GameAction[]>> = {
+export const TABLE_SWEEPS: Partial<Record<string, GameAction[]>> = {
   initiative: [{ type: 'roll-initiative' }],
   threshold: [{ type: 'threshold-sweep' }],
   'damage-control': [{ type: 'resolve-damage-control' }],

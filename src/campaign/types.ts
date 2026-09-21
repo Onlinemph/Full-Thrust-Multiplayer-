@@ -443,6 +443,18 @@ export interface TaskForce {
   plot: PlottedMove[]
   /** Base 2 hexes a turn, raised by research to a maximum of 8 (6.1). */
   ftlRate: number
+  /**
+   * Colony transports travelling with the force, each carrying a million
+   * colonists (Economy). They are landed by `found-colony`, and a force that
+   * is nothing but transports is a convoy.
+   */
+  transports: number
+  /**
+   * The campaign turn this force last arrived somewhere by FTL, or null. The
+   * force that moved into a hex this turn is the intruder there, and the one
+   * that was already in it defends (6.1).
+   */
+  movedTurn: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -603,9 +615,13 @@ export interface PendingBattle {
   kind: BattleKind
   /** The side that arrived, first, then the side that was there (6.1). */
   sides: Array<{ playerId: PlayerId; taskForceIds: TaskForceId[]; role: 'intruder' | 'defender' }>
+  /** In a pursuit, who is chasing (6.1). */
+  pursuer: 'intruder' | 'defender' | null
   seed: number
   /** Set once the battle has been fought and its result folded back in. */
   resolved: boolean
+  /** How it went, once resolved: the winner's player id, or null for a draw. */
+  winner?: PlayerId | null
 }
 
 /** One line of the campaign log, stamped with where in the turn it happened. */
@@ -709,6 +725,10 @@ export type CampaignMove =
       destination: ColonyId | null
     }
   | { kind: 'integration-program'; player: PlayerId; colony: ColonyId; rp: number }
+  /** Ortillery in orbit removes a million population a battery a turn (6.4). */
+  | { kind: 'bombard'; player: PlayerId; colony: ColonyId; taskForce: TaskForceId }
+  /** A landing by the Marines aboard a task force holding the orbit (6.4). */
+  | { kind: 'assault'; player: PlayerId; colony: ColonyId; taskForce: TaskForceId }
   // --- Purchasing and building (Price schedule, Shipyards) ----------------
   | { kind: 'purchase'; player: PlayerId; colony: ColonyId; item: PurchaseItem; quantity: number }
   | { kind: 'cancel-build'; player: PlayerId; colony: ColonyId; order: string }
@@ -780,9 +800,17 @@ export interface CampaignSetup {
     /** 2,000 RP of naval ships and 20 colony transports to start (Economy). */
     startingShips: Array<{ designId: string; name: string }>
     startingTransports: number
+    /** The computer fights this player's battles on the table. */
+    computer?: boolean
   }>
   /** Systems banned from ship design: Reflex Shield, Cloaking Field, Wave Gun. */
   bannedSystems: string[]
+  /**
+   * The home colony every player starts with, which the rules leave to the
+   * GM: millions of people, factories, and one orbital yard. Absent means the
+   * defaults in `campaign.ts`.
+   */
+  home?: { population?: number; factories?: number; shipyard?: { throughput: number; capacity: number } }
 }
 
 /** A campaign file: setup plus the move journal, and nothing else. */
