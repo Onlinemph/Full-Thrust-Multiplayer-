@@ -7,6 +7,7 @@ import { deleteVehicleDesign, isBookDesign, motorPoolDesigns, saveVehicleDesign 
 import { ordnanceLoadsCost, priceDesign } from '../../dirtside/pricing'
 import { recordCardOf } from '../../dirtside/recordCard'
 import type { ArtilleryClass, DirectFireWeapon, EcmLevel, MissileSystem, MobilityType, PowerPlant, SizeClass, SystemLevel, VehicleDesign, WeaponClass, WeaponType } from '../../dirtside/types'
+import { FiringRange } from './FiringRange'
 import { PrintCards } from './PrintCards'
 import { RecordCard } from './RecordCard'
 
@@ -39,6 +40,7 @@ export function MotorPool({ onClose }: MotorPoolProps) {
   const [design, setDesign] = useState<VehicleDesign>(() => structuredClone(shelf[2] ?? newVehicleDesign(nextId('vehicle'))))
   const [savedAs, setSavedAs] = useState<string | null>(null)
   const [printing, setPrinting] = useState<'one' | 'shelf' | null>(null)
+  const [range, setRange] = useState(false)
 
   const set = (patch: Partial<VehicleDesign>) => {
     setDesign((d) => ({ ...d, ...patch }))
@@ -128,6 +130,9 @@ export function MotorPool({ onClose }: MotorPoolProps) {
             </select>
           </label>
           <button onClick={() => { setDesign(newVehicleDesign(nextId('vehicle'))); setSavedAs(null) }}>New hull</button>
+          <button onClick={() => setRange(true)} disabled={design.weapons.length === 0} title={design.weapons.length === 0 ? 'Fit a direct-fire weapon first' : 'Try this design\'s guns against any target'}>
+            Firing range
+          </button>
           <span className="spacer" />
           {faults.filter((f) => !f.advisory).length === 0 ? <p className="yard-legal">A legal design.</p> : null}
           <button onClick={onClose}>Close</button>
@@ -515,6 +520,7 @@ export function MotorPool({ onClose }: MotorPoolProps) {
             </div>
           </aside>
         </div>
+        {range ? <FiringRange bench={design} shelf={shelf} onClose={() => setRange(false)} /> : null}
         {printing ? (
           <PrintCards
             title={printing === 'one' ? `Dirtside II record card — ${design.name}` : 'Dirtside II record cards'}

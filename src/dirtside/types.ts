@@ -141,3 +141,12 @@ export interface InfantryElement {
   /** Riding animals: +50% (p. 53). */
   cavalry?: boolean
 }
+
+/**
+ * How a vehicle is sitting when it is shot at (p. 29): the one secondary die
+ * it rolls beside its signature die. Only the highest applies.
+ */
+export type TargetPosture = 'none' | 'turret-down' | 'hull-down' | 'dug-in' | 'evading' | 'soft-cover' | 'pop-up'
+
+/** Where an infantry element is when it is shot at (p. 33). */
+export type InfantryPosition = 'open' | 'soft-cover' | 'dug-in' | 'urban'

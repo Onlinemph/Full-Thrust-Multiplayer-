@@ -209,3 +209,161 @@
     padding: 4mm 0;
   }
 }
+
+/* The Firing Range: the shot's plan and odds on the right, the log under
+   them; the bands table on the left shows the same gun at each band's edge. */
+.ds-range .yard {
+  grid-template-columns: minmax(0, 1fr) minmax(26rem, 32rem);
+}
+
+.ds-range .yard-controls {
+  max-height: 74vh;
+}
+
+.ds-seed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.ds-seed input {
+  width: 7rem;
+}
+
+.ds-range .yard-head button {
+  white-space: nowrap;
+}
+
+.ds-ticks {
+  gap: var(--gap-2);
+  flex-wrap: wrap;
+}
+
+.ds-ticks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ds-inches {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ds-inches input {
+  width: 4.5rem;
+}
+
+.ds-plan h3 {
+  margin: 0 0 var(--gap);
+  font-size: var(--text-sm);
+}
+
+.ds-plan dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem var(--gap);
+  margin: 0 0 var(--gap);
+}
+
+.ds-plan dt {
+  color: var(--ink-dim);
+}
+
+.ds-plan dd {
+  margin: 0;
+}
+
+.ds-odds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.ds-odds th,
+.ds-odds td {
+  padding: 0.15rem 0.35rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.ds-odds th.num,
+.ds-odds td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-bands tr.is-current td {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.ds-notes {
+  margin: var(--gap) 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
+}
+
+.ds-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  font-size: var(--text-xs);
+}
+
+.ds-log-entry {
+  padding: var(--gap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.ds-log-entry p {
+  margin: 0.2rem 0 0;
+}
+
+.ds-verdict {
+  font-weight: 600;
+}
+
+.ds-chits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.ds-chit {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #333;
+}
+
+.ds-chit.is-red {
+  background: #b3261e;
+}
+
+.ds-chit.is-yellow {
+  background: #d9a900;
+  color: #1a1a1a;
+}
+
+.ds-chit.is-green {
+  background: #2e7d32;
+}
+
+.ds-chit.is-special {
+  background: #111;
+  border-color: #888;
+}

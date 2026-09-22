@@ -19,6 +19,8 @@
  *    with the campaign it claims to be (docs/architecture.md).
  */
 
+import { sampleAt } from '../engine/dice'
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
@@ -69,20 +71,10 @@ export interface RandomStream {
 /**
  * The fraction at one position of a stream, without moving it — the whole of
  * the campaign's randomness, in a form that depends on nothing but the two
- * numbers above.
- *
- * Counter-based rather than iterated (mulberry32's mixing function applied to
- * `seed` and `cursor`) precisely so that position can be a plain number in a
- * save file: reloading a campaign at cursor 4,000 costs one multiply, not
- * 4,000 of them.
+ * numbers above. The function itself lives with the engine's dice, shared
+ * with Dirtside, so the two games' streams are interchangeable.
  */
-export function sampleAt(seed: number, cursor: number): number {
-  let t = (seed + Math.imul(cursor + 1, 0x9e3779b9)) >>> 0
-  t = (t + 0x6d2b79f5) >>> 0
-  t = Math.imul(t ^ (t >>> 15), t | 1)
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-}
+export { sampleAt }
 
 /** Draw one fraction in [0, 1) and advance the stream. */
 export function draw(stream: RandomStream): number {

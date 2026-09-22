@@ -46,6 +46,21 @@ export class Rng {
   }
 }
 
+/**
+ * The fraction at one position of a counter-based stream: mulberry32's mixing
+ * function applied to `seed` and `cursor` rather than iterated. A stream's
+ * position can then be a plain number in a save file — the campaign and
+ * Dirtside both keep `{ seed, cursor }` as state and draw by advancing the
+ * cursor — and reloading at cursor 4,000 costs one multiply, not 4,000.
+ */
+export function sampleAt(seed: number, cursor: number): number {
+  let t = (seed + Math.imul(cursor + 1, 0x9e3779b9)) >>> 0
+  t = (t + 0x6d2b79f5) >>> 0
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+
 /** One six-sided die (1.7). */
 export function d6(rng: Rng): number {
   return rng.int(6) + 1

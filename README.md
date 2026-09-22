@@ -417,9 +417,38 @@ Pool** on the main menu to use them.
   capacity bar, the faults and the cost sheet on the right, a shelf that always carries the book's eight
   vehicles and keeps your own in this browser, and record cards on paper one at a time or the whole shelf.
 
-One reading to know about: the book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT,
-which p. 10 forbids. It is kept as printed and the Motor Pool shows the fault. The next steps are the dice,
-the chit pot and the direct-fire resolver with the spreadsheet as its oracle, then the table.
+The second step is the fire itself: the dice, the chit pot and direct fire (pp. 28–32, p. 36), with the
+**Firing Range** off the Motor Pool to try any gun on the shelf against any target.
+
+- `dice.ts` is a seeded stream in the campaign's `{ seed, cursor }` shape, handing out D4 to D12; the die
+  *type* is the game's whole modifier system, so nothing here adds to a roll.
+- `chits.ts` is the pot of 119 black chits as the counter sheet prints them, drawn without replacement and
+  returned after every shot; `resolveVehicleHit` reads a draw as p. 30 does (total the valid colours, less
+  than the armour is nothing, equal is damaged, more is knocked out, the specials always count, a BOOM
+  always kills, an F voids the shot) and `resolveInfantryHit` as p. 33 does (specials ignored, 3, 4 or 5
+  points to remove militia, line or powered troops).
+- `odds.ts` is the exact arithmetic: the opposed roll summed outright, one target die or the higher of two,
+  the barrels of a multiple mount sharing one target roll; and every draw of up to five chits enumerated
+  and put through the same resolver the game uses. The 1998 spreadsheet in the user's zip tabulates that
+  distribution for every armour value and validity set, and `odds.test.ts` reproduces all 56 vehicle rows
+  and 24 infantry rows to its six printed decimals.
+- `fire.ts` plans a shot before it is rolled — the band (a damaged firer's bands one worse), the firer's die
+  by fire control, band and movement (off the end of the scale is a refusal), the target's die by
+  signature and the one secondary die its posture allows, the validity for the weapon, band and any
+  ablative or reactive armour — and refuses with the page when the book does. Against infantry there is no
+  roll (p. 36): a fixed number of chits at a shorter reach, an HKP nothing at all.
+- The Firing Range shows the plan and the odds — hit, knocked out, damaged, immobilised, either side's
+  systems down — with the same gun at the edge of each band beside it, then rolls it on a seed and logs
+  the dice and the chits drawn. The seed can be rewound to replay a run.
+
+Readings to know about. The book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT, which
+p. 10 forbids; it is kept as printed and the Motor Pool shows the fault. Vehicle guns firing on infantry have
+two printed validity rules — a colour per weapon on p. 29 and the record card, and "as for infantry
+firefights", by cover, on p. 36 — which cannot both hold; the range offers either, with the card's as the
+default. Three readings only matter against armour 0 and follow the spreadsheet: an F voids a BOOM drawn with
+it, an invalid colour is a total of 0 and so damages a soft skin, and a draw of specials alone has no total
+to compare. The next steps are the table itself: elements and units, the activation sequence, movement and
+the confidence tests.
 
 Two readings to know about: a computer player's fleets are fought by the computer at the table but
 are not moved by it between battles (whoever runs the campaign moves them from the console), and
@@ -443,7 +472,7 @@ src/
   data/      Game content, authored as data: the construction catalogue, ships, scenarios
   ui/        React. The only mutable-state boundary is store.ts
   campaign/  The strategic layer
-  dirtside/  Dirtside II: the ground game's engine, so far its design and pricing
+  dirtside/  Dirtside II: the ground game's engine, so far design, pricing, dice, chits and direct fire
 docs/rules/  Where every rule in the engine comes from, and what is missing
 ```
 
