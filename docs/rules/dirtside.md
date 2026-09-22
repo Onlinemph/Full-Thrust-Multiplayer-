@@ -1446,9 +1446,11 @@ Each platoon-sized UNIT in player's Combat Group has two important characteristi
 |---|---|---|
 | **CONFIDENT (CO)** | Unit will act normally at all times. | Unit will act normally at all times. |
 | **STEADY (ST)** | Unit will act normally at all times. | Unit will act normally at all times. |
-| **SHAKEN (SH)** | Successful REACTION TEST required for unit to LEAVE COVER, or advance towards enemy. If in OPEN, must withdraw to nearest cover. May not Close Assault. If Close-Assaulted, will drop to ROUTED automatically. | Unit will act normally at all times. |
-| **BROKEN (BR)** | Unit is unable to continue in combat, withdraws towards baseline, may not fire. | Unit may no longer advance towards enemy. If in open, must withdraw to nearest cover. |
-| **ROUTED (RO)** | Unit must withdraw towards baseline, may not fire. | Unit must withdraw towards baseline, but may return fire if attacked. |
+| **SHAKEN (SH)** | Successful REACTION TEST is required for unit to LEAVE COVER, or advance towards enemy. | Unit will act normally at all times. |
+| **BROKEN (BR)** | IF in OPEN, must withdraw to nearest cover. May not Close-Assault; if Close-Assaulted, will drop to ROUTED (RO) automatically. | Unit may no longer advance towards enemy. If in open, must withdraw to nearest cover. |
+| **ROUTED (RO)** | Unit is unable to continue in combat; withdraws towards baseline; may not fire. | Unit must withdraw towards baseline, but may return fire if attacked. |
+
+[Corrected against the page image (pt2-p06) on a third reading: the two machine readings had swapped and merged rows.]
 
 **Note:** While infantry units are mounted in APCs or MICVs, treated as "Armour units"; when they DISMOUNT, whole UNIT counted as Dismounted Infantry. Troops in "soft" transport (ordinary trucks) treated as Dismounted at all times for Confidence purposes.
 
@@ -1547,13 +1549,15 @@ Each platoon-sized UNIT in player's Combat Group has two important characteristi
 
 ### EFFECTS OF CONFIDENCE LEVELS (Page 22)
 
-| Confidence Level | Effect on Dismounted Infantry | Effect on Armour |
+| CONFIDENCE LEVEL | DISMOUNTED INFANTRY | ARMOUR |
 |---|---|---|
-| CONFIDENT (CO) | Unit will act normally at all times. | Unit will act normally at all times. |
-| STEADY (ST) | Unit will act normally at all times. | Unit will act normally at all times. |
-| SHAKEN (SH) | Successful REACTION TEST is required for unit to LEAVE COVER, or advance towards enemy. May not Close Assault. If Close-Assaulted, will drop to ROUTED (RO) automatically. | Unit may no longer advance towards enemy. If in open, must withdraw to nearest cover. |
-| BROKEN (BR) | IF in OPEN, must withdraw to nearest cover. | Unit may no longer advance towards enemy. If in open, must withdraw to nearest cover. |
-| ROUTED (RO) | Unit is unable to continue in combat, withdraws towards baseline, but may return fire if attacked. | Unit must withdraw towards baseline, may not fire. |
+| **CONFIDENT (CO)** | Unit will act normally at all times. | Unit will act normally at all times. |
+| **STEADY (ST)** | Unit will act normally at all times. | Unit will act normally at all times. |
+| **SHAKEN (SH)** | Successful REACTION TEST is required for unit to LEAVE COVER, or advance towards enemy. | Unit will act normally at all times. |
+| **BROKEN (BR)** | IF in OPEN, must withdraw to nearest cover. May not Close-Assault; if Close-Assaulted, will drop to ROUTED (RO) automatically. | Unit may no longer advance towards enemy. If in open, must withdraw to nearest cover. |
+| **ROUTED (RO)** | Unit is unable to continue in combat; withdraws towards baseline; may not fire. | Unit must withdraw towards baseline, but may return fire if attacked. |
+
+[Corrected against the page image (pt2-p06) on a third reading: the two machine readings had swapped and merged rows.]
 
 Note: While infantry units are mounted in APCs or MICVs, they are treated as "Armour" units; when they DISMOUNT from their vehicles, the whole UNIT is counted as Dismounted Infantry. Troops in "soft" transport (ordinary trucks) are treated as Dismounted at all times for Confidence purposes.
 

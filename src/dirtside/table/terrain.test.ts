@@ -1,0 +1,81 @@
+/**
+ * The ground: terrain under a point, the line of sight of p. 4 and p. 20,
+ * and the movement example of p. 25.
+ */
+
+import { describe, expect, it } from 'vitest'
+import { lineOfSight, pathCost, terrainAt, woodAt } from './terrain'
+import type { TerrainFeature } from './types'
+
+const wood: TerrainFeature = { id: 'w', terrain: 'light-woods', shape: { kind: 'circle', centre: { x: 20, y: 10 }, radius: 4 }, label: 'a wood' }
+const hill: TerrainFeature = { id: 'h', terrain: 'hills', shape: { kind: 'circle', centre: { x: 20, y: 30 }, radius: 4 }, label: 'a hill' }
+const road: TerrainFeature = { id: 'r', terrain: 'road', shape: { kind: 'path', points: [{ x: 0, y: 5 }, { x: 40, y: 5 }], width: 1 } }
+const rough: TerrainFeature = { id: 'g', terrain: 'rough', shape: { kind: 'rect', x: 6, y: 6, width: 10, height: 10 } }
+
+describe('terrain under a point', () => {
+  it('reads the last feature listed, and open ground where there is none', () => {
+    expect(terrainAt({ x: 20, y: 10 }, [wood])).toBe('light-woods')
+    expect(terrainAt({ x: 1, y: 1 }, [wood])).toBe('open')
+    expect(terrainAt({ x: 10, y: 5 }, [rough, road])).toBe('road')
+  })
+
+  it('tells a wood edge from its interior: the first inch in is the edge (p. 20)', () => {
+    expect(woodAt({ x: 23.5, y: 10 }, [wood])?.where).toBe('edge')
+    expect(woodAt({ x: 20, y: 10 }, [wood])?.where).toBe('within')
+    expect(woodAt({ x: 30, y: 10 }, [wood])).toBeNull()
+  })
+})
+
+describe('line of sight (p. 4, p. 20)', () => {
+  it('is blocked by a wood between two elements and clear beside it', () => {
+    expect(lineOfSight({ x: 10, y: 10 }, { x: 30, y: 10 }, [wood]).clear).toBe(false)
+    expect(lineOfSight({ x: 10, y: 20 }, { x: 30, y: 20 }, [wood]).clear).toBe(true)
+  })
+
+  it('lets an element on the edge of a wood see out and be seen, but not one within', () => {
+    expect(lineOfSight({ x: 23.5, y: 10 }, { x: 35, y: 10 }, [wood]).clear).toBe(true)
+    expect(lineOfSight({ x: 35, y: 10 }, { x: 23.5, y: 10 }, [wood]).clear).toBe(true)
+    const within = lineOfSight({ x: 35, y: 10 }, { x: 20, y: 10 }, [wood])
+    expect(within.clear).toBe(false)
+    expect(within.reason).toMatch(/within a wood/)
+  })
+
+  it('is blocked by high ground unless one end stands on it, and high ground sees over woods', () => {
+    expect(lineOfSight({ x: 10, y: 30 }, { x: 30, y: 30 }, [hill]).clear).toBe(false)
+    expect(lineOfSight({ x: 20, y: 30 }, { x: 30, y: 30 }, [hill]).clear).toBe(true)
+    // From the hill, across the wood, to open ground beyond: the wood does not block.
+    expect(lineOfSight({ x: 20, y: 30 }, { x: 20, y: 0 }, [hill, wood]).clear).toBe(true)
+  })
+
+  it('reaches 60" and no further', () => {
+    expect(lineOfSight({ x: 0, y: 0 }, { x: 60, y: 0 }, []).clear).toBe(true)
+    expect(lineOfSight({ x: 0, y: 0 }, { x: 61, y: 0 }, []).reason).toMatch(/60"/)
+  })
+})
+
+describe('the cost of a path (p. 25)', () => {
+  it('charges the tank of the worked example 8 factors: 4" of road, 2" of open, 2" of rough', () => {
+    // Slow tracked: road easy (in travel mode), open normal, rough poor (p. 25).
+    const features: TerrainFeature[] = [{ id: 'g', terrain: 'rough', shape: { kind: 'rect', x: 20, y: 0, width: 20, height: 20 } }, road]
+    expect(pathCost([{ x: 10, y: 5 }, { x: 14, y: 5 }], 'tracked', features, { travel: true }).factors).toBeCloseTo(2, 1)
+    expect(pathCost([{ x: 14, y: 8 }, { x: 16, y: 8 }], 'tracked', features, { travel: true }).factors).toBeCloseTo(2, 1)
+    expect(pathCost([{ x: 20, y: 8 }, { x: 22, y: 8 }], 'tracked', features, { travel: true }).factors).toBeCloseTo(4, 1)
+    // All together, off the road's own edge: 2 + 2 + 4.
+    const whole = pathCost([{ x: 10, y: 5 }, { x: 14, y: 5 }, { x: 14, y: 5.5 }, { x: 14, y: 7.5 }, { x: 16, y: 7.5 }, { x: 20, y: 7.5 }, { x: 22, y: 7.5 }], 'tracked', features, { travel: true })
+    expect(whole.legs.map((l) => l.going)).toEqual(['easy', 'normal', 'poor'])
+  })
+
+  it('counts easy going as normal unless in travel mode', () => {
+    expect(pathCost([{ x: 0, y: 5 }, { x: 10, y: 5 }], 'tracked', [road]).factors).toBeCloseTo(10, 1)
+    expect(pathCost([{ x: 0, y: 5 }, { x: 10, y: 5 }], 'tracked', [road], { travel: true }).factors).toBeCloseTo(5, 1)
+  })
+
+  it('stops at impassable ground, but lets a wheeled vehicle into the edge of a wood', () => {
+    const blocked = pathCost([{ x: 10, y: 10 }, { x: 20, y: 10 }], 'gev', [wood])
+    expect(blocked.blockedAt).not.toBeNull()
+    expect(blocked.blockedBy).toBe('light-woods')
+    const edge = pathCost([{ x: 10, y: 10 }, { x: 16.5, y: 10 }], 'high-wheeled', [wood])
+    expect(edge.blockedAt).toBeNull()
+    expect(edge.intoWood).toBe(true)
+  })
+})
