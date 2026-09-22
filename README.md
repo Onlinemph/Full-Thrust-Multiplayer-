@@ -462,7 +462,15 @@ over a seeded spread of terrain, with objectives placed as p. 17 says.
 - `tableFire.ts`: the shot from the table — the angle of attack (p. 32), posture and cover for the target's
   dice, rifles, APSW and IAVR fire (pp. 33–36) with the infantry unit's fire-effectiveness roll first.
 - `autoplay.ts` plays both sides with random legal actions; five seeded skirmishes replay from their
-  journals exactly. `tools/drive_dirtside_table.mjs` walks the screen in a browser.
+  journals exactly. `setupCheck.ts` faults a setup whose objectives break p. 17's placement quotas.
+  `tools/drive_dirtside_table.mjs` walks the screen in a browser.
+
+The engine was then read against the page scans by five readers, one chapter each, every finding put to two
+skeptics with the page in front of them; the nine that survived are in (regrouping, the attacker alone ending
+an attack/defence battle, a marker in the enemy's rear area to end an encounter, prepared positions kept and
+re-occupied, cover claimed by contact, one reaction test per move at the highest threat, a SLAM salvo
+catching elements within 1" or 2" of its target, the fire-effectiveness cap counted over the whole platoon,
+no new offensive in the turn a command unit is lost, fixed mounts' 30° arc).
 
 Readings to know about. The book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT, which
 p. 10 forbids; it is kept as printed and the Motor Pool shows the fault. Vehicle guns firing on infantry have
@@ -473,7 +481,9 @@ it, an invalid colour is a total of 0 and so damages a soft skin, and a draw of 
 to compare. On the table: vehicles moving under fire test at +0 as p. 24's marker section says, where
 p. 23's table prints +1; "withdraw to the nearest cover" is enforced as not ending a move nearer the enemy;
 a disorganised unit's moves must each close up on a unit-mate; a wood a mobility type cannot enter may be
-entered to its edge at poor going. Not yet on the table: missiles and area defence, artillery, aircraft and
+entered to its edge at poor going; a vehicle turret down cannot shoot (the book gives turret-down only as the
+target's die); the target's front arc is a square model's 90°; opportunity fire is guns and IAVRs, not a
+firefight. Not yet on the table: missiles and area defence, artillery, aircraft and
 VTOL modes, close assault and mounted infantry, hidden units, smoke and engineering.
 
 Two readings to know about: a computer player's fleets are fought by the computer at the table but

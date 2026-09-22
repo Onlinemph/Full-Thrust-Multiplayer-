@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { motorPoolDesigns } from '../../dirtside/library'
+import { validateSetup } from '../../dirtside/table/setupCheck'
 import { defaultForces, skirmishSetup, type UnitSpec } from '../../dirtside/table/skirmish'
 import type { Leadership, Quality } from '../../dirtside/table/types'
 import type { InfantryTeam, InfantryTroops } from '../../dirtside/types'
@@ -87,6 +88,11 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
       return
     }
     const setup = skirmishSetup({ seed, name, width, depth, terrain, objectivesPerSide: objectives, turnLimit: turnLimit > 0 ? turnLimit : null, north: specsOf(north), south: specsOf(south), northName, southName })
+    const faults = validateSetup(setup)
+    if (faults.length > 0) {
+      setError(faults.map((f) => `${f.detail} (${f.page})`).join(' '))
+      return
+    }
     newDirtsideBattle(setup)
     onStart()
   }

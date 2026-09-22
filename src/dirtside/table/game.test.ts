@@ -257,14 +257,16 @@ describe('fire on the table (pp. 28–32)', () => {
     expect(refused(applyAction(state, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-3', weapon: { kind: 'direct', weaponId: 'hkp3' }, targetId: 's1-3' }, { elementId: 'n1-3', weapon: { kind: 'direct', weaponId: 'hkp3' }, targetId: 's1-2' }] })).page).toBe('p. 18')
   })
 
-  it('a fixed mount fires only before moving, only ahead, and never as opportunity fire (p. 18, p. 20)', () => {
+  it('a fixed mount fires only before moving and only through its 30° arc (p. 11, p. 18)', () => {
+    // n1-2 faces 160°: the target at 10,20 bears 180°, 20° off — outside 15° either side.
     const setup = setupWith([
-      { id: 'n1', side: 'north', vehicles: [{ design: gev(), at: { x: 10, y: 4 }, facing: 180 }, { design: gev(), at: { x: 12, y: 4 }, facing: 90 }] },
+      { id: 'n1', side: 'north', vehicles: [{ design: gev(), at: { x: 10, y: 4 }, facing: 180 }, { design: gev(), at: { x: 10, y: 6 }, facing: 160 }, { design: gev(), at: { x: 10, y: 8 }, facing: 170 }] },
       { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 10, y: 20 } }] },
     ])
     let state = battle(setup)
     state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
-    expect(refused(applyAction(state, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-2', weapon: { kind: 'direct', weaponId: 'mdc2' }, targetId: 's1-1' }] })).reason).toMatch(/front arc/)
+    expect(refused(applyAction(state, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-2', weapon: { kind: 'direct', weaponId: 'mdc2' }, targetId: 's1-1' }] })).reason).toMatch(/30°/)
+    must(applyAction(state, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-3', weapon: { kind: 'direct', weaponId: 'mdc2' }, targetId: 's1-1' }] }))
     const moved = must(applyAction(state, { kind: 'move', side: 'north', elementId: 'n1-1', path: [{ x: 10, y: 8 }] }))
     const after = moved.activation!.window ? must(applyAction(moved, { kind: 'decline-opportunity', side: 'south' })) : moved
     expect(refused(applyAction(after, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-1', weapon: { kind: 'direct', weaponId: 'mdc2' }, targetId: 's1-1' }] })).page).toBe('p. 18')
@@ -337,8 +339,9 @@ describe('opportunity fire (p. 20)', () => {
     expect(state.units['s1']!.activated).toBe(true)
     expect(state.activation!.window).toBeNull()
     expect(state.toAct).toBe('north')
-    // South has no unit left to fire: no further windows.
-    state = must(applyAction(state, { kind: 'move', side: 'north', elementId: 'n1-2', path: [{ x: 12, y: 9 }] }))
+    // South has no unit left to fire: no further windows. (A sideways step: if the salvo killed the
+    // command vehicle, north may not start a new offensive this turn, p. 24.)
+    state = must(applyAction(state, { kind: 'move', side: 'north', elementId: 'n1-2', path: [{ x: 13, y: 3.5 }] }))
     expect(state.activation!.window).toBeNull()
   })
 
@@ -656,6 +659,58 @@ describe('regrouping (p. 24)', () => {
   })
 })
 
+describe('a SLAM salvo at medium or long range (p. 30)', () => {
+  it('may catch other elements within 1" of the target on a 5 or 6, drawing the SLAM\'s chits', () => {
+    const slamTank = tank({ fireControl: 'superior', weapons: [gun('slam', 4)] })
+    let caught = false
+    for (let seed = 1; seed < 60 && !caught; seed++) {
+      const setup = setupWith(
+        [
+          { id: 'n1', side: 'north', vehicles: [{ design: slamTank, at: { x: 10, y: 4 } }] },
+          // 20" away: medium range for a SLAM (12/24/36). Two elements 0.8" from the target, and one 3" off.
+          { id: 's1', side: 'south', vehicles: [{ design: tank({ armour: 1 }), at: { x: 10, y: 24 } }, { design: tank({ armour: 1 }), at: { x: 10.8, y: 24 } }, { design: tank({ armour: 1 }), at: { x: 13, y: 24 } }], infantry: [{ troops: 'line', team: 'rifle', at: { x: 10, y: 24.7 } }] },
+        ],
+        { seed },
+      )
+      let state = battle(setup)
+      state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-1', weapon: { kind: 'direct', weaponId: 'slam4' }, targetId: 's1-1' }] })
+      const splash = state.log.filter((l) => /from the salvo's target|caught in the salvo/.test(l.text))
+      const hit = state.log.some((l) => /— hit\.|hits\./.test(l.text))
+      if (!hit) {
+        expect(splash).toHaveLength(0)
+        continue
+      }
+      // Two elements in the danger area (the vehicle beside and the team behind), never the one 3" off.
+      expect(splash).toHaveLength(2)
+      expect(splash.every((l) => !/s1-3/.test(l.text))).toBe(true)
+      if (splash.some((l) => /caught in the salvo/.test(l.text))) caught = true
+    }
+    expect(caught).toBe(true)
+  })
+})
+
+describe('the fire-effectiveness cap counts the whole platoon (p. 33)', () => {
+  it('halves the elements in range and able to fire, not the shots named', () => {
+    // Four rifle teams in range; a partial result caps draws at two even when one shot is named at a time.
+    for (let seed = 1; seed < 60; seed++) {
+      const setup = setupWith(
+        [
+          { id: 'n1', side: 'north', leadership: 3, infantry: [{ troops: 'line', team: 'rifle', at: { x: 10, y: 4 } }, { troops: 'line', team: 'rifle', at: { x: 11, y: 4 } }, { troops: 'line', team: 'rifle', at: { x: 12, y: 4 } }, { troops: 'line', team: 'rifle', at: { x: 13, y: 4 } }] },
+          { id: 's1', side: 'south', infantry: [{ troops: 'militia', team: 'rifle', at: { x: 11, y: 8 } }] },
+        ],
+        { seed },
+      )
+      let state = battle(setup)
+      state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'fire', side: 'north', shots: [{ elementId: 'n1-t1', weapon: { kind: 'rifles' }, targetId: 's1-t1' }] })
+      const eff = state.activation!.effectiveness!
+      if (eff.result !== 'partial') continue
+      expect(eff.cap).toBe(2)
+      return
+    }
+    throw new Error('no partial result in 60 seeds')
+  })
+})
+
 describe('loss of the command unit (p. 24)', () => {
   it('drops every unit a level when the command vehicle is destroyed', () => {
     let state = battle(openField())
@@ -674,6 +729,10 @@ describe('loss of the command unit (p. 24)', () => {
         expect(s.sides.south.commandLost).toBe(true)
         expect(s.log.some((l) => /command unit is lost/.test(l.text))).toBe(true)
         expect(s.units['s1']!.confidence).not.toBe('CO')
+        // No new offensive for the rest of the turn: the other southern units may not close on the enemy.
+        s = play(s, { kind: 'end-activation', side: 'north' }, { kind: 'activate', side: 'south', unitId: 's1' })
+        const mover = ['s1-2', 's1-3'].find((id) => !s.elements[id]!.destroyed)!
+        expect(refused(applyAction(s, { kind: 'move', side: 'south', elementId: mover, path: [{ x: s.elements[mover]!.position.x, y: 20 }] })).page).toBe('p. 24')
       }
     }
     expect(seen).toBe(true)

@@ -11,10 +11,12 @@
  */
 
 import { mobilityFamily } from '../data/mobility'
+import { APSW_RANGE, validityAgainstInfantry, validityOf } from '../data/weapons'
+import { INFANTRY_KILL_TOTAL, drawChits, firefightValidity, resolveInfantryHit, resolveVehicleHit } from '../chits'
 import { newStream, roll, rollD6 } from '../dice'
 import { describeInfantryHit, describeVehicleHit, fireShot, narrateShot } from '../fire'
 import { CONFIDENCE_LABELS, CONFIDENCE_LEVELS_INDEX, QUALITY_DIE, THREAT, casualtyThreat, confidenceTest, lowerConfidence, raiseConfidence, rallyTest, reactionTest, restrictionsOf } from './confidence'
-import { baseMovement, planTableShot, resolveChitShot, type TableShotPlan, touchesCover, unitKind } from './tableFire'
+import { baseMovement, infantryPosition, planTableShot, resolveChitShot, rifleRange, type TableShotPlan, teamFiresRanged, touchesCover, unitKind } from './tableFire'
 import { bearing, distance, distanceToSegment, lineOfSight, onTable, pathCost, terrainAt, woodAt } from './terrain'
 import {
   type Action,
@@ -132,8 +134,8 @@ export function createGame(setup: GameSetup): GameState {
     elements,
     units,
     sides: {
-      north: { id: 'north', name: setup.sides.find((s) => s.id === 'north')?.name ?? 'North', ready: false, done: false, commandLost: false },
-      south: { id: 'south', name: setup.sides.find((s) => s.id === 'south')?.name ?? 'South', ready: false, done: false, commandLost: false },
+      north: { id: 'north', name: setup.sides.find((s) => s.id === 'north')?.name ?? 'North', ready: false, done: false, commandLost: false, commandLostTurn: null },
+      south: { id: 'south', name: setup.sides.find((s) => s.id === 'south')?.name ?? 'South', ready: false, done: false, commandLost: false, commandLostTurn: null },
     },
     toAct: null,
     chooser: null,
@@ -487,6 +489,8 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
     if (Math.abs(end.y - base) >= Math.abs(el.position.y - base) - 1e-9) return refuse(`${unit.name} is routed and must withdraw towards its baseline.`, 'p. 22')
   }
   if (restrictions.noAdvance && advancing) return refuse(`${unit.name} is ${CONFIDENCE_LABELS[unit.confidence].toLowerCase()} and may not advance towards the enemy.`, 'p. 22')
+  // The turn the command unit is lost, no unit may be given a change of orders: read as no move ending nearer the enemy (p. 24).
+  if (advancing && state.sides[action.side].commandLostTurn === state.turn) return refuse(`${state.sides[action.side].name}'s command unit was lost this turn: no new offensive until the next turn.`, 'p. 24')
 
   // Reaction tests before the move (pp. 22–24): under fire, and shaken
   // infantry advancing or leaving cover. Threat levels are not cumulative:
@@ -637,6 +641,7 @@ function posture(state: GameState, side: SideId, elementId: string, next: Elemen
   if (!el || el.unitId !== got.unit.id) return refuse('That element is not in the activated unit.', 'p. 18')
   if (!el.vehicle) return refuse('Only a vehicle goes hull down or turret down.', 'p. 29')
   if (el.destroyed) return refuse(`${el.name} is knocked out.`, 'p. 30')
+  if (el.systemsDown) return refuse(`${el.name} is systems down and may take no action but moving.`, 'p. 30')
   if (next !== 'none' && !touchesCover(state, el.position)) return refuse('Cover is claimed by contact with a hilltop, ridgeline, wood edge or buildings.', 'p. 20')
   el.posture = next
   if (next !== 'none') log(state, side, `${el.name} goes ${next.replace('-', ' ')}.`, 'p. 29')
@@ -805,7 +810,9 @@ function resolveVolley(state: GameState, side: SideId, unit: UnitState, shots: S
       const die = unit.underFire ? (stepDie(base, -1) ?? 4) : base
       const rolled = roll(die, state.rng)
       const result = rolled < unit.leadership ? 'ineffective' : rolled < 2 * unit.leadership ? 'partial' : 'full'
-      eff = { die, roll: rolled, result, cap: result === 'partial' ? Math.ceil(infantryShots.length / 2) : null, used: 0 }
+      // Half of the elements in range and able to fire (p. 33): counted over the whole unit, not the shots named so far.
+      const eligible = Math.max(infantryShots.length, eligibleFirefighters(state, unit, activation))
+      eff = { die, roll: rolled, result, cap: result === 'partial' ? Math.ceil(eligible / 2) : null, used: 0 }
       if (activation) activation.effectiveness = eff
       log(state, side, `${unit.name} checks fire effectiveness: D${die}${unit.underFire ? ' (under fire)' : ''} rolls ${rolled} against leadership ${unit.leadership} — ${result === 'full' ? 'fully effective' : result === 'partial' ? `partially effective, ${eff.cap} element${eff.cap === 1 ? '' : 's'} may draw` : 'ineffective: no casualties, but the target is under fire'}.`, 'p. 33')
     }
@@ -848,6 +855,7 @@ function resolveVolley(state: GameState, side: SideId, unit: UnitState, shots: S
       const result = fireShot(plan.shot, state.rng)
       if ('ok' in result) return result
       for (const line of narrateShot(result)) log(state, side, `${firer.name} → ${target.name}: ${line}`, 'p. 29')
+      if (result.kind === 'vehicle' && plan.plan.weapon.type === 'slam' && plan.plan.band !== 'close' && result.hits > 0) slamSplash(state, side, plan, result.hits, hits, touch, casualty)
       if (result.kind === 'vehicle') {
         const o = result.outcome
         if (o.knockedOut) {
@@ -905,6 +913,78 @@ function resolveVolley(state: GameState, side: SideId, unit: UnitState, shots: S
   return null
 }
 
+/** Rifle and APSW teams of the unit able to fire now: not yet fired, an enemy in range and in sight (p. 33). */
+function eligibleFirefighters(state: GameState, unit: UnitState, activation: ActivationState | null): number {
+  const enemies = Object.values(state.elements).filter((e) => e.sideId !== unit.sideId && functional(e))
+  let count = 0
+  for (const el of elementsOf(state, unit)) {
+    if (!functional(el) || !el.infantry || !teamFiresRanged(el)) continue
+    if (activation?.elements[el.id]?.fired) continue
+    const reach = el.infantry.team === 'apsw' ? APSW_RANGE : rifleRange(el.infantry.troops)
+    if (enemies.some((t) => distance(el.position, t.position) <= reach && lineOfSight(el.position, t.position, state.setup.table.terrain).clear)) count += 1
+  }
+  return count
+}
+
+/**
+ * A SLAM salvo that hit at medium or long range may also hit any other
+ * element within 1" or 2" of its target (p. 30): a D6 each, 5+ at medium,
+ * 6 at long, and a hit draws the SLAM's chits. Infantry caught this way
+ * draw chits equal to the class (p. 36).
+ */
+function slamSplash(state: GameState, side: SideId, plan: Extract<TableShotPlan, { kind: 'direct' }>, salvos: number, hits: Map<string, UnitHit>, touch: (t: ElementState) => UnitHit, casualty: (t: ElementState, h: UnitHit, before: { damaged: boolean; destroyed: boolean }) => void): void {
+  const weapon = plan.plan.weapon
+  const band = plan.plan.band
+  const radius = band === 'medium' ? 1 : 2
+  const need = band === 'medium' ? 5 : 6
+  const target = state.elements[plan.target.id]!
+  const nearby = Object.values(state.elements).filter((e) => e.id !== target.id && !e.destroyed && distance(e.position, target.position) <= radius)
+  if (nearby.length === 0) return
+  void hits
+  for (let salvo = 0; salvo < salvos; salvo++) {
+    for (const other of nearby) {
+      if (other.destroyed) continue
+      const rolled = rollD6(state.rng)
+      if (rolled < need) {
+        log(state, side, `${other.name}, ${distance(other.position, target.position).toFixed(1)}" from the salvo's target: D6 rolls ${rolled}, needs ${need} — missed.`, 'p. 30')
+        continue
+      }
+      const h = touch(other)
+      h.attacked = true
+      const before = { damaged: other.damaged, destroyed: other.destroyed }
+      const chits = drawChits(weapon.class, state.rng)
+      if (other.vehicle) {
+        const aspect = angleBetweenFacing(other, target)
+        const armour = aspect === 'front' ? other.vehicle.armour : Math.max(0, other.vehicle.armour - 1)
+        const hit = resolveVehicleHit(chits, validityOf('slam', band, { reactive: other.vehicle.armourSpecial === 'reactive' }), armour)
+        log(state, side, `${other.name} is caught in the salvo (D6 ${rolled}): ${describeVehicleHit(hit)}`, 'p. 30')
+        if (hit.knockedOut) other.destroyed = true
+        else {
+          if (hit.damaged) other.damaged = true
+          if (hit.immobilised) other.immobilised = true
+          if (hit.systemsDown) {
+            other.systemsDown = true
+            other.systemsDownAt = state.activationCount
+          }
+        }
+      } else if (other.infantry) {
+        h.antiPersonnel = true
+        const validity = validityAgainstInfantry('slam') ?? firefightValidity(infantryPosition(state, other))
+        const hit = resolveInfantryHit(chits, validity, INFANTRY_KILL_TOTAL[other.infantry.troops])
+        log(state, side, `${other.name} is caught in the salvo (D6 ${rolled}): ${describeInfantryHit(hit)}`, 'p. 36')
+        if (hit.killed) other.destroyed = true
+      }
+      casualty(other, h, before)
+    }
+  }
+}
+
+/** Which face of `other` the salvo strikes: from the direction of the salvo's target, as a stand-in for the firer. */
+function angleBetweenFacing(other: ElementState, from: ElementState): 'front' | 'side' {
+  const a = Math.abs((((bearing(other.position, from.position) - other.facing) % 360) + 540) % 360) - 180
+  return Math.abs(a) <= 45 ? 'front' : 'side'
+}
+
 /** Markers and tests after one attack on a unit (pp. 23–24). */
 function afterAttack(state: GameState, h: UnitHit): void {
   const unit = h.unit
@@ -949,6 +1029,7 @@ function afterAttack(state: GameState, h: UnitHit): void {
   // Loss of the command unit (p. 24): the designated command vehicle (its leader element) destroyed, or the whole unit: every unit of the force drops a level.
   if (unit.commandUnit && (h.leaderDestroyed || !elementsOf(state, unit).some(functional)) && !state.sides[side].commandLost) {
     state.sides[side].commandLost = true
+    state.sides[side].commandLostTurn = state.turn
     for (const u of unitsOf(state, side)) u.confidence = lowerConfidence(u.confidence, 1)
     log(state, side, `${state.sides[side].name}'s command unit is lost: every unit drops a level of confidence, and no rallying is possible.`, 'p. 24')
   }

@@ -18,8 +18,14 @@ import { restrictionsOf } from './confidence'
 import { angleBetween, bearing, lineOfSight, onHighGround, terrainAt, woodAt } from './terrain'
 import { type ActivationElement, type ElementState, type GameState, type Refusal, type ShotOrder, type UnitState, refuse } from './types'
 
-/** Half-angle of the front arc: lines through opposite corners of the model (p. 32). */
+/**
+ * Half-angle of the target's front arc for the angle of attack (p. 32). The
+ * book draws it through the model's diagonal corners; with no model, a
+ * square one's 90° is the convention.
+ */
 export const FRONT_ARC = 45
+/** Half-angle of a fixed mount's fire arc: 30°, 15° either side of the centre-line (p. 11). */
+export const FIXED_MOUNT_ARC = 15
 
 export function baseMovement(element: ElementState): number {
   if (element.vehicle) return baseMovementOf(element.vehicle) ?? 0
@@ -33,9 +39,9 @@ export function unitKind(state: GameState, unit: UnitState): 'infantry' | 'armou
   return live.length > 0 && live.every((e) => e.infantry) ? 'infantry' : 'armour'
 }
 
-/** Whether the target is in the firer's front arc: within 45° of its facing. */
-export function inFrontArc(firer: ElementState, target: ElementState): boolean {
-  return angleBetween(firer.facing, bearing(firer.position, target.position)) <= FRONT_ARC
+/** Whether the target is within a fixed mount's arc: 15° either side of the firer's centre-line (p. 11). */
+export function inFixedArc(firer: ElementState, target: ElementState): boolean {
+  return angleBetween(firer.facing, bearing(firer.position, target.position)) <= FIXED_MOUNT_ARC + 1e-9
 }
 
 /** Which face of the target the shot strikes (p. 32): front within 45° of its facing, otherwise side (rear is the side value, p. 10). */
@@ -128,14 +134,15 @@ export function planTableShot(state: GameState, order: ShotOrder, opts: { activa
   const choice = order.weapon
   if (choice.kind === 'direct') {
     if (!firer.vehicle) return refuse('Only a vehicle carries direct-fire weapons.', 'p. 11')
-    if (firer.posture === 'turret-down') return refuse(`${firer.name} is turret down and cannot see to shoot.`, 'p. 29')
+    // The book gives turret-down only as the target's D12 (p. 29); that a vehicle hidden to the turret cannot shoot is this implementation's reading.
+    if (firer.posture === 'turret-down') return refuse(`${firer.name} is turret down: hidden to the turret, it cannot shoot until it comes up.`, 'p. 29')
     const weaponId = choice.weaponId
     const weapon = firer.vehicle.weapons.find((w) => w.id === weaponId)
     if (!weapon) return refuse('No such weapon on the vehicle.', 'p. 11')
     if (weapon.mount === 'fixed') {
       // p. 18's note bars a fixed mount from moving then firing in its own activation; opportunity fire moves nothing, so only the arc applies.
       if (opts.activation?.moved) return refuse('A fixed mount fires only before, or instead of, moving.', 'p. 18')
-      if (!inFrontArc(firer, target)) return refuse('A fixed mount fires only into the front arc.', 'p. 11')
+      if (!inFixedArc(firer, target)) return refuse('A fixed mount fires through a 30° arc ahead; turn the vehicle to bear.', 'p. 11')
     }
     const shot: Shot =
       target.vehicle

@@ -180,6 +180,8 @@ export interface SideState {
   done: boolean
   /** The command unit is gone: no rallying (p. 24). */
   commandLost: boolean
+  /** The turn it was lost: no new offensives for the rest of it (p. 24). */
+  commandLostTurn: number | null
 }
 
 export type Phase = 'deployment' | 'turn-start' | 'activation' | 'ended'
