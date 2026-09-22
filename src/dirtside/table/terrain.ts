@@ -12,7 +12,11 @@ import { FACTORS_PER_INCH, type Going, type MobilityFamily, type TerrainType, go
 import type { Point, Shape, TerrainFeature } from './types'
 
 export const MAX_SIGHT = 60
-/** How far into a wood an element may stand and still count as on its edge (p. 20). */
+/**
+ * How far into a wood an element may stand and still count as on its edge.
+ * The book measures the edge by contact with the wood's drawn fringe
+ * (p. 20); with woods as filled shapes, the first inch in stands for that.
+ */
 export const WOOD_EDGE = 1
 /** Terrain that blocks a line of sight when the line passes through it (p. 4, p. 20). */
 export const BLOCKS_SIGHT: readonly TerrainType[] = ['light-woods', 'dense-woods', 'urban', 'hills', 'mountains']
@@ -72,10 +76,20 @@ export function depthInside(point: Point, shape: Shape): number {
   }
 }
 
-/** The feature under a point: the last one listed wins, roads and rivers over areas. */
+/**
+ * The feature under a point: the last one listed wins, roads and rivers
+ * over areas — except that an ordinary road through an urban area does
+ * not lift the urban restrictions; only a major highway does (p. 26).
+ */
 export function featureAt(point: Point, features: readonly TerrainFeature[]): TerrainFeature | null {
   let found: TerrainFeature | null = null
-  for (const feature of features) if (insideShape(point, feature.shape)) found = feature
+  let urban: TerrainFeature | null = null
+  for (const feature of features) {
+    if (!insideShape(point, feature.shape)) continue
+    found = feature
+    if (feature.terrain === 'urban') urban = feature
+  }
+  if (found?.terrain === 'road' && !found.majorHighway && urban) return urban
   return found
 }
 
@@ -160,8 +174,10 @@ export interface PathCost {
   blockedBy: TerrainType | null
   /** The goings met, in order, for the log. */
   legs: { terrain: TerrainType; going: Going; length: number }[]
-  /** The path enters a wood the mobility type cannot pass, beyond its edge. */
+  /** The path ends on the edge of a wood the mobility type cannot pass. */
   intoWood: boolean
+  /** Where the path first met that wood's edge. */
+  woodEntry: Point | null
 }
 
 /**
@@ -173,7 +189,7 @@ export interface PathCost {
  * going.
  */
 export function pathCost(path: readonly Point[], family: MobilityFamily, features: readonly TerrainFeature[], opts: { amphibious?: boolean; travel?: boolean } = {}): PathCost {
-  const out: PathCost = { factors: 0, length: 0, blockedAt: null, blockedBy: null, legs: [], intoWood: false }
+  const out: PathCost = { factors: 0, length: 0, blockedAt: null, blockedBy: null, legs: [], intoWood: false, woodEntry: null }
   for (let i = 1; i < path.length; i++) {
     const a = path[i - 1]!
     const b = path[i]!
@@ -191,6 +207,7 @@ export function pathCost(path: readonly Point[], family: MobilityFamily, feature
         const wood = feature && WOODS.includes(feature.terrain) ? depthInside(to, feature.shape) : Number.POSITIVE_INFINITY
         if (wood <= WOOD_EDGE) {
           going = 'poor'
+          if (!out.intoWood) out.woodEntry = { x: from.x, y: from.y }
           out.intoWood = true
         } else {
           out.blockedAt = from
@@ -198,6 +215,7 @@ export function pathCost(path: readonly Point[], family: MobilityFamily, feature
           return out
         }
       }
+      if (going !== 'poor' || !(feature && WOODS.includes(feature.terrain) && goingOf(family, terrain, opts.amphibious) === 'impassable')) out.intoWood = false
       const factors = step * FACTORS_PER_INCH[going]
       out.factors += factors
       out.length += step

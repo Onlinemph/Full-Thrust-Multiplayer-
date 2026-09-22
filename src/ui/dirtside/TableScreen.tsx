@@ -286,6 +286,7 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
                     const command = commandUnitOf(state, s)
                     const canRally = canActivate && u.confidence !== 'CO' && !!command && command.id !== u.id && !state.sides[s].commandLost
                     const canAnswer = !!window && window.sideId === s && !u.activated && alive > 0 && !u.panic && !u.evasive
+                    const canJoin = !!activation && !window && activation.sideId === s && activation.unitId !== u.id && !u.activated && alive > 0
                     return (
                       <li key={u.id} className={`dst-unit${activeUnit?.id === u.id ? ' is-active' : ''}${firingUnit?.id === u.id && opportunity ? ' is-firing' : ''}${alive === 0 ? ' is-gone' : ''}`}>
                         <button className="dst-unit-name" onClick={() => setSelectedId(elementsOf(state, u).find(functional)?.id ?? null)}>
@@ -304,6 +305,11 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
                         </button>
                         {canActivate ? <button onClick={() => { if (act({ kind: 'activate', side: s, unitId: u.id })) reset() }}>Activate</button> : null}
                         {canRally ? <button onClick={() => act({ kind: 'rally', side: s, unitId: u.id })}>Rally</button> : null}
+                        {canJoin ? (
+                          <button onClick={() => { if (act({ kind: 'regroup', side: s, intoUnitId: u.id })) reset() }} title="The activated unit joins this one (p. 24)">
+                            Regroup into
+                          </button>
+                        ) : null}
                         {canAnswer ? (
                           <button className={firingUnit?.id === u.id ? 'primary' : undefined} onClick={() => { setFiringUnitId(u.id); setVolley([]); setSelectedId(elementsOf(state, u).find(functional)?.id ?? null); setMode('fire') }}>
                             Fire with

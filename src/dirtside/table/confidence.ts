@@ -13,6 +13,8 @@ export const QUALITY_DIE: Record<Quality, DieType> = { green: 6, regular: 8, vet
 export const QUALITY_LABELS: Record<Quality, string> = { green: 'Green', regular: 'Regular', veteran: 'Veteran' }
 export const CONFIDENCE_LABELS: Record<Confidence, string> = { CO: 'Confident', ST: 'Steady', SH: 'Shaken', BR: 'Broken', RO: 'Routed' }
 
+export const CONFIDENCE_LEVELS_INDEX: Record<Confidence, number> = { CO: 0, ST: 1, SH: 2, BR: 3, RO: 4 }
+
 export function lowerConfidence(level: Confidence, steps: number): Confidence {
   const at = Math.min(CONFIDENCE_LEVELS.length - 1, CONFIDENCE_LEVELS.indexOf(level) + steps)
   return CONFIDENCE_LEVELS[at]!

@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { newVehicleDesign } from '../design'
 import type { DirectFireWeapon, VehicleDesign } from '../types'
 import { applyAction, canPass, createGame, isOrganised, replay, unactivatedUnits } from './game'
+import { planTableShot } from './tableFire'
 import type { Action, ElementSetup, GameSetup, GameState, Point, Refusal, SideId, TerrainFeature, UnitSetup } from './types'
 
 const gun = (type: DirectFireWeapon['type'], cls: DirectFireWeapon['class'], mount: DirectFireWeapon['mount'] = 'turret'): DirectFireWeapon => ({ id: `${type}${cls}`, type, class: cls, mount, barrels: 1 })
@@ -472,21 +473,209 @@ describe('the end of the game (p. 17)', () => {
     expect(state.result?.values).toEqual({ north: 3, south: 0 })
   })
 
-  it('lets a side holding more than half the markers declare the end, and replays the journal', () => {
+  it('lets a side holding more than half the markers, one in the enemy rear area, declare the end, and replays the journal', () => {
     const setup = setupWith(
       [
-        { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 4 } }] },
+        { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 14 } }] },
         { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 40, y: 34 } }] },
       ],
-      { objectives: [{ id: 'A', position: { x: 10, y: 12 }, value: 2, drawnBy: 'north' }] },
+      { objectives: [{ id: 'A', position: { x: 10, y: 25 }, value: 2, drawnBy: 'north' }] },
     )
     let state = battle(setup, 'north')
     expect(refused(applyAction(state, { kind: 'declare-end', side: 'north' })).page).toBe('p. 17')
-    state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'move', side: 'north', elementId: 'n1-1', path: [{ x: 10, y: 12 }] })
+    // Holding only a marker in its own rear area is not enough, however many that is.
+    const ownRear = structuredClone(state)
+    ownRear.setup.table.objectives = [{ id: 'B', position: { x: 30, y: 10 }, value: 1, drawnBy: 'north' }]
+    ownRear.objectives = { B: { heldBy: 'north' } }
+    expect(refused(applyAction(ownRear, { kind: 'declare-end', side: 'north' })).reason).toMatch(/rear area/)
+    state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'move', side: 'north', elementId: 'n1-1', path: [{ x: 10, y: 25 }] })
     if (state.activation?.window) state = must(applyAction(state, { kind: 'decline-opportunity', side: 'south' }))
     state = play(state, { kind: 'end-activation', side: 'north' }, { kind: 'declare-end', side: 'north' })
     expect(state.result?.winner).toBe('north')
     const again = replay(setup, state.journal)
     expect(again).toEqual(state)
+  })
+
+  it('in an attack/defence battle only the attacker declares the end, and only the defender starts dug in (p. 17, p. 20)', () => {
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 4 }, dugIn: true }] },
+        { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 40, y: 20 }, dugIn: true }] },
+      ],
+      { objectives: [{ id: 'A', position: { x: 30, y: 30 }, value: 2, drawnBy: 'south' }] },
+    )
+    setup.battle = 'attack-defence'
+    setup.attacker = 'north'
+    const state = battle(setup, 'north')
+    expect(state.objectives['A']!.heldBy).toBe('south')
+    expect(state.elements['n1-1']!.dugIn).toBe(false)
+    expect(state.elements['s1-1']!.dugIn).toBe(true)
+    expect(refused(applyAction(state, { kind: 'declare-end', side: 'south' })).reason).toMatch(/only the attacker/)
+    // The encounter version: nobody defends, nobody starts dug in.
+    const open = setupWith([{ id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 4 }, dugIn: true }] }, { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 40, y: 34 } }] }])
+    expect(createGame(open).elements['n1-1']!.dugIn).toBe(false)
+  })
+})
+
+describe('cover on the table (p. 20)', () => {
+  const hill: TerrainFeature = { id: 'h', terrain: 'hills', shape: { kind: 'circle', centre: { x: 10, y: 8 }, radius: 3 }, label: 'a hill' }
+
+  it('hull down is claimed only in contact with cover', () => {
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 4 } }, { design: tank(), at: { x: 10, y: 6 } }] },
+        { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 40, y: 34 } }] },
+      ],
+      { terrain: [hill] },
+    )
+    let state = battle(setup)
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect(refused(applyAction(state, { kind: 'posture', side: 'north', elementId: 'n1-1', posture: 'hull-down' })).page).toBe('p. 20')
+    state = must(applyAction(state, { kind: 'posture', side: 'north', elementId: 'n1-2', posture: 'hull-down' }))
+    expect(state.elements['n1-2']!.posture).toBe('hull-down')
+  })
+
+  it('infantry behind a hilltop are in soft cover: red chits only against them', () => {
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', infantry: [{ troops: 'line', team: 'rifle', at: { x: 10, y: 3 } }] },
+        { id: 's1', side: 'south', infantry: [{ troops: 'line', team: 'rifle', at: { x: 10, y: 7 } }, { troops: 'line', team: 'rifle', at: { x: 14, y: 3 } }] },
+      ],
+      { terrain: [hill] },
+    )
+    let state = battle(setup)
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    const plan = planTableShot(state, { elementId: 'n1-t1', weapon: { kind: 'rifles' }, targetId: 's1-t1' }, { activation: state.activation!.elements['n1-t1']!, opportunity: false })
+    expect(plan.ok && plan.kind === 'chits' && plan.validity).toBe('RED')
+    const open = planTableShot(state, { elementId: 'n1-t1', weapon: { kind: 'rifles' }, targetId: 's1-t2' }, { activation: state.activation!.elements['n1-t1']!, opportunity: false })
+    expect(open.ok && open.kind === 'chits' && open.validity).toBe('R/Y')
+  })
+
+  it('a prepared position left behind can be re-occupied by either side', () => {
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 15 }, dugIn: true }] },
+        { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 10, y: 24 } }] },
+      ],
+      { terrain: [] },
+    )
+    setup.battle = 'attack-defence'
+    setup.attacker = 'south'
+    let state = battle(setup, 'north')
+    expect(state.elements['n1-1']!.dugIn).toBe(true)
+    state = mv(must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' })), 'north', 'n1-1', [{ x: 10, y: 10 }])
+    expect(state.elements['n1-1']!.dugIn).toBe(false)
+    expect(state.prepared).toEqual([{ x: 10, y: 15 }])
+    state = play(state, { kind: 'end-activation', side: 'north' }, { kind: 'activate', side: 'south', unitId: 's1' })
+    state = mv(state, 'south', 's1-1', [{ x: 10, y: 15 }])
+    expect(state.elements['s1-1']!.dugIn).toBe(true)
+  })
+})
+
+describe('the edge of a wood a vehicle cannot enter (p. 25)', () => {
+  it('is left straight back out by the point of entry', () => {
+    const wood: TerrainFeature = { id: 'w', terrain: 'light-woods', shape: { kind: 'circle', centre: { x: 10, y: 14 }, radius: 4 }, label: 'the wood' }
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', vehicles: [{ design: gev(), at: { x: 10, y: 6 } }] },
+        { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 40, y: 34 } }] },
+      ],
+      { terrain: [wood] },
+    )
+    let state = battle(setup)
+    state = mv(must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' })), 'north', 'n1-1', [{ x: 10, y: 10.5 }])
+    expect(state.elements['n1-1']!.wood).toBe('edge')
+    // The entry is the last quarter-inch outside the treeline.
+    expect(state.elements['n1-1']!.woodEntry?.x).toBe(10)
+    expect(Math.abs((state.elements['n1-1']!.woodEntry?.y ?? 0) - 10)).toBeLessThanOrEqual(0.3)
+    state = play(state, { kind: 'end-activation', side: 'north' }, { kind: 'activate', side: 'south', unitId: 's1' }, { kind: 'end-activation', side: 'south' })
+    state = must(applyAction(state, { kind: 'choose-first', side: state.chooser!, first: 'north' }))
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect(refused(applyAction(state, { kind: 'move', side: 'north', elementId: 'n1-1', path: [{ x: 13, y: 11 }] })).page).toBe('p. 25')
+    state = mv(state, 'north', 'n1-1', [{ x: 10, y: 10 }, { x: 10, y: 6 }])
+    expect(state.elements['n1-1']!.woodEntry).toBeNull()
+  })
+})
+
+describe('one reaction test per move, at the highest threat (p. 23)', () => {
+  it('a shaken, under-fire infantry unit advancing rolls once', () => {
+    const setup = setupWith([
+      { id: 'n1', side: 'north', confidence: 'SH', infantry: [{ troops: 'line', team: 'rifle', at: { x: 10, y: 4 } }] },
+      { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 10, y: 30 } }] },
+    ])
+    let state = battle(setup)
+    state.units['n1']!.underFire = true
+    state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'move', side: 'north', elementId: 'n1-t1', path: [{ x: 10, y: 6 }] })
+    const tests = state.log.filter((l) => /tests to move at \+1/.test(l.text))
+    expect(tests).toHaveLength(1)
+    expect(tests[0]!.text).toMatch(/under fire and shaken and advancing/)
+    expect(state.activation!.moveTest).not.toBeNull()
+    expect(state.activation!.advanceTest).toBe(state.activation!.moveTest)
+  })
+})
+
+describe('opportunity fire weapons (p. 20)', () => {
+  it('a fixed mount may fire opportunity fire into its front arc; rifles may not', () => {
+    const setup = setupWith([
+      { id: 'n1', side: 'north', vehicles: [{ design: tank(), at: { x: 10, y: 4 } }] },
+      { id: 's1', side: 'south', vehicles: [{ design: gev(), at: { x: 10, y: 24 }, facing: 0 }], infantry: [{ troops: 'line', team: 'rifle', at: { x: 12, y: 24 } }] },
+    ])
+    let state = battle(setup)
+    state = play(state, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'move', side: 'north', elementId: 'n1-1', path: [{ x: 10, y: 12 }] })
+    expect(state.activation!.window?.sideId).toBe('south')
+    expect(refused(applyAction(state, { kind: 'opportunity-fire', side: 'south', unitId: 's1', shots: [{ elementId: 's1-t1', weapon: { kind: 'rifles' }, targetId: 'n1-1' }] })).reason).toMatch(/direct fire/)
+    state = must(applyAction(state, { kind: 'opportunity-fire', side: 'south', unitId: 's1', shots: [{ elementId: 's1-1', weapon: { kind: 'direct', weaponId: 'mdc2' }, targetId: 'n1-1' }] }))
+    expect(state.units['s1']!.activated).toBe(true)
+  })
+})
+
+describe('regrouping (p. 24)', () => {
+  it('merges the activated unit into an unactivated one it has closed up with', () => {
+    const setup = setupWith([
+      { id: 'n1', side: 'north', quality: 'veteran', leadership: 2, confidence: 'BR', vehicles: [{ design: tank(), at: { x: 10, y: 4 } }, { design: tank(), at: { x: 12, y: 4 } }] },
+      { id: 'n2', side: 'north', quality: 'regular', leadership: 3, confidence: 'ST', vehicles: [{ design: tank(), at: { x: 20, y: 4 } }, { design: tank(), at: { x: 22, y: 4 } }, { design: tank(), at: { x: 24, y: 4 } }] },
+      // The enemy to the west, so closing up eastward is not advancing for the broken unit.
+      { id: 's1', side: 'south', vehicles: [{ design: tank(), at: { x: 2, y: 34 } }] },
+    ])
+    let state = battle(setup)
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect(refused(applyAction(state, { kind: 'regroup', side: 'north', intoUnitId: 'n2' })).reason).toMatch(/within 3"/)
+    state = mv(state, 'north', 'n1-1', [{ x: 18, y: 4 }])
+    state = mv(state, 'north', 'n1-2', [{ x: 18, y: 6 }])
+    state = must(applyAction(state, { kind: 'regroup', side: 'north', intoUnitId: 'n2' }))
+    // The book's example: veteran 2 broken joins regular 3 steady — regular 2, shaken.
+    const merged = state.units['n2']!
+    expect(state.units['n1']).toBeUndefined()
+    expect(merged.quality).toBe('regular')
+    expect(merged.leadership).toBe(2)
+    expect(merged.confidence).toBe('SH')
+    expect(merged.elementIds).toHaveLength(5)
+    expect(merged.activated).toBe(true)
+    expect(state.activation).toBeNull()
+    expect(state.elements['n1-1']!.unitId).toBe('n2')
+  })
+})
+
+describe('loss of the command unit (p. 24)', () => {
+  it('drops every unit a level when the command vehicle is destroyed', () => {
+    let state = battle(openField())
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    // s1-1 leads the southern command unit; strike it down by hand and settle the attack's bookkeeping through a volley.
+    let seen = false
+    for (let seed = 1; seed < 80 && !seen; seed++) {
+      const setup = openField()
+      setup.seed = seed
+      setup.sides[0]!.units[0]!.elements.forEach((e) => (e.vehicle!.fireControl = 'superior'))
+      setup.sides[1]!.units[0]!.elements.forEach((e) => (e.vehicle!.armour = 0))
+      let s = battle(setup)
+      s = play(s, { kind: 'activate', side: 'north', unitId: 'n1' }, { kind: 'fire', side: 'north', shots: ['n1-1', 'n1-2', 'n1-3'].map((id) => ({ elementId: id, weapon: { kind: 'direct' as const, weaponId: 'hkp3' }, targetId: 's1-1' })) })
+      if (s.elements['s1-1']!.destroyed) {
+        seen = true
+        expect(s.sides.south.commandLost).toBe(true)
+        expect(s.log.some((l) => /command unit is lost/.test(l.text))).toBe(true)
+        expect(s.units['s1']!.confidence).not.toBe('CO')
+      }
+    }
+    expect(seen).toBe(true)
   })
 })

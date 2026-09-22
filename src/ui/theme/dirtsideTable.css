@@ -105,6 +105,12 @@
   stroke-linejoin: round;
 }
 
+.dst-terrain.is-ford {
+  stroke: #9fb8c8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .dst-terrain.is-river {
   stroke: #3f6f9f;
   stroke-linecap: round;

@@ -13,8 +13,8 @@
 import { mobilityFamily } from '../data/mobility'
 import { newStream, roll, rollD6 } from '../dice'
 import { describeInfantryHit, describeVehicleHit, fireShot, narrateShot } from '../fire'
-import { CONFIDENCE_LABELS, QUALITY_DIE, THREAT, casualtyThreat, confidenceTest, lowerConfidence, raiseConfidence, rallyTest, reactionTest, restrictionsOf } from './confidence'
-import { baseMovement, planTableShot, resolveChitShot, type TableShotPlan, unitKind } from './tableFire'
+import { CONFIDENCE_LABELS, CONFIDENCE_LEVELS_INDEX, QUALITY_DIE, THREAT, casualtyThreat, confidenceTest, lowerConfidence, raiseConfidence, rallyTest, reactionTest, restrictionsOf } from './confidence'
+import { baseMovement, planTableShot, resolveChitShot, type TableShotPlan, touchesCover, unitKind } from './tableFire'
 import { bearing, distance, distanceToSegment, lineOfSight, onTable, pathCost, terrainAt, woodAt } from './terrain'
 import {
   type Action,
@@ -66,6 +66,8 @@ export function inDeploymentZone(setup: GameSetup, side: SideId, point: Point): 
 export function createGame(setup: GameSetup): GameState {
   const elements: Record<string, ElementState> = {}
   const units: Record<string, UnitState> = {}
+  // Prepared positions are the defender's, in an attack/defence battle (p. 20).
+  const defends = (side: SideId) => setup.battle === 'attack-defence' && side !== (setup.attacker ?? 'north')
   for (const side of setup.sides) {
     let x = 2
     for (const unit of side.units) {
@@ -88,9 +90,10 @@ export function createGame(setup: GameSetup): GameState {
           immobilised: false,
           systemsDown: false,
           systemsDownAt: null,
-          dugIn: !!el.dugIn,
+          dugIn: !!el.dugIn && defends(side.id),
           posture: 'none',
           wood: null,
+          woodEntry: null,
         }
         ids.push(el.id)
         if (el.leader && !leader) leader = el.id
@@ -138,6 +141,7 @@ export function createGame(setup: GameSetup): GameState {
     activationCount: 0,
     owed: 0,
     objectives,
+    prepared: [],
     journal: [],
     log: [{ turn: 0, side: null, text: `${setup.name}: deployment. ${setup.battle === 'encounter' ? 'Both sides deploy within 6" of their baselines.' : `${state0Name(setup, defender!)} defends and deploys first.`}`, page: 'p. 17' }],
     result: null,
@@ -260,6 +264,8 @@ function dispatch(state: GameState, action: Action): Refusal | null {
       return repair(state, action.side, action.elementId)
     case 'rally':
       return rally(state, action.side, action.unitId)
+    case 'regroup':
+      return regroup(state, action.side, action.intoUnitId)
     case 'end-activation':
       return endActivation(state, action.side)
     case 'opportunity-fire':
@@ -400,13 +406,22 @@ function done(state: GameState, side: SideId): Refusal | null {
   return null
 }
 
+/** The third of the table adjoining a side's baseline (p. 17). */
+export function inRearArea(setup: GameSetup, side: SideId, point: Point): boolean {
+  const depth = setup.table.depth
+  return side === 'north' ? point.y <= depth / 3 : point.y >= (2 * depth) / 3
+}
+
 function declareEnd(state: GameState, side: SideId): Refusal | null {
   if (state.phase === 'deployment' || state.phase === 'ended') return refuse('The battle is not under way.', 'p. 17')
-  const total = state.setup.table.objectives.length
-  const held = Object.values(state.objectives).filter((o) => o.heldBy === side).length
-  if (total === 0 || held * 2 <= total) return refuse('Game end may be declared only while holding more than half of the objective markers.', 'p. 17')
+  const setup = state.setup
+  if (setup.battle === 'attack-defence' && side !== (setup.attacker ?? 'north')) return refuse('In an attack/defence battle only the attacker may declare game end.', 'p. 17')
+  const total = setup.table.objectives.length
+  const mine = setup.table.objectives.filter((o) => state.objectives[o.id]?.heldBy === side)
+  if (total === 0 || mine.length * 2 <= total) return refuse('Game end may be declared only while holding more than half of the objective markers.', 'p. 17')
+  if (setup.battle === 'encounter' && !mine.some((o) => inRearArea(setup, otherSide(side), o.position))) return refuse("Game end in an encounter needs at least one marker held in the opponent's rear area.", 'p. 17')
   const values = objectiveValues(state)
-  finish(state, values.north === values.south ? 'draw' : values.north > values.south ? 'north' : 'south', `${state.sides[side].name} declares game end holding ${held} of ${total} objectives`)
+  finish(state, values.north === values.south ? 'draw' : values.north > values.south ? 'north' : 'south', `${state.sides[side].name} declares game end holding ${mine.length} of ${total} objectives`)
   return null
 }
 
@@ -473,23 +488,30 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
   }
   if (restrictions.noAdvance && advancing) return refuse(`${unit.name} is ${CONFIDENCE_LABELS[unit.confidence].toLowerCase()} and may not advance towards the enemy.`, 'p. 22')
 
-  // Under fire: one reaction test, announced with the activation (p. 24).
-  if (unit.underFire && activation.moveTest === null) {
-    const threat = kind === 'infantry' ? THREAT.infantryUnderFireMoving : THREAT.vehiclesUnderFireMoving
-    const test = reactionTest(unit.quality, unit.leadership, threat, state.rng)
-    activation.moveTest = test.passed ? 'passed' : 'failed'
-    log(state, action.side, `${unit.name}, under fire, tests to move: D${test.die} rolls ${test.roll} against ${test.needed} — ${test.passed ? 'it moves' : 'the troops stay put'}.`, 'p. 24')
-    if (!test.passed) return null
-  }
-  // Shaken infantry: a reaction test to leave cover or advance (p. 22).
-  if (restrictions.advanceTest && (advancing || (inCover(state, el) && !inCover(state, el, end)))) {
-    if (activation.advanceTest === 'failed') return refuse(`${unit.name} failed its reaction test to advance this activation.`, 'p. 22')
-    if (activation.advanceTest === null) {
-      const test = reactionTest(unit.quality, unit.leadership, THREAT.shakenInfantryAdvancing, state.rng)
-      activation.advanceTest = test.passed ? 'passed' : 'failed'
-      log(state, action.side, `${unit.name}, shaken, tests to advance: D${test.die} rolls ${test.roll} against ${test.needed} — ${test.passed ? 'it goes' : 'it stays in cover'}.`, 'p. 22')
-      if (!test.passed) return null
+  // Reaction tests before the move (pp. 22–24): under fire, and shaken
+  // infantry advancing or leaving cover. Threat levels are not cumulative:
+  // whatever applies to this one move is a single test at the highest (p. 23).
+  const leavingCover = inCover(state, el) && !inCover(state, el, end)
+  const needsMoveTest = unit.underFire && activation.moveTest === null
+  const needsAdvanceTest = restrictions.advanceTest && (advancing || leavingCover)
+  if (needsAdvanceTest && activation.advanceTest === 'failed') return refuse(`${unit.name} failed its reaction test to advance this activation.`, 'p. 22')
+  if (needsMoveTest || (needsAdvanceTest && activation.advanceTest === null)) {
+    const threats: number[] = []
+    const reasons: string[] = []
+    if (needsMoveTest) {
+      threats.push(kind === 'infantry' ? THREAT.infantryUnderFireMoving : THREAT.vehiclesUnderFireMoving)
+      reasons.push('under fire')
     }
+    if (needsAdvanceTest && activation.advanceTest === null) {
+      threats.push(THREAT.shakenInfantryAdvancing)
+      reasons.push(advancing ? 'shaken and advancing' : 'shaken and leaving cover')
+    }
+    const threat = Math.max(...threats)
+    const test = reactionTest(unit.quality, unit.leadership, threat, state.rng)
+    if (needsMoveTest) activation.moveTest = test.passed ? 'passed' : 'failed'
+    if (needsAdvanceTest) activation.advanceTest = test.passed ? 'passed' : 'failed'
+    log(state, action.side, `${unit.name}, ${reasons.join(' and ')}, tests to move at +${threat}: D${test.die} rolls ${test.roll} against ${test.needed} — ${test.passed ? 'it moves' : 'the troops stay put'}.`, needsMoveTest ? 'p. 24' : 'p. 22')
+    if (!test.passed) return null
   }
 
   const family = el.vehicle ? mobilityFamily(el.vehicle.mobility) : 'infantry'
@@ -497,8 +519,16 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
   if (bmf <= 0) return refuse(`${el.name} has no ground movement.`, 'p. 25')
   const allowance = el.damaged ? bmf / 2 : bmf
   const cap = record.firedBeforeMoving ? Math.min(allowance, bmf / 2) : allowance
-  const cost = pathCost([el.position, ...action.path], family, state.setup.table.terrain, { amphibious: !!el.vehicle?.amphibious, travel: !!action.travel })
+  // Powered infantry take open water as poor going where other infantry cannot enter it (p. 26): the amphibious exception in the table.
+  const wades = !!el.vehicle?.amphibious || el.infantry?.troops === 'powered'
+  const cost = pathCost([el.position, ...action.path], family, state.setup.table.terrain, { amphibious: wades, travel: !!action.travel })
   if (cost.blockedAt) return refuse(`${cost.blockedBy?.replace('-', ' ')} is impassable to ${el.name}.`, 'p. 25')
+  // An element on the edge of a wood it cannot pass leaves straight out by the point it entered (p. 25).
+  if (el.woodEntry) {
+    const first = action.path[0]!
+    if (distance(first, el.woodEntry) > 0.5) return refuse(`${el.name} took cover at the treeline and must move straight back out through the point it entered.`, 'p. 25')
+    if (cost.intoWood) return refuse(`${el.name} may not move along the wood; it leaves the way it came.`, 'p. 25')
+  }
   if (record.factorsUsed + cost.factors > cap + 1e-9) {
     const why = record.firedBeforeMoving ? 'having fired without the movement penalty, it may move at most half its base movement' : el.damaged ? 'a damaged vehicle moves at half speed' : `its base movement is ${bmf}`
     return refuse(`That path costs ${cost.factors.toFixed(1)} factors and ${el.name} has ${(cap - record.factorsUsed).toFixed(1)} left: ${why}.`, record.firedBeforeMoving ? 'p. 28' : el.damaged ? 'p. 30' : 'p. 25')
@@ -520,15 +550,18 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
   el.position = { ...end }
   const last = action.path.length >= 2 ? action.path[action.path.length - 2]! : from
   el.facing = action.facing !== undefined ? ((action.facing % 360) + 360) % 360 : cost.length > 0 ? bearing(last, end) : el.facing
-  el.dugIn = false
+  // A prepared position stays on the table when it is left, and either side may re-occupy it (p. 20).
+  if (wasDugIn && !state.prepared.some((q) => distance(q, from) < 0.01)) state.prepared.push(from)
+  el.dugIn = state.prepared.some((q) => distance(q, end) <= 0.5)
   el.posture = 'none'
+  el.woodEntry = cost.intoWood ? (el.woodEntry ?? cost.woodEntry ?? { ...from }) : null
   el.wood = woodAt(el.position, state.setup.table.terrain)?.where ?? null
   record.factorsUsed += cost.factors
   record.moved = true
   if (action.evasive) record.evasive = true
   if (action.travel) record.travel = true
   const legs = cost.legs.map((l) => `${l.length.toFixed(1)}" ${l.terrain.replace('-', ' ')} (${l.going})`).join(', ')
-  log(state, action.side, `${el.name} moves ${cost.length.toFixed(1)}" for ${cost.factors.toFixed(1)} of ${cap} factors: ${legs}${action.evasive ? '; evading' : ''}${action.travel ? '; travel mode' : ''}${wasDugIn ? '; leaves its prepared position' : ''}.`, 'p. 25')
+  log(state, action.side, `${el.name} moves ${cost.length.toFixed(1)}" for ${cost.factors.toFixed(1)} of ${cap} factors: ${legs}${action.evasive ? '; evading' : ''}${action.travel ? '; travel mode' : ''}${wasDugIn ? '; leaves its prepared position' : ''}${el.dugIn ? '; occupies a prepared position' : ''}.`, 'p. 25')
   if (el.wood === 'within') log(state, action.side, `${el.name} is within the wood: it can neither fire nor be fired on.`, 'p. 20')
   takeObjectives(state, action.side, [record.startPosition, ...action.path].slice(-(action.path.length + 1)), el)
   openWindow(state, activation, el)
@@ -583,6 +616,8 @@ function opportunityFire(state: GameState, side: SideId, unitId: string, shots: 
     if (!t || t.unitId !== activation.unitId) return refuse('Opportunity fire is against the unit being moved.', 'p. 20')
     const f = state.elements[s.elementId]
     if (!f || f.unitId !== unit.id) return refuse('Every firer must belong to the unit firing.', 'p. 20')
+    // "Able to engage the moving unit with direct-fire weaponry" (p. 20): guns and IAVRs, not a firefight's rifles and APSWs.
+    if (s.weapon.kind !== 'direct' && s.weapon.kind !== 'iavr') return refuse('Opportunity fire is direct fire: guns and IAVRs, not a firefight.', 'p. 20')
   }
   const outcome = resolveVolley(state, side, unit, shots, { opportunity: true })
   if (outcome) return outcome
@@ -602,6 +637,7 @@ function posture(state: GameState, side: SideId, elementId: string, next: Elemen
   if (!el || el.unitId !== got.unit.id) return refuse('That element is not in the activated unit.', 'p. 18')
   if (!el.vehicle) return refuse('Only a vehicle goes hull down or turret down.', 'p. 29')
   if (el.destroyed) return refuse(`${el.name} is knocked out.`, 'p. 30')
+  if (next !== 'none' && !touchesCover(state, el.position)) return refuse('Cover is claimed by contact with a hilltop, ridgeline, wood edge or buildings.', 'p. 20')
   el.posture = next
   if (next !== 'none') log(state, side, `${el.name} goes ${next.replace('-', ' ')}.`, 'p. 29')
   return null
@@ -646,6 +682,53 @@ function rally(state: GameState, side: SideId, unitId: string): Refusal | null {
   return null
 }
 
+/**
+ * Regrouping (p. 24): the activated, depleted unit has moved within
+ * integrity distance of another unit that has not yet activated; both
+ * activations are spent and the two become one unit with the better
+ * leadership, the quality of the larger, and the average confidence
+ * rounded towards the worse.
+ */
+function regroup(state: GameState, side: SideId, intoUnitId: string): Refusal | null {
+  const got = activeUnit(state, side)
+  if ('ok' in got) return got
+  const { unit, activation } = got
+  const into = state.units[intoUnitId]
+  if (!into || into.sideId !== side || into.id === unit.id) return refuse('Regroup with another unit of your own.', 'p. 24')
+  if (into.activated) return refuse(`${into.name} has already activated this turn; the regrouping waits until the next turn.`, 'p. 24')
+  if (!elementsOf(state, into).some(functional)) return refuse(`${into.name} has no element left.`, 'p. 24')
+  if (Object.values(activation.elements).some((r) => r.fired)) return refuse('A unit that regroups may not perform a combat action as well as its movement.', 'p. 24')
+  const mine = elementsOf(state, unit).filter(functional)
+  const theirs = elementsOf(state, into).filter(functional)
+  const limit = INTEGRITY[unitKind(state, into)]
+  if (!mine.every((e) => theirs.some((o) => distance(e.position, o.position) <= limit + 1e-9))) return refuse(`Every element must be within ${limit}" of ${into.name} to regroup.`, 'p. 24')
+  const larger = theirs.length >= mine.length ? into : unit
+  const leadership = Math.min(unit.leadership, into.leadership) as UnitState['leadership']
+  const average = Math.ceil((CONFIDENCE_LEVELS_INDEX[unit.confidence] + CONFIDENCE_LEVELS_INDEX[into.confidence]) / 2)
+  const confidence = lowerConfidence('CO', average)
+  const wasQuality = into.quality
+  into.quality = larger.quality
+  into.leadership = leadership
+  into.confidence = confidence
+  into.strength += unit.strength
+  into.casualties += unit.casualties
+  into.underFire = into.underFire || unit.underFire
+  into.contacted = into.contacted || unit.contacted
+  into.firstLossTaken = into.firstLossTaken || unit.firstLossTaken
+  for (const e of elementsOf(state, unit)) {
+    e.unitId = into.id
+    into.elementIds.push(e.id)
+  }
+  delete state.units[unit.id]
+  into.activated = true
+  into.underFire = false
+  state.activation = null
+  state.activationCount += 1
+  log(state, side, `${unit.name} regroups into ${into.name}: ${into.elementIds.filter((id) => functional(state.elements[id]!)).length} elements, ${into.quality === wasQuality ? into.quality : `${into.quality} (the larger unit's)`} ${into.leadership}, ${CONFIDENCE_LABELS[confidence]}. Both activations are spent.`, 'p. 24')
+  settleTurnFlow(state, side, true)
+  return null
+}
+
 function endActivation(state: GameState, side: SideId): Refusal | null {
   const got = activeUnit(state, side)
   if ('ok' in got) return got
@@ -662,6 +745,7 @@ function endActivation(state: GameState, side: SideId): Refusal | null {
     log(state, side, `${unit.name} is evading until its next activation.`, 'p. 27')
   }
   unit.activated = true
+  // "Invert the Command Marker and then remove any UNDER FIRE markers" (p. 19); the same when an activation is spent any other way.
   unit.underFire = false
   state.activation = null
   state.activationCount += 1
@@ -862,8 +946,8 @@ function afterAttack(state: GameState, h: UnitHit): void {
       log(state, side, `${next.name} takes command of ${unit.name}: D6 rolls ${rolled}, leadership ${was} becomes ${unit.leadership}.`, 'p. 23')
     }
   }
-  // Loss of the command unit (p. 24): every unit of the force drops a level.
-  if (unit.commandUnit && !elementsOf(state, unit).some(functional) && !state.sides[side].commandLost) {
+  // Loss of the command unit (p. 24): the designated command vehicle (its leader element) destroyed, or the whole unit: every unit of the force drops a level.
+  if (unit.commandUnit && (h.leaderDestroyed || !elementsOf(state, unit).some(functional)) && !state.sides[side].commandLost) {
     state.sides[side].commandLost = true
     for (const u of unitsOf(state, side)) u.confidence = lowerConfidence(u.confidence, 1)
     log(state, side, `${state.sides[side].name}'s command unit is lost: every unit drops a level of confidence, and no rallying is possible.`, 'p. 24')

@@ -72,6 +72,8 @@ export type TerrainType =
   | 'river'
   | 'light-woods'
   | 'dense-woods'
+  /** A designated crossing of a river, drawn over it (p. 26). */
+  | 'ford'
 
 export type Going = 'easy' | 'normal' | 'poor' | 'difficult' | 'impassable'
 
@@ -107,35 +109,40 @@ export function mobilityFamily(type: MobilityType): MobilityFamily {
 const TERRAIN: Record<MobilityFamily, Partial<Record<TerrainType, Going>>> = {
   infantry: {
     road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', urban: 'normal', hills: 'normal', 'light-woods': 'normal',
-    mountains: 'poor', swamp: 'poor', 'dense-woods': 'poor', river: 'difficult', 'open-water': 'impassable',
+    mountains: 'poor', swamp: 'poor', 'dense-woods': 'poor', river: 'difficult', ford: 'difficult', 'open-water': 'impassable',
   },
   'low-wheeled': {
-    road: 'easy', open: 'poor', urban: 'poor', hills: 'poor', 'light-scrub': 'difficult', cultivated: 'difficult', river: 'difficult',
+    // Rivers "crossing only at designated Ford — otherwise impassable" (p. 26).
+    road: 'easy', open: 'poor', urban: 'poor', hills: 'poor', 'light-scrub': 'difficult', cultivated: 'difficult', ford: 'difficult', river: 'impassable',
     rough: 'impassable', mountains: 'impassable', swamp: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   'high-wheeled': {
-    road: 'easy', open: 'normal', 'light-scrub': 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', rough: 'difficult', swamp: 'difficult', river: 'difficult',
+    road: 'easy', open: 'normal', 'light-scrub': 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', rough: 'difficult', swamp: 'difficult', river: 'difficult', ford: 'difficult',
     mountains: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   tracked: {
-    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', mountains: 'difficult', 'light-woods': 'difficult', river: 'difficult',
+    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', mountains: 'difficult', 'light-woods': 'difficult', river: 'difficult', ford: 'difficult',
     swamp: 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   gev: {
-    road: 'easy', open: 'easy', 'open-water': 'easy', swamp: 'normal', 'light-scrub': 'poor', hills: 'poor', urban: 'difficult', cultivated: 'difficult', rough: 'difficult', river: 'difficult',
+    road: 'easy', open: 'easy', 'open-water': 'easy', swamp: 'normal', 'light-scrub': 'poor', hills: 'poor', urban: 'difficult', cultivated: 'difficult', rough: 'difficult', river: 'difficult', ford: 'difficult',
     mountains: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable',
   },
   grav: {
-    road: 'easy', open: 'easy', 'open-water': 'easy', river: 'easy', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', swamp: 'normal', urban: 'poor', hills: 'poor', mountains: 'difficult',
+    road: 'easy', open: 'easy', 'open-water': 'easy', river: 'easy', ford: 'easy', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', swamp: 'normal', urban: 'poor', hills: 'poor', mountains: 'difficult',
     'light-woods': 'impassable', 'dense-woods': 'impassable',
   },
   walker: {
-    road: 'normal', open: 'normal', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', hills: 'normal', river: 'normal', 'open-water': 'poor',
+    road: 'normal', open: 'normal', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', hills: 'normal', river: 'normal', ford: 'normal', 'open-water': 'poor',
     mountains: 'poor', swamp: 'poor', 'light-woods': 'poor', 'dense-woods': 'poor', urban: 'difficult',
   },
 }
 
-/** How a mobility family takes a terrain type (p. 26). Open water is passable at "poor" for an amphibious vehicle. */
+/**
+ * How a mobility family takes a terrain type (p. 26). Open water is passable
+ * at "poor" for an amphibious vehicle, and for powered infantry, whom p. 26
+ * excepts from the infantry's impassable water in the same words.
+ */
 export function goingOf(family: MobilityFamily, terrain: TerrainType, amphibious = false): Going {
   const going = TERRAIN[family][terrain] ?? 'normal'
   if (going === 'impassable' && terrain === 'open-water' && amphibious) return 'poor'

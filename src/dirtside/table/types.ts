@@ -37,6 +37,8 @@ export interface TerrainFeature {
   terrain: TerrainType
   shape: Shape
   label?: string
+  /** A road that is a major highway keeps road going through an urban area; an ordinary street does not (p. 26). */
+  majorHighway?: boolean
 }
 
 /** An objective marker (p. 17): face down, taken by moving over it. */
@@ -138,6 +140,8 @@ export interface ElementState {
   posture: Posture
   /** In a wood: on its edge or within it (p. 20). Derived from the position, kept for the record. */
   wood: 'edge' | 'within' | null
+  /** Where it entered the edge of a wood its mobility type cannot pass: it leaves by the same point (p. 25). */
+  woodEntry: Point | null
 }
 
 export interface UnitState {
@@ -258,6 +262,8 @@ export interface GameState {
   /** After a pass, the other side owes this many activations in succession (p. 18). */
   owed: number
   objectives: Record<string, { heldBy: SideId | null }>
+  /** Prepared positions left on the table when a dug-in element moved off; either side may re-occupy them (p. 20). */
+  prepared: Point[]
   journal: Action[]
   log: LogEntry[]
   result: GameResult | null
@@ -304,6 +310,8 @@ export type Action =
   | { kind: 'fire'; side: SideId; shots: ShotOrder[] }
   | { kind: 'repair'; side: SideId; elementId: string }
   | { kind: 'rally'; side: SideId; unitId: string }
+  /** The activated unit joins another, unactivated one it has closed up with (p. 24). */
+  | { kind: 'regroup'; side: SideId; intoUnitId: string }
   | { kind: 'end-activation'; side: SideId }
   | { kind: 'opportunity-fire'; side: SideId; unitId: string; shots: ShotOrder[] }
   | { kind: 'decline-opportunity'; side: SideId; forActivation?: boolean }

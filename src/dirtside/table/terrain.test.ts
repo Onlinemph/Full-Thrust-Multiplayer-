@@ -70,6 +70,24 @@ describe('the cost of a path (p. 25)', () => {
     expect(pathCost([{ x: 0, y: 5 }, { x: 10, y: 5 }], 'tracked', [road], { travel: true }).factors).toBeCloseTo(5, 1)
   })
 
+  it('gives an ordinary road through a town the urban going, and a major highway the road going (p. 26)', () => {
+    const town: TerrainFeature = { id: 't', terrain: 'urban', shape: { kind: 'rect', x: 10, y: 0, width: 10, height: 10 } }
+    const street: TerrainFeature = { id: 's', terrain: 'road', shape: { kind: 'path', points: [{ x: 0, y: 5 }, { x: 30, y: 5 }], width: 1 } }
+    expect(terrainAt({ x: 15, y: 5 }, [town, street])).toBe('urban')
+    expect(terrainAt({ x: 15, y: 5 }, [town, { ...street, majorHighway: true }])).toBe('road')
+    expect(terrainAt({ x: 5, y: 5 }, [town, street])).toBe('road')
+  })
+
+  it('lets low-mobility wheels cross a river only at a ford, and powered infantry wade open water (p. 26)', () => {
+    const river: TerrainFeature = { id: 'r', terrain: 'river', shape: { kind: 'path', points: [{ x: 20, y: 0 }, { x: 20, y: 40 }], width: 1 } }
+    const ford: TerrainFeature = { id: 'f', terrain: 'ford', shape: { kind: 'circle', centre: { x: 20, y: 10 }, radius: 1 } }
+    expect(pathCost([{ x: 18, y: 20 }, { x: 22, y: 20 }], 'low-wheeled', [river, ford]).blockedBy).toBe('river')
+    expect(pathCost([{ x: 18, y: 10 }, { x: 22, y: 10 }], 'low-wheeled', [river, ford]).blockedAt).toBeNull()
+    const lake: TerrainFeature = { id: 'l', terrain: 'open-water', shape: { kind: 'circle', centre: { x: 30, y: 30 }, radius: 3 } }
+    expect(pathCost([{ x: 26, y: 30 }, { x: 30, y: 30 }], 'infantry', [lake]).blockedBy).toBe('open-water')
+    expect(pathCost([{ x: 26, y: 30 }, { x: 30, y: 30 }], 'infantry', [lake], { amphibious: true }).blockedAt).toBeNull()
+  })
+
   it('stops at impassable ground, but lets a wheeled vehicle into the edge of a wood', () => {
     const blocked = pathCost([{ x: 10, y: 10 }, { x: 20, y: 10 }], 'gev', [wood])
     expect(blocked.blockedAt).not.toBeNull()

@@ -15,7 +15,7 @@ import type { DiceStream } from '../dice'
 import { type InfantryShotPlan, type Shot, type VehicleShotPlan, fireShot, planShot } from '../fire'
 import type { InfantryPosition, TargetPosture } from '../types'
 import { restrictionsOf } from './confidence'
-import { angleBetween, bearing, lineOfSight, terrainAt, woodAt } from './terrain'
+import { angleBetween, bearing, lineOfSight, onHighGround, terrainAt, woodAt } from './terrain'
 import { type ActivationElement, type ElementState, type GameState, type Refusal, type ShotOrder, type UnitState, refuse } from './types'
 
 /** Half-angle of the front arc: lines through opposite corners of the model (p. 32). */
@@ -53,12 +53,23 @@ export function vehiclePosture(state: GameState, target: ElementState, unit: Uni
   return 'none'
 }
 
-/** Where an infantry element stands, for chit validity (p. 33). */
+/**
+ * Where an infantry element stands, for chit validity (p. 33): dug in, in
+ * an urban area, in soft cover on a wood edge or behind a hilltop or
+ * ridgeline (p. 20), or in the open.
+ */
 export function infantryPosition(state: GameState, target: ElementState): InfantryPosition {
   if (target.dugIn) return 'dug-in'
-  if (terrainAt(target.position, state.setup.table.terrain) === 'urban') return 'urban'
-  if (woodAt(target.position, state.setup.table.terrain)?.where === 'edge') return 'soft-cover'
+  const terrain = state.setup.table.terrain
+  if (terrainAt(target.position, terrain) === 'urban') return 'urban'
+  if (woodAt(target.position, terrain)?.where === 'edge' || onHighGround(target.position, terrain)) return 'soft-cover'
   return 'open'
+}
+
+/** Terrain an element can claim cover from by contact (p. 20): high ground, a wood edge, an urban area. */
+export function touchesCover(state: GameState, at: ElementState['position']): boolean {
+  const terrain = state.setup.table.terrain
+  return onHighGround(at, terrain) || woodAt(at, terrain)?.where === 'edge' || terrainAt(at, terrain) === 'urban'
 }
 
 export interface TablePlanBase {
@@ -122,7 +133,7 @@ export function planTableShot(state: GameState, order: ShotOrder, opts: { activa
     const weapon = firer.vehicle.weapons.find((w) => w.id === weaponId)
     if (!weapon) return refuse('No such weapon on the vehicle.', 'p. 11')
     if (weapon.mount === 'fixed') {
-      if (opts.opportunity) return refuse('A fixed mount cannot fire opportunity fire; it fires only before, or instead of, moving.', 'p. 20')
+      // p. 18's note bars a fixed mount from moving then firing in its own activation; opportunity fire moves nothing, so only the arc applies.
       if (opts.activation?.moved) return refuse('A fixed mount fires only before, or instead of, moving.', 'p. 18')
       if (!inFrontArc(firer, target)) return refuse('A fixed mount fires only into the front arc.', 'p. 11')
     }
