@@ -27,6 +27,10 @@ export interface MainMenuProps {
   onNewCampaign: () => void
   /** Dirtside II's vehicle designer. */
   onMotorPool: () => void
+  /** A Dirtside battle under way, or null. */
+  dirtsideLabel: string | null
+  /** The Dirtside table: continue the battle, or set up a skirmish. */
+  onDirtside: () => void
   /** Rules presets: what a table allows and plays under. */
   onHouseRules: () => void
 }
@@ -45,6 +49,8 @@ export function MainMenu({
   onContinueCampaign,
   onNewCampaign,
   onMotorPool,
+  dirtsideLabel,
+  onDirtside,
   onHouseRules,
 }: MainMenuProps) {
   const [size, setSize] = useState({ width: 1280, height: 800 })
@@ -94,6 +100,9 @@ export function MainMenu({
             </button>
           ) : null}
           <button onClick={onNewCampaign}>{campaignLabel ? 'New campaign' : 'Campaign'}</button>
+          <button onClick={onDirtside}>
+            {dirtsideLabel ? 'Continue the ground battle' : 'Dirtside table'} <span className="menu-hint">{dirtsideLabel ?? 'Dirtside II skirmish'}</span>
+          </button>
           <button onClick={onMotorPool}>
             Motor Pool <span className="menu-hint">Dirtside II vehicle designer</span>
           </button>

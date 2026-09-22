@@ -441,14 +441,40 @@ The second step is the fire itself: the dice, the chit pot and direct fire (pp. 
   systems down — with the same gun at the edge of each band beside it, then rolls it on a seed and logs
   the dice and the chits drawn. The seed can be rewound to replay a run.
 
+The third step is the table itself, under `src/dirtside/table/`, and the **Dirtside table** on the main menu
+to play it hot-seat: a skirmish of the book's vehicles and infantry (or your own, off the Motor Pool shelf)
+over a seeded spread of terrain, with objectives placed as p. 17 says.
+
+- `types.ts` and `game.ts`: a battle is a setup plus a journal of actions, and `applyAction` is the one door.
+  Deployment within 6" of the baseline; the side with fewer units choosing who activates first; the
+  integrated sequence of one unit at a time, a pass allowed only with fewer unactivated units and paid for
+  with two activations in succession (pp. 17–18); a unit's activation as moves and one combat action per
+  element, fixed mounts before moving, a volley declared whole with shots at a dead target wasted (p. 28);
+  the opponent's opportunity window after each move, its fire spending that unit's activation (p. 20);
+  under-fire markers, the panic of green troops, casualty tests at the p. 23 threat levels, a fallen leader
+  replaced on a D6, the loss of the command unit; rallying through the command unit and repairs on a 6
+  (pp. 22–24, p. 32); objectives taken by moving over them, a declared game end or a turn limit.
+- `terrain.ts`: the ground as circles, rectangles and wide paths; a wood's edge is its first inch (p. 20);
+  line of sight to 60" blocked by woods, buildings and high ground unless one end stands on the high
+  ground (p. 4); a path costed by the going each quarter inch of it meets, easy only in travel mode (p. 25).
+- `confidence.ts`: the quality dice, the confidence, reaction and rally tests, what each level forbids as
+  the page prints it (the digest's two copies of that table were both wrong; the engine follows the scan).
+- `tableFire.ts`: the shot from the table — the angle of attack (p. 32), posture and cover for the target's
+  dice, rifles, APSW and IAVR fire (pp. 33–36) with the infantry unit's fire-effectiveness roll first.
+- `autoplay.ts` plays both sides with random legal actions; five seeded skirmishes replay from their
+  journals exactly. `tools/drive_dirtside_table.mjs` walks the screen in a browser.
+
 Readings to know about. The book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT, which
 p. 10 forbids; it is kept as printed and the Motor Pool shows the fault. Vehicle guns firing on infantry have
 two printed validity rules — a colour per weapon on p. 29 and the record card, and "as for infantry
 firefights", by cover, on p. 36 — which cannot both hold; the range offers either, with the card's as the
 default. Three readings only matter against armour 0 and follow the spreadsheet: an F voids a BOOM drawn with
 it, an invalid colour is a total of 0 and so damages a soft skin, and a draw of specials alone has no total
-to compare. The next steps are the table itself: elements and units, the activation sequence, movement and
-the confidence tests.
+to compare. On the table: vehicles moving under fire test at +0 as p. 24's marker section says, where
+p. 23's table prints +1; "withdraw to the nearest cover" is enforced as not ending a move nearer the enemy;
+a disorganised unit's moves must each close up on a unit-mate; a wood a mobility type cannot enter may be
+entered to its edge at poor going. Not yet on the table: missiles and area defence, artillery, aircraft and
+VTOL modes, close assault and mounted infantry, hidden units, smoke and engineering.
 
 Two readings to know about: a computer player's fleets are fought by the computer at the table but
 are not moved by it between battles (whoever runs the campaign moves them from the console), and
@@ -472,7 +498,7 @@ src/
   data/      Game content, authored as data: the construction catalogue, ships, scenarios
   ui/        React. The only mutable-state boundary is store.ts
   campaign/  The strategic layer
-  dirtside/  Dirtside II: the ground game's engine, so far design, pricing, dice, chits and direct fire
+  dirtside/  Dirtside II: the ground game's engine — design, pricing, dice, chits, direct fire, and table/ the battle
 docs/rules/  Where every rule in the engine comes from, and what is missing
 ```
 

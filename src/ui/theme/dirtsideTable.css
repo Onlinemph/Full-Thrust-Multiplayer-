@@ -1,0 +1,467 @@
+/* Dirtside II: the table.
+   ────────────────────────────────────────────────────────────────────────────
+   The map is inches; the counters are the book's 1/300 models drawn as
+   coloured blocks with a nose, the markers beside them the counter sheet's
+   own abbreviations. */
+
+.dst-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.dst-table {
+  position: relative;
+  min-height: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.dst-map {
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+  font-family: var(--font-body);
+}
+
+.dst-banner {
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.dst-ground {
+  fill: #6f7d4f;
+}
+
+.dst-third {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.08;
+  stroke-dasharray: 0.6 0.4;
+}
+
+.dst-zone {
+  fill: rgba(255, 255, 255, 0.08);
+}
+
+.dst-zone.is-north {
+  fill: rgba(90, 160, 255, 0.15);
+}
+
+.dst-zone.is-south {
+  fill: rgba(255, 150, 70, 0.15);
+}
+
+.dst-terrain {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 0.08;
+}
+
+.dst-terrain.is-light-woods {
+  fill: #3f6b3a;
+}
+
+.dst-terrain.is-dense-woods {
+  fill: #2c4d2a;
+}
+
+.dst-terrain.is-hills {
+  fill: #9a8a5a;
+}
+
+.dst-terrain.is-mountains {
+  fill: #7a6f5f;
+}
+
+.dst-terrain.is-rough {
+  fill: #8a8a7a;
+}
+
+.dst-terrain.is-light-scrub {
+  fill: #7f8d55;
+}
+
+.dst-terrain.is-cultivated {
+  fill: #b5a04a;
+}
+
+.dst-terrain.is-urban {
+  fill: #6b6b70;
+}
+
+.dst-terrain.is-swamp {
+  fill: #4f7a6a;
+}
+
+.dst-terrain.is-open-water {
+  fill: #3f6f9f;
+}
+
+.dst-terrain.is-road {
+  stroke: #c9b78a;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dst-terrain.is-river {
+  stroke: #3f6f9f;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dst-objective polygon {
+  fill: #e6d36a;
+  stroke: #333;
+  stroke-width: 0.08;
+}
+
+.dst-objective.is-north polygon {
+  fill: #7fb3ff;
+}
+
+.dst-objective.is-south polygon {
+  fill: #ffb070;
+}
+
+.dst-objective-label {
+  font-size: 0.7px;
+  font-weight: 700;
+  fill: #222;
+  pointer-events: none;
+}
+
+.dst-reach {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 0.08;
+  stroke-dasharray: 0.4 0.3;
+  pointer-events: none;
+}
+
+.dst-plot {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 0.12;
+  stroke-dasharray: 0.5 0.3;
+  pointer-events: none;
+}
+
+.dst-plot-point {
+  fill: #fff;
+  pointer-events: none;
+}
+
+.dst-counter {
+  cursor: pointer;
+}
+
+.dst-counter .dst-body {
+  stroke: #111;
+  stroke-width: 0.08;
+}
+
+.dst-counter.is-north .dst-body {
+  fill: #4f8fe0;
+}
+
+.dst-counter.is-south .dst-body {
+  fill: #e08a3a;
+}
+
+.dst-counter.is-infantry.is-north .dst-body {
+  fill: #7fb0f0;
+}
+
+.dst-counter.is-infantry.is-south .dst-body {
+  fill: #f0b070;
+}
+
+.dst-counter .dst-nose {
+  fill: none;
+  stroke: #111;
+  stroke-width: 0.1;
+}
+
+.dst-counter.is-active .dst-body {
+  stroke: #fff;
+  stroke-width: 0.14;
+}
+
+.dst-counter.is-destroyed {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dst-ko {
+  stroke: #111;
+  stroke-width: 0.14;
+}
+
+.dst-ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 0.1;
+  pointer-events: none;
+}
+
+.dst-ring.is-target {
+  stroke: #ff5050;
+  stroke-dasharray: 0.3 0.2;
+}
+
+.dst-ring.is-highlight {
+  stroke: #ffe066;
+  stroke-width: 0.14;
+}
+
+.dst-underfire {
+  fill: #ff5a3c;
+  stroke: #111;
+  stroke-width: 0.05;
+}
+
+.dst-badges {
+  font-size: 0.55px;
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: #000;
+  stroke-width: 0.12px;
+  pointer-events: none;
+}
+
+.dst-refusal {
+  position: absolute;
+  left: var(--gap);
+  right: var(--gap);
+  bottom: var(--gap);
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  background: rgba(20, 20, 20, 0.85);
+  color: #ffd27a;
+  font-size: var(--text-sm);
+}
+
+.dst-refusal.is-note {
+  color: var(--ink);
+}
+
+.dst-side {
+  gap: var(--gap);
+}
+
+.dst-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.dst-force h3 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-sm);
+}
+
+.dst-force.is-north h3 {
+  color: #8fb8ff;
+}
+
+.dst-force.is-south h3 {
+  color: #ffb877;
+}
+
+.dst-units {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dst-unit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-xs);
+}
+
+.dst-unit.is-active .dst-unit-name {
+  outline: 1px solid #fff;
+}
+
+.dst-unit.is-firing .dst-unit-name {
+  outline: 1px solid #ff5050;
+}
+
+.dst-unit.is-gone {
+  opacity: 0.5;
+}
+
+.dst-unit-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 0.2rem 0.4rem;
+}
+
+.dst-marker {
+  display: inline-block;
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 0.2rem;
+  text-align: center;
+  font-weight: 700;
+  color: #111;
+}
+
+.dst-marker.is-green {
+  background: #6fbf5f;
+}
+
+.dst-marker.is-regular {
+  background: #6fa0ff;
+}
+
+.dst-marker.is-veteran {
+  background: #ff9f3f;
+}
+
+.dst-marker.is-spent {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.dst-confidence {
+  display: inline-block;
+  padding: 0 0.3rem;
+  border-radius: 0.2rem;
+  background: #555;
+  color: #fff;
+  font-weight: 700;
+}
+
+.dst-confidence.is-SH {
+  background: #a08020;
+}
+
+.dst-confidence.is-BR {
+  background: #b04a20;
+}
+
+.dst-confidence.is-RO {
+  background: #8a1a1a;
+}
+
+.dst-flag {
+  padding: 0 0.3rem;
+  border-radius: 0.2rem;
+  background: rgba(255, 90, 60, 0.3);
+  color: #ffb0a0;
+}
+
+.dst-element h3,
+.dst-volley h3 {
+  margin: 0 0 0.3rem;
+  font-size: var(--text-sm);
+}
+
+.dst-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.3rem 0;
+  font-size: var(--text-xs);
+}
+
+.dst-shots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-xs);
+}
+
+.dst-shots li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+}
+
+.dst-shots li span {
+  flex: 1;
+}
+
+.dst-log {
+  max-height: 30vh;
+  font-size: var(--text-xs);
+}
+
+.dst-log p {
+  margin: 0.15rem 0;
+}
+
+.dst-log p.is-north {
+  border-left: 2px solid #4f8fe0;
+  padding-left: 0.3rem;
+}
+
+.dst-log p.is-south {
+  border-left: 2px solid #e08a3a;
+  padding-left: 0.3rem;
+}
+
+/* The skirmish panel. */
+.dst-setup .yard {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+}
+
+.dst-unit-row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1.4fr 0.5fr 0.9fr 0.8fr auto auto;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 0.25rem 0;
+  font-size: var(--text-xs);
+}
+
+.dst-unit-row input,
+.dst-unit-row select {
+  min-width: 0;
+}
+
+.dst-count {
+  width: 3.5rem;
+}
+
+.dst-setup .yard-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--gap);
+}
+
+.dst-setup .yard-controls {
+  max-height: 74vh;
+}
+
+.dst-setup .code-field .dst-row {
+  margin: 0;
+  flex-wrap: nowrap;
+}
+
+.dst-unit-row {
+  grid-template-columns: 1.3fr 0.8fr 1.7fr 0.6fr 0.9fr 0.9fr auto auto;
+}
+
+.dst-setup .yard-section {
+  align-items: stretch;
+}
+
+.dst-setup .yard-pair,
+.dst-setup .dst-unit-row {
+  width: 100%;
+}

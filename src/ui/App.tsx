@@ -35,6 +35,9 @@ import { battleEnd, BattleResult } from './BattleResult'
 import { CampaignScreen } from './CampaignScreen'
 import { CampaignSetupPanel } from './CampaignSetupPanel'
 import { MotorPool } from './dirtside/MotorPool'
+import { SkirmishPanel } from './dirtside/SkirmishPanel'
+import { TableScreen } from './dirtside/TableScreen'
+import { useDirtsideBattle } from './dirtside/dirtsideStore'
 import { PresetEditor } from './PresetEditor'
 import { presetFromHash, type RulesPreset } from '../data/rulesPreset'
 import { battleOnTable, campaignDispatch, setBattleOnTable, useCampaign } from './campaignStore'
@@ -163,7 +166,9 @@ export function App() {
   /* The front of the house. The app opens on it rather than on whatever
      battle was last on the table; a connected remote match goes straight to
      the table, since the other console is waiting. */
-  const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign'>('menu')
+  const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign' | 'dirtside'>('menu')
+  const [showSkirmish, setShowSkirmish] = useState(false)
+  const dirtside = useDirtsideBattle()
   const [showCampaignSetup, setShowCampaignSetup] = useState(false)
   const [showMotorPool, setShowMotorPool] = useState(false)
   /* House rules: the preset editor, opened from the menu or by a link that
@@ -366,6 +371,7 @@ export function App() {
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showMotorPool ? <MotorPool onClose={() => setShowMotorPool(false)} /> : null}
+      {showSkirmish ? <SkirmishPanel onClose={() => setShowSkirmish(false)} onStart={() => { setShowSkirmish(false); setScreen('dirtside') }} /> : null}
       {presetEditor ? <PresetEditor initial={presetEditor.initial} onClose={() => setPresetEditor(null)} /> : null}
       {showCampaignSetup ? (
         <CampaignSetupPanel
@@ -410,6 +416,15 @@ export function App() {
     </>
   )
 
+  if (screen === 'dirtside') {
+    return (
+      <>
+        <TableScreen onMenu={() => setScreen('menu')} onNewSkirmish={() => setShowSkirmish(true)} />
+        {modals}
+      </>
+    )
+  }
+
   if (screen === 'campaign' && campaign) {
     return (
       <>
@@ -453,6 +468,8 @@ export function App() {
           onContinueCampaign={() => setScreen('campaign')}
           onNewCampaign={() => setShowCampaignSetup(true)}
           onMotorPool={() => setShowMotorPool(true)}
+          dirtsideLabel={dirtside ? (dirtside.result ? 'battle over' : dirtside.phase === 'deployment' ? 'deploying' : `turn ${dirtside.turn}`) : null}
+          onDirtside={() => (dirtside ? setScreen('dirtside') : setShowSkirmish(true))}
           onHouseRules={() => setPresetEditor({})}
           continueLabel={
             underway
