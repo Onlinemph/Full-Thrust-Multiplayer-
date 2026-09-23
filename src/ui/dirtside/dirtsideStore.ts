@@ -22,6 +22,29 @@ let saved: SavedDirtsideBattle | null = null
 let state: GameState | null = null
 let restored = false
 let version = 0
+
+/**
+ * The last few actions with the states either side of them, for the screen
+ * to show what just happened. States are never mutated after the door
+ * returns them, so holding references is cheap. `generation` changes when
+ * the battle is replaced (new, loaded, cleared, taken back) and the screen
+ * should forget what it drew.
+ */
+export interface DirtsideTransition {
+  id: number
+  before: GameState
+  action: Action
+  after: GameState
+}
+const TRANSITIONS_KEPT = 40
+let transitions: DirtsideTransition[] = []
+let transitionId = 0
+let generation = 0
+
+function forget(): void {
+  transitions = []
+  generation += 1
+}
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -93,6 +116,7 @@ export function newDirtsideBattle(setup: GameSetup): void {
   restore()
   saved = { version: 1, setup, journal: [] }
   state = createGame(setup)
+  forget()
   persist()
   emit()
 }
@@ -103,6 +127,8 @@ export function dirtsideDispatch(action: Action): Refusal | null {
   if (!saved || !state) return { ok: false, reason: 'No battle is under way.', page: 'p. 17' }
   const next = applyAction(state, action)
   if ('ok' in next) return next
+  transitionId += 1
+  transitions = [...transitions.slice(-(TRANSITIONS_KEPT - 1)), { id: transitionId, before: state, action, after: next }]
   state = next
   saved.journal.push(action)
   persist()
@@ -121,6 +147,7 @@ export function loadDirtsideBattle(text: string): string | null {
     return `The journal does not replay: ${error instanceof Error ? error.message : String(error)}`
   }
   saved = parsed
+  forget()
   persist()
   emit()
   return null
@@ -135,8 +162,64 @@ export function clearDirtsideBattle(): void {
   restore()
   saved = null
   state = null
+  forget()
   persist()
   emit()
+}
+
+/** What the screen needs to draw what just happened: the recent transitions, and the battle's generation. */
+export function dirtsideTransitions(): { generation: number; list: readonly DirtsideTransition[] } {
+  return { generation, list: transitions }
+}
+
+/**
+ * Whether the last action can be taken back honestly: it was a move, a
+ * change of posture or a deployment; it drew nothing from the dice stream,
+ * so the battle's future is unchanged; it did not hand play to the other
+ * side, open a window or take an objective. Answered from the transition
+ * kept for it, so it costs nothing to ask on every render.
+ */
+export function canTakeBackDirtside(): boolean {
+  restore()
+  if (!saved || !state) return false
+  const last = transitions[transitions.length - 1]
+  if (!last || last.after !== state) return false
+  return honest(last.before, last.action, last.after)
+}
+
+function honest(before: GameState, action: Action, after: GameState): boolean {
+  if (action.kind !== 'move' && action.kind !== 'posture' && action.kind !== 'deploy') return false
+  if (before.rng.cursor !== after.rng.cursor || before.rng.seed !== after.rng.seed) return false
+  if (before.toAct !== after.toAct || before.phase !== after.phase) return false
+  if ((before.activation?.unitId ?? null) !== (after.activation?.unitId ?? null) || !!after.activation?.window) return false
+  if (after.result) return false
+  return Object.keys(after.objectives).every((id) => after.objectives[id]!.heldBy === before.objectives[id]?.heldBy)
+}
+
+/**
+ * Take the last action back: the journal loses it and the battle is
+ * replayed from the setup without it. Refused (false) unless
+ * canTakeBackDirtside holds and the replay agrees, draw for draw.
+ */
+export function takeBackDirtside(): boolean {
+  if (!canTakeBackDirtside() || !saved || !state) return false
+  const journal = saved.journal.slice(0, -1)
+  let back: GameState
+  try {
+    back = replay(saved.setup, journal)
+  } catch {
+    return false
+  }
+  if (back.rng.cursor !== state.rng.cursor || back.journal.length !== journal.length) return false
+  const kept = transitions.slice(0, -1)
+  saved = { ...saved, journal }
+  state = back
+  // The transitions before the one taken back still hold: their states are what was on the table.
+  transitions = kept.length > 0 && kept[kept.length - 1]!.after.journal.length === journal.length ? kept.map((t, i) => (i === kept.length - 1 ? { ...t, after: back } : t)) : []
+  generation += 1
+  persist()
+  emit()
+  return true
 }
 
 /** A handle for a browser drive in development, as the battle and campaign stores offer. */
@@ -144,5 +227,6 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { __fullThrustDirtside?: unknown }).__fullThrustDirtside = {
     currentDirtsideBattle,
     dirtsideDispatch,
+    newDirtsideBattle,
   }
 }
