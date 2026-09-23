@@ -66,7 +66,7 @@ describe('what just happened', () => {
       { label: 'T', colour: 'special' },
       { label: 'YELLOW 2', colour: 'yellow' },
     ])
-    expect(parseDice('A → B: Firer rolled 4; target rolled 1 — hit.')).toBe('rolled 4 against 1')
+    expect(parseDice('A → B: Firer rolled 4; target rolled 1 — hit.')).toBe('rolled 4 against 1: hit')
     expect(logKind('A → B: Drew RED 1: 1 valid against armour 3 — knocked out.')).toBe('damage')
     expect(logKind('Tank 1 moves 5.0" for 5.0 of 12 factors: 5.0" open (normal).')).toBe('move')
     expect(shortReason('An APSW reaches 12"; the target is at 18.2".')).toBe('18.2″ > 12″')

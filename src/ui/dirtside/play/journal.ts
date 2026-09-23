@@ -58,8 +58,8 @@ export function parseChits(text: string): Chit[] {
 
 /** "Firer rolled 4; target rolled 1 — hit." into "you 4 · them 1". */
 export function parseDice(text: string): string | null {
-  const m = text.match(/Firer rolled ([\d, ]+); target rolled (.+?) — /)
-  return m ? `rolled ${m[1]!.trim()} against ${m[2]!.trim()}` : null
+  const m = text.match(/Firer rolled ([\d, ]+); target rolled (.+?) — (.+?)\.$/)
+  return m ? `rolled ${m[1]!.trim()} against ${m[2]!.trim()}: ${m[3]}` : null
 }
 
 export function describeAction(before: GameState, action: Action, after: GameState, codes: Record<string, string>): PlayEvent {
@@ -93,6 +93,7 @@ export function describeAction(before: GameState, action: Action, after: GameSta
     case 'opportunity-fire': {
       const first = after.elements[action.shots[0]?.elementId ?? '']
       title = action.kind === 'opportunity-fire' ? `${unitLabel(action.unitId)} fires back` : unitLabel(first?.unitId)
+      const reported = new Set<string>()
       for (const shot of action.shots) {
         const firer = after.elements[shot.elementId]
         const target = after.elements[shot.targetId]
@@ -101,25 +102,34 @@ export function describeAction(before: GameState, action: Action, after: GameSta
         const mine = logged.filter((l) => l.text.startsWith(`${firer.name} → ${target.name}`) || l.text.startsWith(`${firer.name} fires at ${target.name}`))
         const chits = mine.flatMap((l) => parseChits(l.text))
         const dice = mine.map((l) => parseDice(l.text)).find(Boolean) ?? undefined
-        const effects: string[] = []
-        if (!was.damaged && target.damaged) effects.push('damaged')
-        if (!was.immobilised && target.immobilised) effects.push('immobilised')
-        if (!was.systemsDown && target.systemsDown) effects.push('systems down')
+        // The verdict is read from this shot's own lines, so two shots at one target each get their own;
+        // the flags the engine set are the fallback when the log says nothing plain.
+        const said = mine.map((l) => l.text).filter((t) => !/F: the shot never fired/.test(t)).join(' ')
+        const effects = ['damaged', 'immobilised', 'systems down'].filter((e) => new RegExp(`— [^.]*${e}`).test(said))
+        if (effects.length === 0 && !reported.has(target.id)) {
+          if (!was.damaged && target.damaged) effects.push('damaged')
+          if (!was.immobilised && target.immobilised) effects.push('immobilised')
+          if (!was.systemsDown && target.systemsDown) effects.push('systems down')
+        }
         let stamp: string
         let tone: Tone
-        if (!was.destroyed && target.destroyed) {
+        if (/BOOM|knocked out|element removed/.test(said) || (!reported.has(target.id) && !was.destroyed && target.destroyed && !/— miss\.|wasted|no chits drawn/.test(said))) {
           stamp = target.vehicle ? 'KNOCKED OUT' : 'REMOVED'
           tone = 'kill'
+        } else if (/wasted/.test(said)) {
+          stamp = 'WASTED'
+          tone = 'miss'
         } else if (effects.length) {
           stamp = effects.join(', ').toUpperCase()
           tone = 'hit'
-        } else if (mine.some((l) => /— miss\.|no chits drawn|wasted/.test(l.text))) {
+        } else if (/— miss\.|no chits drawn|ineffective/.test(said)) {
           stamp = 'MISS'
           tone = 'miss'
         } else {
           stamp = 'NO EFFECT'
           tone = 'miss'
         }
+        if (tone === 'kill' || tone === 'hit') reported.add(target.id)
         lines.push({ text: `${firer.name} → ${target.name}${codes[target.unitId] ? ` (${codes[target.unitId]})` : ''}`, tone, stamp, chits: chits.length ? chits : undefined, dice })
       }
       const eff = logged.find((l) => /checks fire effectiveness/.test(l.text))
@@ -294,7 +304,14 @@ export function recapGroups(events: readonly PlayEvent[]): RecapGroup[] {
   const worth = groups.filter((g) => g.events.some((e) => !QUIET_KINDS.has(e.kind) && (e.lines.length > 0 || e.kind === 'activate')))
   return worth.map((g) => {
     const first = g.events[0]!
-    const lines = g.events.flatMap((e) => e.lines)
+    let lines = g.events.flatMap((e) => e.lines)
+    // A company's worth of moves reads as one line.
+    const moves = lines.filter((l) => l.tone === 'move')
+    if (moves.length > 3) {
+      const at = lines.indexOf(moves[0]!)
+      lines = lines.filter((l) => l.tone !== 'move')
+      lines.splice(at, 0, { text: `${moves.length} elements moved.`, tone: 'move' })
+    }
     return { key: first.seq, side: first.side, title: first.title, headline: headlineOf(g.events), lines, turn: first.turn }
   })
 }
@@ -312,10 +329,14 @@ function headlineOf(events: readonly PlayEvent[]): string {
     else if (e.kind === 'posture') add('took cover')
     else if (e.kind === 'call-orbital') add('called fire from orbit')
   }
-  const results = events
-    .flatMap((e) => e.lines)
-    .filter((l) => l.tone === 'kill' || l.tone === 'hit')
-    .map((l) => `${l.text.replace(/^.* → /, '')} ${l.stamp?.toLowerCase() ?? ''}`.trim())
+  const results = [
+    ...new Set(
+      events
+        .flatMap((e) => e.lines)
+        .filter((l) => l.tone === 'kill' || l.tone === 'hit')
+        .map((l) => `${l.text.replace(/^.* → /, '')} ${l.stamp?.toLowerCase() ?? ''}`.trim()),
+    ),
+  ]
   if (verbs.length === 0) return first.kind === 'activate' ? `${first.title} activated and held its ground.` : (first.lines[0]?.text ?? first.title)
   return `${first.title} ${verbs.join(' and ')}${results.length ? `: ${results.slice(0, 3).join(', ')}${results.length > 3 ? '…' : ''}` : ''}.`
 }

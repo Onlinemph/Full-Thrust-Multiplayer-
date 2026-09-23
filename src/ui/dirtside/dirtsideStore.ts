@@ -227,5 +227,6 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { __fullThrustDirtside?: unknown }).__fullThrustDirtside = {
     currentDirtsideBattle,
     dirtsideDispatch,
+    newDirtsideBattle,
   }
 }

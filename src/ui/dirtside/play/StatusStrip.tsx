@@ -81,7 +81,7 @@ export function StatusStrip({ model }: { model: StripModel }) {
           {secondary.length > 0 ? (
             <div className="dst-secondary">
               {secondary.map((a) => (
-                <StripButton key={a.key} action={a} onWhy={setWhy} />
+                <StripButton key={a.key} action={a.kbd === 'Enter' ? { ...a, kbd: undefined } : a} onWhy={setWhy} />
               ))}
             </div>
           ) : null}

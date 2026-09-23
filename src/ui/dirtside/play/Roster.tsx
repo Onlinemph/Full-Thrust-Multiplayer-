@@ -56,7 +56,7 @@ export function ForcePanel(props: ForceProps) {
       <div className={`panel dst-force is-${side} is-collapsed`}>
         <button className="dst-force-fold" onClick={props.onToggle} aria-expanded={false}>
           <span className="dst-force-name">{name}</span>
-          <span className="dst-force-sum">{summary}</span>
+          <span className="dst-force-sum" title={summary}>{summary}</span>
           <span className="dst-force-holds" title="Objective value held">
             ◆ <b className="num">{props.holds}</b>
           </span>
@@ -76,7 +76,7 @@ export function ForcePanel(props: ForceProps) {
     <div className={`panel dst-force is-${side}`}>
       <button className="dst-force-fold" onClick={props.onToggle} aria-expanded={true}>
         <span className="dst-force-name">{name}</span>
-        <span className="dst-force-sum">{summary}</span>
+        <span className="dst-force-sum" title={summary}>{summary}</span>
         <span className="dst-force-holds" title="Objective value held">
           ◆ <b className="num">{props.holds}</b>
         </span>

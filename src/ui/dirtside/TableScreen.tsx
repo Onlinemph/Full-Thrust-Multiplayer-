@@ -121,7 +121,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     return () => clearTimeout(timer)
   }, [state])
 
-  const seats = state.setup.aiSides ?? []
+  const seats = useMemo(() => state.setup.aiSides ?? [], [state.setup.aiSides])
   const human = useCallback((side: SideId) => !seats.includes(side), [seats])
   const humans = SIDES.filter(human)
   const activation = state.activation
@@ -247,6 +247,8 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   // A go still under way with nothing done yet has nothing to tell; once over, it "held its ground".
   const lastTransition = transitions.list[transitions.list.length - 1]
   const outcomeRef = useRef<HTMLDivElement>(null)
+  // Anything that happens on the table, the computer's go included, answers an old refusal.
+  useEffect(() => setRefusal(null), [lastId])
   useEffect(() => {
     const k = lastTransition?.action.kind
     if (k === 'fire' || k === 'opportunity-fire' || k === 'orbital-strike') outcomeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
