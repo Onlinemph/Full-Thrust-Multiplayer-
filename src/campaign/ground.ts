@@ -75,7 +75,8 @@ export const LANDING_TABLE = { width: 48, depth: 36 } as const
  * this gives seventeen.
  */
 export function contingentTeams(design: ShipDesign): number {
-  if (design.mass < FRIGATE_MASS || design.weapons.length === 0) return 0
+  // "Most Naval Starships" (p. 17): a hull declared civilian — a merchant, an assault transport — carries troops in its holds, not Marines.
+  if (design.mass < FRIGATE_MASS || design.weapons.length === 0 || design.group === 'civilian') return 0
   return Math.floor((design.mass * MARINE_CS_PER_MASS) / TEAM_CS)
 }
 
@@ -86,7 +87,7 @@ export function marinesAboard(ship: CampaignShip, design: ShipDesign): number {
 
 /** Sheafs a ship fires from its ordinary armament (p. 17): by 13.4's mass classes, nothing below a frigate. */
 export function sheafsOf(design: ShipDesign): number {
-  if (design.mass < FRIGATE_MASS || design.weapons.length === 0) return 0
+  if (design.mass < FRIGATE_MASS || design.weapons.length === 0 || design.group === 'civilian') return 0
   return SHEAFS[classifyByMass(design.mass)]
 }
 

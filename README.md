@@ -252,6 +252,15 @@ check the campaign came back the same.
 node tools/drive_campaign.mjs
 ```
 
+`tools/drive_ground.mjs` walks ground units: a tank platoon and a powered platoon raised from the
+purchase form, embarked on a liner, carried to an enemy colony and landed, their craft placed and
+brought down on the Dirtside table and the dropship unloaded, and the battle returned to the
+campaign with the units' experience.
+
+```
+node tools/drive_ground.mjs
+```
+
 `tools/drive_landing.mjs` walks a landing: a fleet reaches an undefended enemy home and lands its
 Marines, the landing is opened on the Dirtside table from the planetary phase with the computer
 playing the garrison, platoon leaders call fire from orbit until one is answered, the strike is
@@ -501,8 +510,11 @@ p. 23's table prints +1; "withdraw to the nearest cover" is enforced as not endi
 a disorganised unit's moves must each close up on a unit-mate; a wood a mobility type cannot enter may be
 entered to its edge at poor going; a vehicle turret down cannot shoot (the book gives turret-down only as the
 target's die); the target's front arc is a square model's 90°; opportunity fire is guns and IAVRs, not a
-firefight. Not yet on the table: missiles and area defence, artillery beyond fire from orbit, aircraft and
-VTOL modes, close assault and mounted infantry, hidden units, smoke and engineering.
+firefight. Interface landings (p. 43) are on the table: craft in orbit with units aboard, brought down any
+number to an activation 12" from the nearest enemy in sight, landers unloading at once and dropships
+in a later activation, and craft lost to the defence's D6. Not yet on the table: missiles and area
+defence, artillery beyond fire from orbit, aircraft and VTOL modes, drop troops, close assault and
+mounted infantry, hidden units, smoke and engineering.
 
 ## Landings: the campaign on the ground
 
@@ -548,6 +560,44 @@ on a D12 clock face and a D6 against a D8, the D8's excess in inches; every elem
 sheaf or 4" of ortillery draws three or four chits, HEF against infantry and MAK against vehicles
 (p. 29's validities: yellow, red only against dug-in infantry, nothing against a dug-in vehicle), and
 a NUKE marker at ground zero keeps unprotected troops and vehicles 2" away.
+
+**Ground units.** Players raise their own Dirtside platoons (`src/campaign/army.ts`). In the
+production phase a colony's purchase form offers a *ground unit*: up to eight of any design on the
+Motor Pool's shelf, the book's or your own, or an infantry platoon of militia, line or powered
+troops, priced at one RP a Dirtside point (the campaign's own prices bear it out: its PDU at 200 RP
+against 130 points for the line platoon it stands for, its advanced PDU at 500 against 516 for three
+tanks). Ticking *lands from orbit* adds the quarter Dirtside charges on each element for interface
+landing (pp. 43, 52). A new unit draws its command marker at random from the counter sheet's mix,
+which sets its quality and leadership (p. 21).
+
+Units stand garrison at their colony, and fight beside its PDUs and militia when it is attacked. They
+embark into a ship's cargo holds or troop berthing at More Thrust's 50 CS a mass, a vehicle taking its
+size × 4 and its crew, a team its four men (p. 15), and disembark at a friendly colony; any ship with
+holds will carry them, a Shipyard transport included. When a task force lands, the units aboard that
+can land from orbit come down during the battle in Dirtside's interface craft (p. 43): each ship's
+armour in dropships, five units at most to one, and each infantry unit in its own assault lander.
+Craft wait in orbit off the table; bringing any number down is one activation, each at least 12" from
+the nearest enemy that can see the spot; a lander's unit comes straight out, a dropship's unloads in
+a later activation as a full activation of its own. The colony's PDUs fire at craft coming in, a D6
+bringing one down on a 6 while a PDU platoon is in action and on 5–6 while an advanced PDU's tanks are.
+
+After the battle, lost elements are struck off; the attacker's units that got down stay as the
+captured colony's garrison, or go back up to their ships if it held; a garrison surrenders with its
+colony; troops aboard a ship that is lost go with it, and troops going down from a damaged ship roll
+for transit losses (More Thrust p. 18). Every unit that fought earns Stargrunt II's experience
+(pp. 60–61, the same publisher's rules for the same universe, since Dirtside only says units build
+up a history): 3 points on the winning side, 1 on the losing, 1 more for taking an objective itself;
+a green unit turns regular at 5 points and a regular one veteran at 8. A depleted unit at a colony
+buys its lost elements back in the production phase, and rolls the die nearest its remaining
+strength: no higher than the number of replacements and the new men cost it a level.
+
+Readings for ground units. A vehicle's crew is four men, or two in a vehicle of size 2 or less (More
+Thrust counts crews man by man; this matches its Medium Battle Tank and its size-2 command vehicle).
+Units come down by Dirtside's element-side costing, not More Thrust's ship-side dropships and hangar
+bays (pp. 15–16), so no ship needs new systems to land them. A ship declared civilian in the Shipyard
+carries troops, not Marines, and fires no support. Unloaded units still have their activation to make.
+Aircraft are not yet on the Dirtside table, so the form leaves them off. Stargrunt's fatigue is not
+carried.
 
 The landing was then read against the pages and the code by three reviewers, one for the fire from
 orbit, one for the campaign side and one for the screens and the computer player, every finding put to

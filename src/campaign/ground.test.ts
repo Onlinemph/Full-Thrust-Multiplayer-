@@ -55,6 +55,9 @@ describe('Marine contingents (More Thrust pp. 17–18)', () => {
     expect([10, 22, 26, 32, 40, 48, 70].map((m) => contingentTeams(withMass(m)))).toEqual([2, 5, 6, 8, 10, 12, 17])
     expect(contingentTeams(withMass(8))).toBe(0)
     expect(contingentTeams({ ...frigate, weapons: [] })).toBe(0)
+    // A merchant hull carries no Marines and fires no sheafs, whatever its guns.
+    expect(contingentTeams({ ...withMass(60), group: 'civilian' })).toBe(0)
+    expect(sheafsOf({ ...withMass(60), group: 'civilian' })).toBe(0)
   })
 
   it('fires one sheaf from an escort, two from a cruiser, three from a capital ship (13.4 classes)', () => {

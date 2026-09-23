@@ -6,7 +6,7 @@ import { infantryHitOdds, vehicleHitOdds } from '../../dirtside/odds'
 import { CONFIDENCE_LABELS, QUALITY_LABELS } from '../../dirtside/table/confidence'
 import { newStream } from '../../dirtside/dice'
 import { aiAction } from '../../dirtside/table/ai'
-import { canPass, commandUnitOf, elementsOf, functional, mobile, objectiveValues, strikesDue, unactivatedUnits } from '../../dirtside/table/game'
+import { LANDING_CLEARANCE, canPass, commandUnitOf, craftToLand, elementsOf, functional, mobile, objectiveValues, strikesDue, unactivatedUnits } from '../../dirtside/table/game'
 import { ATTACK_LABELS, STRIKE_CHITS, STRIKE_RADIUS, attacksLeft, nextOverhead, orbitalShips, overhead } from '../../dirtside/table/orbital'
 import { baseMovement, planTableShot, teamFiresRanged, type TableShotPlan } from '../../dirtside/table/tableFire'
 import { pathCost } from '../../dirtside/table/terrain'
@@ -27,7 +27,7 @@ export interface TableScreenProps {
   campaign?: { label: string; onReturn: () => void } | null
 }
 
-type Mode = 'idle' | 'move' | 'fire' | 'orbital'
+type Mode = 'idle' | 'move' | 'fire' | 'orbital' | 'land'
 
 /** How long the computer waits before each action, so a player can follow it. */
 const AI_DELAY_MS = 350
@@ -47,6 +47,9 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
   const [refusal, setRefusal] = useState<Refusal | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [orbitalChoice, setOrbitalChoice] = useState<{ shipId: string; attack: OrbitalAttack } | null>(null)
+  /* Craft being brought down this activation: each placed with a click (p. 43). */
+  const [landings, setLandings] = useState<Array<{ craftId: string; at: Point }>>([])
+  const [placing, setPlacing] = useState<string | null>(null)
 
   /* The computer's seats: whenever one of them is to act, it acts, a beat
      later, through the same door as everyone else. */
@@ -100,6 +103,8 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
     setVolley([])
     setWeapon(null)
     setOrbitalChoice(null)
+    setLandings([])
+    setPlacing(null)
   }
   const act = (action: Action): boolean => {
     const r = dirtsideDispatch(action)
@@ -146,6 +151,13 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
   }
 
   const onClickTable = (point: Point) => {
+    if (mode === 'land' && placing) {
+      setLandings((list) => [...list.filter((l) => l.craftId !== placing), { craftId: placing, at: point }])
+      const next = craftToLand(state, toAct!).find((c) => c.id !== placing && !landings.some((l) => l.craftId === c.id))
+      setPlacing(next?.id ?? null)
+      if (!next) setMode('idle')
+      return
+    }
     if (!selected) return
     if (mode === 'orbital' && orbitalChoice) {
       if (act({ kind: 'call-orbital', side: selected.sideId, elementId: selected.id, shipId: orbitalChoice.shipId, attack: orbitalChoice.attack, aim: point })) reset()
@@ -271,6 +283,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
             reach={mode === 'move' && record ? left - (plotted?.factors ?? 0) : null}
             targets={volley.map((s) => s.targetId)}
             highlight={window?.movedElementId ?? null}
+            pendingLandings={landings.map((l) => ({ at: l.at, label: state.setup.craft?.find((c) => c.id === l.craftId)?.name ?? '' }))}
             viewer={toAct ?? (state.phase === 'deployment' ? null : 'north')}
           />
           {refusal ? (
@@ -330,6 +343,56 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
               </>
             ) : null}
           </div>
+
+          {state.setup.craft && state.setup.craft.length > 0 ? (
+            <div className="panel dst-craft">
+              <h3>
+                Interface craft <span className="rule-ref">p. 43</span>
+              </h3>
+              <ul className="dst-ships">
+                {state.setup.craft.map((c) => {
+                  const record = state.craft[c.id]!
+                  const planned = landings.find((l) => l.craftId === c.id)
+                  const units = c.unitIds.map((id) => state.units[id]?.name).filter(Boolean).join(', ')
+                  const mine = toAct === c.side && human(c.side) && state.phase === 'activation' && !activation && !due
+                  const canUnload = mine && c.kind === 'dropship' && record.status === 'landed' && (record.landedAt ?? Infinity) < state.activationCount
+                  return (
+                    <li key={c.id}>
+                      <b>{c.name}</b>
+                      <span className="campaign-dim">
+                        {' '}
+                        {c.kind === 'dropship' ? 'dropship' : 'assault lander'} · {units} · {record.status === 'aloft' ? (planned ? `lands at (${planned.at.x.toFixed(1)}, ${planned.at.y.toFixed(1)})` : 'in orbit') : record.status === 'landed' ? 'on the ground, loaded' : record.status === 'lost' ? 'shot down' : 'unloaded'}
+                      </span>
+                      {mine && record.status === 'aloft' ? (
+                        <button
+                          className={placing === c.id ? 'primary' : undefined}
+                          onClick={() => {
+                            setMode('land')
+                            setPlacing(c.id)
+                            setNote(`Click where ${c.name} lands: on the table, at least ${LANDING_CLEARANCE}" from any enemy that can see the spot.`)
+                          }}
+                        >
+                          {planned ? 'Move' : 'Place'}
+                        </button>
+                      ) : null}
+                      {planned ? <button onClick={() => setLandings((list) => list.filter((l) => l.craftId !== c.id))}>×</button> : null}
+                      {canUnload ? <button onClick={() => act({ kind: 'unload', side: c.side, craftId: c.id })}>Unload</button> : null}
+                    </li>
+                  )
+                })}
+              </ul>
+              {landings.length > 0 ? (
+                <button
+                  className="primary"
+                  onClick={() => {
+                    if (act({ kind: 'land-craft', side: toAct!, landings })) reset()
+                  }}
+                >
+                  Bring {landings.length === 1 ? 'it' : `all ${landings.length}`} down: one activation
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           {state.orbit ? (
             <div className="panel dst-orbit">
@@ -405,6 +468,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                   .filter((u) => u.sideId === s)
                   .map((u) => {
                     const alive = elementsOf(state, u).filter(functional).length
+                    const aloft = elementsOf(state, u).some((e) => e.aboard && !e.destroyed)
                     const mine = toAct === s && human(s)
                     const canActivate = mine && !due && state.phase === 'activation' && !activation && !u.activated && alive > 0
                     const command = commandUnitOf(state, s)
@@ -412,7 +476,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                     const canAnswer = !!window && window.sideId === s && human(s) && !u.activated && alive > 0 && !u.panic && !u.evasive
                     const canJoin = !!activation && !window && activation.sideId === s && human(s) && activation.unitId !== u.id && !u.activated && alive > 0
                     return (
-                      <li key={u.id} className={`dst-unit${activeUnit?.id === u.id ? ' is-active' : ''}${firingUnit?.id === u.id && opportunity ? ' is-firing' : ''}${alive === 0 ? ' is-gone' : ''}`}>
+                      <li key={u.id} className={`dst-unit${activeUnit?.id === u.id ? ' is-active' : ''}${firingUnit?.id === u.id && opportunity ? ' is-firing' : ''}${alive === 0 && !aloft ? ' is-gone' : ''}`}>
                         <button className="dst-unit-name" onClick={() => setSelectedId(elementsOf(state, u).find(functional)?.id ?? null)}>
                           <span className={`dst-marker is-${u.quality}${u.activated ? ' is-spent' : ''}`} title={`${QUALITY_LABELS[u.quality]} ${u.leadership}${u.activated ? ', activated' : ''}`}>
                             {u.leadership}
@@ -426,6 +490,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                           {u.underFire ? <span className="dst-flag">under fire</span> : null}
                           {u.panic ? <span className="dst-flag">panic</span> : null}
                           {u.evasive ? <span className="dst-flag">evading</span> : null}
+                          {aloft ? <span className="dst-flag">aboard a craft</span> : null}
                         </button>
                         {canActivate ? <button onClick={() => { if (act({ kind: 'activate', side: s, unitId: u.id })) reset() }}>Activate</button> : null}
                         {canRally ? <button onClick={() => act({ kind: 'rally', side: s, unitId: u.id })}>Rally</button> : null}

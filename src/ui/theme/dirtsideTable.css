@@ -512,3 +512,42 @@
   align-items: center;
   padding: 0.15rem 0;
 }
+
+/* Interface craft (p. 43). */
+.dst-craft-mark polygon {
+  stroke: #e8e8e8;
+  stroke-width: 0.1;
+}
+.dst-craft-mark.is-north polygon {
+  fill: rgba(100, 160, 255, 0.55);
+}
+.dst-craft-mark.is-south polygon {
+  fill: rgba(255, 140, 90, 0.55);
+}
+.dst-craft-mark.is-empty polygon {
+  fill: transparent;
+  stroke-dasharray: 0.2 0.15;
+}
+.dst-craft-pending polygon {
+  fill: rgba(255, 255, 255, 0.25);
+  stroke: #fff;
+  stroke-width: 0.1;
+}
+.dst-craft-clearance {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 0.08;
+  stroke-dasharray: 0.5 0.4;
+}
+.dst-craft .dst-ships {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+}
+.dst-craft .dst-ships li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.15rem 0;
+}

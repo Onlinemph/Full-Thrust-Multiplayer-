@@ -113,7 +113,7 @@ console.log('orbit:', (await page.locator('.dst-orbit').textContent())?.replace(
 await shot('landing-table')
 
 // ── Deploy, and play north until the ships come over ──────────────────────
-await page.getByRole('button', { name: /Terra Marines: ready/ }).click()
+await page.getByRole('button', { name: /Terra landing force: ready/ }).click()
 let b = await northToAct()
 console.log('turn', b.turn, b.phase, 'ships overhead on turn', b.window)
 for (let guard = 0; guard < 40 && !b.result; guard++) {

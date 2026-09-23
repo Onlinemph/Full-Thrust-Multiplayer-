@@ -26,10 +26,12 @@ export interface TableMapProps {
   highlight: string | null
   /** Whose objective values to show; null shows none. */
   viewer: SideId | null
+  /** Craft placed to come down this activation, with the 12" they must keep from enemies in sight (p. 43). */
+  pendingLandings?: Array<{ at: Point; label: string }>
 }
 
 
-export function TableMap({ state, selectedId, onSelectElement, onClickTable, plot, plotFrom, reach, targets, highlight, viewer }: TableMapProps) {
+export function TableMap({ state, selectedId, onSelectElement, onClickTable, plot, plotFrom, reach, targets, highlight, viewer, pendingLandings = [] }: TableMapProps) {
   const { width, depth } = state.setup.table
   const svg = useRef<SVGSVGElement>(null)
   const [view, setView] = useState({ x: -1, y: -1, w: width + 2, h: depth + 2 })
@@ -147,6 +149,24 @@ export function TableMap({ state, selectedId, onSelectElement, onClickTable, plo
           <path d="M-0.7,0 L0.7,0 M0,-0.7 L0,0.7" className="dst-strike-cross" />
           <circle r={0.35} className="dst-strike-cross" />
           <title>{`Impact marker: ${st.attack === 'pbm' ? 'ortillery' : 'a converged sheaf'} called by ${state.elements[st.calledBy]?.name ?? 'an observer'}, arriving after the next enemy activation; it may stray up to 7"`}</title>
+        </g>
+      ))}
+      {/* Interface craft on the ground (p. 43), and those placed to come down. */}
+      {(state.setup.craft ?? []).map((c) => {
+        const record = state.craft[c.id]
+        if (!record?.position || record.status === 'lost') return null
+        return (
+          <g key={c.id} transform={`translate(${record.position.x} ${record.position.y})`} className={`dst-craft-mark is-${c.side}${record.status === 'empty' ? ' is-empty' : ''}`}>
+            <polygon points={c.kind === 'dropship' ? '0,-1.1 1,0 0,1.1 -1,0' : '0,-0.7 0.65,0.5 -0.65,0.5'} />
+            <title>{`${c.name}${record.status === 'empty' ? ', unloaded' : ', loaded'}`}</title>
+          </g>
+        )
+      })}
+      {pendingLandings.map((l, i) => (
+        <g key={`pending-${i}`} transform={`translate(${l.at.x} ${l.at.y})`} className="dst-craft-pending">
+          <circle r={12} className="dst-craft-clearance" />
+          <polygon points="0,-1 0.9,0 0,1 -0.9,0" />
+          <title>{`${l.label} lands here`}</title>
         </g>
       ))}
       {plotFrom && reach !== null ? <circle cx={plotFrom.x} cy={plotFrom.y} r={Math.max(0, reach)} className="dst-reach" /> : null}

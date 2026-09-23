@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { elementCs, holdCs, orderRefusal, present, replacementPrice, unitCs, type GroundUnit, type GroundUnitOrder } from '../campaign/army'
 import {
   colonyById,
   commandPostsOf,
+  holdSpaceLeft,
   plotLeadOf,
   researchBudgetOf,
   systemById,
   taskForcesAt,
 } from '../campaign/campaign'
+import { motorPoolDesigns } from '../dirtside/library'
+import type { InfantryTeam, InfantryTroops } from '../dirtside/types'
 import {
   PRICE_SCHEDULE,
   SHIPYARD_CAPACITY_RATINGS,
@@ -217,6 +221,8 @@ function ColonyCard({ state, viewer, colony, act }: { state: CampaignState; view
         </ul>
       ) : null}
 
+      <Garrison state={state} viewer={viewer} colony={colony} own={own} seen={seen} act={act} />
+
       {own && state.phase === 'planetary' ? (
         <div className="campaign-actions">
           {!colony.commandPost ? (
@@ -237,8 +243,8 @@ function ColonyCard({ state, viewer, colony, act }: { state: CampaignState; view
         <div className="campaign-actions">
           {myForces.map((tf) => (
             <span key={tf.id} className="campaign-inline">
-              <button onClick={() => act({ kind: 'assault', player: viewer, colony: colony.id, taskForce: tf.id })} title={state.rulesVersion >= 2 ? 'The Marine contingents go down and the landing is fought on the Dirtside table (More Thrust p. 17)' : undefined}>
-                {state.rulesVersion >= 2 ? `Land Marines from ${tf.name}` : `Assault with ${tf.name}`}
+              <button onClick={() => act({ kind: 'assault', player: viewer, colony: colony.id, taskForce: tf.id })} title={state.rulesVersion >= 2 ? 'The Marine contingents go down, units aboard able to land from orbit come down in craft, and the landing is fought on the Dirtside table (More Thrust p. 17, Dirtside p. 43)' : undefined}>
+                {state.rulesVersion >= 2 ? `Land from ${tf.name}` : `Assault with ${tf.name}`}
               </button>
               <button onClick={() => act({ kind: 'bombard', player: viewer, colony: colony.id, taskForce: tf.id })}>Bombard</button>
             </span>
@@ -258,6 +264,7 @@ function ColonyCard({ state, viewer, colony, act }: { state: CampaignState; view
 
 const ITEM_KINDS: ReadonlyArray<{ kind: PurchaseItem['kind']; label: string }> = [
   { kind: 'starship', label: 'Starship' },
+  { kind: 'ground-unit', label: 'Ground unit' },
   { kind: 'colony-transport', label: 'Colony transport' },
   { kind: 'scout-drone', label: 'Scout drone' },
   { kind: 'factory', label: 'Factory' },
@@ -277,10 +284,13 @@ function PurchaseForm({ state, viewer, colony, act }: { state: CampaignState; vi
   const [orbital, setOrbital] = useState(true)
   const body = systemById(state, colony.systemId)?.bodies.find((b) => b.id === colony.bodyId)
 
+  const [unit, setUnit] = useState<GroundUnitOrder>(() => ({ name: 'Rifle Platoon', infantry: { troops: 'line', teams: [...INFANTRY_PRESETS[0]!.teams] }, interfaceLanding: false }))
   const item = ((): PurchaseItem => {
     switch (kind) {
       case 'starship':
         return { kind, designId }
+      case 'ground-unit':
+        return { kind, unit }
       case 'shipyard':
         return { kind, throughput, capacity, orbital }
       default:
@@ -300,7 +310,7 @@ function PurchaseForm({ state, viewer, colony, act }: { state: CampaignState; vi
       <h4>Buy</h4>
       <div className="campaign-inline">
         <select aria-label="Item" value={kind} onChange={(e) => setKind(e.target.value as PurchaseItem['kind'])}>
-          {ITEM_KINDS.map((entry) => (
+          {ITEM_KINDS.filter((entry) => entry.kind !== 'ground-unit' || state.rulesVersion >= 2).map((entry) => (
             <option key={entry.kind} value={entry.kind}>
               {entry.label}
             </option>
@@ -347,7 +357,138 @@ function PurchaseForm({ state, viewer, colony, act }: { state: CampaignState; vi
           Buy · <span className="num">{each * (kind === 'planet-shield' || kind === 'shipyard' ? 1 : quantity)} RP</span>
         </button>
       </div>
+      {kind === 'ground-unit' ? <GroundUnitForm order={unit} onChange={setUnit} /> : null}
       {kind === 'starship' && colony.shipyards.length === 0 ? <p className="campaign-dim">No yard here: buy one first (Shipyards).</p> : null}
+    </div>
+  )
+}
+
+/** Infantry platoons to pick from: the teams a unit is raised with (Dirtside p. 13). */
+const INFANTRY_PRESETS: ReadonlyArray<{ label: string; teams: InfantryTeam[] }> = [
+  { label: 'rifle platoon: 3 rifle, APSW, anti-armour', teams: ['rifle', 'rifle', 'rifle', 'apsw', 'anti-armour'] },
+  { label: 'assault platoon: 4 rifle', teams: ['rifle', 'rifle', 'rifle', 'rifle'] },
+  { label: 'weapons platoon: 2 APSW, 2 anti-armour', teams: ['apsw', 'apsw', 'anti-armour', 'anti-armour'] },
+  { label: 'recon section: 2 rifle, observer', teams: ['rifle', 'rifle', 'observer'] },
+  { label: 'engineers: 2 rifle, 2 engineer', teams: ['rifle', 'rifle', 'engineer', 'engineer'] },
+]
+
+/**
+ * A ground unit to order: a platoon of one design off the Motor Pool's shelf,
+ * or an infantry platoon; able to land from orbit or not. The price is the
+ * campaign's to work out; this only says what the order is.
+ */
+function GroundUnitForm({ order, onChange }: { order: GroundUnitOrder; onChange: (next: GroundUnitOrder) => void }) {
+  const designs = useMemo(() => motorPoolDesigns().filter((d) => d.mobility !== 'aerospace' && d.mobility !== 'vtol'), [])
+  const source = order.vehicle ? `v:${order.vehicle.id}` : `i:${order.infantry?.troops ?? 'line'}`
+  const preset = INFANTRY_PRESETS.findIndex((p) => JSON.stringify(p.teams) === JSON.stringify(order.infantry?.teams))
+  const why = orderRefusal(order)
+  const cs = order.vehicle ? elementCs({ vehicle: order.vehicle }) * (order.count ?? 1) : (order.infantry?.teams.length ?? 0) * 16
+  return (
+    <div className="campaign-inline campaign-ground-form">
+      <input aria-label="Unit name" value={order.name} onChange={(e) => onChange({ ...order, name: e.target.value })} />
+      <select
+        aria-label="Unit type"
+        value={source}
+        onChange={(e) => {
+          const k = e.target.value.slice(0, 1)
+          const v = e.target.value.slice(2)
+          if (k === 'v') {
+            const design = designs.find((d) => d.id === v)!
+            onChange({ name: order.vehicle ? order.name : `${design.name} Platoon`, vehicle: design, count: order.count ?? 3, interfaceLanding: order.interfaceLanding })
+          } else onChange({ name: order.infantry ? order.name : 'Rifle Platoon', infantry: { troops: v as InfantryTroops, teams: order.infantry?.teams ?? [...INFANTRY_PRESETS[0]!.teams] }, interfaceLanding: order.interfaceLanding })
+        }}
+      >
+        <optgroup label="Infantry">
+          <option value="i:militia">militia</option>
+          <option value="i:line">line infantry</option>
+          <option value="i:powered">powered infantry</option>
+        </optgroup>
+        <optgroup label="Motor Pool">
+          {designs.map((d) => (
+            <option key={d.id} value={`v:${d.id}`}>
+              {d.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {order.vehicle ? (
+        <label>
+          ×
+          <input aria-label="Vehicles" className="num" type="number" min={1} max={8} value={order.count ?? 3} onChange={(e) => onChange({ ...order, count: Math.max(1, Math.min(8, Number(e.target.value) || 1)) })} />
+        </label>
+      ) : (
+        <select aria-label="Teams" value={preset} onChange={(e) => onChange({ ...order, infantry: { troops: order.infantry?.troops ?? 'line', teams: [...INFANTRY_PRESETS[Number(e.target.value)]!.teams] } })}>
+          {INFANTRY_PRESETS.map((p, i) => (
+            <option key={p.label} value={i}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      )}
+      <label title="A quarter more on every element: it can come down in interface craft to fight a landing (Dirtside p. 43)">
+        <input type="checkbox" checked={order.interfaceLanding} onChange={(e) => onChange({ ...order, interfaceLanding: e.target.checked })} /> lands from orbit
+      </label>
+      <span className="campaign-dim num">{cs} CS</span>
+      {why ? <span className="campaign-damage">{why}</span> : null}
+    </div>
+  )
+}
+
+const markerLabel = (u: GroundUnit) => `${u.quality} ${u.leadership}`
+
+/** A colony's ground units: the owner's garrison with what it can do this phase, or what a visitor can see of it. */
+function Garrison({ state, viewer, colony, own, seen, act }: { state: CampaignState; viewer: PlayerId; colony: Colony; own: boolean; seen: boolean; act: Act }) {
+  const units = state.groundUnits.filter((u) => 'colony' in u.at && u.at.colony === colony.id)
+  if (units.length === 0) return null
+  if (!own) return seen ? <p className="campaign-dim">Garrison: {units.length} ground unit{units.length === 1 ? '' : 's'}.</p> : null
+  const system = systemById(state, colony.systemId)!
+  const ships = taskForcesAt(state, system.hex)
+    .filter((tf) => tf.owner === viewer)
+    .flatMap((tf) => tf.ships)
+    .filter((s) => {
+      const d = designById(s.designId)
+      return d ? holdCs(d) > 0 : false
+    })
+  const moving = state.phase === 'planetary' || state.phase === 'production'
+  return (
+    <div className="campaign-garrison">
+      <h4>Garrison</h4>
+      <ul className="campaign-queue">
+        {units.map((u) => (
+          <li key={u.id}>
+            <span>
+              <b>{u.name}</b>{' '}
+              <span className="campaign-dim">
+                {markerLabel(u)} · {present(u).length}/{u.elements.length} elements · {unitCs(u)} CS{u.interfaceLanding ? ' · lands from orbit' : ''}
+                {u.battles > 0 ? ` · ${u.battles} battle${u.battles === 1 ? '' : 's'}, ${u.qualityPoints} pts` : ''}
+              </span>
+            </span>
+            <span className="campaign-inline">
+              {moving && ships.length > 0 ? (
+                <select
+                  aria-label={`Embark ${u.name}`}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) act({ kind: 'embark', player: viewer, unit: u.id, ship: e.target.value })
+                  }}
+                >
+                  <option value="">Embark on…</option>
+                  {ships.map((s) => (
+                    <option key={s.id} value={s.id} disabled={holdSpaceLeft(state, s) < unitCs(u)}>
+                      {s.name} ({Math.max(0, holdSpaceLeft(state, s))} CS free)
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {state.phase === 'production' && present(u).length < u.elements.length ? (
+                <button onClick={() => act({ kind: 'reinforce', player: viewer, unit: u.id })} title="Replacements for the lost elements; the new men may cost the unit a quality level (Stargrunt p. 60)">
+                  Reinforce · <span className="num">{replacementPrice(u)} RP</span>
+                </button>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -474,6 +615,8 @@ function TaskForceCard({
                   <span>
                     <b>{ship.name}</b> <span className="campaign-dim">{design?.name ?? ship.designId}</span>
                     {damage ? <span className="campaign-damage"> · {damage}</span> : null}
+                    {design && holdCs(design) > 0 ? <span className="campaign-dim num"> · holds {holdCs(design) - holdSpaceLeft(state, ship)}/{holdCs(design)} CS</span> : null}
+                    <Embarked state={state} viewer={viewer} ship={ship} tf={tf} act={act} />
                   </span>
                   {tf.ships.length > 1 ? (
                     <button
@@ -576,6 +719,31 @@ function TaskForceCard({
         </p>
       )}
     </div>
+  )
+}
+
+/** The ground units aboard a ship, and where they can go down this phase. */
+function Embarked({ state, viewer, ship, tf, act }: { state: CampaignState; viewer: PlayerId; ship: CampaignShip; tf: TaskForce; act: Act }) {
+  const aboard = state.groundUnits.filter((u) => 'ship' in u.at && u.at.ship === ship.id)
+  if (aboard.length === 0) return null
+  const system = systemAt(state.map, tf.hex)
+  const friendly = system ? state.colonies.filter((c) => c.systemId === system.id && c.owner === viewer) : []
+  const moving = state.phase === 'planetary' || state.phase === 'production'
+  return (
+    <ul className="campaign-embarked">
+      {aboard.map((u) => (
+        <li key={u.id}>
+          {u.name} <span className="campaign-dim">{markerLabel(u)} · {present(u).length}/{u.elements.length} · {unitCs(u)} CS{u.interfaceLanding ? ' · lands from orbit' : ''}</span>
+          {moving
+            ? friendly.map((c) => (
+                <button key={c.id} onClick={() => act({ kind: 'disembark', player: viewer, unit: u.id, colony: c.id })}>
+                  Disembark at {c.name}
+                </button>
+              ))
+            : null}
+        </li>
+      ))}
+    </ul>
   )
 }
 

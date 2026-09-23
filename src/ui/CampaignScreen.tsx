@@ -309,10 +309,14 @@ function LandingList({
           const involved = landing.attacker === viewer || landing.defender === viewer
           const teams = Object.keys(landing.landed).length
           const ships = landing.setup.orbital?.[0]?.ships.length ?? 0
+          const craft = landing.setup.craft?.length ?? 0
+          const units = new Set(landing.setup.craft?.flatMap((c) => c.unitIds) ?? []).size
+          const force = [teams > 0 ? `${teams} Marine team${teams === 1 ? '' : 's'}` : '', units > 0 ? `${units} ground unit${units === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')
           return (
             <li key={landing.id}>
               <span>
-                <b>{colony?.name ?? landing.colonyId}</b>: {name(landing.attacker)} lands {teams} Marine team{teams === 1 ? '' : 's'} against {name(landing.defender)}
+                <b>{colony?.name ?? landing.colonyId}</b>: {name(landing.attacker)} lands {force} against {name(landing.defender)}
+                {craft > 0 ? <span className="campaign-dim"> · {craft} craft coming down</span> : null}
                 {ships > 0 ? <span className="campaign-dim"> · {ships} ship{ships === 1 ? '' : 's'} overhead</span> : null}
               </span>
               {landing.resolved ? (
