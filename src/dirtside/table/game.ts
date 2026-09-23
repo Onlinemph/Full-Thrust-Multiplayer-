@@ -46,6 +46,10 @@ export const INTEGRITY = { infantry: 2, armour: 3 } as const
 export const OBJECTIVE_REACH = 1
 /** Evasive movement uses at least this share of the movement factors (p. 27). */
 export const EVASIVE_SHARE = 0.75
+/** Interface craft land at least this far from the nearest visible enemy (p. 43). */
+export const LANDING_CLEARANCE = 12
+/** Where an element aboard a craft in orbit is kept: nowhere near the table. */
+const OFF_TABLE: Point = { x: -1000, y: -1000 }
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -98,6 +102,7 @@ export function createGame(setup: GameSetup): GameState {
           posture: 'none',
           wood: null,
           woodEntry: null,
+          aboard: null,
         }
         ids.push(el.id)
         if (el.leader && !leader) leader = el.id
@@ -147,9 +152,22 @@ export function createGame(setup: GameSetup): GameState {
     objectives,
     prepared: [],
     orbit: null,
+    craft: {},
     journal: [],
     log: [{ turn: 0, side: null, text: `${setup.name}: deployment. ${setup.battle === 'encounter' ? 'Both sides deploy within 6" of their baselines.' : `${state0Name(setup, defender!)} defends and deploys first.`}`, page: 'p. 17' }],
     result: null,
+  }
+  // Interface craft wait in orbit with their units aboard, off the table (p. 43).
+  for (const craft of setup.craft ?? []) {
+    state.craft[craft.id] = { status: 'aloft', position: null, landedAt: null }
+    for (const unitId of craft.unitIds) {
+      for (const id of state.units[unitId]?.elementIds ?? []) {
+        const el = state.elements[id]!
+        el.aboard = craft.id
+        el.position = { ...OFF_TABLE }
+        el.wood = null
+      }
+    }
   }
   // Ships in orbit (More Thrust p. 17): a D6 as the game opens is the turn they are first overhead.
   const supports = (setup.orbital ?? []).filter((s) => s.ships.length > 0)
@@ -175,8 +193,9 @@ function state0Name(setup: GameSetup, side: SideId): string {
 // Queries
 // ---------------------------------------------------------------------------
 
-export const functional = (e: ElementState) => !e.destroyed
-export const mobile = (e: ElementState) => !e.destroyed && !e.immobilised
+/** On the table and not knocked out: an element aboard a craft in orbit is neither (p. 43). */
+export const functional = (e: ElementState) => !e.destroyed && !e.aboard
+export const mobile = (e: ElementState) => functional(e) && !e.immobilised
 
 export function elementsOf(state: GameState, unit: UnitState): ElementState[] {
   return unit.elementIds.map((id) => state.elements[id]!)
@@ -294,6 +313,10 @@ function dispatch(state: GameState, action: Action): Refusal | null {
       return pass(state, action.side)
     case 'done':
       return done(state, action.side)
+    case 'land-craft':
+      return landCraft(state, action)
+    case 'unload':
+      return unloadDropship(state, action.side, action.craftId)
     case 'call-orbital':
       return callOrbital(state, action)
     case 'orbital-strike':
@@ -312,6 +335,7 @@ function deploy(state: GameState, action: Extract<Action, { kind: 'deploy' }>): 
   if (state.sides[action.side].ready) return refuse('This side has finished deploying.', 'p. 17')
   const el = state.elements[action.elementId]
   if (!el || el.sideId !== action.side) return refuse('Not one of your elements.', 'p. 17')
+  if (el.aboard) return refuse(`${el.name} is aboard an interface craft and comes down during the battle.`, 'p. 43')
   if (!inDeploymentZone(state.setup, action.side, action.position)) return refuse(state.setup.battle === 'encounter' || action.side === state.setup.attacker ? `Deploy within ${DEPLOY_DEPTH}" of your own baseline.` : "The defender deploys in the main battle area and its own rear area.", 'p. 17')
   el.position = { x: action.position.x, y: action.position.y }
   el.facing = ((action.facing % 360) + 360) % 360
@@ -337,8 +361,10 @@ function startTurn(state: GameState): void {
   for (const side of Object.values(state.sides)) side.done = false
   const north = liveUnits(state, 'north').length
   const south = liveUnits(state, 'south').length
-  if (north === 0 || south === 0) {
-    finish(state, north === 0 && south === 0 ? 'draw' : north === 0 ? 'south' : 'north', 'the other side has no unit left on the table')
+  // A side is beaten with nothing on the table and nothing still to come down in a craft (p. 43).
+  const gone = (side: SideId, onTable: number) => onTable === 0 && unitsAboard(state, side) === 0
+  if (gone('north', north) || gone('south', south)) {
+    finish(state, gone('north', north) && gone('south', south) ? 'draw' : gone('north', north) ? 'south' : 'north', 'the other side has no unit left on the table')
     return
   }
   let chooser: SideId
@@ -393,7 +419,22 @@ function settleTurnFlow(state: GameState, current: SideId, justActed: boolean): 
 
 /** A side that has not declared itself done and still has a unit to activate (p. 18). */
 function canActivate(state: GameState, side: SideId): boolean {
-  return !state.sides[side].done && unactivatedUnits(state, side).length > 0
+  return !state.sides[side].done && (unactivatedUnits(state, side).length > 0 || craftToLand(state, side).length > 0 || dropshipsToUnload(state, side).length > 0)
+}
+
+/** Craft of the side still in orbit (p. 43). */
+export function craftToLand(state: GameState, side: SideId) {
+  return (state.setup.craft ?? []).filter((c) => c.side === side && state.craft[c.id]?.status === 'aloft')
+}
+
+/** Dropships of the side on the ground with units still aboard (p. 43). */
+export function dropshipsToUnload(state: GameState, side: SideId) {
+  return (state.setup.craft ?? []).filter((c) => c.side === side && c.kind === 'dropship' && state.craft[c.id]?.status === 'landed')
+}
+
+/** Units of the side aboard craft still aloft or waiting to unload. */
+export function unitsAboard(state: GameState, side: SideId): number {
+  return (state.setup.craft ?? []).filter((c) => c.side === side && (state.craft[c.id]?.status === 'aloft' || state.craft[c.id]?.status === 'landed')).reduce((n, c) => n + c.unitIds.length, 0)
 }
 
 /**
@@ -636,6 +677,7 @@ function takeObjectives(state: GameState, side: SideId, path: Point[], el: Eleme
     const held = state.objectives[o.id]!
     if (held.heldBy === side) continue
     held.heldBy = side
+    held.takenBy = el.unitId
     log(state, side, `${el.name} takes objective ${o.id} (value ${o.value}).`, 'p. 17')
   }
 }
@@ -1043,6 +1085,126 @@ function slamSplash(state: GameState, side: SideId, plan: Extract<TableShotPlan,
 function angleBetweenFacing(other: ElementState, from: ElementState): 'front' | 'side' {
   const a = Math.abs((((bearing(other.position, from.position) - other.facing) % 360) + 540) % 360) - 180
   return Math.abs(a) <= 45 ? 'front' : 'side'
+}
+
+// ---------------------------------------------------------------------------
+// Interface landings (p. 43)
+// ---------------------------------------------------------------------------
+
+/** Put a craft's units on the table about the point it landed at, each unit in a tight row facing the enemy. */
+function unloadAt(state: GameState, craftId: string, at: Point): string[] {
+  const craft = (state.setup.craft ?? []).find((c) => c.id === craftId)!
+  const names: string[] = []
+  const { width, depth } = state.setup.table
+  craft.unitIds.forEach((unitId, u) => {
+    const unit = state.units[unitId]
+    if (!unit) return
+    const els = elementsOf(state, unit).filter((e) => e.aboard === craftId && !e.destroyed)
+    const rowY = at.y + (u % 2 === 0 ? 1 : -1) * (1.2 + Math.floor(u / 2) * 1.4)
+    els.forEach((el, i) => {
+      el.aboard = null
+      el.position = { x: Math.max(0.5, Math.min(width - 0.5, at.x + (i - (els.length - 1) / 2) * 1.2)), y: Math.max(0.5, Math.min(depth - 0.5, rowY)) }
+      el.facing = el.sideId === 'north' ? 180 : 0
+      el.wood = woodAt(el.position, state.setup.table.terrain)?.where ?? null
+    })
+    if (els.length > 0) names.push(unit.name)
+  })
+  return names
+}
+
+/**
+ * Craft coming down (p. 43): any number in one activation, each on the
+ * table at least 12" from the nearest enemy that can see the spot. An
+ * opposed landing rolls a D6 a craft, lost with all aboard on the defence's
+ * score or more. An assault lander's units come out as it lands; a
+ * dropship's wait for a later activation.
+ *
+ * [reading] "Visible" enemy forces are those with a line of sight to the
+ * landing point. A craft does not set down in open water or a river.
+ */
+function landCraft(state: GameState, action: Extract<Action, { kind: 'land-craft' }>): Refusal | null {
+  const side = action.side
+  if (state.phase !== 'activation' || state.toAct !== side) return refuse('Not your turn.', 'p. 18')
+  if (state.activation) return refuse('An activation is under way; end it first.', 'p. 43')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
+  if (state.sides[side].done) return refuse(`${state.sides[side].name} has made its last activation this turn.`, 'p. 18')
+  if (action.landings.length === 0) return refuse('Name at least one craft and where it lands.', 'p. 43')
+  const seen = new Set<string>()
+  for (const { craftId, at } of action.landings) {
+    const craft = (state.setup.craft ?? []).find((c) => c.id === craftId)
+    if (!craft || craft.side !== side) return refuse('Not one of your craft.', 'p. 43')
+    if (state.craft[craftId]!.status !== 'aloft') return refuse(`${craft.name} is not in orbit.`, 'p. 43')
+    if (seen.has(craftId)) return refuse(`${craft.name} can land only once.`, 'p. 43')
+    seen.add(craftId)
+    if (!onTable(at, state.setup.table)) return refuse(`${craft.name} must land on the table.`, 'p. 43')
+    const ground = terrainAt(at, state.setup.table.terrain)
+    if (ground === 'open-water' || ground === 'river') return refuse(`${craft.name} cannot set down in ${ground.replace('-', ' ')}.`, 'p. 43')
+    const near = Object.values(state.elements).find((e) => e.sideId !== side && functional(e) && distance(e.position, at) < LANDING_CLEARANCE - 1e-9 && lineOfSight(e.position, at, state.setup.table.terrain).clear)
+    if (near) return refuse(`${craft.name} must land at least ${LANDING_CLEARANCE}" from the nearest enemy in sight: ${near.name} is ${distance(near.position, at).toFixed(1)}" away.`, 'p. 43')
+  }
+  // The defence's best score among its units still in action.
+  const defence = (state.setup.landingDefence ?? []).filter((d) => {
+    const unit = state.units[d.unitId]
+    return unit && unit.sideId !== side && elementsOf(state, unit).some(functional)
+  })
+  const needs = defence.length > 0 ? Math.min(...defence.map((d) => d.needs)) : null
+  const landed: string[] = []
+  for (const { craftId, at } of action.landings) {
+    const craft = (state.setup.craft ?? []).find((c) => c.id === craftId)!
+    const record = state.craft[craftId]!
+    if (needs !== null) {
+      const rolled = rollD6(state.rng)
+      if (rolled >= needs) {
+        record.status = 'lost'
+        for (const unitId of craft.unitIds) {
+          const unit = state.units[unitId]
+          if (!unit) continue
+          for (const el of elementsOf(state, unit)) if (el.aboard === craftId) el.destroyed = true
+          unit.casualties = unit.strength
+        }
+        log(state, side, `${craft.name} comes in under fire: D6 rolls ${rolled}, lost on ${needs}+ — it is shot down with ${craft.unitIds.map((id) => state.units[id]?.name).filter(Boolean).join(', ')} aboard.`, 'p. 43')
+        continue
+      }
+      log(state, side, `${craft.name} comes in under fire: D6 rolls ${rolled}, lost on ${needs}+ — it gets through.`, 'p. 43')
+    }
+    record.status = 'landed'
+    record.position = { ...at }
+    record.landedAt = state.activationCount
+    if (craft.kind === 'lander') {
+      const out = unloadAt(state, craftId, at)
+      record.status = 'empty'
+      log(state, side, `${craft.name}, an assault lander, touches down at (${at.x.toFixed(1)}, ${at.y.toFixed(1)}) and ${out.join(' and ')} come${out.length === 1 ? 's' : ''} straight out.`, 'p. 43')
+    } else {
+      log(state, side, `${craft.name}, a dropship, touches down at (${at.x.toFixed(1)}, ${at.y.toFixed(1)}); its units unload in a later activation.`, 'p. 43')
+    }
+    landed.push(craft.name)
+  }
+  state.activationCount += 1
+  activationMade(state, side)
+  settleTurnFlow(state, side, true)
+  return null
+}
+
+/** A dropship that landed in an earlier activation unloads: a full activation (p. 43). */
+function unloadDropship(state: GameState, side: SideId, craftId: string): Refusal | null {
+  if (state.phase !== 'activation' || state.toAct !== side) return refuse('Not your turn.', 'p. 18')
+  if (state.activation) return refuse('An activation is under way; end it first.', 'p. 43')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
+  if (state.sides[side].done) return refuse(`${state.sides[side].name} has made its last activation this turn.`, 'p. 18')
+  const craft = (state.setup.craft ?? []).find((c) => c.id === craftId)
+  if (!craft || craft.side !== side) return refuse('Not one of your craft.', 'p. 43')
+  const record = state.craft[craftId]!
+  if (craft.kind !== 'dropship' || record.status !== 'landed' || !record.position) return refuse(`${craft.name} is not a dropship waiting on the ground.`, 'p. 43')
+  if (record.landedAt !== null && record.landedAt >= state.activationCount) return refuse(`${craft.name}'s units unload in the activation after it lands.`, 'p. 43')
+  const out = unloadAt(state, craftId, record.position)
+  record.status = 'empty'
+  log(state, side, `${craft.name} unloads ${out.join(' and ') || 'nothing'}.`, 'p. 43')
+  state.activationCount += 1
+  activationMade(state, side)
+  settleTurnFlow(state, side, true)
+  return null
 }
 
 // ---------------------------------------------------------------------------

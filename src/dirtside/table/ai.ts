@@ -14,11 +14,11 @@
 
 import { mobilityFamily } from '../data/mobility'
 import { type DiceStream, draw, newStream } from '../dice'
-import { applyAction, canPass, commandUnitOf, createGame, elementsOf, functional, inRearArea, mobile, objectiveValues, strikesDue, unactivatedUnits } from './game'
+import { LANDING_CLEARANCE, applyAction, canPass, commandUnitOf, craftToLand, createGame, dropshipsToUnload, elementsOf, functional, inRearArea, mobile, objectiveValues, strikesDue, unactivatedUnits } from './game'
 import { restrictionsOf } from './confidence'
 import { NUKE_EXCLUSION, STRIKE_RADIUS, attacksLeft, orbitalShips, overhead, protectedFromFallout } from './orbital'
 import { baseMovement, planTableShot, teamFiresRanged, unitKind } from './tableFire'
-import { distance, lineOfSight, onTable, pathCost } from './terrain'
+import { distance, lineOfSight, onTable, pathCost, terrainAt } from './terrain'
 import type { Action, ElementState, GameSetup, GameState, OrbitalAttack, Point, ShotOrder, SideId, UnitState, WeaponChoice } from './types'
 import { otherSide } from './types'
 
@@ -142,6 +142,41 @@ function orbitalCall(state: GameState, side: SideId, unit: UnitState): Action | 
   return { kind: 'call-orbital', side, elementId: best.caller.id, shipId: ship.s.id, attack, aim: { ...best.aim } }
 }
 
+/**
+ * Where the side's craft come down (p. 43): the spots nearest the objectives
+ * it wants, clear of every enemy that can see them by the 12" and a margin,
+ * and a few inches apart; null if nowhere on the table will do.
+ */
+function landingsFor(state: GameState, side: SideId): Action | null {
+  const craft = craftToLand(state, side)
+  if (craft.length === 0) return null
+  const { width, depth } = state.setup.table
+  const enemies = enemiesOf(state, side)
+  const wanted = state.setup.table.objectives.filter((o) => state.objectives[o.id]?.heldBy !== side).map((o) => o.position)
+  const aims = wanted.length > 0 ? wanted : enemies.map((e) => e.position)
+  const home = { x: width / 2, y: side === 'north' ? 3 : depth - 3 }
+  const score = (p: Point) => (aims.length > 0 ? Math.min(...aims.map((a) => near(a, p))) : near(home, p))
+  const spots: Point[] = []
+  for (let y = 1.5; y < depth - 1; y += 2.5)
+    for (let x = 1.5; x < width - 1; x += 2.5) {
+      const p = { x, y }
+      const ground = terrainAt(p, state.setup.table.terrain)
+      if (ground === 'open-water' || ground === 'river') continue
+      if (enemies.some((e) => near(e.position, p) < LANDING_CLEARANCE + 1.5 && lineOfSight(e.position, p, state.setup.table.terrain).clear)) continue
+      spots.push(p)
+    }
+  spots.sort((a, b) => score(a) - score(b))
+  const landings: Array<{ craftId: string; at: Point }> = []
+  for (const c of craft) {
+    const at = spots.find((p) => landings.every((l) => near(l.at, p) >= 5))
+    if (!at) break
+    landings.push({ craftId: c.id, at })
+  }
+  if (landings.length === 0) return null
+  const action: Action = { kind: 'land-craft', side, landings }
+  return 'ok' in applyAction(state, action) ? null : action
+}
+
 /** The action the computer takes for `side`, or null if it is not that side's to take. */
 export function aiAction(state: GameState, side: SideId, stream: DiceStream): Action | null {
   if (state.result) return null
@@ -186,6 +221,10 @@ export function aiAction(state: GameState, side: SideId, stream: DiceStream): Ac
 
   // Between activations.
   if (strikesDue(state, side).length > 0) return { kind: 'orbital-strike', side }
+  const unload = dropshipsToUnload(state, side).find((c) => (state.craft[c.id]!.landedAt ?? Infinity) < state.activationCount)
+  if (unload) return { kind: 'unload', side, craftId: unload.id }
+  const land = landingsFor(state, side)
+  if (land) return land
   const values = objectiveValues(state)
   const objectives = state.setup.table.objectives
   const mine = objectives.filter((o) => state.objectives[o.id]?.heldBy === side)

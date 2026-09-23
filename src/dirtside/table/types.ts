@@ -114,6 +114,41 @@ export interface GameSetup {
   orbital?: OrbitalSupport[]
   /** Sides the computer plays at the table. The engine never reads it; the screen does. */
   aiSides?: SideId[]
+  /** Interface craft waiting in orbit with units aboard (p. 43). */
+  craft?: InterfaceCraft[]
+  /** Fire at craft coming in (p. 43): whoever of these still has an element in action. */
+  landingDefence?: LandingDefence[]
+}
+
+// ---------------------------------------------------------------------------
+// Interface landings (p. 43)
+// ---------------------------------------------------------------------------
+
+/**
+ * A dropship or an assault lander in orbit (p. 43). A dropship's units come
+ * out in a later activation, one dropship an activation; an assault lander's
+ * come out as it touches down.
+ */
+export interface InterfaceCraft {
+  id: string
+  side: SideId
+  name: string
+  kind: 'dropship' | 'lander'
+  /** Units aboard: off the table until they are unloaded. */
+  unitIds: string[]
+}
+
+/** A defending unit that fires at craft coming in: a D6 a craft, lost on `needs` or more (p. 43). */
+export interface LandingDefence {
+  unitId: string
+  needs: number
+}
+
+export interface CraftState {
+  status: 'aloft' | 'landed' | 'lost' | 'empty'
+  position: Point | null
+  /** The activation count it landed at: a dropship unloads in a later activation (p. 43). */
+  landedAt: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +231,8 @@ export interface ElementState {
   wood: 'edge' | 'within' | null
   /** Where it entered the edge of a wood its mobility type cannot pass: it leaves by the same point (p. 25). */
   woodEntry: Point | null
+  /** Aboard an interface craft, off the table, by the craft's id (p. 43). */
+  aboard: string | null
 }
 
 export interface UnitState {
@@ -317,11 +354,14 @@ export interface GameState {
   activationCount: number
   /** After a pass, the other side owes this many activations in succession (p. 18). */
   owed: number
-  objectives: Record<string, { heldBy: SideId | null }>
+  /** Who holds each marker, and the unit that last took it (for a campaign's experience). */
+  objectives: Record<string, { heldBy: SideId | null; takenBy?: string }>
   /** Prepared positions left on the table when a dug-in element moved off; either side may re-occupy them (p. 20). */
   prepared: Point[]
   /** Ships in orbit, fire in the air and the craters it left; null when neither side has orbital support. */
   orbit: OrbitState | null
+  /** Interface craft by id (p. 43). */
+  craft: Record<string, CraftState>
   journal: Action[]
   log: LogEntry[]
   result: GameResult | null
@@ -380,6 +420,10 @@ export type Action =
   | { kind: 'call-orbital'; side: SideId; elementId: string; shipId: string; attack: OrbitalAttack; aim: Point }
   /** The fire called earlier arrives, and bringing it down is the side's turn (Dirtside p. 39). */
   | { kind: 'orbital-strike'; side: SideId }
+  /** Bring any number of interface craft down, each 12" or more from the nearest visible enemy: one activation (p. 43). */
+  | { kind: 'land-craft'; side: SideId; landings: Array<{ craftId: string; at: Point }> }
+  /** Unload a dropship that landed in an earlier activation: a full activation (p. 43). */
+  | { kind: 'unload'; side: SideId; craftId: string }
 
 export interface Refusal {
   ok: false

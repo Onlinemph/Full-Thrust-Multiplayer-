@@ -20,11 +20,12 @@ import { type DiceStream, draw, newStream } from '../dirtside/dice'
 import { replay } from '../dirtside/table/game'
 import { objectiveDrawer, randomTerrain } from '../dirtside/table/skirmish'
 import { depthInside, insideShape } from '../dirtside/table/terrain'
-import type { Action, ElementSetup, GameSetup, GameState, Objective, OrbitalShip, Point, SideId, TerrainFeature, UnitSetup } from '../dirtside/table/types'
+import type { Action, ElementSetup, GameSetup, GameState, InterfaceCraft, Objective, OrbitalShip, Point, SideId, TerrainFeature, UnitSetup } from '../dirtside/table/types'
 import type { InfantryElement } from '../dirtside/types'
 import { classifyByMass, type FleetClass } from '../engine/battles'
 import type { ShipDesign } from '../engine/types'
 import { designById } from '../data/ships'
+import { type GroundUnit, present, unitSetup } from './army'
 import type { CampaignShip, Colony, PendingLanding } from './types'
 
 // ---------------------------------------------------------------------------
@@ -104,7 +105,7 @@ export function ortilleryOf(ship: CampaignShip, design: ShipDesign): number {
 export function transitLosses(ship: CampaignShip, design: ShipDesign, stream: DiceStream): { lost: number; chance: number } {
   const before = ship.marineLossRolledAt ?? 0
   const teams = marinesAboard(ship, design)
-  if (ship.hullDamage <= before || teams === 0 || design.hullBoxes <= before) return { lost: 0, chance: 0 }
+  if (ship.hullDamage <= before || design.hullBoxes <= before) return { lost: 0, chance: 0 }
   const chance = (ship.hullDamage - before) / (design.hullBoxes - before)
   let lost = 0
   for (let i = 0; i < teams; i++) if (draw(stream) < chance) lost += 1
@@ -278,8 +279,10 @@ export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSet
     row(unit, { x: post.at.x + shift * 0.7, y: post.at.y + shift * 0.7 })
     for (const el of unit.elements) el.facing = 0
   }
-  const order = (role: string) => (role === 'pdu' ? 0 : role === 'advanced-pdu' ? 1 : 2)
-  for (const unit of [...garrison].sort((a, b) => order(roles[a.id]!) - order(roles[b.id]!))) take(unit, roles[unit.id] === 'advanced-pdu')
+  // PDUs first, then the tanks, then the colony's own ground units (armour to the flanks), then the militia.
+  const order = (role: string | undefined) => (role === 'pdu' ? 0 : role === 'advanced-pdu' ? 1 : role === 'militia' ? 3 : 2)
+  const armoured = (unit: UnitSetup) => roles[unit.id] === 'advanced-pdu' || (roles[unit.id] === undefined && unit.elements.some((e) => e.vehicle))
+  for (const unit of [...garrison].sort((a, b) => order(roles[a.id]) - order(roles[b.id]))) take(unit, armoured(unit))
 
   const placed = [...force, ...garrison].flatMap((u) => u.elements.map((e) => e.position!)).concat(anchors)
   const random = randomTerrain(stream, width, depth, 'light').filter((f) => f.terrain === 'road' || !placed.some((p) => insideShape(p, f.shape)))
@@ -292,9 +295,46 @@ export interface LandingPlan {
   setup: GameSetup
   landed: Record<string, string>
   roles: Record<string, 'militia' | 'pdu' | 'advanced-pdu'>
+  /** Ground units' elements on the table: the unit and its place in the establishment. */
+  ground: Record<string, { unit: string; index: number }>
 }
 
-/** The Dirtside battle for a landing: the table, both sides, the ships overhead, and who the computer plays. */
+/** How many units a dropship carries at most (p. 43: "between two and five complete units"). */
+export const DROPSHIP_UNITS = 5
+
+/**
+ * The fire a landing meets on the way down (p. 43: "perhaps 6 if facing
+ * light defences or 5-6 if against heavy resistance"). [reading] The
+ * colony's PDUs are what fire at craft: a D6 of 6 brings one down while a
+ * PDU platoon is in action, 5 or 6 while an advanced PDU's tanks are.
+ */
+export const LANDING_FIRE: Record<'pdu' | 'advanced-pdu', number> = { pdu: 6, 'advanced-pdu': 5 }
+
+/**
+ * The craft that bring a landing force's ground units down (p. 43).
+ * [reading] Each ship puts its own units down: its units with vehicles in
+ * dropships, five units at most to a dropship, and each unit of infantry
+ * alone in an assault lander that lets it straight out.
+ */
+export function craftFor(units: readonly GroundUnit[], shipName: (id: string) => string): InterfaceCraft[] {
+  const craft: InterfaceCraft[] = []
+  const byShip = new Map<string, GroundUnit[]>()
+  for (const unit of units) {
+    const ship = 'ship' in unit.at ? unit.at.ship : ''
+    byShip.set(ship, [...(byShip.get(ship) ?? []), unit])
+  }
+  for (const [ship, aboard] of byShip) {
+    const heavy = aboard.filter((u) => present(u).some((e) => e.vehicle))
+    const light = aboard.filter((u) => !present(u).some((e) => e.vehicle))
+    for (let i = 0; i * DROPSHIP_UNITS < heavy.length; i++) {
+      craft.push({ id: `craft-${ship}-d${i + 1}`, side: 'north', name: `${shipName(ship)} dropship ${i + 1}`, kind: 'dropship', unitIds: heavy.slice(i * DROPSHIP_UNITS, (i + 1) * DROPSHIP_UNITS).map((u) => u.id) })
+    }
+    light.forEach((u, i) => craft.push({ id: `craft-${ship}-l${i + 1}`, side: 'north', name: `${shipName(ship)} lander ${i + 1}`, kind: 'lander', unitIds: [u.id] }))
+  }
+  return craft
+}
+
+/** The Dirtside battle for a landing: the table, both sides, the ships overhead, the craft coming down, and who the computer plays. */
 export function landingSetup(opts: {
   seed: number
   name: string
@@ -303,10 +343,32 @@ export function landingSetup(opts: {
   attackerName: string
   defenderName: string
   computers: SideId[]
+  /** The attacker's ground units aboard, able to land from orbit. */
+  attackers?: readonly GroundUnit[]
+  /** The colony's own ground units. */
+  defenders?: readonly GroundUnit[]
 }): LandingPlan {
   const force = landingForce(opts.ships)
   const garrison = garrisonOf(opts.colony)
-  const table = landingTable(opts.seed, force.units, garrison.units, garrison.roles, opts.colony.name)
+  const ground: Record<string, { unit: string; index: number }> = {}
+  const asUnits = (units: readonly GroundUnit[]) =>
+    units.map((u) => {
+      const { setup, ids } = unitSetup(u)
+      for (const [id, index] of Object.entries(ids)) ground[id] = { unit: u.id, index }
+      return setup
+    })
+  const landing = asUnits(opts.attackers ?? [])
+  const standing = asUnits(opts.defenders ?? [])
+  // The colony's command: its first PDU or tank troop, else its first ground unit, else the militia.
+  const works = garrison.units.filter((u) => garrison.roles[u.id] !== 'militia')
+  if (works.length === 0 && standing.length > 0) {
+    for (const u of garrison.units) delete u.commandUnit
+    standing[0]!.commandUnit = true
+  }
+  const defenders = [...garrison.units, ...standing]
+  // The landing force's command: the Marines' first platoon, else the first unit down.
+  if (force.units.length === 0 && landing.length > 0) landing[0]!.commandUnit = true
+  const table = landingTable(opts.seed, force.units, defenders, garrison.roles, opts.colony.name)
   const overhead: OrbitalShip[] = opts.ships
     .map(({ ship, design }) => ({ id: ship.id, name: ship.name, sheafs: sheafsOf(design), ortillery: ortilleryOf(ship, design) }))
     .filter((s) => s.sheafs + s.ortillery > 0)
@@ -317,14 +379,20 @@ export function landingSetup(opts: {
     attacker: 'north',
     table,
     sides: [
-      { id: 'north', name: opts.attackerName, units: force.units },
-      { id: 'south', name: opts.defenderName, units: garrison.units },
+      { id: 'north', name: opts.attackerName, units: [...force.units, ...landing] },
+      { id: 'south', name: opts.defenderName, units: defenders },
     ],
     turnLimit: LANDING_TURNS,
   }
   if (overhead.length > 0) setup.orbital = [{ side: 'north', ships: overhead }]
+  if (landing.length > 0) {
+    const names = new Map(opts.ships.map((s) => [s.ship.id, s.ship.name]))
+    setup.craft = craftFor(opts.attackers ?? [], (id) => names.get(id) ?? 'Transport')
+    const defence = Object.entries(garrison.roles).flatMap(([unitId, role]) => (role === 'militia' ? [] : [{ unitId, needs: LANDING_FIRE[role] }]))
+    if (defence.length > 0) setup.landingDefence = defence
+  }
   if (opts.computers.length > 0) setup.aiSides = [...opts.computers]
-  return { setup, landed: force.landed, roles: garrison.roles }
+  return { setup, landed: force.landed, roles: garrison.roles, ground }
 }
 
 /** Ships of a task force as a landing sees them: design, and the teams each can put down. */

@@ -142,5 +142,5 @@ export function falloutBreach(el: ElementState, path: readonly Point[], nukes: r
 /** Elements the zone catches: every one not already out of action within the radius of the impact, friend or foe. */
 export function caughtBy(state: GameState, impact: Point, attack: OrbitalAttack): ElementState[] {
   const radius = STRIKE_RADIUS[attack]
-  return Object.values(state.elements).filter((e) => !e.destroyed && distance(e.position, impact) <= radius + 1e-9)
+  return Object.values(state.elements).filter((e) => !e.destroyed && !e.aboard && distance(e.position, impact) <= radius + 1e-9)
 }

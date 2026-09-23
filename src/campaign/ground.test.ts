@@ -252,7 +252,7 @@ describe('a landing (rules reading 2)', () => {
     // 22 teams from the heavy cruiser and 5 from the frigate.
     expect(Object.keys(landing.landed)).toHaveLength(27)
     expect(landing.garrison).toMatchObject({ 'pdu-1': 'pdu', 'militia-1': 'militia', 'militia-2': 'militia' })
-    expect(c.log()).toMatch(/lands 27 Marine teams on .* in 7 platoons against Eurasia's garrison of 3, with 2 ships overhead/)
+    expect(c.log()).toMatch(/lands 27 Marine teams on .* in 7 platoons, against Eurasia's garrison of 3, with 2 ships overhead/)
     expect(c.play({ kind: 'end-phase', player: null })).toMatch(/1 landing still to fight/)
     expect(c.play(assault)).toMatch(/already been made/)
   })
@@ -261,7 +261,7 @@ describe('a landing (rules reading 2)', () => {
     expect(overEurasia(2, { defences: { pdu: 0, advancedPdu: 0, planetShield: true } }).play(assault)).toMatch(/planet shield is intact/)
     const c = overEurasia(2)
     for (const s of taskForceById(c.state, 'terra-tf-1')!.ships) s.marinesLost = 99
-    expect(c.play(assault)).toMatch(/no Marines to land: frigates and larger carry them \(More Thrust p\. 17\)/)
+    expect(c.play(assault)).toMatch(/no Marines to land, and no ground unit aboard that can come down from orbit \(More Thrust p\. 17, Dirtside p\. 43\)/)
   })
 
   it('takes a colony nobody defends at once', () => {

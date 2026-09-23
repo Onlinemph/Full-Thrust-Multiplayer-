@@ -116,6 +116,7 @@ export function planTableShot(state: GameState, order: ShotOrder, opts: { activa
   if (firer.sideId === target.sideId) return refuse('That is a friendly element.', 'p. 28')
   if (firer.destroyed) return refuse(`${firer.name} is knocked out.`, 'p. 30')
   if (target.destroyed) return refuse(`${target.name} is already out of action.`, 'p. 28')
+  if (firer.aboard || target.aboard) return refuse(`${firer.aboard ? firer.name : target.name} is aboard a craft, off the table.`, 'p. 43')
   const unit = state.units[firer.unitId]!
   const targetUnit = state.units[target.unitId]!
   if (unit.panic) return refuse(`${unit.name} is panicking and may do nothing until it spends an activation recovering.`, 'p. 23')

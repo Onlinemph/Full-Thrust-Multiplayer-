@@ -88,8 +88,9 @@ export function TableMap({ state, selectedId, onSelectElement, onClickTable, plo
 
   const activeUnit = state.activation?.unitId ?? null
   const elements = Object.values(state.elements)
-  const dead = elements.filter((e) => e.destroyed)
-  const live = elements.filter((e) => !e.destroyed)
+  // Elements aboard a craft are off the table until they come out (p. 43).
+  const dead = elements.filter((e) => e.destroyed && !e.aboard)
+  const live = elements.filter((e) => !e.destroyed && !e.aboard)
 
   return (
     <svg

@@ -14,6 +14,7 @@
  * a production phase replays exactly — same growth, same disasters, same riots.
  */
 
+import { orderPrice } from './army'
 import type { ShipDesign } from '../engine/types'
 import {
   rollD20,
@@ -49,7 +50,7 @@ export interface PriceEntry {
  * see `shipPrice` and `shipyardPrice`.
  */
 export const PRICE_SCHEDULE: Record<
-  Exclude<PurchaseItem['kind'], 'starship' | 'shipyard'>,
+  Exclude<PurchaseItem['kind'], 'starship' | 'shipyard' | 'ground-unit'>,
   PriceEntry
 > = {
   'colony-transport': { rp: 50, requires: null, note: 'Carries one million colonists.' },
@@ -98,6 +99,7 @@ export function priceOf(
     if (!design) throw new Error(`Unknown ship design: ${item.designId}`)
     return shipPrice(design)
   }
+  if (item.kind === 'ground-unit') return orderPrice(item.unit)
   if (item.kind === 'shipyard') {
     return shipyardPrice({
       throughput: item.throughput,
@@ -111,7 +113,7 @@ export function priceOf(
 
 /** The technology a purchase needs, or null if anyone may buy it. */
 export function requiredTechnology(item: PurchaseItem): TechnologyId | null {
-  if (item.kind === 'starship' || item.kind === 'shipyard') return null
+  if (item.kind === 'starship' || item.kind === 'shipyard' || item.kind === 'ground-unit') return null
   return PRICE_SCHEDULE[item.kind].requires
 }
 

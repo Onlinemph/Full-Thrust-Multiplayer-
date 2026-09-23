@@ -21,6 +21,7 @@
 
 import { sampleAt } from '../engine/dice'
 import type { GameSetup as DirtsideSetup } from '../dirtside/table/types'
+import type { GroundUnit, GroundUnitOrder } from './army'
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -268,6 +269,8 @@ export type PurchaseItem =
   | { kind: 'drop-pod' }
   | { kind: 'sleeper-spy' }
   | { kind: 'counter-espionage' }
+  /** A Dirtside platoon, raised at the colony (army.ts); the order carries the player's choice of design, never a price. */
+  | { kind: 'ground-unit'; unit: GroundUnitOrder }
 
 /**
  * Something being built at a colony. A yard processes its first rating in RP
@@ -649,6 +652,8 @@ export interface PendingLanding {
   landed: Record<string, CampaignShipId>
   /** The colony's platoons by unit id, and what each stands for. */
   garrison: Record<string, 'militia' | 'pdu' | 'advanced-pdu'>
+  /** Ground units' elements on the table, by element id: the unit and its place in the establishment. */
+  ground?: Record<string, { unit: string; index: number }>
   resolved: boolean
   /** Once fought: the winner's player id, or null when neither side had the better of it. */
   winner?: PlayerId | null
@@ -695,6 +700,8 @@ export interface CampaignState {
   battles: PendingBattle[]
   /** Landings made under rules reading 2 (More Thrust pp. 15–18). */
   landings: PendingLanding[]
+  /** Ground units raised by the players: garrisons and troops aboard ships. */
+  groundUnits: GroundUnit[]
   log: CampaignLogEntry[]
 }
 
@@ -761,6 +768,12 @@ export type CampaignMove =
   | { kind: 'bombard'; player: PlayerId; colony: ColonyId; taskForce: TaskForceId }
   /** A landing by the Marines aboard a task force holding the orbit (6.4). */
   | { kind: 'assault'; player: PlayerId; colony: ColonyId; taskForce: TaskForceId }
+  /** A ground unit at a colony goes aboard a ship in orbit, if its holds have the space (More Thrust p. 15). */
+  | { kind: 'embark'; player: PlayerId; unit: string; ship: CampaignShipId }
+  /** A ground unit aboard a ship goes down to a friendly colony in the system. */
+  | { kind: 'disembark'; player: PlayerId; unit: string; colony: ColonyId }
+  /** A depleted ground unit at a friendly colony is brought back to strength (Stargrunt p. 60). */
+  | { kind: 'reinforce'; player: PlayerId; unit: string }
   // --- Purchasing and building (Price schedule, Shipyards) ----------------
   | { kind: 'purchase'; player: PlayerId; colony: ColonyId; item: PurchaseItem; quantity: number }
   | { kind: 'cancel-build'; player: PlayerId; colony: ColonyId; order: string }
