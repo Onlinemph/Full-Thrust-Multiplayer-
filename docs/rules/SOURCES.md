@@ -8,6 +8,9 @@ The engine is built from these, and every rule reference in the code points at o
 | Full Thrust Continuum Ultimate Ship Builder v1.31 | Sections 13–14: the mass and points cost of every hull, drive, system and weapon/arc combination | `construction-tables.md` |
 | Full Thrust XD Quick Reference | Core Systems effects (bridge, life support, power core) and damage control, cross-checked against the rulebook | `threshold.md`, marked `[XD]` |
 | Stellar Imperium campaign rules | The strategic layer: economy, research, espionage, production | `campaign.md` |
+| *More Thrust* (Ground Zero Games, 1994) | The second-edition supplement: new weapons and systems, expanded fighters, planets, the interface between space and ground games, the 1994 Kra'Vak and the Sa'Vasku; each chunk compared with the engine | `more-thrust.md` |
+| *Dirtside II* (Ground Zero Games, 1993), its two counter sheets, and DS.XLS (M. Kurki-Suonio, 1998) | The ground game in `src/dirtside/`: design and points, the chit pot, fire, the table | `dirtside.md` |
+| *Stargrunt II* (Ground Zero Games, 1996), its quick reference and two counter sheets | The infantry skirmish game, not yet built | `stargrunt.md` |
 
 ## The source, in two halves
 
@@ -63,3 +66,12 @@ What the rest costs, and what stands in for it:
 
 Appending the missing pages to `continuum-rulebook-extract.txt` is all it takes to close these —
 the engine reads rules from the spec documents in this directory, not from the PDF.
+
+## Downloading scans through the connector
+
+Scanned rulebooks have no text layer, so they have to come down as files and be read from page images.
+The connector's download tool states a 10 MB limit, but in practice it drops its session on files a little
+under that: the two 9.7 MB parts of *Stargrunt II* failed every time, while every file up to about 6.3 MB
+came through (the *Dirtside II* parts at 5–6 MB, the 4.6 MB counter-sheet scan, the 4.7–5.0 MB *Stargrunt II*
+parts). A book to be read this way should be uploaded in parts of about 5 MB.
+

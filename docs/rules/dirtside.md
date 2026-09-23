@@ -324,6 +324,29 @@ This page is the **counter inventory** (icons plus quantities); it is the exact 
 
 Total black chits in the pot = 100 + 5 + 7 + 5 + 2 = **119**. The page does NOT give the distribution of values 0/1/2/3 within each colour — that must come from the later damage rules or the physical counter sheet (not in this chunk).
 
+**From the counter sheets themselves** (the two 1993 sheets, uploaded as `DSII-CS.pdf`, counted by hand from
+the scan): Sheet A carries the pot and confirms DS.XLS exactly —
+
+| Colour | 0 | 1 | 2 | 3 | Total |
+| --- | --- | --- | --- | --- | --- |
+| Red | 5 | 20 | 15 | 10 | 50 |
+| Yellow | 3 | 10 | 7 | 5 | 25 |
+| Green | 3 | 10 | 7 | 5 | 25 |
+
+plus BOOM 5, M 7, T 5 (lightning, "T") and F 2 (lightning, "F"): 119. Sheet A also fixes the leadership split
+of the command markers that p. 5 gives only by colour, which is the mix to draw from for a one-off game
+(p. 21):
+
+| Command markers | Leader 1 | Leader 2 | Leader 3 | Total |
+| --- | --- | --- | --- | --- |
+| Green (green troops) | 5 | 8 | 5 | 18 |
+| Blue (regulars) | 9 | 12 | 9 | 30 |
+| Orange (veterans) | 5 | 8 | 5 | 18 |
+
+and the confidence markers, 18 CO, 18 ST, 14 SH, 12 BR, 12 RO, with 7 PANIC and 14 ruined-building markers.
+Sheet B holds the play markers of section C below, including the 14 objective markers (seven 1s, four 2s,
+three 3s).
+
 ### B) THE COMMAND AND CONFIDENCE MARKERS
 
 | Marker | Description as printed | Quantity |
