@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import type { MobilityFamily } from '../../dirtside/data/mobility'
 import { NUKE_EXCLUSION, STRIKE_RADIUS } from '../../dirtside/table/orbital'
 import { distance } from '../../dirtside/table/terrain'
 import type { ElementState, GameState, Point, SideId } from '../../dirtside/table/types'
@@ -28,7 +29,59 @@ export interface TableMapProps {
   viewer: SideId | null
   /** Craft placed to come down this activation, with the 12" they must keep from enemies in sight (p. 43). */
   pendingLandings?: Array<{ at: Point; label: string }>
+
+  // ---- Presentation props: all optional, all drawn by the map, none decides a rule.
+
+  /** The side whose turn it is: the table frame takes its colour. */
+  toAct?: SideId | null
+  /** A unit to draw linked, hovered here or in the roster. */
+  hoverUnitId?: string | null
+  /** The pointer is over one of a unit's counters, or over none. */
+  onHoverUnit?: (unitId: string | null) => void
+  /** Fire being planned: each enemy element's verdict for the chosen firer and weapon, and the weapon's range bands in inches. */
+  targeting?: TargetingOverlay | null
+  /** A move being plotted: what the ghost path to the pointer costs, measured from the last waypoint. */
+  moveBudget?: MoveBudget | null
+  /** What just happened, drawn fading: the last moves and shots, most recent last. */
+  recent?: RecentMark[]
+  /** An orbital aim being chosen: the beaten zone follows the pointer. */
+  aimPreview?: { radius: number } | null
+  /** A craft being placed: its 12" clearance follows the pointer. */
+  landingPreview?: { label: string } | null
+  /** The pointer's shape for the mode the screen is in. */
+  cursor?: 'default' | 'crosshair' | 'place' | 'move'
+  /** A preview of the table: no clicks, no panning. */
+  readOnly?: boolean
 }
+
+export interface TargetVerdict {
+  ok: boolean
+  /** Why not, in plain words, when the shot cannot be made. */
+  reason?: string
+  /** The odds line, when it can: "hit 63% · knocked out 51%". */
+  odds?: string
+  /** Range to the target in inches. */
+  range?: number
+}
+
+export interface TargetingOverlay {
+  firerId: string
+  verdicts: Record<string, TargetVerdict>
+  /** Close, medium and long reach of the weapon in inches, if it has bands. */
+  bands?: number[]
+}
+
+export interface MoveBudget {
+  family: MobilityFamily
+  amphibious: boolean
+  travel: boolean
+  /** Movement factors left before the plotted path. */
+  left: number
+}
+
+export type RecentMark =
+  | { kind: 'move'; side: SideId; path: Point[] }
+  | { kind: 'fire'; side: SideId; from: Point; to: Point; result: 'miss' | 'hit' | 'kill' }
 
 
 export function TableMap({ state, selectedId, onSelectElement, onClickTable, plot, plotFrom, reach, targets, highlight, viewer, pendingLandings = [] }: TableMapProps) {

@@ -1,0 +1,73 @@
+/* Dirtside II — the ground war's own colours, on top of tokens.css.
+   ────────────────────────────────────────────────────────────────────────────
+   The table is a miniatures board seen from above: earth, woods, hills and
+   roads in muted natural colours, with the game's meaning drawn on top in the
+   app's frozen tokens. North is --side-a (cyan) and south --side-b (amber),
+   the same as the fleets; red is damage and nothing else; orange (--thrust)
+   is the one button to press next and the movement being spent.
+
+   These are chrome and terrain colours, free to retune. They never stand in
+   for side identity. */
+
+:root {
+  /* Sides, as the fleet game has them. */
+  --dst-north: var(--side-a);
+  --dst-south: var(--side-b);
+  --dst-north-spent: color-mix(in srgb, var(--side-a) 55%, #1a2016);
+  --dst-south-spent: color-mix(in srgb, var(--side-b) 55%, #1a2016);
+
+  /* The board and its surround. */
+  --dst-surround: #11140d;
+  --dst-frame: #2c2819;
+  --dst-ground: #6b7650;
+  --dst-ground-fleck-1: #78855a;
+  --dst-ground-fleck-2: #5e6946;
+  --dst-grid: rgba(18, 22, 10, 0.22);
+  --dst-ink: #10150d; /* counter silhouettes */
+  --dst-outline: #0d1109; /* counter outlines */
+  --dst-paper: #efe6c8; /* objective chits and map lettering */
+  --dst-label: rgba(246, 240, 220, 0.85);
+  --dst-label-halo: rgba(18, 20, 12, 0.7);
+  --dst-shadow: rgba(0, 0, 0, 0.28);
+
+  /* Terrain. */
+  --dst-earth: #7d6a45; /* berms and scrapes */
+  --dst-sandbag: #8b7a55;
+  --dst-road: #bca77a;
+  --dst-verge: #515e3b;
+  --dst-tarmac: #8f8d86;
+  --dst-water: #3b6a86;
+  --dst-bank: #cbbf92;
+  --dst-woods-l: #46643a;
+  --dst-woods-l-tree: #58793f;
+  --dst-woods-l-rim: #2b3f23;
+  --dst-woods-d: #2c4527;
+  --dst-woods-d-tree: #36552f;
+  --dst-woods-d-rim: #162413;
+  --dst-hill: #977f52;
+  --dst-hill-step-1: #a38c5d;
+  --dst-hill-step-2: #ae9868;
+  --dst-hill-step-3: #b9a474;
+  --dst-hill-step-4: #c4b07f;
+  --dst-hill-line: #6f5e38;
+  --dst-mountain: #857765;
+  --dst-rough: #7b7862;
+  --dst-rough-rock-1: #a39f89;
+  --dst-rough-rock-2: #55523f;
+  --dst-scrub: #76824e;
+  --dst-scrub-tuft: #4c572f;
+  --dst-field: #b3a256;
+  --dst-field-furrow: #978842;
+  --dst-hedge: #3e5a31;
+  --dst-urban: #77736a;
+  --dst-urban-roof: #a39c8e;
+  --dst-urban-edge: #34322d;
+  --dst-swamp: #4d6650;
+  --dst-swamp-water: #8fb0a6;
+  --dst-swamp-reed: #2f4331;
+
+  /* Markers. */
+  --dst-hull: #c9ced6; /* interface craft */
+  --dst-fallout: #b8f040;
+  --dst-strike: var(--ordnance);
+}
