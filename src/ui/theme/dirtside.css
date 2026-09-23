@@ -183,11 +183,6 @@
   color: var(--ink-dim);
 }
 
-/* The hovered primary button stays orange (the base hover rule outranks it). */
-.ds-pool button.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--thrust) 85%, #fff);
-}
-
 .ds-pool button.primary:disabled {
   background: var(--panel-2);
   border-color: var(--line);

@@ -183,6 +183,13 @@ button.primary {
   font-weight: 700;
 }
 
+/* Hovered, it stays the one thing to press: brighter, never the grey of an
+   ordinary button (the plain hover rule above outranks button.primary). */
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--thrust) 85%, #ffffff);
+  border-color: color-mix(in srgb, var(--thrust) 85%, #ffffff);
+}
+
 /* Focus is visible on every control: this game is played through a lot of
    small buttons and a keyboard user must be able to see where they are. */
 :focus-visible {

@@ -152,7 +152,8 @@
 }
 
 .modal input[type='number'],
-.modal input[type='text'] {
+.modal input[type='text'],
+.modal input:not([type]) {
   font: inherit;
   font-family: var(--font-mono);
   background: var(--panel-2);
