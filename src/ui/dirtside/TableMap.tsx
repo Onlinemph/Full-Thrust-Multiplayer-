@@ -1,7 +1,7 @@
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { type MobilityFamily, type TerrainType, goingOf, mobilityFamily } from '../../dirtside/data/mobility'
-import { distance, onTable, terrainAt, woodAt } from '../../dirtside/table/terrain'
+import { BLOCKS_SIGHT, HIGH_GROUND, distance, onTable, terrainAt, woodAt } from '../../dirtside/table/terrain'
 import type { ElementState, GameState, Point, SideId } from '../../dirtside/table/types'
 import { Board, BoardMarks, DeploymentZones } from './map/board'
 import { Counter } from './map/counters'
@@ -147,7 +147,9 @@ function describePoint(state: GameState, at: Point, selected: ElementState | nul
   const parts = [`(${at.x.toFixed(1)}", ${at.y.toFixed(1)}")`]
   const terrain = terrainAt(at, features)
   const wood = woodAt(at, features)
-  parts.push(wood ? `${TERRAIN_NAMES[wood.feature.terrain]}, ${wood.where === 'edge' ? 'edge: soft cover, sees out' : 'within: neither sees nor is seen'}` : TERRAIN_NAMES[terrain])
+  if (wood) parts.push(`${TERRAIN_NAMES[wood.feature.terrain]}, ${wood.where === 'edge' ? 'edge: soft cover, sees out' : 'within: neither sees nor is seen'}`)
+  else if (HIGH_GROUND.includes(terrain)) parts.push(`${TERRAIN_NAMES[terrain]}: high ground, sees over woods and towns`)
+  else parts.push(`${TERRAIN_NAMES[terrain]}${BLOCKS_SIGHT.includes(terrain) ? ': blocks sight' : ''}`)
   if (selected && !selected.destroyed) {
     parts.push(`${distance(selected.position, at).toFixed(1)}" from ${selected.name}`)
     const family = selected.vehicle ? mobilityFamily(selected.vehicle.mobility) : 'infantry'
@@ -386,7 +388,9 @@ export function TableMap(props: TableMapProps) {
   const deploying = state.phase === 'deployment' && !!selected && !selected.destroyed && !state.sides[selected.sideId].ready && !(state.setup.aiSides ?? []).includes(selected.sideId)
 
   const readout = !readOnly && pointer && onBoard ? describePoint(state, pointer, selected) : null
-  const cursorClass = measuring ? 'cursor-measure' : `cursor-${cursor ?? 'default'}`
+  // Without a word from the screen, the pointer is a crosshair whenever a click on the ground would place something.
+  const placing = !!plotFrom || !!aimPreview || !!landingPreview || deploying
+  const cursorClass = measuring ? 'cursor-measure' : `cursor-${cursor ?? (placing ? 'crosshair' : 'default')}`
   const lod = pxPerInch >= 28 ? ' lod-near' : pxPerInch < 12 ? ' lod-far' : ''
   const style = { '--k': k } as CSSProperties
 
