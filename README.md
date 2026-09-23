@@ -395,6 +395,14 @@ Ground battles are the next engine. `docs/rules/dirtside.md` is a page-by-page d
 probability analysis; it is the reference for the Dirtside game being built in `src/dirtside/`, which the
 campaign will later hand its planetary battles to through the same battle-file-in, result-file-out seam.
 
+Two more references sit beside it. `docs/rules/stargrunt.md` digests *Stargrunt II*, the 25mm infantry game
+of the same universe, all 75 pages with its quick reference and counter sheets; it shares Dirtside's heavy
+weapons and vehicle design, so the Motor Pool's vehicles will carry over, and its campaign chapter says
+what a ground unit carries between battles (quality earned, replacements, fatigue, repairs). And
+`docs/rules/more-thrust.md` digests *More Thrust*, Full Thrust's 1994 supplement, against the engine: its
+chapter on combining space and ground games is the conversion the campaign will use to put a fleet's
+troops, orbital bombardment and fighters onto a Dirtside table.
+
 ## Dirtside II
 
 The ground game, built in the same repository and to the same rules as the fleet game: a pure engine under
