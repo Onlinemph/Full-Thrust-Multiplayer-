@@ -37,10 +37,10 @@ import { CampaignSetupPanel } from './CampaignSetupPanel'
 import { MotorPool } from './dirtside/MotorPool'
 import { SkirmishPanel } from './dirtside/SkirmishPanel'
 import { TableScreen } from './dirtside/TableScreen'
-import { useDirtsideBattle } from './dirtside/dirtsideStore'
+import { dirtsideBattleText, loadDirtsideBattle, newDirtsideBattle, useDirtsideBattle } from './dirtside/dirtsideStore'
 import { PresetEditor } from './PresetEditor'
 import { presetFromHash, type RulesPreset } from '../data/rulesPreset'
-import { battleOnTable, campaignDispatch, setBattleOnTable, useCampaign } from './campaignStore'
+import { battleOnTable, campaignDispatch, landingOnTable, setBattleOnTable, setLandingOnTable, useCampaign } from './campaignStore'
 import { systemById } from '../campaign/campaign'
 import { CAMPAIGN_PHASE_LABELS } from '../campaign/turn'
 import { PrintSheets, type PrintJob } from './PrintSheets'
@@ -194,6 +194,9 @@ export function App() {
   const campaign = useCampaign()
   const tableBattleId = battleOnTable()
   const campaignBattle = campaign?.battles.find((b) => b.id === tableBattleId && !b.resolved) ?? null
+  /* Likewise the landing whose battle is on the Dirtside table. */
+  const tableLandingId = landingOnTable()
+  const campaignLanding = campaign?.landings.find((l) => l.id === tableLandingId && !l.resolved) ?? null
   const net = useNet()
   useEffect(() => {
     if (net.phase === 'connected') setScreen('battle')
@@ -417,9 +420,29 @@ export function App() {
   )
 
   if (screen === 'dirtside') {
+    /* A landing comes back to the campaign as its battle file: the campaign
+       replays the journal over the landing's own setup. */
+    const landingBack =
+      campaignLanding && dirtside && dirtside.setup.seed === campaignLanding.seed
+        ? {
+            label: 'Campaign landing',
+            onReturn: () => {
+              if (!dirtside.result && !window.confirm('The battle is not over. Fold it back into the campaign as it stands? The side holding the objectives has the ground.')) return
+              const text = dirtsideBattleText()
+              if (!text) return
+              const outcome = campaignDispatch({ kind: 'resolve-landing', landing: campaignLanding.id, savedBattle: text })
+              if (outcome.refused) {
+                window.alert(outcome.refused)
+                return
+              }
+              setLandingOnTable(null)
+              setScreen('campaign')
+            },
+          }
+        : null
     return (
       <>
-        <TableScreen onMenu={() => setScreen('menu')} onNewSkirmish={() => setShowSkirmish(true)} />
+        <TableScreen onMenu={() => setScreen(landingBack ? 'campaign' : 'menu')} onNewSkirmish={() => setShowSkirmish(true)} campaign={landingBack} />
         {modals}
       </>
     )
@@ -439,6 +462,20 @@ export function App() {
             setScreen('battle')
           }}
           onResume={() => setScreen('battle')}
+          onFightLanding={(tableSetup, landing) => {
+            newDirtsideBattle(tableSetup)
+            setLandingOnTable(landing.id)
+            setScreen('dirtside')
+          }}
+          onResumeLanding={() => setScreen('dirtside')}
+          onReviewLanding={(text) => {
+            const error = loadDirtsideBattle(text)
+            if (error) window.alert(error)
+            else {
+              setLandingOnTable(null)
+              setScreen('dirtside')
+            }
+          }}
           onReview={(text) => {
             const error = loadGame(text)
             if (error) window.alert(error)

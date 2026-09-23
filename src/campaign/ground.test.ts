@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { aiPlay } from '../dirtside/table/ai'
 import { inDeploymentZone } from '../dirtside/table/game'
 import { validateSetup } from '../dirtside/table/setupCheck'
+import { depthInside, insideShape } from '../dirtside/table/terrain'
 import { newStream } from '../dirtside/dice'
 import { designById } from '../data/ships'
 import type { ShipDesign } from '../engine/types'
@@ -133,7 +134,10 @@ describe('the garrison (reading)', () => {
       expect(plan.setup).toMatchObject({ battle: 'attack-defence', attacker: 'north', turnLimit: 8, aiSides: ['south'] })
       for (const side of plan.setup.sides) for (const unit of side.units) for (const el of unit.elements) expect(inDeploymentZone(plan.setup, side.id, el.position!)).toBe(true)
       expect(plan.setup.orbital).toEqual([{ side: 'north', ships: [{ id: 'endeavour', name: 'endeavour', sheafs: 2, ortillery: 0 }, { id: 'dart', name: 'dart', sheafs: 1, ortillery: 0 }] }])
-      expect(plan.setup.table.terrain.some((f) => f.terrain === 'urban' && f.label === 'Haven')).toBe(true)
+      const town = plan.setup.table.terrain.find((f) => f.terrain === 'urban' && f.label === 'Haven')!
+      expect(town).toBeDefined()
+      // A defender in the town stands within its first inch, where it can see out and be seen (p. 20).
+      for (const el of plan.setup.sides[1].units.flatMap((u) => u.elements)) if (insideShape(el.position!, town.shape)) expect(depthInside(el.position!, town.shape)).toBeLessThanOrEqual(1)
     }
   })
 })

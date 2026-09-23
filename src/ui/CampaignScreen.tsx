@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 
-import { PHASE_GUIDE, battleSetup, phasesForTurn, plotLeadOf, systemById, taskForceById } from '../campaign/campaign'
+import { PHASE_GUIDE, battleSetup, colonyById, phasesForTurn, plotLeadOf, systemById, taskForceById } from '../campaign/campaign'
 import { hexKey, systemAt } from '../campaign/map'
 import { CAMPAIGN_PHASE_LABELS } from '../campaign/turn'
-import type { CampaignMove, CampaignState, Hex, PendingBattle, PlayerId, PlottedMove, TaskForce } from '../campaign/types'
+import type { CampaignMove, CampaignSetup, CampaignState, Hex, PendingBattle, PendingLanding, PlayerId, PlottedMove, TaskForce } from '../campaign/types'
 import type { GameSetup } from '../data/savedGame'
+import { aiPlay } from '../dirtside/table/ai'
+import type { GameSetup as DirtsideSetup, SideId } from '../dirtside/table/types'
 import { autoplay } from '../engine/playtest/autoplay'
 import { CampaignMap, playerColour } from './CampaignMap'
 import { HexPanel, PlayerPanel } from './CampaignPanels'
-import { battleOnTable, campaignDispatch, currentCampaignSetup, exportCampaign, loadCampaign, useCampaign } from './campaignStore'
+import { battleOnTable, campaignDispatch, currentCampaignSetup, exportCampaign, landingOnTable, loadCampaign, useCampaign } from './campaignStore'
 
 /**
  * The campaign console: the star map on the left, the phase and the selected
@@ -29,6 +31,19 @@ export interface CampaignScreenProps {
   onResume: () => void
   /** Open a fought battle's file on the table, to read how it went. */
   onReview: (savedGame: string) => void
+  /** Open a landing on the Dirtside table. */
+  onFightLanding: (setup: DirtsideSetup, landing: PendingLanding) => void
+  /** Go back to the landing already on the Dirtside table. */
+  onResumeLanding: () => void
+  /** Open a fought landing's battle file on the Dirtside table. */
+  onReviewLanding: (savedBattle: string) => void
+}
+
+/** A landing's battle as the table opens it: the computer at the helm of any side a computer player holds. */
+export function landingTableSetup(landing: PendingLanding, setup: CampaignSetup): DirtsideSetup {
+  const computer = (player: string) => !!setup.players.find((p) => p.id === player)?.computer
+  const aiSides: SideId[] = [...(computer(landing.attacker) ? (['north'] as const) : []), ...(computer(landing.defender) ? (['south'] as const) : [])]
+  return aiSides.length > 0 ? { ...landing.setup, aiSides } : landing.setup
 }
 
 interface Draft {
@@ -36,7 +51,7 @@ interface Draft {
   legs: PlottedMove[]
 }
 
-export function CampaignScreen({ onMenu, onFight, onResume, onReview }: CampaignScreenProps) {
+export function CampaignScreen({ onMenu, onFight, onResume, onReview, onFightLanding, onResumeLanding, onReviewLanding }: CampaignScreenProps) {
   const state = useCampaign()
   const setup = currentCampaignSetup()
   const humans = state ? state.players.filter((p) => !setup?.players.find((s) => s.id === p.id)?.computer) : []
@@ -66,7 +81,9 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview }: Campaign
   const phases = phasesForTurn(state.turn)
   const last = phases[phases.length - 1] === state.phase
   const openBattles = state.battles.filter((b) => !b.resolved)
-  const endBlocked = state.phase === 'combat' && openBattles.length > 0
+  const openLandings = state.landings.filter((l) => !l.resolved)
+  const endBlocked = (state.phase === 'combat' && openBattles.length > 0) || (state.phase === 'planetary' && openLandings.length > 0)
+  const blockedBy = state.phase === 'combat' ? `${openBattles.length} battle${openBattles.length === 1 ? '' : 's'} still to fight` : `${openLandings.length} landing${openLandings.length === 1 ? '' : 's'} still to fight`
   const draftForce = draft ? taskForceById(state, draft.taskForceId) : undefined
 
   const selectHex = (hex: Hex) => {
@@ -84,6 +101,16 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview }: Campaign
   const autoFight = (battle: PendingBattle) => {
     const saved = autoplay(battleSetup(state, battle, setup))
     act({ kind: 'resolve-battle', battle: battle.id, savedGame: JSON.stringify(saved) })
+  }
+  const fightLanding = (landing: PendingLanding) => onFightLanding(landingTableSetup(landing, setup), landing)
+  const autoLanding = (landing: PendingLanding) => {
+    const game = aiPlay(landing.setup, { seed: landing.seed })
+    act({ kind: 'resolve-landing', landing: landing.id, savedBattle: JSON.stringify({ version: 1, setup: landing.setup, journal: game.journal }) })
+  }
+  const landingFile = (landing: PendingLanding): string | null => {
+    const moves = JSON.parse(exportCampaign()).moves as Array<{ move: CampaignMove }>
+    const entry = [...moves].reverse().find((m) => m.move.kind === 'resolve-landing' && m.move.landing === landing.id)
+    return entry && entry.move.kind === 'resolve-landing' ? entry.move.savedBattle : null
   }
   const reviewOf = (battle: PendingBattle): string | null => {
     const moves = currentCampaignSetup() ? JSON.parse(exportCampaign()).moves as Array<{ move: CampaignMove }> : []
@@ -139,7 +166,7 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview }: Campaign
         <button
           className="primary end-phase"
           disabled={endBlocked}
-          title={endBlocked ? `${openBattles.length} battle${openBattles.length === 1 ? '' : 's'} still to fight` : undefined}
+          title={endBlocked ? blockedBy : undefined}
           onClick={() => act({ kind: 'end-phase', player: null })}
         >
           {last ? `End turn ${state.turn}` : `End ${lower(CAMPAIGN_PHASE_LABELS[state.phase])}`}
@@ -214,6 +241,20 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview }: Campaign
                   }}
                 />
               ) : null}
+              {state.phase === 'planetary' && state.landings.some((l) => l.id.startsWith(`landing-${state.turn}-`)) ? (
+                <LandingList
+                  state={state}
+                  viewer={viewer}
+                  onTable={landingOnTable()}
+                  onFight={fightLanding}
+                  onResume={onResumeLanding}
+                  onAuto={autoLanding}
+                  onReview={(l) => {
+                    const file = landingFile(l)
+                    if (file) onReviewLanding(file)
+                  }}
+                />
+              ) : null}
             </div>
 
             {selected ? <HexPanel state={state} viewer={viewer} hex={selected} act={act} onPlot={(tf) => setDraft({ taskForceId: tf.id, legs: [] })} /> : null}
@@ -226,6 +267,73 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview }: Campaign
         </aside>
       </main>
     </div>
+  )
+}
+
+/** This turn's landings: fight each on the Dirtside table, or let the computers fight it. */
+function LandingList({
+  state,
+  viewer,
+  onTable,
+  onFight,
+  onResume,
+  onAuto,
+  onReview,
+}: {
+  state: CampaignState
+  viewer: PlayerId
+  /** The landing already open on the Dirtside table, by id. */
+  onTable: string | null
+  onFight: (landing: PendingLanding) => void
+  onResume: () => void
+  onAuto: (landing: PendingLanding) => void
+  onReview: (landing: PendingLanding) => void
+}) {
+  const name = (id: PlayerId) => state.players.find((p) => p.id === id)?.name ?? id
+  return (
+    <ul className="campaign-battles">
+      {state.landings
+        .filter((l) => l.id.startsWith(`landing-${state.turn}-`))
+        .map((landing) => {
+          const colony = colonyById(state, landing.colonyId)
+          const involved = landing.attacker === viewer || landing.defender === viewer
+          const teams = Object.keys(landing.landed).length
+          const ships = landing.setup.orbital?.[0]?.ships.length ?? 0
+          return (
+            <li key={landing.id}>
+              <span>
+                <b>{colony?.name ?? landing.colonyId}</b>: {name(landing.attacker)} lands {teams} Marine team{teams === 1 ? '' : 's'} against {name(landing.defender)}
+                {ships > 0 ? <span className="campaign-dim"> · {ships} ship{ships === 1 ? '' : 's'} overhead</span> : null}
+              </span>
+              {landing.resolved ? (
+                <span className="campaign-dim">
+                  {' '}
+                  · fought{landing.winner ? `, ${name(landing.winner)} had the better of it` : ', the garrison kept the ground'}{' '}
+                  <button onClick={() => onReview(landing)}>Review</button>
+                </span>
+              ) : (
+                <span className="campaign-inline">
+                  {onTable === landing.id ? (
+                    <button className="primary" onClick={onResume}>
+                      Back to the table
+                    </button>
+                  ) : null}
+                  <button
+                    className={involved && onTable !== landing.id ? 'primary' : undefined}
+                    onClick={() => {
+                      if (onTable === landing.id && !window.confirm('Start this landing over, discarding the battle on the table?')) return
+                      onFight(landing)
+                    }}
+                  >
+                    {onTable === landing.id ? 'Start over' : 'Fight on the Dirtside table'}
+                  </button>
+                  <button onClick={() => onAuto(landing)}>Let the computers fight it</button>
+                </span>
+              )}
+            </li>
+          )
+        })}
+    </ul>
   )
 }
 

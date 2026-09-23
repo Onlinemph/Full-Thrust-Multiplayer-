@@ -80,8 +80,9 @@ function goalFor(state: GameState, side: SideId, el: ElementState, unit: UnitSta
     if (el.dugIn) return null
     const retake = lost.sort((a, b) => near(a.position, el.position) - near(b.position, el.position))[0]
     if (retake) return retake.position
+    // Holding: an element within 5" of an objective it holds stays where it was posted.
     const mine = [...objectives].sort((a, b) => near(a.position, el.position) - near(b.position, el.position))[0]
-    return mine && near(mine.position, el.position) > 3 ? mine.position : null
+    return mine && near(mine.position, el.position) > 5 ? mine.position : null
   }
   const target = lost.sort((a, b) => near(a.position, el.position) - near(b.position, el.position))[0]
   if (target) return target.position

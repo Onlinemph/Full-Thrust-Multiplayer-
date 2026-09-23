@@ -138,3 +138,11 @@ export function clearDirtsideBattle(): void {
   persist()
   emit()
 }
+
+/** A handle for a browser drive in development, as the battle and campaign stores offer. */
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __fullThrustDirtside?: unknown }).__fullThrustDirtside = {
+    currentDirtsideBattle,
+    dirtsideDispatch,
+  }
+}

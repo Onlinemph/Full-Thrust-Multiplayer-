@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { mobilityFamily } from '../../dirtside/data/mobility'
 import { weaponLabel } from '../../dirtside/design'
 import { infantryHitOdds, vehicleHitOdds } from '../../dirtside/odds'
 import { CONFIDENCE_LABELS, QUALITY_LABELS } from '../../dirtside/table/confidence'
-import { canPass, commandUnitOf, elementsOf, functional, mobile, objectiveValues, unactivatedUnits } from '../../dirtside/table/game'
+import { newStream } from '../../dirtside/dice'
+import { aiAction } from '../../dirtside/table/ai'
+import { canPass, commandUnitOf, elementsOf, functional, mobile, objectiveValues, strikesDue, unactivatedUnits } from '../../dirtside/table/game'
+import { ATTACK_LABELS, STRIKE_CHITS, STRIKE_RADIUS, attacksLeft, nextOverhead, orbitalShips, overhead } from '../../dirtside/table/orbital'
 import { baseMovement, planTableShot, teamFiresRanged, type TableShotPlan } from '../../dirtside/table/tableFire'
 import { pathCost } from '../../dirtside/table/terrain'
-import type { Action, ElementState, Point, Refusal, ShotOrder, SideId, UnitState, WeaponChoice } from '../../dirtside/table/types'
+import type { Action, ElementState, OrbitalAttack, Point, Refusal, ShotOrder, SideId, UnitState, WeaponChoice } from '../../dirtside/table/types'
 import { TableMap } from './TableMap'
-import { dirtsideBattleText, dirtsideDispatch, useDirtsideBattle } from './dirtsideStore'
+import { currentDirtsideBattle, dirtsideBattleText, dirtsideDispatch, useDirtsideBattle } from './dirtsideStore'
 
 /**
  * The Dirtside II table, played hot-seat from one console: both sides'
@@ -20,13 +23,18 @@ import { dirtsideBattleText, dirtsideDispatch, useDirtsideBattle } from './dirts
 export interface TableScreenProps {
   onMenu: () => void
   onNewSkirmish: () => void
+  /** A campaign landing on the table: where it came from, and the way back with its result. */
+  campaign?: { label: string; onReturn: () => void } | null
 }
 
-type Mode = 'idle' | 'move' | 'fire'
+type Mode = 'idle' | 'move' | 'fire' | 'orbital'
+
+/** How long the computer waits before each action, so a player can follow it. */
+const AI_DELAY_MS = 350
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
 
-export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
+export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProps) {
   const state = useDirtsideBattle()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('idle')
@@ -38,6 +46,27 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
   const [firingUnitId, setFiringUnitId] = useState<string | null>(null)
   const [refusal, setRefusal] = useState<Refusal | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [orbitalChoice, setOrbitalChoice] = useState<{ shipId: string; attack: OrbitalAttack } | null>(null)
+
+  /* The computer's seats: whenever one of them is to act, it acts, a beat
+     later, through the same door as everyone else. */
+  useEffect(() => {
+    if (!state || state.result) return
+    const seats = state.setup.aiSides ?? []
+    if (seats.length === 0) return
+    const side = state.phase === 'deployment' ? (seats.find((s) => !state.sides[s].ready) ?? null) : state.toAct && seats.includes(state.toAct) ? state.toAct : null
+    if (!side) return
+    const timer = setTimeout(() => {
+      const live = currentDirtsideBattle()
+      if (!live || live !== state) return
+      const action = aiAction(live, side, newStream((live.setup.seed ^ Math.imul(live.journal.length + 1, 2654435761)) >>> 0))
+      if (!action) return
+      if (!dirtsideDispatch(action)) return
+      const fallback: Action = live.activation?.window ? { kind: 'decline-opportunity', side, forActivation: true } : live.activation ? { kind: 'end-activation', side } : strikesDue(live, side).length > 0 ? { kind: 'orbital-strike', side } : { kind: 'done', side }
+      dirtsideDispatch(fallback)
+    }, AI_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [state])
 
   if (!state) {
     return (
@@ -70,6 +99,7 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
     setPlot([])
     setVolley([])
     setWeapon(null)
+    setOrbitalChoice(null)
   }
   const act = (action: Action): boolean => {
     const r = dirtsideDispatch(action)
@@ -90,6 +120,11 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
 
   const onSelectElement = (id: string) => {
     const el = state.elements[id]!
+    // Calling fire from orbit, a click on a counter aims at where it stands.
+    if (mode === 'orbital' && orbitalChoice && selected) {
+      if (act({ kind: 'call-orbital', side: selected.sideId, elementId: selected.id, shipId: orbitalChoice.shipId, attack: orbitalChoice.attack, aim: { ...el.position } })) reset()
+      return
+    }
     if (mode === 'fire' && selected && weapon && el.sideId !== selected.sideId) {
       const order: ShotOrder = { elementId: selected.id, weapon, targetId: id }
       const plan = planFor(order)
@@ -109,6 +144,10 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
 
   const onClickTable = (point: Point) => {
     if (!selected) return
+    if (mode === 'orbital' && orbitalChoice) {
+      if (act({ kind: 'call-orbital', side: selected.sideId, elementId: selected.id, shipId: orbitalChoice.shipId, attack: orbitalChoice.attack, aim: point })) reset()
+      return
+    }
     if (state.phase === 'deployment') {
       if (state.sides[selected.sideId].ready) return
       act({ kind: 'deploy', side: selected.sideId, elementId: selected.id, position: point, facing: selected.sideId === 'north' ? 180 : 0 })
@@ -168,8 +207,13 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
   const sideName = (s: SideId) => state.sides[s].name
 
   // ---- The banner: what the table is waiting for.
+  const seats = state.setup.aiSides ?? []
+  const computerToAct = !state.result && !!toAct && seats.includes(toAct) && state.phase !== 'deployment'
+  const due = toAct && !activation ? strikesDue(state, toAct).length > 0 : false
   let banner: string
-  if (state.result) banner = state.result.winner === 'draw' ? `A draw: ${state.result.reason}.` : `${sideName(state.result.winner)} wins: ${state.result.reason}.`
+  if (computerToAct) banner = `The computer is playing ${sideName(toAct!)}…`
+  else if (due) banner = `${sideName(toAct!)}: the fire called down from orbit arrives. Bring it down before anything else.`
+  else if (state.result) banner = state.result.winner === 'draw' ? `A draw: ${state.result.reason}.` : `${sideName(state.result.winner)} wins: ${state.result.reason}.`
   else if (state.phase === 'deployment') banner = 'Deployment: pick an element, click where it stands, then Ready.'
   else if (state.phase === 'turn-start') banner = `Turn ${state.turn}: ${sideName(state.chooser!)} chooses who activates first.`
   else if (window) banner = `${sideName(window.sideId)}: opportunity fire on ${state.elements[window.movedElementId]!.name}? Pick one of your unactivated units below.`
@@ -200,8 +244,17 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
         >
           Save
         </button>
-        <button onClick={onNewSkirmish}>New skirmish</button>
-        <button onClick={onMenu}>Menu</button>
+        {campaign ? (
+          <>
+            <span className="campaign-kicker">{campaign.label}</span>
+            <button className="primary" onClick={campaign.onReturn}>
+              Return to campaign
+            </button>
+          </>
+        ) : (
+          <button onClick={onNewSkirmish}>New skirmish</button>
+        )}
+        <button onClick={onMenu}>{campaign ? 'Campaign' : 'Menu'}</button>
       </header>
 
       <main className="app-body dst-body">
@@ -229,6 +282,12 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
 
         <aside className="app-side dst-side">
           <div className="panel dst-actions">
+            {computerToAct ? <p className="campaign-dim">The computer is at the helm of {sideName(toAct!)}.</p> : null}
+            {due && !computerToAct ? (
+              <button className="primary" onClick={() => act({ kind: 'orbital-strike', side: toAct! })}>
+                Bring down the orbital fire
+              </button>
+            ) : null}
             {state.phase === 'deployment' ? (
               <>
                 {(['north', 'south'] as SideId[]).map((s) => (
@@ -248,18 +307,18 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
                 </button>
               </>
             ) : null}
-            {state.phase === 'activation' && window ? (
+            {state.phase === 'activation' && window && !seats.includes(window.sideId) ? (
               <>
                 <button onClick={() => { act({ kind: 'decline-opportunity', side: window.sideId }); reset(); setFiringUnitId(null) }}>Decline</button>
                 <button onClick={() => { act({ kind: 'decline-opportunity', side: window.sideId, forActivation: true }); reset(); setFiringUnitId(null) }}>Decline for this activation</button>
               </>
             ) : null}
-            {state.phase === 'activation' && !window && activation ? (
+            {state.phase === 'activation' && !window && activation && !computerToAct ? (
               <button className="primary" onClick={() => { if (act({ kind: 'end-activation', side: activation.sideId })) reset() }}>
                 End {activeUnit?.name}'s activation
               </button>
             ) : null}
-            {state.phase === 'activation' && !activation && toAct ? (
+            {state.phase === 'activation' && !activation && toAct && !computerToAct && !due ? (
               <>
                 {canPass(state, toAct) ? <button onClick={() => act({ kind: 'pass', side: toAct })}>Pass</button> : null}
                 <button onClick={() => act({ kind: 'done', side: toAct })}>{sideName(toAct)}: no more activations</button>
@@ -269,6 +328,69 @@ export function TableScreen({ onMenu, onNewSkirmish }: TableScreenProps) {
               </>
             ) : null}
           </div>
+
+          {state.orbit ? (
+            <div className="panel dst-orbit">
+              <h3>
+                In orbit <span className="rule-ref">More Thrust p. 17</span>
+              </h3>
+              {(['north', 'south'] as SideId[])
+                .filter((s) => orbitalShips(state, s).length > 0)
+                .map((s) => {
+                  const now = state.phase !== 'deployment' && overhead(state, s)
+                  const next = nextOverhead(state, s, Math.max(1, state.turn + (now ? 1 : 0)))
+                  const caller = selected && activation && !window && activation.sideId === s && canControl(selectedUnit) && record && !record.fired && !selected.destroyed && (selectedUnit?.leaderElementId === selected.id || selected.infantry?.team === 'observer') ? selected : null
+                  return (
+                    <div key={s}>
+                      <p className="campaign-dim">
+                        {sideName(s)}: {now ? 'overhead this turn' : 'not overhead'}
+                        {next ? `; ${now ? 'next ' : ''}over the table on turn ${next}` : ''}
+                      </p>
+                      <ul className="dst-ships">
+                        {orbitalShips(state, s).map((ship) => {
+                          const left = attacksLeft(state, ship)
+                          return (
+                            <li key={ship.id}>
+                              <b>{ship.name}</b>
+                              <span className="campaign-dim num">
+                                {ship.sheafs > 0 ? ` · ${left.sheaf}/${ship.sheafs} sheaf${ship.sheafs === 1 ? '' : 's'}` : ''}
+                                {ship.ortillery > 0 ? ` · ${left.pbm}/${ship.ortillery} ortillery` : ''}
+                              </span>
+                              {caller && now
+                                ? (['sheaf', 'pbm'] as OrbitalAttack[])
+                                    .filter((a) => left[a] > 0)
+                                    .map((a) => (
+                                      <button
+                                        key={a}
+                                        className={mode === 'orbital' && orbitalChoice?.shipId === ship.id && orbitalChoice.attack === a ? 'primary' : undefined}
+                                        title={`${STRIKE_RADIUS[a] * 2}" beaten zone, ${STRIKE_CHITS[a]} chits an element; called by ${caller.name}`}
+                                        onClick={() => {
+                                          setOrbitalChoice({ shipId: ship.id, attack: a })
+                                          setMode('orbital')
+                                          setPlot([])
+                                          setVolley([])
+                                          setNote(`Click the aim point for ${ship.name}'s ${ATTACK_LABELS[a]}: ${caller.name} must see it. The fire may stray up to 7".`)
+                                        }}
+                                      >
+                                        Call {ATTACK_LABELS[a]}
+                                      </button>
+                                    ))
+                                : null}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )
+                })}
+              {state.orbit.strikes.length > 0 ? (
+                <p className="campaign-dim">
+                  {state.orbit.strikes.length} strike{state.orbit.strikes.length === 1 ? '' : 's'} called, arriving after the next enemy activation.
+                </p>
+              ) : null}
+              {!activation || window ? null : <p className="campaign-dim">A unit commander or an observer team of the activated unit calls fire, as its combat action (p. 38).</p>}
+            </div>
+          ) : null}
 
           {(['north', 'south'] as SideId[]).map((s) => (
             <div key={s} className={`panel dst-force is-${s}`}>

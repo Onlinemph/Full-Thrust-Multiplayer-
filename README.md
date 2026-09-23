@@ -252,6 +252,16 @@ check the campaign came back the same.
 node tools/drive_campaign.mjs
 ```
 
+`tools/drive_landing.mjs` walks a landing: a fleet reaches an undefended enemy home and lands its
+Marines, the landing is opened on the Dirtside table from the planetary phase with the computer
+playing the garrison, platoon leaders call fire from orbit until one is answered, the strike is
+brought down and leaves its marker, the battle goes back to the campaign and is reviewed; then a
+second campaign lets the computers fight its landing and survives a reload.
+
+```
+node tools/drive_landing.mjs
+```
+
 ## Playing
 
 A battle is **(setup + action journal)**: the engine is deterministic and the dice are seeded, so
@@ -390,18 +400,18 @@ winner and lets the phase end. *Let the computers fight it* does the same withou
 table, through `src/engine/playtest/autoplay.ts`. The campaign autosaves to this browser and
 saves to a file from the header.
 
-Ground battles are the next engine. `docs/rules/dirtside.md` is a page-by-page digest of *Dirtside II*, the
+Ground battles are the second engine. `docs/rules/dirtside.md` is a page-by-page digest of *Dirtside II*, the
 1/300-scale ground combat rules from the same publisher, with the damage-chit pot's exact contents from a 1998
-probability analysis; it is the reference for the Dirtside game being built in `src/dirtside/`, which the
-campaign will later hand its planetary battles to through the same battle-file-in, result-file-out seam.
+probability analysis; it is the reference for the Dirtside game in `src/dirtside/`, which the campaign now
+hands its planetary assaults to through the same battle-file-in, result-file-out seam (see **Landings** below).
 
 Two more references sit beside it. `docs/rules/stargrunt.md` digests *Stargrunt II*, the 25mm infantry game
 of the same universe, all 75 pages with its quick reference and counter sheets; it shares Dirtside's heavy
 weapons and vehicle design, so the Motor Pool's vehicles will carry over, and its campaign chapter says
 what a ground unit carries between battles (quality earned, replacements, fatigue, repairs). And
 `docs/rules/more-thrust.md` digests *More Thrust*, Full Thrust's 1994 supplement, against the engine: its
-chapter on combining space and ground games is the conversion the campaign will use to put a fleet's
-troops, orbital bombardment and fighters onto a Dirtside table.
+chapter on combining space and ground games is the conversion the campaign uses to put a fleet's
+Marines and orbital fire onto a Dirtside table.
 
 ## Dirtside II
 
@@ -491,14 +501,68 @@ p. 23's table prints +1; "withdraw to the nearest cover" is enforced as not endi
 a disorganised unit's moves must each close up on a unit-mate; a wood a mobility type cannot enter may be
 entered to its edge at poor going; a vehicle turret down cannot shoot (the book gives turret-down only as the
 target's die); the target's front arc is a square model's 90°; opportunity fire is guns and IAVRs, not a
-firefight. Not yet on the table: missiles and area defence, artillery, aircraft and
+firefight. Not yet on the table: missiles and area defence, artillery beyond fire from orbit, aircraft and
 VTOL modes, close assault and mounted infantry, hidden units, smoke and engineering.
 
+## Landings: the campaign on the ground
+
+A new campaign is played under campaign rules reading 2, in which an assault is a landing fought on
+the Dirtside table, as *More Thrust*'s Full Thrust / Dirtside II interface (pp. 15–18) has it.
+`src/campaign/ground.ts` builds the battle and reads it back; campaign files from before reading 2
+replay as they were played.
+
+**Land Marines** on an enemy colony in the planetary phase, from a task force holding the orbit.
+Every warship of frigate size or more carries a Marine contingent of its mass × 4 in cargo space
+(p. 17), and at 16 CS a team (four men at 4 CS each, p. 15) that is mass ÷ 4 teams: the frigate's
+squad of two, the heavy cruiser's eight, the battlecruiser's ten, six of the seven contingents p. 18
+prints. They land in powered armour, two rifle teams to a squad and an odd team a specialist (the
+force's first an observer, then anti-armour, then APSW), in platoons of four, the largest ship's
+platoon commanding. A damaged ship loses Marines on the way down: each team has the chance of the
+share of hull lost (p. 18), rolled once for that damage. Teams lost stay lost until the ship is
+repaired at a friendly yard.
+
+The colony answers with what the campaign rules give it, read onto the table: a PDU is a platoon of
+line infantry dug in (three rifle teams, APSW, anti-armour), an advanced PDU three Medium Battle Tanks
+dug in, and every million loyal colonists a team of green militia, to twenty; subject population does
+not fight. A colony nobody defends falls at once; an intact planet shield stops the landing.
+
+The battle is an attack/defence game of eight turns on a 48" × 36" table: the town in the defender's
+rear area with an objective at its heart and two more in the main battle area, the defenders on the
+town's front edge and the flank objectives, the Marines on the north baseline. The planetary phase
+lists it: **Fight on the Dirtside table** opens it with the computer at the helm of any computer
+player's side, and **Return to campaign** brings it back; **Let the computers fight it** plays both
+sides with `src/dirtside/table/ai.ts`. The campaign replays the battle file's journal over the
+landing's own setup, fixed when the Marines went down, so a file from another battle or an edited
+setup is refused. The winner of the battle has the ground: a colony taken changes hands as 6.4 says;
+a PDU whose platoon lost half its elements is gone; Marines lost are struck off their ships. An
+unfinished battle goes to whoever holds more objective value, the garrison on a tie.
+
+**Fire from orbit.** The task force's ships support the landing (More Thrust p. 17, Dirtside
+pp. 38–40). They are overhead on a turn rolled on a D6 as the battle opens and every sixth turn
+after. Each turn overhead an escort fires one converged sheaf, a cruiser two and a capital ship three
+(by 13.4's mass classes), and a ship with ortillery makes a bombardment attack for each working
+system. A unit commander (D10, D8 or D6 by leadership 1 to 3) or an observer team (D12) calls it as
+its combat action, needing sight of the aim point and 6 or more; the impact marker goes down and the
+fire arrives after the enemy's next activation, bringing it down being that side's turn. It deviates
+on a D12 clock face and a D6 against a D8, the D8's excess in inches; every element within 2" of a
+sheaf or 4" of ortillery draws three or four chits, HEF against infantry and MAK against vehicles
+(p. 29's validities: yellow, red only against dug-in infantry, nothing against a dug-in vehicle), and
+a NUKE marker at ground zero keeps unprotected troops and vehicles 2" away.
+
+Readings to know about. The garrison is ours: the campaign rules print no ground forces. The
+contingent's make-up is ours within More Thrust's space: the book's examples are illustrative, and
+powered Marines without vehicles need no drop capacity, which is why assault transports, dropships
+and hangar bays (pp. 15–16) are not yet in the Shipyard. One D6 is rolled for the whole task force's
+orbit, not one a ship. A bombardment is read against a vehicle's top armour, one less than the
+front. Protected from fallout means powered infantry and armoured vehicles. Where p. 39 and p. 29
+disagree on MAK against dug-in vehicles, p. 29's table is followed. More Thrust's fighters flying
+ground attack wait for Dirtside's aerospace rules.
+
 Two readings to know about: a computer player's fleets are fought by the computer at the table but
-are not moved by it between battles (whoever runs the campaign moves them from the console), and
-an assault takes a colony when the landing brings more Marine parties than its defences are worth
-— one a PDU, two an advanced PDU — since the rules say a landing is repulsed by PDUs and nothing
-about how they are reduced. Espionage, emigration and technology trading are in the library and
+are not moved by it between battles (whoever runs the campaign moves them from the console), and,
+in a campaign under rules reading 1, an assault takes a colony when the landing brings more Marine
+parties than its defences are worth — one a PDU, two an advanced PDU — since the rules say a
+landing is repulsed by PDUs and nothing about how they are reduced. Espionage, emigration and technology trading are in the library and
 not yet on the console.
 
 One thing to flag about the source: the campaign document's economy section says *1 million

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { NUKE_EXCLUSION, STRIKE_RADIUS } from '../../dirtside/table/orbital'
 import { distance } from '../../dirtside/table/terrain'
 import type { ElementState, GameState, Point, SideId } from '../../dirtside/table/types'
 
@@ -130,6 +131,23 @@ export function TableMap({ state, selectedId, onSelectElement, onClickTable, plo
           </g>
         )
       })}
+      {/* Ground zero of every orbital strike (More Thrust p. 17), and the impact markers of fire still to arrive (p. 38). */}
+      {(state.orbit?.nukes ?? []).map((n, i) => (
+        <g key={`nuke-${i}`} transform={`translate(${n.x} ${n.y})`} className="dst-nuke">
+          <circle r={NUKE_EXCLUSION} className="dst-nuke-zone" />
+          <circle r={0.45} className="dst-nuke-marker" />
+          <text y={0.2} textAnchor="middle" className="dst-nuke-label">☢</text>
+          <title>{`Ground zero of an orbital strike: unprotected troops and vehicles keep ${NUKE_EXCLUSION}" away`}</title>
+        </g>
+      ))}
+      {(state.orbit?.strikes ?? []).map((st) => (
+        <g key={st.id} transform={`translate(${st.aim.x} ${st.aim.y})`} className={`dst-strike is-${st.side}`}>
+          <circle r={STRIKE_RADIUS[st.attack]} className="dst-strike-zone" />
+          <path d="M-0.7,0 L0.7,0 M0,-0.7 L0,0.7" className="dst-strike-cross" />
+          <circle r={0.35} className="dst-strike-cross" />
+          <title>{`Impact marker: ${st.attack === 'pbm' ? 'ortillery' : 'a converged sheaf'} called by ${state.elements[st.calledBy]?.name ?? 'an observer'}, arriving after the next enemy activation; it may stray up to 7"`}</title>
+        </g>
+      ))}
       {plotFrom && reach !== null ? <circle cx={plotFrom.x} cy={plotFrom.y} r={Math.max(0, reach)} className="dst-reach" /> : null}
       {plotFrom && plot.length > 0 ? (
         <>

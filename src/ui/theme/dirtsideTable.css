@@ -471,3 +471,44 @@
 .dst-setup .dst-unit-row {
   width: 100%;
 }
+
+/* Fire from orbit (More Thrust p. 17). */
+.dst-strike-zone {
+  fill: rgba(255, 170, 60, 0.12);
+  stroke: #ffb347;
+  stroke-width: 0.12;
+  stroke-dasharray: 0.4 0.25;
+}
+.dst-strike-cross {
+  fill: none;
+  stroke: #ffb347;
+  stroke-width: 0.1;
+}
+.dst-nuke-zone {
+  fill: rgba(190, 255, 80, 0.08);
+  stroke: #b8f040;
+  stroke-width: 0.1;
+  stroke-dasharray: 0.3 0.2;
+}
+.dst-nuke-marker {
+  fill: #1c1f10;
+  stroke: #b8f040;
+  stroke-width: 0.08;
+}
+.dst-nuke-label {
+  font-size: 0.6px;
+  fill: #d8ff70;
+  pointer-events: none;
+}
+.dst-orbit .dst-ships {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+}
+.dst-orbit .dst-ships li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.15rem 0;
+}

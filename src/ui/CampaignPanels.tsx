@@ -237,7 +237,9 @@ function ColonyCard({ state, viewer, colony, act }: { state: CampaignState; view
         <div className="campaign-actions">
           {myForces.map((tf) => (
             <span key={tf.id} className="campaign-inline">
-              <button onClick={() => act({ kind: 'assault', player: viewer, colony: colony.id, taskForce: tf.id })}>Assault with {tf.name}</button>
+              <button onClick={() => act({ kind: 'assault', player: viewer, colony: colony.id, taskForce: tf.id })} title={state.rulesVersion >= 2 ? 'The Marine contingents go down and the landing is fought on the Dirtside table (More Thrust p. 17)' : undefined}>
+                {state.rulesVersion >= 2 ? `Land Marines from ${tf.name}` : `Assault with ${tf.name}`}
+              </button>
               <button onClick={() => act({ kind: 'bombard', player: viewer, colony: colony.id, taskForce: tf.id })}>Bombard</button>
             </span>
           ))}

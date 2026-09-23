@@ -143,7 +143,7 @@ export function landingForce(ships: readonly LandingShip[]): { units: UnitSetup[
       const team = odd ? SPECIALISTS[specialists++ % SPECIALISTS.length]! : 'rifle'
       const infantry: InfantryElement = { troops: 'powered', team }
       if (team === 'anti-armour') infantry.guidance = 'basic'
-      teams.push({ shipId: ship.id, name: `${ship.name} ${team === 'rifle' ? 'rifle' : team} team`, infantry })
+      teams.push({ shipId: ship.id, name: `${ship.name} ${team} team ${i + 1}`, infantry })
     }
   }
   const chunks: (typeof teams)[] = []
@@ -217,50 +217,52 @@ export function garrisonOf(colony: Colony): { units: UnitSetup[]; roles: Record<
  * The ground: the colony's town in the defender's rear area with an
  * objective at its heart, two more in the main battle area (the p. 17
  * quotas for an attack/defence battle), light terrain from the landing's
- * seed kept off the positions; the defenders at their posts, PDUs first on
- * the town, the Marines down on the north baseline.
+ * seed kept off the positions; the Marines down on the north baseline.
+ *
+ * The defenders take posts in order: the town's front edge first (inside
+ * its first inch, where cover still sees out, p. 20), then the two flank
+ * objectives, then further back on the flanks. PDUs take the first posts,
+ * tanks the first on the flanks, militia what is left.
  */
 export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSetup[], roles: Record<string, string>, colonyName: string): GameSetup['table'] {
   const { width, depth } = LANDING_TABLE
   const stream = newStream(seed ^ 0x1a4d)
   const town: Point = { x: width / 2, y: depth * 0.72 }
-  const anchors: Point[] = [town, { x: width * 0.25, y: depth * 0.45 }, { x: width * 0.75, y: depth * 0.45 }]
+  const west: Point = { x: width * 0.25, y: depth * 0.45 }
+  const east: Point = { x: width * 0.75, y: depth * 0.45 }
+  const anchors: Point[] = [town, west, east]
   const value = objectiveDrawer(stream)
   const objectives: Objective[] = anchors.map((p, i) => ({ id: `O${i + 1}`, position: { ...p }, value: value(), drawnBy: 'south' }))
+  const townFeature: TerrainFeature = { id: 'town', terrain: 'urban', shape: { kind: 'rect', x: town.x - 6, y: town.y - 3, width: 12, height: 6 }, label: colonyName }
+  const front = town.y - 3 + 0.6
 
   const clamp = (p: Point): Point => ({ x: Math.max(0.8, Math.min(width - 0.8, p.x)), y: Math.max(0.8, Math.min(depth - 0.8, p.y)) })
-  const row = (unit: UnitSetup, centre: Point) => unit.elements.forEach((el, j) => (el.position = clamp({ x: centre.x + (j - (unit.elements.length - 1) / 2) * 1.5, y: centre.y })))
+  const row = (unit: UnitSetup, centre: Point) => unit.elements.forEach((el, j) => (el.position = clamp({ x: centre.x + (j - (unit.elements.length - 1) / 2) * 1.4, y: centre.y })))
   // The Marines, spread along the north baseline (p. 17: within 6").
   force.forEach((unit, i) => {
     row(unit, { x: ((i + 1) * width) / (force.length + 1), y: 3 + (i % 2) * 1.5 })
     for (const el of unit.elements) el.facing = 180
   })
-  // The defenders: PDUs on the town first, then the flanks; tanks on the flanks first; militia about the town.
-  const crowd = new Map<number, number>()
-  const post = (unit: UnitSetup, anchor: number) => {
-    const k = crowd.get(anchor) ?? 0
-    crowd.set(anchor, k + 1)
-    const a = anchors[anchor]!
-    row(unit, { x: a.x + (k % 2 === 1 ? 4 : k > 0 ? -4 : 0), y: a.y + 1.2 + Math.floor(k / 2) * 2.5 })
+  // The defenders' posts, best first; the flanks run back towards the south baseline as far as they are needed.
+  const posts: { at: Point; flank: boolean; taken: boolean }[] = [
+    { at: { x: town.x - 3.2, y: front }, flank: false, taken: false },
+    { at: { x: town.x + 3.2, y: front }, flank: false, taken: false },
+  ]
+  for (let r = 0; west.y + 1.2 + r * 2.5 < depth - 1; r++) {
+    posts.push({ at: { x: west.x, y: west.y + 1.2 + r * 2.5 }, flank: true, taken: false }, { at: { x: east.x, y: east.y + 1.2 + r * 2.5 }, flank: true, taken: false })
   }
-  let pdus = 0
-  let tanks = 0
-  let companies = 0
-  for (const unit of garrison) {
-    const role = roles[unit.id]
-    if (role === 'pdu') post(unit, pdus++ % anchors.length)
-    else if (role === 'advanced-pdu') post(unit, [1, 2, 0][tanks++ % 3]!)
-    else {
-      row(unit, clamp({ x: town.x + ((companies % 3) - 1) * 8, y: town.y + 3.5 + Math.floor(companies / 3) * 2 }))
-      companies += 1
-    }
+  const take = (unit: UnitSetup, flank: boolean) => {
+    const post = posts.find((p) => !p.taken && (!flank || p.flank)) ?? posts.find((p) => !p.taken) ?? posts[posts.length - 1]!
+    post.taken = true
+    row(unit, post.at)
     for (const el of unit.elements) el.facing = 0
   }
+  const order = (role: string) => (role === 'pdu' ? 0 : role === 'advanced-pdu' ? 1 : 2)
+  for (const unit of [...garrison].sort((a, b) => order(roles[a.id]!) - order(roles[b.id]!))) take(unit, roles[unit.id] === 'advanced-pdu')
 
   const placed = [...force, ...garrison].flatMap((u) => u.elements.map((e) => e.position!)).concat(anchors)
-  const townFeature: TerrainFeature = { id: 'town', terrain: 'urban', shape: { kind: 'rect', x: town.x - 5, y: town.y - 3, width: 10, height: 6 }, label: colonyName }
   const random = randomTerrain(stream, width, depth, 'light').filter((f) => f.terrain === 'road' || !placed.some((p) => insideShape(p, f.shape)))
-  // The town under the road, so the road still runs through it.
+  // The town over the rest, and the road over the town so it still runs through.
   const road = random.filter((f) => f.terrain === 'road')
   return { width, depth, terrain: [...random.filter((f) => f.terrain !== 'road'), townFeature, ...road], objectives }
 }

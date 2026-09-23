@@ -23,12 +23,15 @@ import type { CampaignMove, CampaignSetup, CampaignState, SavedCampaign } from '
 
 const SAVE_KEY = 'ftpc.campaign.v1'
 const BATTLE_KEY = 'ftpc.campaign.battle.v1'
+const LANDING_KEY = 'ftpc.campaign.landing.v1'
 
 let saved: SavedCampaign | null = null
 let state: CampaignState | null = null
 let restored = false
 /** The pending battle whose game is on the battle table, by id. */
 let battleId: string | null = null
+/** The landing whose battle is on the Dirtside table, by id. */
+let landingId: string | null = null
 
 let version = 0
 const listeners = new Set<() => void>()
@@ -49,6 +52,8 @@ function persist(): void {
     else localStorage.removeItem(SAVE_KEY)
     if (battleId) localStorage.setItem(BATTLE_KEY, battleId)
     else localStorage.removeItem(BATTLE_KEY)
+    if (landingId) localStorage.setItem(LANDING_KEY, landingId)
+    else localStorage.removeItem(LANDING_KEY)
   } catch {
     // Quota, or a private window: the campaign plays on and will not survive a refresh.
   }
@@ -68,10 +73,12 @@ function restore(): void {
       }
     }
     battleId = typeof localStorage === 'undefined' ? null : localStorage.getItem(BATTLE_KEY)
+    landingId = typeof localStorage === 'undefined' ? null : localStorage.getItem(LANDING_KEY)
   } catch {
     saved = null
     state = null
     battleId = null
+    landingId = null
   }
 }
 
@@ -101,6 +108,7 @@ export function newCampaign(setup: CampaignSetup): void {
   saved = { version: 1, setup, moves: [] }
   state = createCampaign(setup)
   battleId = null
+  landingId = null
   persist()
   emit()
 }
@@ -130,6 +138,7 @@ export function loadCampaign(text: string): string | null {
   saved = parsed
   state = replayed
   battleId = null
+  landingId = null
   persist()
   emit()
   return null
@@ -145,6 +154,7 @@ export function abandonCampaign(): void {
   saved = null
   state = null
   battleId = null
+  landingId = null
   persist()
   emit()
 }
@@ -158,6 +168,19 @@ export function battleOnTable(): string | null {
 export function setBattleOnTable(id: string | null): void {
   restore()
   battleId = id
+  persist()
+  emit()
+}
+
+/** The landing whose battle is on the Dirtside table, if one is being fought. */
+export function landingOnTable(): string | null {
+  restore()
+  return landingId
+}
+
+export function setLandingOnTable(id: string | null): void {
+  restore()
+  landingId = id
   persist()
   emit()
 }
