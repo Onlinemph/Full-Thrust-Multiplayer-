@@ -42,7 +42,6 @@ if (counters < 20) fail(`expected the two forces on the table, got ${counters} c
 
 // Deploy: pick a northern tank and put it on the baseline strip.
 const svg = page.locator('.dst-map')
-const box = await svg.boundingBox()
 await page.locator('.dst-counter.is-north.is-vehicle').first().click()
 if (!(await page.locator('.dst-element').isVisible())) fail('clicking a counter did not select it')
 await shot('dirtside-deploy')
@@ -64,8 +63,8 @@ await active.click()
 await page.getByRole('button', { name: 'Plot a move' }).click()
 const ab = await active.boundingBox()
 const north = (await page.locator('.dst-counter.is-active.is-north').count()) > 0
-// Click 5" ahead: the map's scale is the SVG's box over the table's (width + 2) inches.
-const pxPerInch = box.width / 50
+// Click 5" ahead: the map's scale is read off the SVG, whose user units are inches.
+const pxPerInch = await svg.evaluate((el) => el.getScreenCTM().a)
 await page.mouse.click(ab.x + ab.width / 2, ab.y + ab.height / 2 + (north ? 1 : -1) * 5 * pxPerInch)
 const plotText = await page.locator('.dst-element .dst-row .num').first().textContent()
 console.log('plot:', plotText)
