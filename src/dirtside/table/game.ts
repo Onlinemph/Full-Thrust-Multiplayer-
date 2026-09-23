@@ -725,6 +725,8 @@ function repair(state: GameState, side: SideId, elementId: string): Refusal | nu
 
 function rally(state: GameState, side: SideId, unitId: string): Refusal | null {
   if (state.phase !== 'activation' || state.toAct !== side || state.activation) return refuse('Rallying takes an activation of your own.', 'p. 24')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
   const unit = state.units[unitId]
   if (!unit || unit.sideId !== side) return refuse('Not one of your units.', 'p. 24')
   if (unit.activated) return refuse(`${unit.name} has used its activation this turn.`, 'p. 24')
@@ -1179,9 +1181,9 @@ function afterAttack(state: GameState, h: UnitHit): void {
   const side = unit.sideId
   const kind = unitKind(state, unit)
   const hit = h.hit.size
-  // Under fire (p. 24): infantry by anti-personnel fire, vehicles only when
-  // hurt; any unit with an element in an artillery beaten zone (p. 39).
-  if ((kind === 'infantry' && h.antiPersonnel) || hit > 0 || h.bombarded) {
+  // Under fire (p. 24): infantry by anti-personnel fire or artillery,
+  // vehicles only when hurt, artillery included.
+  if ((kind === 'infantry' && (h.antiPersonnel || h.bombarded)) || hit > 0) {
     if (!unit.underFire) log(state, side, `${unit.name} is under fire.`, 'p. 24')
     unit.underFire = true
   }

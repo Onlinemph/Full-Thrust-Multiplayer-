@@ -549,6 +549,14 @@ sheaf or 4" of ortillery draws three or four chits, HEF against infantry and MAK
 (p. 29's validities: yellow, red only against dug-in infantry, nothing against a dug-in vehicle), and
 a NUKE marker at ground zero keeps unprotected troops and vehicles 2" away.
 
+The landing was then read against the pages and the code by three reviewers, one for the fire from
+orbit, one for the campaign side and one for the screens and the computer player, every finding put to
+a skeptic; the six that survived are in (a vehicle unit caught by a strike that does it no harm is not
+under fire, p. 24; fire that is due must be brought down before a rally too, p. 39; defenders and
+Marines each get ground of their own however large the garrison or the fleet; nothing on the screen
+acts for a side the computer plays; and opening another landing over one still on the table asks
+first).
+
 Readings to know about. The garrison is ours: the campaign rules print no ground forces. The
 contingent's make-up is ours within More Thrust's space: the book's examples are illustrative, and
 powered Marines without vehicles need no drop capacity, which is why assault transports, dropships

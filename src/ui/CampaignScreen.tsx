@@ -102,7 +102,17 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview, onFightLan
     const saved = autoplay(battleSetup(state, battle, setup))
     act({ kind: 'resolve-battle', battle: battle.id, savedGame: JSON.stringify(saved) })
   }
-  const fightLanding = (landing: PendingLanding) => onFightLanding(landingTableSetup(landing, setup), landing)
+  /* The Dirtside table holds one battle: opening another landing, or a fought
+     one's file, over a landing still being fought discards that battle. */
+  const tableLanding = state.landings.find((l) => l.id === landingOnTable() && !l.resolved) ?? null
+  const clearTable = (opening: PendingLanding): boolean => {
+    if (!tableLanding || tableLanding.id === opening.id) return true
+    const where = colonyById(state, tableLanding.colonyId)?.name ?? tableLanding.colonyId
+    return window.confirm(`The landing at ${where} is still on the Dirtside table, unfought. Discard that battle?`)
+  }
+  const fightLanding = (landing: PendingLanding) => {
+    if (clearTable(landing)) onFightLanding(landingTableSetup(landing, setup), landing)
+  }
   const autoLanding = (landing: PendingLanding) => {
     const game = aiPlay(landing.setup, { seed: landing.seed })
     act({ kind: 'resolve-landing', landing: landing.id, savedBattle: JSON.stringify({ version: 1, setup: landing.setup, journal: game.journal }) })
@@ -251,7 +261,7 @@ export function CampaignScreen({ onMenu, onFight, onResume, onReview, onFightLan
                   onAuto={autoLanding}
                   onReview={(l) => {
                     const file = landingFile(l)
-                    if (file) onReviewLanding(file)
+                    if (file && clearTable(l)) onReviewLanding(file)
                   }}
                 />
               ) : null}

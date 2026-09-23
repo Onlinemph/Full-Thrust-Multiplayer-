@@ -140,6 +140,31 @@ describe('the garrison (reading)', () => {
       for (const el of plan.setup.sides[1].units.flatMap((u) => u.elements)) if (insideShape(el.position!, town.shape)) expect(depthInside(el.position!, town.shape)).toBeLessThanOrEqual(1)
     }
   })
+
+  it('finds every unit its own ground however big the fleet or the garrison', () => {
+    const tender = withMass(292)
+    const plan = landingSetup({
+      seed: 7,
+      name: 'big',
+      colony: colonyWith({ defences: { pdu: 40, advancedPdu: 5, planetShield: false }, population: { loyal: 100, subject: 0 } }),
+      ships: [1, 2, 3, 4].map((n) => ({ ship: ship(`t${n}`, tender), design: tender, teams: contingentTeams(tender) })),
+      attackerName: 'Marines',
+      defenderName: 'Garrison',
+      computers: [],
+    })
+    // Four mass-292 ships: 73 teams each, 73 platoons; 45 platoons of PDUs and four militia companies.
+    expect(plan.setup.sides[0].units).toHaveLength(73)
+    expect(plan.setup.sides[1].units).toHaveLength(49)
+    const seen = new Set<string>()
+    for (const side of plan.setup.sides)
+      for (const unit of side.units)
+        for (const el of unit.elements) {
+          const key = `${el.position!.x.toFixed(3)},${el.position!.y.toFixed(3)}`
+          expect(seen.has(key)).toBe(false)
+          seen.add(key)
+          expect(inDeploymentZone(plan.setup, side.id, el.position!)).toBe(true)
+        }
+  })
 })
 
 // ---------------------------------------------------------------------------

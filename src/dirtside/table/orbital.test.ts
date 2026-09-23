@@ -321,6 +321,7 @@ describe('the fire arriving (pp. 39–40)', () => {
     expect(strikesDue(s, 'north')).toHaveLength(1)
     expect(refused(applyAction(s, { kind: 'activate', side: 'north', unitId: 'n2' })).page).toBe('p. 39')
     expect(refused(applyAction(s, { kind: 'done', side: 'north' })).page).toBe('p. 39')
+    expect(refused(applyAction(s, { kind: 'rally', side: 'north', unitId: 'n2' })).page).toBe('p. 39')
     const after = play(s, { kind: 'orbital-strike', side: 'north' })
     expect(after.orbit!.strikes).toHaveLength(0)
     expect(after.orbit!.nukes).toHaveLength(1)
@@ -409,6 +410,8 @@ describe('the fire arriving (pp. 39–40)', () => {
       if (Math.hypot(impact.x - 20.5, impact.y - 20) > 3) continue
       expect(s.log.some((l) => l.text.includes('s1-1 is dug in: MAK is ineffective') && l.page === 'p. 29')).toBe(true)
       expect(s.elements['s1-1']!.damaged || s.elements['s1-1']!.destroyed).toBe(false)
+      // Vehicles take an under-fire marker only when hurt (p. 24).
+      expect(s.units['s1']!.underFire).toBe(false)
       return
     }
     throw new Error('no seed landed close')

@@ -374,7 +374,7 @@ export function App() {
       ) : null}
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showMotorPool ? <MotorPool onClose={() => setShowMotorPool(false)} /> : null}
-      {showSkirmish ? <SkirmishPanel onClose={() => setShowSkirmish(false)} onStart={() => { setShowSkirmish(false); setScreen('dirtside') }} /> : null}
+      {showSkirmish ? <SkirmishPanel onClose={() => setShowSkirmish(false)} onStart={() => { setShowSkirmish(false); setLandingOnTable(null); setScreen('dirtside') }} /> : null}
       {presetEditor ? <PresetEditor initial={presetEditor.initial} onClose={() => setPresetEditor(null)} /> : null}
       {showCampaignSetup ? (
         <CampaignSetupPanel

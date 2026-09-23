@@ -19,7 +19,7 @@ import { bookExample } from '../dirtside/data/examples'
 import { type DiceStream, draw, newStream } from '../dirtside/dice'
 import { replay } from '../dirtside/table/game'
 import { objectiveDrawer, randomTerrain } from '../dirtside/table/skirmish'
-import { insideShape } from '../dirtside/table/terrain'
+import { depthInside, insideShape } from '../dirtside/table/terrain'
 import type { Action, ElementSetup, GameSetup, GameState, Objective, OrbitalShip, Point, SideId, TerrainFeature, UnitSetup } from '../dirtside/table/types'
 import type { InfantryElement } from '../dirtside/types'
 import { classifyByMass, type FleetClass } from '../engine/battles'
@@ -237,24 +237,45 @@ export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSet
   const front = town.y - 3 + 0.6
 
   const clamp = (p: Point): Point => ({ x: Math.max(0.8, Math.min(width - 0.8, p.x)), y: Math.max(0.8, Math.min(depth - 0.8, p.y)) })
-  const row = (unit: UnitSetup, centre: Point) => unit.elements.forEach((el, j) => (el.position = clamp({ x: centre.x + (j - (unit.elements.length - 1) / 2) * 1.4, y: centre.y })))
-  // The Marines, spread along the north baseline (p. 17: within 6").
+  const row = (unit: UnitSetup, centre: Point, spacing = 1.4) => unit.elements.forEach((el, j) => (el.position = clamp({ x: centre.x + (j - (unit.elements.length - 1) / 2) * spacing, y: centre.y })))
+  // The Marines along the north baseline (p. 17: within 6"), seven platoons
+  // to a row and up to six rows; a force bigger than that closes up its rows.
+  const perRow = Math.max(7, Math.ceil(force.length / 6))
+  const rows = Math.ceil(force.length / perRow)
+  const gap = width / (Math.min(perRow, force.length) + 1)
   force.forEach((unit, i) => {
-    row(unit, { x: ((i + 1) * width) / (force.length + 1), y: 3 + (i % 2) * 1.5 })
+    const r = Math.floor(i / perRow)
+    const c = i % perRow
+    const inRow = Math.min(perRow, force.length - r * perRow)
+    row(unit, { x: ((c + 1) * width) / (inRow + 1), y: rows === 1 ? 3 + (i % 2) * 1.5 : 1 + (r * 5) / (rows - 1) }, Math.min(1.4, gap / 3.2))
     for (const el of unit.elements) el.facing = 180
   })
-  // The defenders' posts, best first; the flanks run back towards the south baseline as far as they are needed.
-  const posts: { at: Point; flank: boolean; taken: boolean }[] = [
-    { at: { x: town.x - 3.2, y: front }, flank: false, taken: false },
-    { at: { x: town.x + 3.2, y: front }, flank: false, taken: false },
+  // The defenders' posts, best first: the town's front edge, the flank
+  // objectives and back from them, then a grid over the rest of the
+  // defender's ground (p. 17: the main battle area and its rear), nearest
+  // an objective first. Should even the grid run out, a unit stands beside
+  // the post it shares.
+  const posts: { at: Point; flank: boolean; taken: number }[] = [
+    { at: { x: town.x - 3.2, y: front }, flank: false, taken: 0 },
+    { at: { x: town.x + 3.2, y: front }, flank: false, taken: 0 },
   ]
   for (let r = 0; west.y + 1.2 + r * 2.5 < depth - 1; r++) {
-    posts.push({ at: { x: west.x, y: west.y + 1.2 + r * 2.5 }, flank: true, taken: false }, { at: { x: east.x, y: east.y + 1.2 + r * 2.5 }, flank: true, taken: false })
+    posts.push({ at: { x: west.x, y: west.y + 1.2 + r * 2.5 }, flank: true, taken: 0 }, { at: { x: east.x, y: east.y + 1.2 + r * 2.5 }, flank: true, taken: 0 })
   }
+  const grid: Point[] = []
+  const deep = (p: Point) => insideShape(p, townFeature.shape) && depthInside(p, townFeature.shape) > 1
+  for (let y = depth / 3 + 1; y < depth - 0.8; y += 2.5)
+    for (let x = 4; x < width; x += 8) {
+      const p = { x, y }
+      if (!deep(p) && posts.every((q) => Math.abs(q.at.x - x) > 4 || Math.abs(q.at.y - y) > 1.2)) grid.push(p)
+    }
+  const nearest = (p: Point) => Math.min(...anchors.map((a) => Math.hypot(a.x - p.x, a.y - p.y)))
+  for (const at of grid.sort((a, b) => nearest(a) - nearest(b))) posts.push({ at, flank: true, taken: 0 })
   const take = (unit: UnitSetup, flank: boolean) => {
-    const post = posts.find((p) => !p.taken && (!flank || p.flank)) ?? posts.find((p) => !p.taken) ?? posts[posts.length - 1]!
-    post.taken = true
-    row(unit, post.at)
+    const post = posts.find((p) => p.taken === 0 && (!flank || p.flank)) ?? posts.find((p) => p.taken === 0) ?? posts.reduce((a, b) => (b.taken < a.taken ? b : a))
+    const shift = post.taken
+    post.taken += 1
+    row(unit, { x: post.at.x + shift * 0.7, y: post.at.y + shift * 0.7 })
     for (const el of unit.elements) el.facing = 0
   }
   const order = (role: string) => (role === 'pdu' ? 0 : role === 'advanced-pdu' ? 1 : 2)

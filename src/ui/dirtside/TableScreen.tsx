@@ -108,7 +108,10 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
     return !r
   }
 
-  const canControl = (unit: UnitState | null) => !!unit && !!activation && unit.id === activation.unitId && !window
+  /** Sides the computer plays: nothing on the screen acts for them. */
+  const seats = state.setup.aiSides ?? []
+  const human = (side: SideId) => !seats.includes(side)
+  const canControl = (unit: UnitState | null) => !!unit && !!activation && unit.id === activation.unitId && !window && human(activation.sideId)
   const record = selected && activation && canControl(selectedUnit) ? activation.elements[selected.id] ?? null : null
   const family = selected?.vehicle ? mobilityFamily(selected.vehicle.mobility) : 'infantry'
   const allowance = selected ? (selected.damaged ? baseMovement(selected) / 2 : baseMovement(selected)) : 0
@@ -149,7 +152,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
       return
     }
     if (state.phase === 'deployment') {
-      if (state.sides[selected.sideId].ready) return
+      if (state.sides[selected.sideId].ready || !human(selected.sideId)) return
       act({ kind: 'deploy', side: selected.sideId, elementId: selected.id, position: point, facing: selected.sideId === 'north' ? 180 : 0 })
       return
     }
@@ -207,7 +210,6 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
   const sideName = (s: SideId) => state.sides[s].name
 
   // ---- The banner: what the table is waiting for.
-  const seats = state.setup.aiSides ?? []
   const computerToAct = !state.result && !!toAct && seats.includes(toAct) && state.phase !== 'deployment'
   const due = toAct && !activation ? strikesDue(state, toAct).length > 0 : false
   let banner: string
@@ -291,13 +293,13 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
             {state.phase === 'deployment' ? (
               <>
                 {(['north', 'south'] as SideId[]).map((s) => (
-                  <button key={s} className={state.sides[s].ready ? undefined : 'primary'} disabled={state.sides[s].ready} onClick={() => act({ kind: 'ready', side: s })}>
+                  <button key={s} className={state.sides[s].ready ? undefined : 'primary'} disabled={state.sides[s].ready || !human(s)} onClick={() => act({ kind: 'ready', side: s })}>
                     {state.sides[s].ready ? `${sideName(s)} ready` : `${sideName(s)}: ready`}
                   </button>
                 ))}
               </>
             ) : null}
-            {state.phase === 'turn-start' ? (
+            {state.phase === 'turn-start' && !computerToAct ? (
               <>
                 <button className="primary" onClick={() => act({ kind: 'choose-first', side: state.chooser!, first: state.chooser! })}>
                   {sideName(state.chooser!)} activates first
@@ -339,7 +341,7 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                 .map((s) => {
                   const now = state.phase !== 'deployment' && overhead(state, s)
                   const next = nextOverhead(state, s, Math.max(1, state.turn + (now ? 1 : 0)))
-                  const caller = selected && activation && !window && activation.sideId === s && canControl(selectedUnit) && record && !record.fired && !selected.destroyed && (selectedUnit?.leaderElementId === selected.id || selected.infantry?.team === 'observer') ? selected : null
+                  const caller = selected && activation && !window && activation.sideId === s && human(s) && canControl(selectedUnit) && record && !record.fired && !selected.destroyed && (selectedUnit?.leaderElementId === selected.id || selected.infantry?.team === 'observer') ? selected : null
                   return (
                     <div key={s}>
                       <p className="campaign-dim">
@@ -403,12 +405,12 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                   .filter((u) => u.sideId === s)
                   .map((u) => {
                     const alive = elementsOf(state, u).filter(functional).length
-                    const mine = toAct === s
-                    const canActivate = mine && state.phase === 'activation' && !activation && !u.activated && alive > 0
+                    const mine = toAct === s && human(s)
+                    const canActivate = mine && !due && state.phase === 'activation' && !activation && !u.activated && alive > 0
                     const command = commandUnitOf(state, s)
                     const canRally = canActivate && u.confidence !== 'CO' && !!command && command.id !== u.id && !state.sides[s].commandLost
-                    const canAnswer = !!window && window.sideId === s && !u.activated && alive > 0 && !u.panic && !u.evasive
-                    const canJoin = !!activation && !window && activation.sideId === s && activation.unitId !== u.id && !u.activated && alive > 0
+                    const canAnswer = !!window && window.sideId === s && human(s) && !u.activated && alive > 0 && !u.panic && !u.evasive
+                    const canJoin = !!activation && !window && activation.sideId === s && human(s) && activation.unitId !== u.id && !u.activated && alive > 0
                     return (
                       <li key={u.id} className={`dst-unit${activeUnit?.id === u.id ? ' is-active' : ''}${firingUnit?.id === u.id && opportunity ? ' is-firing' : ''}${alive === 0 ? ' is-gone' : ''}`}>
                         <button className="dst-unit-name" onClick={() => setSelectedId(elementsOf(state, u).find(functional)?.id ?? null)}>
