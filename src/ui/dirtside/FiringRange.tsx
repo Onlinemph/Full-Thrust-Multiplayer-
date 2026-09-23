@@ -117,7 +117,9 @@ export function FiringRange({ bench, shelf, onClose }: FiringRangeProps) {
       <div className="modal is-wide yard-modal ds-pool ds-range" onClick={(event) => event.stopPropagation()}>
         <div className="yard-head">
           <h2>Firing Range</h2>
-          <span className="campaign-kicker">Dirtside II · direct fire, pp. 28–32, 36</span>
+          <span className="ds-kicker" title="Dirtside II, direct fire: pp. 28–32 and p. 36">
+            Try a shot: how dice and chits decide a hit
+          </span>
           <span className="spacer" />
           <label className="ds-seed">
             Seed{' '}
@@ -329,7 +331,7 @@ export function FiringRange({ bench, shelf, onClose }: FiringRangeProps) {
             ) : !plan.ok ? (
               <ul className="faults">
                 <li>
-                  <span className="rule-ref">{plan.page}</span> {plan.reason}
+                  {plan.reason} <span className="rule-ref">{plan.page}</span>
                 </li>
               </ul>
             ) : plan.kind === 'vehicle' ? (
