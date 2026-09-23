@@ -593,7 +593,7 @@
   opacity: 0.45;
 }
 
-.dst-window {
+.dst-mapsvg .dst-window {
   fill: none;
   stroke: #fff;
   stroke-width: calc(var(--k) * 2px);
@@ -992,7 +992,7 @@
 
 /* ── Chips: fixed-size labels on the table (drawn in pixels, scaled by k) ── */
 
-.dst-chip {
+.dst-mapsvg .dst-chip {
   pointer-events: none;
 }
 .dst-chip rect {
