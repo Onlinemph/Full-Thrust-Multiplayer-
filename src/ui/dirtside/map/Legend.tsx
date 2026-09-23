@@ -39,7 +39,7 @@ function Swatch({ type, pid, id }: { type: TerrainType; pid: string; id: string 
   }
   const under: Partial<Record<TerrainType, string>> = { 'light-woods': 'var(--dst-woods-l)', 'dense-woods': 'var(--dst-woods-d)', rough: 'var(--dst-rough)', 'light-scrub': 'var(--dst-scrub)', swamp: 'var(--dst-swamp)' }
   return (
-    <svg className="dst-swatch" viewBox="0 0 2.8 1.8" width={28} height={18} aria-hidden="true" data-id={id}>
+    <svg className="dst-legend-swatch" viewBox="0 0 2.8 1.8" width={28} height={18} aria-hidden="true" data-id={id}>
       <rect width={2.8} height={1.8} style={{ fill: patternUrl(pid, 'grass') }} />
       {type === 'hills' || type === 'mountains' ? (
         <>
@@ -78,7 +78,7 @@ function Swatch({ type, pid, id }: { type: TerrainType; pid: string; id: string 
 function CounterSwatch({ look, inf, side = 'north' }: { look?: Silhouette; inf?: InfantryElement; side?: 'north' | 'south' }) {
   const base = look ? VEHICLE_BASE : INFANTRY_BASE
   return (
-    <svg className="dst-swatch is-counter" viewBox="-0.75 -1.0 1.5 2.0" width={18} height={24} aria-hidden="true">
+    <svg className="dst-legend-swatch is-counter" viewBox="-0.75 -1.0 1.5 2.0" width={18} height={24} aria-hidden="true">
       <g transform={look ? 'rotate(0)' : 'rotate(0)'}>
         <rect x={base.x} y={base.y} width={base.w} height={base.h} rx={look ? 0.12 : 0.18} style={{ fill: `var(--dst-${side})`, stroke: 'var(--dst-outline)', strokeWidth: 0.06 }} />
         {look ? <VehicleSilhouette look={look} /> : inf ? <InfantrySilhouette inf={inf} /> : null}
@@ -105,29 +105,43 @@ export const Legend = memo(function Legend({ features, pid, selected, showMarker
   return (
     <div className="dst-legend" aria-label="Map key">
       <div className="dst-legend-row">
-        {family && selected ? <span className="dst-legend-for">Going for {selected.name}:</span> : null}
+        {/* Always there and always the same size, so picking a model never changes the key's height and the map above it holds still. */}
+        <span className={`dst-legend-for${selected && family ? '' : ' is-empty'}`} title={selected && family ? `How ${selected.name} takes each kind of ground` : 'Pick a model to see how it takes each kind of ground'}>
+          <span>{selected && family ? 'Going for' : 'Going'}</span>
+          <b>{selected && family ? selected.name : 'pick a model'}</b>
+        </span>
         {types.map((t) => {
           const going = family ? goingOf(family, t, wades) : null
           const note = TERRAIN_NOTES[t]
           return (
             <span key={t} className="dst-legend-item" onPointerEnter={() => onHoverType(t === 'open' ? null : t)} onPointerLeave={() => onHoverType(null)} title={`${TERRAIN_NAMES[t]}${note ? `: ${note}` : ''}${going ? ` · ${selected!.name}: ${goingText(going)}` : ''}`}>
               <Swatch type={t} pid={pid} id={t} />
-              <span className="dst-legend-name">
-                {TERRAIN_NAMES[t]}
-                {BLOCKS_SIGHT.includes(t) ? (
-                  <svg className="dst-eye" viewBox="0 0 16 12" width={13} height={10} aria-label="blocks sight">
-                    <path d="M1,6 Q8,-1 15,6 Q8,13 1,6 Z" fill="none" stroke="currentColor" strokeWidth={1.4} />
-                    <circle cx={8} cy={6} r={2} fill="currentColor" />
-                    <line x1={2} y1={11} x2={14} y2={1} stroke="currentColor" strokeWidth={1.6} />
-                  </svg>
-                ) : null}
+              <span className="dst-legend-text">
+                <span className="dst-legend-name">
+                  {TERRAIN_NAMES[t]}
+                  {BLOCKS_SIGHT.includes(t) ? (
+                    <svg className="dst-eye" viewBox="0 0 16 12" width={13} height={10} aria-label="blocks sight">
+                      <path d="M1,6 Q8,-1 15,6 Q8,13 1,6 Z" fill="none" stroke="currentColor" strokeWidth={1.4} />
+                      <circle cx={8} cy={6} r={2} fill="currentColor" />
+                      <line x1={2} y1={11} x2={14} y2={1} stroke="currentColor" strokeWidth={1.6} />
+                    </svg>
+                  ) : null}
+                </span>
+                <span className={`dst-legend-going ${going ? `is-${going}` : 'is-empty'}`} aria-hidden={going ? undefined : true}>
+                  {going ? GOING_WORDS[going] : '·'}
+                </span>
               </span>
-              {going ? <span className={`dst-legend-going is-${going}`}>{GOING_WORDS[going]}</span> : null}
             </span>
           )
         })}
         <span className="spacer" />
-        <button type="button" className={`dst-legend-toggle${showMarkers ? ' is-on' : ''}`} aria-pressed={showMarkers} onClick={onToggleMarkers}>
+        <button type="button" className={`dst-legend-toggle${showMarkers ? ' is-on' : ''}`} aria-pressed={showMarkers}
+          onClick={(event) => {
+            onToggleMarkers()
+            // From a click, the keyboard goes back to the map (see TableMap's toolbar).
+            if (event.detail > 0) (event.currentTarget.closest('.dst-mapwrap') as HTMLElement | null)?.focus({ preventScroll: true })
+          }}
+        >
           Symbols
         </button>
       </div>
@@ -145,7 +159,10 @@ export const Legend = memo(function Legend({ features, pid, selected, showMarker
           <span className="dst-legend-sep" />
           <span className="dst-legend-item"><span className="dst-key is-select" />selected</span>
           <span className="dst-legend-item"><span className="dst-key is-halo" />acting now</span>
-          <span className="dst-legend-item"><span className="dst-key is-reticle" />target</span>
+          <span className="dst-legend-item" title="Green, Regular or Veteran, and the leader's number: 1 is the best (p. 18)"><span className="dst-key is-quality">R2</span>quality · leadership</span>
+          <span className="dst-legend-item"><span className="dst-key is-target" />can be shot</span>
+          <span className="dst-legend-item"><span className="dst-key is-noshot" />no shot</span>
+          <span className="dst-legend-item"><span className="dst-key is-reticle" />in the volley</span>
           <span className="dst-legend-item"><span className="dst-key is-spent" />activated</span>
           <span className="dst-legend-item"><span className="dst-key is-berm" />hull down</span>
           <span className="dst-legend-item"><span className="dst-key is-sandbags" />dug in</span>

@@ -34,7 +34,7 @@
   overflow: hidden;
 }
 
-.dst-maptools {
+.dst-mapwrap .dst-maptools {
   flex: none;
   display: flex;
   align-items: center;
@@ -46,24 +46,24 @@
   min-width: 0;
 }
 
-.dst-maptools button {
+.dst-mapwrap .dst-maptools button {
   padding: 0.15rem 0.6rem;
   font-size: var(--text-sm);
   line-height: 1.3;
 }
 
-.dst-maptools button[aria-label='Zoom out'],
-.dst-maptools button[aria-label='Zoom in'] {
+.dst-mapwrap .dst-maptools button[aria-label='Zoom out'],
+.dst-mapwrap .dst-maptools button[aria-label='Zoom in'] {
   min-width: 1.9rem;
   padding: 0.15rem 0.4rem;
   font-weight: 700;
 }
 
-.dst-maptools-gap {
+.dst-mapwrap .dst-maptools-gap {
   width: 0.5rem;
 }
 
-.dst-readout {
+.dst-mapwrap .dst-readout {
   margin-left: auto;
   min-width: 0;
   overflow: hidden;
@@ -106,13 +106,13 @@
 .dst-mapsvg.cursor-measure .dst-counter {
   cursor: crosshair;
 }
-.dst-map-preview .dst-counter {
+.dst-mapsvg.dst-map-preview .dst-counter {
   cursor: default;
 }
 
 /* ── The key ─────────────────────────────────────────────────────────────── */
 
-.dst-legend {
+.dst-mapwrap .dst-legend {
   flex: none;
   max-height: 7.5rem;
   overflow-y: auto;
@@ -123,30 +123,55 @@
   color: var(--ink-dim);
 }
 
-.dst-legend-row {
+.dst-mapwrap .dst-legend-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.8rem;
 }
 
-.dst-legend-row.is-markers {
+.dst-mapwrap .dst-legend-row.is-markers {
   margin-top: 0.3rem;
   padding-top: 0.3rem;
   border-top: 1px solid var(--line-soft);
   gap: 0.25rem 0.7rem;
 }
 
-.dst-legend-row .spacer {
+.dst-mapwrap .dst-legend-row .spacer {
   flex: 1;
 }
 
-.dst-legend-for {
+.dst-mapwrap .dst-legend-for {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  width: 8.5rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.dst-mapwrap .dst-legend-for > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dst-mapwrap .dst-legend-for b {
   color: var(--ink);
-  font-weight: 700;
+}
+.dst-mapwrap .dst-legend-for.is-empty b {
+  color: var(--ink-faint);
+  font-weight: 400;
 }
 
-.dst-legend-item {
+.dst-mapwrap .dst-legend-text {
+  display: inline-flex;
+  min-width: 4.2rem; /* room for the widest going word, picked or not */
+  min-height: 2.3em; /* and for its line */
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.dst-mapwrap .dst-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -154,63 +179,66 @@
   cursor: default;
 }
 
-.dst-legend-name {
+.dst-mapwrap .dst-legend-name {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   color: var(--ink);
 }
 
-.dst-eye {
+.dst-mapwrap .dst-eye {
   color: var(--ink-dim);
 }
 
-.dst-swatch {
+.dst-mapwrap .dst-legend-swatch {
   flex: none;
   border: 1px solid rgba(0, 0, 0, 0.6);
   border-radius: 2px;
 }
 
-.dst-swatch.is-counter {
+.dst-mapwrap .dst-legend-swatch.is-counter {
   border: 0;
 }
 
-.dst-legend-going {
+.dst-mapwrap .dst-legend-going {
   padding: 0 0.3rem;
   border-radius: 2px;
   background: var(--panel-2);
   font-family: var(--font-mono);
   font-size: 0.625rem;
 }
-.dst-legend-going.is-easy {
+.dst-mapwrap .dst-legend-going.is-empty {
+  display: none;
+}
+.dst-mapwrap .dst-legend-going.is-easy {
   color: #d8f3ff;
 }
-.dst-legend-going.is-normal {
+.dst-mapwrap .dst-legend-going.is-normal {
   color: var(--ink);
 }
-.dst-legend-going.is-poor {
+.dst-mapwrap .dst-legend-going.is-poor {
   color: var(--warn);
 }
-.dst-legend-going.is-difficult {
+.dst-mapwrap .dst-legend-going.is-difficult {
   color: var(--thrust);
 }
-.dst-legend-going.is-impassable {
+.dst-mapwrap .dst-legend-going.is-impassable {
   color: var(--ink-faint);
   text-decoration: line-through;
 }
 
-.dst-legend-toggle {
+.dst-mapwrap .dst-legend-toggle {
   padding: 0.05rem 0.5rem;
   font-size: var(--text-xs);
 }
 
-.dst-legend-sep {
+.dst-mapwrap .dst-legend-sep {
   width: 1px;
   align-self: stretch;
   background: var(--line);
 }
 
-.dst-key {
+.dst-mapwrap .dst-key {
   display: inline-block;
   width: 14px;
   height: 14px;
@@ -220,59 +248,74 @@
   text-align: center;
   color: #fff;
 }
-.dst-key.is-select {
+.dst-mapwrap .dst-key.is-select {
   border: 2px solid #fff;
   clip-path: polygon(0 0, 35% 0, 35% 20%, 65% 20%, 65% 0, 100% 0, 100% 35%, 80% 35%, 80% 65%, 100% 65%, 100% 100%, 65% 100%, 65% 80%, 35% 80%, 35% 100%, 0 100%, 0 65%, 20% 65%, 20% 35%, 0 35%);
 }
-.dst-key.is-halo {
+.dst-mapwrap .dst-key.is-halo {
   border-radius: 50%;
   background: color-mix(in srgb, var(--dst-north) 25%, transparent);
   border: 2px solid var(--dst-north);
 }
-.dst-key.is-reticle {
+.dst-mapwrap .dst-key.is-target {
   border-radius: 50%;
-  border: 2px solid var(--damage);
+  border: 2px solid var(--ink);
 }
-.dst-key.is-spent {
+.dst-mapwrap .dst-key.is-noshot {
+  border-radius: 50%;
+  border: 1.5px dashed var(--ink-faint);
+}
+.dst-mapwrap .dst-key.is-reticle {
+  border-radius: 50%;
+  border: 2px solid var(--thrust);
+}
+.dst-mapwrap .dst-key.is-quality {
+  width: auto;
+  padding: 0 2px;
+  border-radius: 2px;
+  background: var(--dst-paper);
+  color: #2a281f;
+}
+.dst-mapwrap .dst-key.is-spent {
   border-radius: 2px;
   background: var(--dst-north-spent);
   border: 1px solid var(--dst-outline);
 }
-.dst-key.is-berm {
+.dst-mapwrap .dst-key.is-berm {
   border-top: 4px solid var(--dst-earth);
   border-radius: 50% 50% 0 0;
   height: 8px;
 }
-.dst-key.is-sandbags {
+.dst-mapwrap .dst-key.is-sandbags {
   border: 3px dotted var(--dst-sandbag);
   border-radius: 4px;
 }
-.dst-key.is-move {
+.dst-mapwrap .dst-key.is-move {
   width: 0;
   height: 0;
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
   border-left: 9px solid #fff;
 }
-.dst-key.is-fire {
+.dst-mapwrap .dst-key.is-fire {
   background: var(--thrust);
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
 }
-.dst-key.is-pip {
+.dst-mapwrap .dst-key.is-pip {
   border-radius: 50%;
   background: var(--damage);
 }
-.dst-key.is-pip.is-ring {
+.dst-mapwrap .dst-key.is-pip.is-ring {
   background: transparent;
   border: 2px solid var(--damage);
   line-height: 10px;
   color: var(--damage);
 }
-.dst-key.is-pip.is-sys {
+.dst-mapwrap .dst-key.is-pip.is-sys {
   background: var(--ink-dim);
   color: var(--dst-outline);
 }
-.dst-key.is-objective {
+.dst-mapwrap .dst-key.is-objective {
   border-radius: 50%;
   background: var(--dst-paper);
   color: #2a281f;
@@ -282,22 +325,22 @@
 
 /* ── The board ───────────────────────────────────────────────────────────── */
 
-.dst-surround {
+.dst-mapsvg .dst-surround {
   fill: var(--dst-surround);
 }
 
-.dst-frame {
+.dst-mapsvg .dst-frame {
   fill: var(--dst-frame);
   stroke: rgba(239, 230, 200, 0.25);
   stroke-width: 0.12;
 }
-.dst-frame.is-north {
+.dst-mapsvg .dst-frame.is-north {
   stroke: var(--dst-north);
 }
-.dst-frame.is-south {
+.dst-mapsvg .dst-frame.is-south {
   stroke: var(--dst-south);
 }
-.dst-frame.is-computer {
+.dst-mapsvg .dst-frame.is-computer {
   stroke-dasharray: 0.8 0.4;
   animation: dst-frame-pulse 1.4s ease-in-out infinite;
 }
@@ -311,102 +354,101 @@
   }
 }
 
-.dst-ruler-ticks {
+.dst-mapsvg .dst-ruler-ticks {
   stroke: var(--dst-chrome-ink);
   stroke-width: 0.03;
   fill: none;
   pointer-events: none;
 }
 
-.dst-ruler text,
-.dst-margin-label text,
-.dst-baseline-label text {
+.dst-mapsvg .dst-edge-ruler text,
+.dst-mapsvg .dst-margin-label text,
+.dst-mapsvg .dst-baseline-label text {
   font-size: calc(var(--k) * 9px);
   fill: var(--dst-chrome-ink);
   text-anchor: middle;
   font-family: var(--font-body);
 }
 
-.dst-margin-label text,
-.dst-baseline-label text {
+.dst-mapsvg .dst-margin-label text,
+.dst-mapsvg .dst-baseline-label text {
   font-size: calc(var(--k) * 8.5px);
   letter-spacing: 0.1em;
   dominant-baseline: central;
 }
 
-.dst-baseline-label text {
+.dst-mapsvg .dst-baseline-label text {
   font-weight: 700;
   pointer-events: none;
 }
-.dst-baseline-label .is-north {
+.dst-mapsvg .dst-baseline-label .is-north {
   fill: var(--dst-north);
 }
-.dst-baseline-label .is-south {
+.dst-mapsvg .dst-baseline-label .is-south {
   fill: var(--dst-south);
 }
 
-.dst-third-line {
+.dst-mapsvg .dst-third-line {
   stroke: rgba(240, 232, 200, 0.35);
   stroke-width: 0.06;
   stroke-dasharray: 0.6 0.4;
   pointer-events: none;
 }
 
-.dst-baseline {
+.dst-mapsvg .dst-baseline {
   pointer-events: none;
 }
-.dst-baseline.is-north {
+.dst-mapsvg .dst-baseline.is-north {
   fill: var(--dst-north);
 }
-.dst-baseline.is-south {
+.dst-mapsvg .dst-baseline.is-south {
   fill: var(--dst-south);
 }
 
-.dst-deploy-wash {
+.dst-mapsvg .dst-deploy-wash {
   opacity: 0.1;
 }
-.dst-deploy.is-north .dst-deploy-wash {
+.dst-mapsvg .dst-deploy.is-north .dst-deploy-wash {
   fill: var(--dst-north);
 }
-.dst-deploy.is-south .dst-deploy-wash {
+.dst-mapsvg .dst-deploy.is-south .dst-deploy-wash {
   fill: var(--dst-south);
 }
-.dst-deploy-edge {
+.dst-mapsvg .dst-deploy-edge {
   stroke-width: 0.08;
 }
-.dst-deploy.is-north .dst-deploy-edge {
+.dst-mapsvg .dst-deploy.is-north .dst-deploy-edge {
   stroke: var(--dst-north);
 }
-.dst-deploy.is-south .dst-deploy-edge {
+.dst-mapsvg .dst-deploy.is-south .dst-deploy-edge {
   stroke: var(--dst-south);
 }
-.dst-deploy-label {
+.dst-mapsvg .dst-deploy-label {
   font-size: calc(var(--k) * 11px);
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-anchor: end;
   paint-order: stroke;
   stroke: var(--dst-surround);
   stroke-width: calc(var(--k) * 3px);
   stroke-linejoin: round;
 }
-.dst-deploy.is-north .dst-deploy-label {
+.dst-mapsvg .dst-deploy.is-north .dst-deploy-label {
   fill: var(--dst-north);
 }
-.dst-deploy.is-south .dst-deploy-label {
+.dst-mapsvg .dst-deploy.is-south .dst-deploy-label {
   fill: var(--dst-south);
 }
 
 /* ── Terrain ─────────────────────────────────────────────────────────────── */
 
-.dst-wood-edge {
+.dst-mapsvg .dst-wood-edge {
   fill: none;
   stroke: rgba(230, 240, 200, 0.45);
   stroke-width: 0.05;
   stroke-dasharray: 0.25 0.2;
 }
 
-.dst-area-label {
+.dst-mapsvg .dst-area-label {
   font-family: var(--font-display);
   font-size: calc(var(--k) * 10.5px);
   font-weight: 700;
@@ -420,27 +462,28 @@
   dominant-baseline: central;
   pointer-events: none;
 }
-.dst-area-label.is-big {
+.dst-mapsvg .dst-area-label.is-big {
   font-size: calc(var(--k) * 12px);
 }
-/* Seen from far off (a small pane or the setup preview), only the models,
-   the ground and the zones are left: lettering at a fixed size would bury them. */
+/* Seen from far off, the lettering that only decorates goes: terrain names
+   (the key has them), the rulers and the margin names. Unit codes (on a
+   compact pennant), chips with odds, costs and verdicts, and the tape stay
+   at every zoom. The setup preview, which nobody works from, keeps only the
+   models, the ground and the zones. */
 .dst-mapsvg.lod-far .dst-area-label,
-.dst-mapsvg.lod-far .dst-ruler,
+.dst-mapsvg.lod-far .dst-edge-ruler,
 .dst-mapsvg.lod-far .dst-margin-label,
-.dst-mapsvg.lod-far .dst-baseline-label,
-.dst-mapsvg.lod-far .dst-deploy-label,
-.dst-mapsvg.lod-far .dst-pennant,
-.dst-mapsvg.lod-far .dst-element-tag,
-.dst-mapsvg.lod-far .dst-chip {
+.dst-mapsvg.dst-map-preview.lod-far .dst-baseline-label,
+.dst-mapsvg.dst-map-preview.lod-far .dst-deploy-label,
+.dst-mapsvg.dst-map-preview.lod-far .dst-tags {
   display: none;
 }
 
-.dst-feature-outline {
+.dst-mapsvg .dst-feature-outline {
   pointer-events: none;
 }
-.dst-feature-outline circle,
-.dst-feature-outline rect {
+.dst-mapsvg .dst-feature-outline circle,
+.dst-mapsvg .dst-feature-outline rect {
   fill: rgba(255, 255, 255, 0.12);
   stroke: #fff;
   stroke-width: 0.12;
@@ -448,57 +491,57 @@
 
 /* ── Objectives (p. 17) ──────────────────────────────────────────────────── */
 
-.dst-objective-reach {
+.dst-mapsvg .dst-objective-reach {
   fill: rgba(239, 230, 200, 0.08);
   stroke: var(--dst-paper);
   stroke-opacity: 0.7;
   stroke-width: 0.05;
   stroke-dasharray: 0.18 0.14;
 }
-.dst-objective-chit {
+.dst-mapsvg .dst-objective-chit {
   fill: var(--dst-paper);
   stroke: #2a281f;
   stroke-width: 0.07;
 }
-.dst-objective-owner {
+.dst-mapsvg .dst-objective-owner {
   fill: none;
   stroke-width: 0.1;
 }
-.dst-objective-owner.is-north {
+.dst-mapsvg .dst-objective-owner.is-north {
   stroke: var(--dst-north);
 }
-.dst-objective-owner.is-south {
+.dst-mapsvg .dst-objective-owner.is-south {
   stroke: var(--dst-south);
 }
-.dst-objective-value {
+.dst-mapsvg .dst-objective-value {
   font-size: 0.6px;
   font-weight: 700;
   fill: #2a281f;
   text-anchor: middle;
   pointer-events: none;
 }
-.dst-objective-staff {
+.dst-mapsvg .dst-objective-staff {
   stroke: #2a281f;
   stroke-width: 0.06;
 }
-.dst-objective-flag {
+.dst-mapsvg .dst-objective-flag {
   stroke: #2a281f;
   stroke-width: 0.03;
 }
-.dst-objective-mark.is-north .dst-objective-flag,
-.dst-objective-mark.is-held.is-north .dst-objective-chit {
+.dst-mapsvg .dst-objective-mark.is-north .dst-objective-flag,
+.dst-mapsvg .dst-objective-mark.is-held.is-north .dst-objective-chit {
   fill: var(--dst-north);
 }
-.dst-objective-mark.is-south .dst-objective-flag,
-.dst-objective-mark.is-held.is-south .dst-objective-chit {
+.dst-mapsvg .dst-objective-mark.is-south .dst-objective-flag,
+.dst-mapsvg .dst-objective-mark.is-held.is-south .dst-objective-chit {
   fill: var(--dst-south);
 }
-.dst-objective-mark.is-held.is-north .dst-objective-reach {
+.dst-mapsvg .dst-objective-mark.is-held.is-north .dst-objective-reach {
   fill: color-mix(in srgb, var(--dst-north) 12%, transparent);
   stroke: var(--dst-north);
   stroke-dasharray: none;
 }
-.dst-objective-mark.is-held.is-south .dst-objective-reach {
+.dst-mapsvg .dst-objective-mark.is-held.is-south .dst-objective-reach {
   fill: color-mix(in srgb, var(--dst-south) 12%, transparent);
   stroke: var(--dst-south);
   stroke-dasharray: none;
@@ -510,40 +553,40 @@
   cursor: pointer;
 }
 
-.dst-counter-shadow {
+.dst-mapsvg .dst-counter-shadow {
   fill: rgba(0, 0, 0, 0.45);
 }
 
-.dst-counter-base {
+.dst-mapsvg .dst-counter-base {
   stroke: var(--dst-outline);
   stroke-width: 0.06;
 }
-.dst-counter.is-north .dst-counter-base {
+.dst-mapsvg .dst-counter.is-north .dst-counter-base {
   fill: var(--dst-north);
 }
-.dst-counter.is-south .dst-counter-base {
+.dst-mapsvg .dst-counter.is-south .dst-counter-base {
   fill: var(--dst-south);
 }
-.dst-counter.is-north.is-spent .dst-counter-base {
+.dst-mapsvg .dst-counter.is-north.is-spent .dst-counter-base {
   fill: var(--dst-north-spent);
 }
-.dst-counter.is-south.is-spent .dst-counter-base {
+.dst-mapsvg .dst-counter.is-south.is-spent .dst-counter-base {
   fill: var(--dst-south-spent);
 }
-.dst-counter.is-selected .dst-counter-base {
+.dst-mapsvg .dst-counter.is-selected .dst-counter-base {
   stroke: #fff;
   stroke-width: 0.1;
 }
 
-.dst-facing {
+.dst-mapsvg .dst-facing {
   fill: var(--dst-ink);
 }
 
-.dst-damage-mark {
+.dst-mapsvg .dst-damage-mark {
   fill: var(--damage);
 }
 
-.dst-select {
+.dst-mapsvg .dst-select {
   fill: none;
   stroke: #fff;
   stroke-width: calc(var(--k) * 2px);
@@ -551,20 +594,20 @@
   pointer-events: none;
 }
 
-.dst-halo {
+.dst-mapsvg .dst-halo {
   stroke-width: 0.07;
   pointer-events: none;
   animation: dst-halo-pulse 1.6s ease-in-out infinite;
 }
-.dst-counter.is-north .dst-halo {
+.dst-mapsvg .dst-counter.is-north .dst-halo {
   fill: color-mix(in srgb, var(--dst-north) 22%, transparent);
   stroke: var(--dst-north);
 }
-.dst-counter.is-south .dst-halo {
+.dst-mapsvg .dst-counter.is-south .dst-halo {
   fill: color-mix(in srgb, var(--dst-south) 22%, transparent);
   stroke: var(--dst-south);
 }
-.dst-counter .dst-halo.is-done {
+.dst-mapsvg .dst-counter .dst-halo.is-done {
   fill: rgba(147, 160, 189, 0.12);
   stroke: var(--ink-faint);
   animation: none;
@@ -579,7 +622,7 @@
   }
 }
 
-.dst-hover-ring {
+.dst-mapsvg .dst-hover-ring {
   fill: rgba(255, 255, 255, 0.08);
   stroke: rgba(255, 255, 255, 0.85);
   stroke-width: calc(var(--k) * 1.25px);
@@ -593,7 +636,7 @@
   opacity: 0.45;
 }
 
-.dst-window {
+.dst-mapsvg .dst-window-ring {
   fill: none;
   stroke: #fff;
   stroke-width: calc(var(--k) * 2px);
@@ -607,15 +650,16 @@
   }
 }
 
-.dst-reticle {
+/* A target queued in the volley. */
+.dst-mapsvg .dst-reticle {
   fill: none;
-  stroke: var(--damage);
+  stroke: var(--thrust);
   pointer-events: none;
 }
-.dst-reticle circle {
+.dst-mapsvg .dst-reticle circle {
   stroke-width: 0.07;
 }
-.dst-reticle path {
+.dst-mapsvg .dst-reticle path {
   stroke-width: 0.09;
 }
 
@@ -624,57 +668,57 @@
   opacity: 0.85;
   cursor: default;
 }
-.dst-wreck {
+.dst-mapsvg .dst-wreck {
   fill: #2e2f2a;
   stroke-width: 0.05;
 }
-.dst-counter.is-north .dst-wreck {
+.dst-mapsvg .dst-counter.is-north .dst-wreck {
   stroke: var(--dst-north);
 }
-.dst-counter.is-south .dst-wreck {
+.dst-mapsvg .dst-counter.is-south .dst-wreck {
   stroke: var(--dst-south);
 }
-.dst-wreck-x {
+.dst-mapsvg .dst-wreck-x {
   fill: none;
   stroke: var(--damage);
   stroke-width: 0.1;
   stroke-linecap: round;
 }
-.dst-smoke {
+.dst-mapsvg .dst-smoke {
   fill: #6b6b66;
   pointer-events: none;
 }
 
 /* ── Earthworks and posture (p. 20) ──────────────────────────────────────── */
 
-.dst-sandbags {
+.dst-mapsvg .dst-sandbags {
   fill: none;
   stroke: var(--dst-sandbag);
   stroke-width: 0.16;
   stroke-dasharray: 0.2 0.05;
 }
-.dst-berm {
+.dst-mapsvg .dst-berm {
   fill: none;
   stroke: var(--dst-earth);
   stroke-width: 0.24;
   stroke-linecap: round;
 }
-.dst-berm.is-turret-down {
+.dst-mapsvg .dst-berm.is-turret-down {
   stroke-width: 0.34;
 }
-.dst-evasive {
+.dst-mapsvg .dst-evasive {
   fill: none;
   stroke-width: 0.06;
   stroke-linecap: round;
   opacity: 0.85;
 }
-.dst-evasive.is-north {
+.dst-mapsvg .dst-evasive.is-north {
   stroke: var(--dst-north);
 }
-.dst-evasive.is-south {
+.dst-mapsvg .dst-evasive.is-south {
   stroke: var(--dst-south);
 }
-.dst-prepared path {
+.dst-mapsvg .dst-prepared path {
   fill: none;
   stroke: var(--dst-sandbag);
   stroke-width: 0.18;
@@ -683,65 +727,69 @@
 
 /* ── Pennants, element tags and pips (drawn in pixels, scaled by k) ──────── */
 
-.dst-pennant-staff {
+.dst-mapsvg .dst-pennant-staff {
   stroke: #e6ecf7;
   stroke-width: 1.2;
 }
-.dst-pennant-flag {
+.dst-mapsvg .dst-pennant-flag {
   fill: var(--panel);
   stroke-width: 1.3;
 }
-.dst-pennant.is-north .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-north .dst-pennant-flag {
   stroke: var(--dst-north);
 }
-.dst-pennant.is-south .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-south .dst-pennant-flag {
   stroke: var(--dst-south);
 }
-.dst-pennant-lead-text,
-.dst-pennant-code {
+.dst-mapsvg .dst-pennant-lead-text,
+.dst-mapsvg .dst-pennant-code {
   font-size: 11px;
   font-weight: 700;
   text-anchor: middle;
   font-family: var(--font-body);
 }
-.dst-pennant-lead-text {
-  fill: #111;
+.dst-mapsvg .dst-pennant-lead {
+  fill: var(--dst-paper);
 }
-.dst-pennant.is-north .dst-pennant-code {
+.dst-mapsvg .dst-pennant-lead-text {
+  font-size: 10px;
+  fill: #2a281f;
+}
+.dst-mapsvg .dst-pennant.is-north .dst-pennant-code {
   fill: var(--dst-north);
 }
-.dst-pennant.is-south .dst-pennant-code {
+.dst-mapsvg .dst-pennant.is-south .dst-pennant-code {
   fill: var(--dst-south);
 }
-.dst-pennant.is-north.is-active .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-north.is-active .dst-pennant-flag {
   fill: var(--dst-north);
 }
-.dst-pennant.is-south.is-active .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-south.is-active .dst-pennant-flag {
   fill: var(--dst-south);
 }
-.dst-pennant.is-active .dst-pennant-code {
+.dst-mapsvg .dst-pennant.is-active .dst-pennant-code {
   fill: var(--dst-outline);
 }
-.dst-pennant.is-spent .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-spent .dst-pennant-flag {
   fill: var(--panel-3);
   stroke: var(--ink-faint);
 }
-.dst-pennant.is-spent .dst-pennant-code {
+.dst-mapsvg .dst-pennant.is-spent .dst-pennant-code {
   fill: var(--ink-dim);
 }
-.dst-pennant.is-spent .dst-pennant-lead {
+.dst-mapsvg .dst-pennant.is-spent .dst-pennant-lead {
   opacity: 0.55;
 }
-.dst-pennant.is-hovered .dst-pennant-flag {
+.dst-mapsvg .dst-pennant.is-hovered .dst-pennant-flag {
   stroke: #fff;
   stroke-width: 2;
 }
-.dst-pennant-chip rect {
+.dst-mapsvg .dst-pennant-chip rect {
   fill: var(--panel-3);
   stroke: rgba(0, 0, 0, 0.5);
   stroke-width: 0.8;
 }
-.dst-pennant-chip text {
+.dst-mapsvg .dst-pennant-chip text {
   font-size: 9px;
   font-weight: 700;
   fill: #fff;
@@ -749,22 +797,22 @@
   letter-spacing: 0.04em;
   font-family: var(--font-body);
 }
-.dst-pennant-chip.is-SH rect {
+.dst-mapsvg .dst-pennant-chip.is-SH rect {
   fill: #a08020;
 }
-.dst-pennant-chip.is-BR rect {
+.dst-mapsvg .dst-pennant-chip.is-BR rect {
   fill: #b04a20;
 }
-.dst-pennant-chip.is-RO rect {
+.dst-mapsvg .dst-pennant-chip.is-RO rect {
   fill: #8a1a1a;
 }
-.dst-under-fire {
-  fill: var(--damage);
+.dst-mapsvg .dst-under-fire {
+  fill: var(--warn);
   stroke: var(--dst-outline);
   stroke-width: 0.8;
 }
 
-.dst-element-tag {
+.dst-mapsvg .dst-element-tag {
   font-size: calc(var(--k) * 9px);
   font-weight: 700;
   text-anchor: middle;
@@ -774,75 +822,75 @@
   stroke-linejoin: round;
   dominant-baseline: hanging;
 }
-.dst-element-tag.is-north {
+.dst-mapsvg .dst-element-tag.is-north {
   fill: var(--dst-north);
 }
-.dst-element-tag.is-south {
+.dst-mapsvg .dst-element-tag.is-south {
   fill: var(--dst-south);
 }
 
-.dst-pip circle {
+.dst-mapsvg .dst-pip circle {
   stroke: var(--dst-outline);
   stroke-width: 1;
 }
-.dst-pip.is-damaged circle {
+.dst-mapsvg .dst-pip.is-damaged circle {
   fill: var(--damage);
 }
-.dst-pip.is-immobilised circle {
+.dst-mapsvg .dst-pip.is-immobilised circle {
   fill: var(--dst-outline);
   stroke: var(--damage);
   stroke-width: 1.8;
 }
-.dst-pip.is-systems circle {
+.dst-mapsvg .dst-pip.is-systems circle {
   fill: var(--ink-dim);
 }
-.dst-pip text {
+.dst-mapsvg .dst-pip text {
   font-size: 8px;
   font-weight: 700;
   text-anchor: middle;
   fill: #fff;
   font-family: var(--font-body);
 }
-.dst-pip.is-immobilised text {
+.dst-mapsvg .dst-pip.is-immobilised text {
   fill: var(--damage);
 }
-.dst-pip.is-systems text {
+.dst-mapsvg .dst-pip.is-systems text {
   fill: var(--dst-outline);
 }
-.dst-pip-move {
+.dst-mapsvg .dst-pip-move {
   fill: rgba(13, 17, 9, 0.7);
   stroke: #fff;
   stroke-width: 1.2;
   stroke-linejoin: round;
 }
-.dst-pip-move.is-spent {
+.dst-mapsvg .dst-pip-move.is-spent {
   fill: #fff;
   stroke: var(--dst-outline);
 }
-.dst-pip-fire {
+.dst-mapsvg .dst-pip-fire {
   fill: rgba(13, 17, 9, 0.7);
   stroke: var(--thrust);
   stroke-width: 1.2;
   stroke-linejoin: round;
 }
-.dst-pip-fire.is-spent {
+.dst-mapsvg .dst-pip-fire.is-spent {
   fill: var(--thrust);
   stroke: var(--dst-outline);
 }
 
 /* ── Unit integrity (p. 23) ──────────────────────────────────────────────── */
 
-.dst-link {
+.dst-mapsvg .dst-link {
   stroke-width: calc(var(--k) * 1.5px);
   opacity: 0.6;
 }
-.dst-link.is-north {
+.dst-mapsvg .dst-link.is-north {
   stroke: var(--dst-north);
 }
-.dst-link.is-south {
+.dst-mapsvg .dst-link.is-south {
   stroke: var(--dst-south);
 }
-.dst-scattered {
+.dst-mapsvg .dst-scattered {
   fill: none;
   stroke: var(--warn);
   stroke-width: 0.07;
@@ -851,8 +899,8 @@
 
 /* ── What just happened ──────────────────────────────────────────────────── */
 
-.dst-trail,
-.dst-tracer {
+.dst-mapsvg .dst-trail,
+.dst-mapsvg .dst-tracer {
   animation: dst-fade-in 0.5s ease-out;
 }
 @keyframes dst-fade-in {
@@ -860,68 +908,68 @@
     opacity: 0;
   }
 }
-.dst-trail-casing {
+.dst-mapsvg .dst-trail-casing {
   fill: none;
   stroke: rgba(13, 17, 9, 0.45);
   stroke-width: 0.22;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.dst-trail-line {
+.dst-mapsvg .dst-trail-line {
   fill: none;
   stroke-width: 0.1;
   stroke-dasharray: 0.35 0.2;
   stroke-linejoin: round;
 }
-.dst-trail-head {
+.dst-mapsvg .dst-trail-head {
   fill: none;
   stroke-width: 0.12;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.dst-trail.is-north .dst-trail-line,
-.dst-trail.is-north .dst-trail-head {
+.dst-mapsvg .dst-trail.is-north .dst-trail-line,
+.dst-mapsvg .dst-trail.is-north .dst-trail-head {
   stroke: var(--dst-north);
 }
-.dst-trail.is-south .dst-trail-line,
-.dst-trail.is-south .dst-trail-head {
+.dst-mapsvg .dst-trail.is-south .dst-trail-line,
+.dst-mapsvg .dst-trail.is-south .dst-trail-head {
   stroke: var(--dst-south);
 }
-.dst-trail.is-north .dst-trail-start {
+.dst-mapsvg .dst-trail.is-north .dst-trail-start {
   fill: var(--dst-north);
 }
-.dst-trail.is-south .dst-trail-start {
+.dst-mapsvg .dst-trail.is-south .dst-trail-start {
   fill: var(--dst-south);
 }
-.dst-tracer-line {
+.dst-mapsvg .dst-tracer-line {
   stroke-width: calc(var(--k) * 2px);
   stroke-dasharray: calc(var(--k) * 8px) calc(var(--k) * 4px);
 }
-.dst-tracer.is-north .dst-tracer-line {
+.dst-mapsvg .dst-tracer.is-north .dst-tracer-line {
   stroke: var(--dst-north);
 }
-.dst-tracer.is-south .dst-tracer-line {
+.dst-mapsvg .dst-tracer.is-south .dst-tracer-line {
   stroke: var(--dst-south);
 }
-.dst-tracer-miss {
+.dst-mapsvg .dst-tracer-miss {
   fill: none;
   stroke: #e6ecf7;
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 3px) calc(var(--k) * 3px);
 }
-.dst-tracer-burst {
+.dst-mapsvg .dst-tracer-burst {
   fill: none;
   stroke: var(--damage);
   stroke-width: 0.12;
   stroke-linecap: round;
 }
-.dst-tracer-burst.is-hit {
+.dst-mapsvg .dst-tracer-burst.is-hit {
   stroke-width: 0.08;
 }
 
 /* ── Fire from orbit (Dirtside pp. 38–40, More Thrust p. 17) ─────────────── */
 
-.dst-strike-stray {
+.dst-mapsvg .dst-strike-stray {
   fill: none;
   stroke: var(--dst-strike);
   stroke-opacity: 0.4;
@@ -929,33 +977,33 @@
   stroke-dasharray: 0.08 0.3;
   stroke-linecap: round;
 }
-.dst-strike-rim {
+.dst-mapsvg .dst-strike-rim {
   fill: none;
   stroke: var(--dst-strike);
   stroke-width: 0.1;
   stroke-dasharray: 0.4 0.25;
 }
-.dst-strike-reticle {
+.dst-mapsvg .dst-strike-reticle {
   fill: none;
   stroke: var(--dst-strike);
   stroke-width: 0.1;
 }
-.dst-fallout-ring {
+.dst-mapsvg .dst-fallout-ring {
   fill: none;
   stroke: var(--dst-fallout);
   stroke-width: 0.1;
   stroke-dasharray: 0.3 0.2;
 }
-.dst-crater {
+.dst-mapsvg .dst-crater {
   fill: #1c1a14;
 }
-.dst-crater-scorch {
+.dst-mapsvg .dst-crater-scorch {
   fill: #3a3326;
 }
-.dst-crater-scorch.is-inner {
+.dst-mapsvg .dst-crater-scorch.is-inner {
   fill: #2a261c;
 }
-.dst-crater-label {
+.dst-mapsvg .dst-crater-label {
   font-size: 0.6px;
   fill: var(--dst-fallout);
   text-anchor: middle;
@@ -963,279 +1011,299 @@
 
 /* ── Interface craft (p. 43) ─────────────────────────────────────────────── */
 
-.dst-craft-hull {
+.dst-mapsvg .dst-craft-hull {
   fill: var(--dst-hull);
   stroke: #1a1d22;
   stroke-width: 0.06;
 }
-.dst-craft-shadow {
+.dst-mapsvg .dst-craft-shadow {
   fill: rgba(0, 0, 0, 0.35);
 }
-.dst-craft-band.is-north {
+.dst-mapsvg .dst-craft-band.is-north {
   fill: var(--dst-north);
 }
-.dst-craft-band.is-south {
+.dst-mapsvg .dst-craft-band.is-south {
   fill: var(--dst-south);
 }
-.dst-craft-spine {
+.dst-mapsvg .dst-craft-spine {
   fill: none;
   stroke: rgba(26, 29, 34, 0.45);
   stroke-width: 0.05;
 }
-.dst-craft-mark.is-empty .dst-craft-hull {
+.dst-mapsvg .dst-craft-mark.is-empty .dst-craft-hull {
   fill-opacity: 0.45;
   stroke-dasharray: 0.2 0.12;
 }
-.dst-craft-mark.is-empty .dst-craft-band {
+.dst-mapsvg .dst-craft-mark.is-empty .dst-craft-band {
   opacity: 0.5;
 }
 
 /* ── Chips: fixed-size labels on the table (drawn in pixels, scaled by k) ── */
 
-.dst-chip {
+.dst-mapsvg .dst-map-chip {
   pointer-events: none;
 }
-.dst-chip rect {
+.dst-mapsvg .dst-map-chip rect {
   fill: rgba(11, 16, 28, 0.9);
   stroke: rgba(230, 236, 247, 0.55);
   stroke-width: 1;
 }
-.dst-chip text {
+.dst-mapsvg .dst-map-chip text {
   fill: var(--ink);
   font-weight: 700;
   text-anchor: middle;
   font-family: var(--font-body);
 }
-.dst-chip.is-ok rect {
+.dst-mapsvg .dst-map-chip.is-ok rect {
   stroke: var(--dst-ok);
 }
-.dst-chip.is-warn rect {
+.dst-mapsvg .dst-map-chip.is-warn rect {
   stroke: var(--warn);
 }
-.dst-chip.is-warn text {
+.dst-mapsvg .dst-map-chip.is-warn text {
   fill: #ffd27a;
 }
-.dst-chip.is-damage rect {
+.dst-mapsvg .dst-map-chip.is-ink rect {
+  stroke: var(--ink);
+}
+.dst-mapsvg .dst-map-chip.is-refused rect {
+  stroke: var(--ink-faint);
+  stroke-dasharray: 3 2;
+}
+.dst-mapsvg .dst-map-chip.is-refused text {
+  fill: var(--ink-dim);
+}
+.dst-mapsvg .dst-map-chip.is-thrust rect {
+  stroke: var(--thrust);
+}
+.dst-mapsvg .dst-map-chip.is-thrust text {
+  fill: var(--thrust);
+}
+.dst-mapsvg .dst-map-chip.is-damage rect {
   stroke: var(--damage);
 }
-.dst-chip.is-north rect {
+.dst-mapsvg .dst-map-chip.is-north rect {
   stroke: var(--dst-north);
 }
-.dst-chip.is-north text {
+.dst-mapsvg .dst-map-chip.is-north text {
   fill: var(--dst-north);
 }
-.dst-chip.is-south rect {
+.dst-mapsvg .dst-map-chip.is-south rect {
   stroke: var(--dst-south);
 }
-.dst-chip.is-south text {
+.dst-mapsvg .dst-map-chip.is-south text {
   fill: var(--dst-south);
 }
-.dst-chip.is-ordnance rect {
+.dst-mapsvg .dst-map-chip.is-ordnance rect {
   stroke: var(--dst-strike);
 }
-.dst-chip.is-ordnance text {
+.dst-mapsvg .dst-map-chip.is-ordnance text {
   fill: var(--dst-strike);
 }
-.dst-chip.is-dim rect {
+.dst-mapsvg .dst-map-chip.is-dim rect {
   stroke: var(--dst-fallout);
 }
-.dst-chip.is-dim text {
+.dst-mapsvg .dst-map-chip.is-dim text {
   fill: var(--dst-fallout);
 }
 
 /* ── Targeting ───────────────────────────────────────────────────────────── */
 
-.dst-band {
+.dst-mapsvg .dst-band {
   fill: none;
   stroke: rgba(100, 210, 255, 0.5);
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 7px) calc(var(--k) * 4px);
 }
-.dst-band.is-close {
+.dst-mapsvg .dst-band.is-close {
   fill: rgba(100, 210, 255, 0.07);
   stroke: rgba(100, 210, 255, 0.7);
   stroke-dasharray: none;
 }
-.dst-band.is-long {
+.dst-mapsvg .dst-band.is-long {
   stroke: rgba(100, 210, 255, 0.35);
 }
-.dst-verdict {
+.dst-mapsvg .dst-verdict {
   fill: none;
 }
-.dst-verdict.is-ok {
-  stroke: var(--damage);
+/* A target that can be shot is ringed in bright ink; one that cannot, faint and dashed (its counter dims). Red stays for damage. */
+.dst-mapsvg .dst-verdict.is-ok {
+  stroke: var(--ink);
   stroke-width: calc(var(--k) * 2px);
 }
-.dst-verdict.is-refused {
-  stroke: var(--ink-dim);
+.dst-mapsvg .dst-verdict.is-refused {
+  stroke: var(--ink-faint);
   stroke-width: calc(var(--k) * 1.3px);
   stroke-dasharray: calc(var(--k) * 3px) calc(var(--k) * 3px);
 }
-.dst-sightline {
+.dst-mapsvg .dst-sightline {
   stroke-width: calc(var(--k) * 2px);
   stroke-dasharray: calc(var(--k) * 8px) calc(var(--k) * 5px);
 }
-.dst-sightline.is-ok {
-  stroke: var(--damage);
+.dst-mapsvg .dst-sightline.is-ok {
+  stroke: var(--ink);
 }
-.dst-sightline.is-refused {
-  stroke: var(--ink-dim);
+.dst-mapsvg .dst-sightline.is-refused {
+  stroke: var(--ink-faint);
 }
-.dst-blocker {
-  fill: rgba(255, 85, 85, 0.12);
-  stroke: var(--damage);
-  stroke-width: 0.12;
+/* The feature in the way: outlined in dashed ink over a light hatch (the fill comes from the pattern). */
+.dst-mapsvg .dst-blocker {
+  stroke: var(--ink);
+  stroke-width: calc(var(--k) * 2px);
+  stroke-dasharray: calc(var(--k) * 6px) calc(var(--k) * 4px);
 }
 
 /* ── Moves ───────────────────────────────────────────────────────────────── */
 
-.dst-reach-area {
+.dst-mapsvg .dst-reach-area {
   fill: rgba(255, 255, 255, 0.07);
   stroke: rgba(255, 255, 255, 0.55);
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 5px) calc(var(--k) * 4px);
   stroke-linejoin: round;
 }
-.dst-path-casing {
+.dst-mapsvg .dst-path-casing {
   fill: none;
   stroke: rgba(13, 17, 9, 0.6);
   stroke-width: 0.28;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.dst-path {
+.dst-mapsvg .dst-path {
   fill: none;
   stroke-width: 0.14;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
-.dst-path.is-easy {
+.dst-mapsvg .dst-path.is-easy {
   stroke: #d8f3ff;
 }
-.dst-path.is-normal {
+.dst-mapsvg .dst-path.is-normal {
   stroke: #fff;
 }
-.dst-path.is-poor {
+.dst-mapsvg .dst-path.is-poor {
   stroke: var(--warn);
 }
-.dst-path.is-difficult {
+.dst-mapsvg .dst-path.is-difficult {
   stroke: var(--thrust);
 }
-.dst-path.is-blocked {
+.dst-mapsvg .dst-path.is-blocked {
   stroke: var(--ink-dim);
   stroke-dasharray: 0.3 0.2;
   stroke-linecap: butt;
 }
-.dst-path-stop {
+.dst-mapsvg .dst-path-stop {
   stroke: var(--warn);
   stroke-width: 0.12;
   stroke-linecap: round;
 }
-.dst-waypoint {
+.dst-mapsvg .dst-waypoint {
   fill: #fff;
   stroke: var(--dst-outline);
   stroke-width: 0.05;
 }
-.dst-ghost-leg {
+.dst-mapsvg .dst-ghost-leg {
   stroke: var(--dst-ok);
   stroke-width: calc(var(--k) * 2px);
   stroke-dasharray: calc(var(--k) * 6px) calc(var(--k) * 4px);
 }
-.dst-ghost.is-over .dst-ghost-leg {
+.dst-mapsvg .dst-ghost.is-over .dst-ghost-leg {
   stroke: var(--warn);
 }
-.dst-ghost-leg.is-blocked,
-.dst-ghost.is-over .dst-ghost-leg.is-blocked {
+.dst-mapsvg .dst-ghost-leg.is-blocked,
+.dst-mapsvg .dst-ghost.is-over .dst-ghost-leg.is-blocked {
   stroke: var(--ink-dim);
 }
-.dst-ghost-base {
+.dst-mapsvg .dst-ghost-base {
   fill: rgba(255, 255, 255, 0.08);
   stroke-width: 0.07;
   stroke-dasharray: 0.2 0.12;
 }
-.dst-ghost-base.is-north {
+.dst-mapsvg .dst-ghost-base.is-north {
   stroke: var(--dst-north);
 }
-.dst-ghost-base.is-south {
+.dst-mapsvg .dst-ghost-base.is-south {
   stroke: var(--dst-south);
 }
-.dst-ghost-nose {
+.dst-mapsvg .dst-ghost-nose {
   opacity: 0.7;
 }
-.dst-ghost-nose.is-north {
+.dst-mapsvg .dst-ghost-nose.is-north {
   fill: var(--dst-north);
 }
-.dst-ghost-nose.is-south {
+.dst-mapsvg .dst-ghost-nose.is-south {
   fill: var(--dst-south);
 }
-.dst-ghost.is-over .dst-ghost-base,
-.dst-ghost-base.is-scattered {
+.dst-mapsvg .dst-ghost.is-over .dst-ghost-base,
+.dst-mapsvg .dst-ghost-base.is-scattered {
   stroke: var(--warn);
 }
-.dst-ghost.is-over .dst-ghost-nose {
+.dst-mapsvg .dst-ghost.is-over .dst-ghost-nose {
   fill: var(--warn);
 }
 
-.dst-window-trail line {
+.dst-mapsvg .dst-window-trail line {
   stroke: #fff;
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 5px) calc(var(--k) * 4px);
 }
-.dst-window-trail circle {
+.dst-mapsvg .dst-window-trail circle {
   fill: #fff;
 }
 
 /* ── Placement previews and the tape ─────────────────────────────────────── */
 
-.dst-landing-ring {
+.dst-mapsvg .dst-landing-ring {
   fill: rgba(255, 255, 255, 0.04);
   stroke: #fff;
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 6px) calc(var(--k) * 5px);
 }
-.dst-landing-ring.is-placed {
+.dst-mapsvg .dst-landing-ring.is-placed {
   fill: none;
   stroke: rgba(255, 255, 255, 0.45);
 }
-.dst-landing-preview.is-refused .dst-landing-ring {
-  fill: rgba(255, 85, 85, 0.06);
-  stroke: var(--damage);
+.dst-mapsvg .dst-landing-preview.is-refused .dst-landing-ring {
+  fill: color-mix(in srgb, var(--warn) 6%, transparent);
+  stroke: var(--warn);
 }
-.dst-landing-ghost {
+.dst-mapsvg .dst-landing-ghost {
   fill: rgba(201, 206, 214, 0.45);
   stroke: #fff;
   stroke-width: 0.06;
 }
-.dst-landing-ghost.is-placed {
+.dst-mapsvg .dst-landing-ghost.is-placed {
   fill: rgba(201, 206, 214, 0.7);
 }
-.dst-landing-culprit {
-  stroke: var(--damage);
+.dst-mapsvg .dst-landing-culprit {
+  stroke: var(--warn);
   stroke-width: calc(var(--k) * 1.5px);
   stroke-dasharray: calc(var(--k) * 4px) calc(var(--k) * 4px);
 }
 
-.dst-deploy-ghost rect,
-.dst-deploy-ghost polygon {
+.dst-mapsvg .dst-deploy-ghost .dst-deploy-model > rect,
+.dst-mapsvg .dst-deploy-ghost .dst-deploy-model > polygon {
   fill: rgba(255, 255, 255, 0.2);
   stroke: #fff;
   stroke-width: 0.06;
   stroke-dasharray: 0.18 0.1;
 }
-.dst-deploy-ghost.is-refused rect,
-.dst-deploy-ghost.is-refused polygon {
-  fill: rgba(255, 85, 85, 0.2);
-  stroke: var(--damage);
+.dst-mapsvg .dst-deploy-ghost.is-refused .dst-deploy-model > rect,
+.dst-mapsvg .dst-deploy-ghost.is-refused .dst-deploy-model > polygon,
+.dst-mapsvg .dst-deploy-ghost.is-scattered .dst-deploy-model > rect,
+.dst-mapsvg .dst-deploy-ghost.is-scattered .dst-deploy-model > polygon {
+  fill: color-mix(in srgb, var(--warn) 20%, transparent);
+  stroke: var(--warn);
 }
 
-.dst-tape-casing {
+.dst-mapsvg .dst-tape-casing {
   stroke: rgba(0, 0, 0, 0.55);
   stroke-width: calc(var(--k) * 4px);
 }
-.dst-tape-line {
+.dst-mapsvg .dst-tape-line {
   stroke: #fff;
   stroke-width: calc(var(--k) * 2px);
 }
-.dst-tape-end {
+.dst-mapsvg .dst-tape-end {
   fill: #fff;
 }

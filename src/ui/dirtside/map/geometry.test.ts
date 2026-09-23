@@ -4,7 +4,8 @@ import { bookExample } from '../../../dirtside/data/examples'
 import { skirmishSetup } from '../../../dirtside/table/skirmish'
 import { distance, pathCost } from '../../../dirtside/table/terrain'
 import type { TerrainFeature } from '../../../dirtside/table/types'
-import { blocksIn, deploymentBand, insetShape, pointAlong, reachPolygon, silhouetteOf, splitByLegs, textWidth } from './geometry'
+import { blocksIn, clearestSpot, deploymentBand, fitLabel, insetShape, pointAlong, reachPolygon, silhouetteOf, splitByLegs, textWidth } from './geometry'
+import { fitFrame, keepInSight } from './useTableView'
 
 describe('the map geometry', () => {
   it('cuts a path into runs of the same going, end to end', () => {
@@ -80,5 +81,44 @@ describe('the map geometry', () => {
   it('estimates lettering width without a page to measure in', () => {
     expect(textWidth('N1★', 11)).toBeGreaterThan(15)
     expect(textWidth('LIGHT WOODS', 10.5, { display: true, spacing: 0.12 })).toBeGreaterThan(textWidth('LIGHT WOODS', 10.5))
+  })
+
+  it('fits a margin label to its room: whole, fewer words, cut short, bare, or not at all', () => {
+    const rear = (n: string) => `${n} REAR AREA`
+    const name = 'EPSILON ERIDANI I-B GARRISON'
+    const full = textWidth(rear(name), 8.5)
+    expect(fitLabel(name, rear, 'REAR AREA', full + 1, 8.5)).toBe(rear(name))
+    expect(fitLabel(name, rear, 'REAR AREA', textWidth(rear('EPSILON ERIDANI'), 8.5) + 1, 8.5)).toBe(rear('EPSILON ERIDANI'))
+    const cut = fitLabel(name, rear, 'REAR AREA', textWidth(rear('EPSILO'), 8.5) + 1, 8.5)
+    expect(cut).toMatch(/^EPS.*… REAR AREA$/)
+    expect(fitLabel(name, rear, 'REAR AREA', textWidth('REAR AREA', 8.5) + 1, 8.5)).toBe('REAR AREA')
+    expect(fitLabel(name, rear, 'REAR AREA', 10, 8.5)).toBeNull()
+  })
+
+  it('puts a label where it covers nothing, or where it covers least', () => {
+    const box = (x: number) => ({ x0: x, y0: 0, x1: x + 2, y1: 1 })
+    const spots = [{ at: 0, box: box(0) }, { at: 5, box: box(5) }, { at: 10, box: box(10) }]
+    expect(clearestSpot(spots, [box(0.5), box(4.5)])?.at).toBe(10)
+    expect(clearestSpot(spots, [box(0.5), box(4.5), box(10.5), box(9.5)])?.at).toBe(0)
+    expect(clearestSpot([], [box(0)])).toBeUndefined()
+  })
+
+  it('fits the whole table and its margins in the pane, centred', () => {
+    const m = { left: 1, right: 1, top: 1, bottom: 1 }
+    // A wide pane: the height decides the scale and the table is centred across.
+    const wide = fitFrame(48, 48, { w: 1000, h: 500, left: 0, top: 0 }, m)
+    expect(wide.ppi).toBeCloseTo(10)
+    expect(wide.y).toBeCloseTo(-1)
+    expect(wide.x + 1000 / wide.ppi / 2).toBeCloseTo(24)
+    // The pane loses 15 px at the top: the frame follows the screen until the table's own edge reaches the pane's.
+    const tall = fitFrame(48, 48, { w: 500, h: 500, left: 0, top: 0 }, m)
+    const shrunk = { w: 500, h: 485, left: 0, top: 15 }
+    const followed = { ...tall, y: tall.y + 15 / tall.ppi }
+    expect(keepInSight(followed, shrunk, 48, 48, m).y).toBeCloseTo(0)
+    // A few pixels only: the margins take it and nothing moves on screen.
+    const nudged = { ...tall, y: tall.y + 4 / tall.ppi }
+    expect(keepInSight(nudged, { w: 500, h: 496, left: 0, top: 4 }, 48, 48, m).y).toBeCloseTo(nudged.y)
+    // Not yet measured: a scale to start from, the table at the corner.
+    expect(fitFrame(48, 48, { w: 0, h: 0, left: 0, top: 0 }, m)).toEqual({ x: -1, y: -1, ppi: 20 })
   })
 })

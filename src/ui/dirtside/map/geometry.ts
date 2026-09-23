@@ -174,6 +174,53 @@ export function textWidth(text: string, size: number, opts: { bold?: boolean; di
   return w
 }
 
+/**
+ * A label that must fit a length in pixels: the full wording with the name,
+ * then with the name's last words dropped ("NORTHERN FORCE" to "NORTHERN"),
+ * then with the name cut short, then the wording without it, then nothing.
+ */
+export function fitLabel(name: string, wording: (name: string) => string, bare: string | null, maxPx: number, size: number, opts: { bold?: boolean; spacing?: number } = {}): string | null {
+  const fits = (t: string) => textWidth(t, size, opts) <= maxPx
+  const full = wording(name)
+  if (fits(full)) return full
+  const words = name.split(' ')
+  for (let n = words.length - 1; n >= 1; n--) {
+    const fewer = wording(words.slice(0, n).join(' '))
+    if (fits(fewer)) return fewer
+  }
+  for (let n = name.length - 1; n >= 4; n--) {
+    const cut = wording(`${name.slice(0, n).trimEnd()}…`)
+    if (fits(cut)) return cut
+  }
+  return bare !== null && fits(bare) ? bare : null
+}
+
+/** A box on the table, in inches. */
+export interface Box {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+export const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
+
+/** Of the places a label could go, the first that covers nothing, else the one that covers least; ties go to the earlier. */
+export function clearestSpot<T extends { box: Box }>(candidates: readonly T[], obstacles: readonly Box[]): T | undefined {
+  let best: T | undefined
+  let bestHits = Number.POSITIVE_INFINITY
+  for (const c of candidates) {
+    let hits = 0
+    for (const o of obstacles) if (overlaps(c.box, o)) hits++
+    if (hits === 0) return c
+    if (hits < bestHits) {
+      best = c
+      bestHits = hits
+    }
+  }
+  return best
+}
+
 // ---------------------------------------------------------------------------
 // Silhouettes
 // ---------------------------------------------------------------------------

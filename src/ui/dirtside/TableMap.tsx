@@ -1,4 +1,4 @@
-import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { type MobilityFamily, type TerrainType, goingOf, mobilityFamily } from '../../dirtside/data/mobility'
 import { BLOCKS_SIGHT, HIGH_GROUND, distance, onTable, terrainAt, woodAt } from '../../dirtside/table/terrain'
@@ -10,6 +10,7 @@ import { Legend } from './map/Legend'
 import { Chip, CraftMarks, Earthworks, IntegrityLinks, Objectives, Orbital, RecentMarks, Tags } from './map/marks'
 import { AimPreview, DeployGhost, LandingPreview, MoveGhost, MovePlot, PendingLandings, Tape, Targeting } from './map/overlays'
 import { TERRAIN_NAMES, TerrainLabels, TerrainLayer, TerrainOutline } from './map/terrain'
+import { type Margin, useTableView } from './map/useTableView'
 import { unitCodes } from './unitCodes'
 
 /**
@@ -85,36 +86,19 @@ export interface MoveBudget {
   travel: boolean
   /** Movement factors left before the plotted path. */
   left: number
+  /** The move is to be made evasively (p. 26): the ghost asks the engine about it that way. */
+  evasive?: boolean
 }
 
 export type RecentMark =
   | { kind: 'move'; side: SideId; path: Point[] }
   | { kind: 'fire'; side: SideId; from: Point; to: Point; result: 'miss' | 'hit' | 'kill' }
 
-/** A view of the table in inches: its top-left corner and width; the height follows the pane's shape. */
-interface View {
-  x: number
-  y: number
-  w: number
-}
-
 /** Room around the table for the rulers and the margin labels, in inches. */
-const MARGIN = { left: 1.45, right: 1.45, top: 1.5, bottom: 0.75 }
+const MARGIN: Margin = { left: 1.45, right: 1.45, top: 1.5, bottom: 0.75 }
 /** A preview has no rulers or margin lettering: just the frame. */
-const PREVIEW_MARGIN = { left: 0.6, right: 0.6, top: 0.6, bottom: 0.6 }
-type Margin = typeof MARGIN
+const PREVIEW_MARGIN: Margin = { left: 0.6, right: 0.6, top: 0.6, bottom: 0.6 }
 const LEGEND_KEY = 'ftpc.dirtside.mapkey.v1'
-
-function fitView(width: number, depth: number, aspect: number, m: Margin): View {
-  const bw = width + m.left + m.right
-  const bh = depth + m.top + m.bottom
-  if (bw / bh >= aspect) {
-    const h = bw / aspect
-    return { x: -m.left, y: -m.top - (h - bh) / 2, w: bw }
-  }
-  const w = bh * aspect
-  return { x: -m.left - (w - bw) / 2, y: -m.top, w }
-}
 
 function toTable(el: SVGSVGElement, clientX: number, clientY: number): Point {
   const pt = el.createSVGPoint()
@@ -165,51 +149,13 @@ export function TableMap(props: TableMapProps) {
   const features = state.setup.table.terrain
   const pid = `dstm${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const svg = useRef<SVGSVGElement>(null)
+  const wrap = useRef<HTMLDivElement>(null)
 
-  // ---- The view: fitted to the pane until the player zooms or pans.
-  const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
-  const [chosen, setChosen] = useState<View | null>(null)
+  // ---- The view: fitted to the pane until the player zooms or pans, and steady while the page around it shifts a little.
   const margin = readOnly ? PREVIEW_MARGIN : MARGIN
-  const aspect = size.w > 0 && size.h > 0 ? size.w / size.h : (W + margin.left + margin.right) / (D + margin.top + margin.bottom)
-  const view = chosen ?? fitView(W, D, aspect, margin)
-  const viewH = view.w / aspect
-  const pxPerInch = size.w > 0 ? size.w / view.w : 20
+  const { frame, box: view, zoomAt, panTo, fit } = useTableView(svg, W, D, margin, readOnly)
+  const pxPerInch = frame.ppi
   const k = 1 / pxPerInch
-  const viewRef = useRef({ view, viewH, aspect })
-  viewRef.current = { view, viewH, aspect }
-
-  useEffect(() => setChosen(null), [W, D])
-
-  useEffect(() => {
-    const el = svg.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[0]?.contentRect
-      if (box && box.width > 0 && box.height > 0) setSize((s) => (Math.abs(s.w - box.width) < 0.5 && Math.abs(s.h - box.height) < 0.5 ? s : { w: box.width, h: box.height }))
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  /** Keep at least a quarter of the table in sight. */
-  const clamp = useCallback(
-    (v: View): View => {
-      const h = v.w / viewRef.current.aspect
-      return { w: v.w, x: Math.min((3 * W) / 4, Math.max(W / 4 - v.w, v.x)), y: Math.min((3 * D) / 4, Math.max(D / 4 - h, v.y)) }
-    },
-    [W, D],
-  )
-
-  const zoomAt = useCallback(
-    (factor: number, at: Point | null) => {
-      const { view: v, viewH: h } = viewRef.current
-      const centre = at ?? { x: v.x + v.w / 2, y: v.y + h / 2 }
-      const w = Math.min(W * 2, Math.max(6, v.w * factor))
-      const nh = w / viewRef.current.aspect
-      setChosen(clamp({ x: centre.x - ((centre.x - v.x) * w) / v.w, y: centre.y - ((centre.y - v.y) * nh) / h, w }))
-    },
-    [W, clamp],
-  )
 
   useEffect(() => {
     const el = svg.current
@@ -232,24 +178,26 @@ export function TableMap(props: TableMapProps) {
   const [key, setKey] = useState(readStoredKey)
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean; hit: string | null; tape: boolean } | null>(null)
   const pending = useRef<{ x: number; y: number } | null>(null)
-  const frame = useRef(0)
+  const raf = useRef(0)
 
-  useEffect(() => () => cancelAnimationFrame(frame.current), [])
+  useEffect(() => () => cancelAnimationFrame(raf.current), [])
 
-  const storeKey = (next: { open: boolean; symbols: boolean }) => {
+  const storeKey = useCallback((next: { open: boolean; symbols: boolean }) => {
     setKey(next)
     try {
       localStorage.setItem(LEGEND_KEY, JSON.stringify(next))
     } catch {
       // No storage: the choice lasts until the page is left.
     }
-  }
+  }, [])
+  // Stable, so the key (a memo) is not drawn again on every pointer move.
+  const toggleSymbols = useCallback(() => storeKey({ ...key, symbols: !key.symbols }), [key, storeKey])
 
   const trackPointer = (clientX: number, clientY: number) => {
     pending.current = { x: clientX, y: clientY }
-    if (frame.current) return
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0
+    if (raf.current) return
+    raf.current = requestAnimationFrame(() => {
+      raf.current = 0
       const p = pending.current
       const el = svg.current
       if (!p || !el) return
@@ -278,7 +226,7 @@ export function TableMap(props: TableMapProps) {
     const at = toTable(event.currentTarget, event.clientX, event.clientY)
     // Pointer capture makes the SVG the target of the release, so the counter under the press is read now.
     const hit = (event.target as Element).closest('[data-element]')?.getAttribute('data-element') ?? null
-    drag.current = { x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false, hit, tape: measuring }
+    drag.current = { x: event.clientX, y: event.clientY, vx: frame.x, vy: frame.y, moved: false, hit, tape: measuring }
     if (measuring) setTape({ from: at, to: at })
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -294,8 +242,7 @@ export function TableMap(props: TableMapProps) {
     const dy = event.clientY - d.y
     if (Math.hypot(dx, dy) > 4) d.moved = true
     if (!d.moved) return
-    const perPx = view.w / event.currentTarget.getBoundingClientRect().width
-    setChosen(clamp({ w: view.w, x: d.vx - dx * perPx, y: d.vy - dy * perPx }))
+    panTo(d.vx - dx / pxPerInch, d.vy - dy / pxPerInch)
   }
   const onPointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
     const d = drag.current
@@ -318,6 +265,16 @@ export function TableMap(props: TableMapProps) {
     setHovered(null)
   }
 
+  /**
+   * A toolbar button run from a click hands the keyboard back to the map,
+   * so a later Enter or Space goes to the screen, not to the button again.
+   * Run from the keyboard, the focus stays where the player put it.
+   */
+  const tool = (run: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
+    run()
+    if (event.detail > 0) wrap.current?.focus({ preventScroll: true })
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (readOnly) return
     const tag = (event.target as HTMLElement).tagName
@@ -334,19 +291,19 @@ export function TableMap(props: TableMapProps) {
           zoomAt(1.25, null)
           return true
         case '0':
-          setChosen(null)
+          fit()
           return true
         case 'ArrowLeft':
-          setChosen(clamp({ ...view, x: view.x - step }))
+          panTo(view.x - step, view.y)
           return true
         case 'ArrowRight':
-          setChosen(clamp({ ...view, x: view.x + step }))
+          panTo(view.x + step, view.y)
           return true
         case 'ArrowUp':
-          setChosen(clamp({ ...view, y: view.y - step }))
+          panTo(view.x, view.y - step)
           return true
         case 'ArrowDown':
-          setChosen(clamp({ ...view, y: view.y + step }))
+          panTo(view.x, view.y + step)
           return true
         case 'Escape':
           if (!measuring) return false
@@ -391,14 +348,16 @@ export function TableMap(props: TableMapProps) {
   // Without a word from the screen, the pointer is a crosshair whenever a click on the ground would place something.
   const placing = !!plotFrom || !!aimPreview || !!landingPreview || deploying
   const cursorClass = measuring ? 'cursor-measure' : `cursor-${cursor ?? (placing ? 'crosshair' : 'default')}`
-  const lod = pxPerInch >= 28 ? ' lod-near' : pxPerInch < 12 ? ' lod-far' : ''
+  // Seen from far off, the lettering that only decorates goes and pennants shrink to the unit's code; nothing a player works from is hidden.
+  const far = pxPerInch < 12
+  const lod = pxPerInch >= 28 ? ' lod-near' : far ? ' lod-far' : ''
   const style = { '--k': k } as CSSProperties
 
   const svgEl = (
     <svg
       ref={svg}
       className={`dst-mapsvg ${readOnly ? 'dst-map-preview' : 'dst-map'} ${cursorClass}${lod}`}
-      viewBox={`${view.x} ${view.y} ${view.w} ${viewH}`}
+      viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       preserveAspectRatio="xMidYMid meet"
       style={style}
       onPointerDown={readOnly ? undefined : onPointerDown}
@@ -412,8 +371,8 @@ export function TableMap(props: TableMapProps) {
       <Board setup={state.setup} pid={pid} toAct={state.phase === 'turn-start' || state.phase === 'ended' ? null : (acting ?? null)} computer={computer} sideNames={sideNames} />
       <TerrainLayer features={features} pid={pid} />
       <TerrainOutline features={features} type={hoverType} />
-      {state.phase === 'deployment' ? <DeploymentZones setup={state.setup} pid={pid} sideNames={sideNames} ready={ready} /> : null}
-      <BoardMarks setup={state.setup} sideNames={sideNames} />
+      {state.phase === 'deployment' ? <DeploymentZones setup={state.setup} pid={pid} sideNames={sideNames} ready={ready} elements={live} units={state.units} k={k} /> : null}
+      <BoardMarks setup={state.setup} sideNames={sideNames} k={k} />
       <TerrainLabels features={features} k={k} avoid={objectivePoints} />
       <Objectives objectives={state.setup.table.objectives} held={state.objectives} viewer={viewer} sideNames={sideNames} />
       {state.orbit ? <Orbital orbit={state.orbit} k={k} pid={pid} callers={callers} /> : null}
@@ -456,15 +415,16 @@ export function TableMap(props: TableMapProps) {
       </g>
       {recent?.length ? <RecentMarks recent={recent} only="fire" /> : null}
       {pendingLandings?.length ? <PendingLandings landings={pendingLandings} state={state} k={k} /> : null}
-      <Tags elements={live} units={state.units} codes={codes} k={k} near={pxPerInch >= 28} activeUnitId={activeUnit} selectedId={selectedId} selectedUnitId={selected?.unitId ?? null} hoverUnitId={hoverUnit} activation={activation} />
-      {highlighted ? <Chip x={highlighted.position.x} y={highlighted.position.y - 1.3} dy={-10} k={k} text="JUST MOVED · FIRE?" tone="warn" size={9} /> : null}
-      {targeting && !readOnly ? <Targeting state={state} targeting={targeting} hoverId={hoverEl} k={k} /> : null}
+      <Tags elements={live} units={state.units} codes={codes} k={k} near={pxPerInch >= 28} far={far} activeUnitId={activeUnit} selectedId={selectedId} selectedUnitId={selected?.unitId ?? null} hoverUnitId={hoverUnit} activation={activation} />
+      {/* Under the model, below its pips and tag: above it is where the unit's pennant flies. */}
+      {highlighted ? <Chip x={highlighted.position.x} y={highlighted.position.y + (highlighted.vehicle ? 0.72 : 0.4)} dy={42} k={k} text="JUST MOVED · FIRE?" tone="thrust" size={9} /> : null}
+      {targeting && !readOnly ? <Targeting state={state} targeting={targeting} hoverId={hoverEl} pid={pid} k={k} /> : null}
       {!readOnly && onBoard && pointer ? (
         <>
           {moveBudget && plotFrom && selected && !hoverEl ? <MoveGhost state={state} element={selected} from={plotFrom} plot={plot} budget={moveBudget} pointer={pointer} k={k} /> : null}
           {aimPreview ? <AimPreview at={pointer} radius={aimPreview.radius} pid={pid} k={k} /> : null}
           {landingPreview ? <LandingPreview state={state} at={pointer} label={landingPreview.label} side={acting ?? null} k={k} /> : null}
-          {deploying && !hoverEl && !measuring ? <DeployGhost state={state} element={selected!} at={pointer} /> : null}
+          {deploying && !hoverEl && !measuring ? <DeployGhost state={state} element={selected!} at={pointer} k={k} /> : null}
         </>
       ) : null}
       {tape ? <Tape from={tape.from} to={tape.to} k={k} /> : null}
@@ -474,15 +434,15 @@ export function TableMap(props: TableMapProps) {
   if (readOnly) return <div className="dst-mapwrap is-preview">{svgEl}</div>
 
   return (
-    <div className="dst-mapwrap" onKeyDown={onKeyDown} tabIndex={-1}>
+    <div className="dst-mapwrap" onKeyDown={onKeyDown} tabIndex={-1} ref={wrap}>
       <div className="dst-maptools" role="toolbar" aria-label="Map">
-        <button type="button" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomAt(1.25, null)}>
+        <button type="button" aria-label="Zoom out" title="Zoom out (−)" onClick={tool(() => zoomAt(1.25, null))}>
           −
         </button>
-        <button type="button" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomAt(1 / 1.25, null)}>
+        <button type="button" aria-label="Zoom in" title="Zoom in (+)" onClick={tool(() => zoomAt(1 / 1.25, null))}>
           +
         </button>
-        <button type="button" aria-label="Fit table" title="Show the whole table (0)" onClick={() => setChosen(null)}>
+        <button type="button" aria-label="Fit table" title="Show the whole table (0)" onClick={tool(fit)}>
           Fit
         </button>
         <span className="dst-maptools-gap" />
@@ -491,14 +451,14 @@ export function TableMap(props: TableMapProps) {
           className={measuring ? 'is-on' : undefined}
           aria-pressed={measuring}
           title="Press and drag on the table to measure; Esc to stop"
-          onClick={() => {
+          onClick={tool(() => {
             setMeasuring((m) => !m)
             setTape(null)
-          }}
+          })}
         >
           Measure
         </button>
-        <button type="button" className={key.open ? 'is-on' : undefined} aria-pressed={key.open} title="The map key" onClick={() => storeKey({ ...key, open: !key.open })}>
+        <button type="button" className={key.open ? 'is-on' : undefined} aria-pressed={key.open} title="The map key" onClick={tool(() => storeKey({ ...key, open: !key.open }))}>
           Legend
         </button>
         <span className="dst-readout num" aria-live="off">
@@ -506,7 +466,7 @@ export function TableMap(props: TableMapProps) {
         </span>
       </div>
       {svgEl}
-      {key.open ? <Legend features={features} pid={pid} selected={selected} showMarkers={key.symbols} onToggleMarkers={() => storeKey({ ...key, symbols: !key.symbols })} onHoverType={setHoverType} /> : null}
+      {key.open ? <Legend features={features} pid={pid} selected={selected} showMarkers={key.symbols} onToggleMarkers={toggleSymbols} onHoverType={setHoverType} /> : null}
     </div>
   )
 }
