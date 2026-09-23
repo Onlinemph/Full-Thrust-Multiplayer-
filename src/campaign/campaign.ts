@@ -54,6 +54,8 @@ import {
   withinCommandRange,
 } from './map'
 import { effectiveCost, ftlRate } from './research'
+import { garrisonOf, landingOutcome, landingSetup, landingShips, replayLanding, transitLosses } from './ground'
+import { newStream } from '../dirtside/dice'
 import {
   advanceCampaignPhase,
   engagementScenario,
@@ -77,6 +79,7 @@ import type {
   Colony,
   Hex,
   PendingBattle,
+  PendingLanding,
   PlayerId,
   PlayerState,
   SavedCampaign,
@@ -85,7 +88,12 @@ import type {
   TaskForceOrder,
 } from './types'
 
-export const CAMPAIGN_RULES_VERSION = 1
+/**
+ * The campaign rules reading a new campaign is played under. 2: an assault is
+ * a landing fought on the Dirtside table (More Thrust pp. 15–18); under 1 it
+ * was decided by counting Marine parties against the colony's PDUs.
+ */
+export const CAMPAIGN_RULES_VERSION = 2
 
 /** The home colony the rules leave to the GM: ten million people, two factories, a modest orbital yard. */
 export const HOME_DEFAULTS = {
@@ -129,7 +137,8 @@ export function createCampaign(setup: CampaignSetup): CampaignState {
     nameFor: (_hex, index) => STAR_NAMES[index] ?? `System ${index + 1}`,
   })
   const state: CampaignState = {
-    rulesVersion: setup.rulesVersion ?? CAMPAIGN_RULES_VERSION,
+    // Absent means the first reading: campaign files written before readings were stamped replay as they were played.
+    rulesVersion: setup.rulesVersion ?? 1,
     seed: setup.seed,
     turn: 1,
     phase: 'ftl-movement',
@@ -140,6 +149,7 @@ export function createCampaign(setup: CampaignSetup): CampaignState {
     taskForces: [],
     admirals: [],
     battles: [],
+    landings: [],
     log: [],
   }
   const home = { ...HOME_DEFAULTS, ...setup.home, shipyard: { ...HOME_DEFAULTS.shipyard, ...setup.home?.shipyard } }
@@ -437,6 +447,8 @@ export function applyMove(state: CampaignState, move: CampaignMove): MoveOutcome
       return refuse('Espionage is not in this reading')
     case 'resolve-battle':
       return resolveBattle(state, move.battle, move.savedGame)
+    case 'resolve-landing':
+      return resolveLanding(state, move.landing, move.savedBattle)
     case 'end-phase':
       return endPhase(state)
     case 'gm-ruling': {
@@ -739,6 +751,7 @@ function assault(state: CampaignState, move: Extract<CampaignMove, { kind: 'assa
   const system = systemById(state, colony.systemId)!
   if (hexKey(tf.hex) !== hexKey(system.hex)) return refuse(`${tf.name} is not at ${system.name}`)
   if (!orbitHeldBy(state, system.hex, move.player)) return refuse('The defender still holds the orbit')
+  if (state.rulesVersion >= 2) return land(state, tf, colony, system)
   const marines = tf.ships.reduce((sum, s) => sum + designOf(s).marineParties, 0)
   if (marines === 0) return refuse(`${tf.name} carries no Marines`)
   if (colony.defences.planetShield) {
@@ -754,8 +767,15 @@ function assault(state: CampaignState, move: Extract<CampaignMove, { kind: 'assa
     note(state, 'move', `${tf.name} lands ${marines} Marine part${marines === 1 ? 'y' : 'ies'} on ${colony.name} and is repulsed by its defences (${needed} needed)`)
     return OK
   }
+  const former = capture(state, colony, move.player)
+  note(state, 'battle', `${tf.name} storms ${colony.name}: taken from ${former?.name ?? 'nobody'} with ${colony.population.subject} million now subject (6.4)`)
+  return OK
+}
+
+/** A colony changes hands (6.4): its people subject, its defences and post gone, a production phase idle. Returns the former owner. */
+function capture(state: CampaignState, colony: Colony, player: PlayerId): PlayerState | undefined {
   const former = playerById(state, colony.owner)
-  colony.owner = move.player
+  colony.owner = player
   colony.population = { loyal: 0, subject: colony.population.loyal + colony.population.subject }
   colony.defences = { pdu: 0, advancedPdu: 0, planetShield: false }
   colony.commandPost = false
@@ -763,9 +783,74 @@ function assault(state: CampaignState, move: Extract<CampaignMove, { kind: 'assa
   colony.capturedIdlePhases = 1
   colony.buildQueue = []
   colony.integrationCredit = 0
-  const player = playerById(state, move.player)
-  if (player && !player.knownSystems.includes(system.id)) player.knownSystems.push(system.id)
-  note(state, 'battle', `${tf.name} storms ${colony.name}: taken from ${former?.name ?? 'nobody'} with ${colony.population.subject} million now subject (6.4)`)
+  const system = systemById(state, colony.systemId)
+  const taker = playerById(state, player)
+  if (system && taker && !taker.knownSystems.includes(system.id)) taker.knownSystems.push(system.id)
+  return former
+}
+
+/**
+ * A landing (rules reading 2; More Thrust pp. 15–18). The task force's
+ * Marine contingents go down, less any the ships' damage costs in transit
+ * (p. 18); against them stand the colony's militia and PDUs; the battle is
+ * set up for the Dirtside table and waits there to be fought. A colony with
+ * nobody to defend it falls at once; a planet shield stops any landing.
+ */
+function land(state: CampaignState, tf: TaskForce, colony: Colony, system: StarSystem): MoveOutcome {
+  if (colony.defences.planetShield) return refuse(`${colony.name}'s planet shield is intact: no landing can be made (6.4)`)
+  if (state.landings.some((l) => l.colonyId === colony.id && l.id.startsWith(`landing-${state.turn}-`))) return refuse(`A landing has already been made on ${colony.name} this turn`)
+  const before = landingShips(tf.ships)
+  if (before.every((s) => s.teams === 0)) return refuse(`${tf.name} has no Marines to land: frigates and larger carry them (More Thrust p. 17)`)
+  const seed = Math.floor(draw(state.rng) * 0x7fffffff)
+  // Damage in transit (More Thrust p. 18): rolled once, as the troops deploy on the planet.
+  const transit = newStream(seed ^ 0x7a11)
+  for (const { ship, design } of before) {
+    const { lost, chance } = transitLosses(ship, design, transit)
+    if (chance === 0) continue
+    ship.marinesLost = (ship.marinesLost ?? 0) + lost
+    ship.marineLossRolledAt = ship.hullDamage
+    note(state, 'roll', `${ship.name} has lost ${Math.round(chance * 100)}% of its hull: ${lost} Marine team${lost === 1 ? '' : 's'} lost in transit (More Thrust p. 18)`)
+  }
+  const ships = landingShips(tf.ships)
+  const teams = ships.reduce((sum, s) => sum + s.teams, 0)
+  if (teams === 0) {
+    note(state, 'battle', `${tf.name}'s landing on ${colony.name} fails: every Marine aboard was lost in transit`)
+    return OK
+  }
+  const attacker = playerById(state, tf.owner)!
+  const defender = playerById(state, colony.owner)
+  if (garrisonOf(colony).units.length === 0) {
+    const former = capture(state, colony, tf.owner)
+    note(state, 'battle', `${tf.name} lands ${teams} Marine team${teams === 1 ? '' : 's'} on ${colony.name} and nobody stands against them: taken from ${former?.name ?? 'nobody'} with ${colony.population.subject} million now subject (6.4)`)
+    return OK
+  }
+  const plan = landingSetup({
+    seed,
+    name: `Landing at ${colony.name}, turn ${state.turn}`,
+    colony,
+    ships,
+    attackerName: `${attacker.name} Marines`,
+    defenderName: `${colony.name} garrison`,
+    computers: [],
+  })
+  const landing: PendingLanding = {
+    id: `landing-${state.turn}-${colony.id}`,
+    colonyId: colony.id,
+    systemId: system.id,
+    attacker: tf.owner,
+    defender: colony.owner,
+    taskForceId: tf.id,
+    seed,
+    setup: plan.setup,
+    landed: plan.landed,
+    garrison: plan.roles,
+    resolved: false,
+  }
+  state.landings.push(landing)
+  const force = plan.setup.sides[0].units.length
+  const garrison = plan.setup.sides[1].units.length
+  const overhead = plan.setup.orbital?.[0]?.ships.length ?? 0
+  note(state, 'battle', `${tf.name} lands ${teams} Marine team${teams === 1 ? '' : 's'} on ${colony.name} in ${force} platoon${force === 1 ? '' : 's'} against ${defender?.name ?? 'its'}'s garrison of ${garrison}${overhead > 0 ? `, with ${overhead} ship${overhead === 1 ? '' : 's'} overhead` : ''}: the battle is for the Dirtside table (More Thrust p. 17)`)
   return OK
 }
 
@@ -937,6 +1022,10 @@ function endPhase(state: CampaignState): MoveOutcome {
     const open = state.battles.filter((b) => !b.resolved)
     if (open.length > 0) return refuse(`${open.length} battle${open.length === 1 ? '' : 's'} still to fight`)
   }
+  if (state.phase === 'planetary') {
+    const open = state.landings.filter((l) => !l.resolved)
+    if (open.length > 0) return refuse(`${open.length} landing${open.length === 1 ? '' : 's'} still to fight`)
+  }
   const before = { turn: state.turn, phase: state.phase }
   advanceCampaignPhase(state)
   if (state.turn !== before.turn) note(state, 'phase', `Turn ${state.turn} begins`)
@@ -1086,7 +1175,13 @@ function admin(state: CampaignState): void {
         ship.armourDamage = ship.armourDamage.map(() => 0)
         ship.coreDamage = []
       }
+      if (port && ship.marineLossRolledAt !== undefined) ship.marineLossRolledAt = 0
       if (mended > 0) note(state, 'note', `${ship.name} makes good ${mended} of its damage${port ? ' in the yard' : ''} (6.3)`)
+      // Marines lost are replaced at a friendly yard, where the rest of the crew's losses would be (6.3, More Thrust p. 17).
+      if (port && (ship.marinesLost ?? 0) > 0) {
+        note(state, 'note', `${ship.name} takes on ${ship.marinesLost} Marine team${ship.marinesLost === 1 ? '' : 's'} to fill its contingent`)
+        ship.marinesLost = 0
+      }
     }
   }
   for (const admiral of state.admirals) {
@@ -1225,6 +1320,46 @@ function resolveBattle(state: CampaignState, battleId: string, savedGame: string
   return OK
 }
 
+/**
+ * A landing's battle comes back (rules reading 2): its journal is replayed
+ * over the landing's own setup, and the ground is the winner's. The Marines
+ * lost are struck off their ships' contingents; a PDU whose platoon lost half
+ * its strength is gone; a colony taken changes hands as 6.4 says.
+ */
+function resolveLanding(state: CampaignState, landingId: string, savedBattle: string): MoveOutcome {
+  if (state.phase !== 'planetary') return refuse('Landings are fought in the planetary phase')
+  const landing = state.landings.find((l) => l.id === landingId)
+  if (!landing) return refuse('No such landing')
+  if (landing.resolved) return refuse('That landing has been fought')
+  const game = replayLanding(landing, savedBattle)
+  if (typeof game === 'string') return refuse(game)
+  const outcome = landingOutcome(landing, game)
+  const colony = colonyById(state, landing.colonyId)!
+  const lostNames: string[] = []
+  for (const [shipId, lost] of Object.entries(outcome.marinesLost)) {
+    const ship = state.taskForces.flatMap((tf) => tf.ships).find((s) => s.id === shipId)
+    if (!ship) continue
+    ship.marinesLost = (ship.marinesLost ?? 0) + lost
+    lostNames.push(`${ship.name} ${lost}`)
+  }
+  landing.resolved = true
+  const attacker = playerById(state, landing.attacker)
+  const turns = game.result ? game.turn : Math.max(0, game.turn)
+  const summary = `${lostNames.length > 0 ? `; Marine teams lost: ${lostNames.join(', ')}` : ''}`
+  if (outcome.winner === 'north' && colony.owner === landing.defender) {
+    landing.winner = landing.attacker
+    const former = capture(state, colony, landing.attacker)
+    note(state, 'battle', `The landing at ${colony.name} is fought over ${turns} turn${turns === 1 ? '' : 's'}: ${attacker?.name} takes it from ${former?.name ?? 'nobody'} with ${colony.population.subject} million now subject (6.4)${summary}`)
+    return OK
+  }
+  landing.winner = outcome.winner === 'south' ? landing.defender : null
+  colony.defences.pdu = Math.max(0, colony.defences.pdu - outcome.pduLost)
+  colony.defences.advancedPdu = Math.max(0, colony.defences.advancedPdu - outcome.advancedPduLost)
+  const works = [outcome.pduLost > 0 ? `${outcome.pduLost} PDU${outcome.pduLost === 1 ? '' : 's'}` : '', outcome.advancedPduLost > 0 ? `${outcome.advancedPduLost} advanced PDU${outcome.advancedPduLost === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')
+  note(state, 'battle', `The landing at ${colony.name} is fought over ${turns} turn${turns === 1 ? '' : 's'}: ${outcome.winner === 'south' ? 'the garrison holds' : 'neither side has the better of it and the garrison keeps the ground'}${works ? `, losing ${works}` : ''}${summary}`)
+  return OK
+}
+
 function foldBack(state: CampaignState, battle: PendingBattle, game: GameState): void {
   const losses: string[] = []
   battle.sides.forEach((side, index) => {
@@ -1280,7 +1415,7 @@ export const PHASE_GUIDE: Record<CampaignPhase, string> = {
   'exploration-risk': 'Hazard rolls for forces that came through a dense asteroid field are on the log for the GM to rule on.',
   discovery: 'Detection checks against every enemy force within four hexes have been rolled. Voluntary checks may be added.',
   combat: 'Meetings have become battles. Fight each one on the table, or let the computers fight it, before the phase ends.',
-  planetary: 'Land colonists, establish command posts, bombard and assault, pay for integration.',
+  planetary: 'Land colonists, establish command posts, bombard and assault, pay for integration. A landing is fought on the Dirtside table before the phase ends.',
   admin: 'Unrest and repairs are done. The turn is recorded.',
   production: 'Colonies have produced. Spend their stockpiles: hulls, transports, factories, defences, yards, admirals; pool RP for research.',
 }

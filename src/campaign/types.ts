@@ -20,6 +20,7 @@
  */
 
 import { sampleAt } from '../engine/dice'
+import type { GameSetup as DirtsideSetup } from '../dirtside/table/types'
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -372,6 +373,17 @@ export interface CampaignShip {
    * phase.
    */
   expendables: Record<string, number>
+  /**
+   * Marine teams of the ship's contingent lost on the ground or to damage in
+   * transit (More Thrust pp. 17–18), made good when the ship is repaired at a
+   * friendly yard. Absent means none.
+   */
+  marinesLost?: number
+  /**
+   * The hull damage the last transit-loss roll was made at: damage already
+   * rolled for is not rolled for again (More Thrust p. 18, "only once").
+   */
+  marineLossRolledAt?: number
 }
 
 /** An admiral's command level (7): 1 excellent, 2 average, 3 inept. */
@@ -616,6 +628,32 @@ export interface PendingBattle {
   winner?: PlayerId | null
 }
 
+/**
+ * A landing (More Thrust pp. 15–18): under campaign rules reading 2 an
+ * assault is fought on the Dirtside table. The order of battle is fixed when
+ * the landing is made — which Marine team came down from which ship, which of
+ * the colony's platoons is a PDU — so the battle file comes back to the same
+ * table whatever else happens in the phase.
+ */
+export interface PendingLanding {
+  id: string
+  colonyId: ColonyId
+  systemId: SystemId
+  attacker: PlayerId
+  defender: PlayerId
+  taskForceId: TaskForceId
+  seed: number
+  /** The Dirtside battle as it opens: the landing force is north and attacks. */
+  setup: DirtsideSetup
+  /** Marine teams by element id, and the ship each came down from. */
+  landed: Record<string, CampaignShipId>
+  /** The colony's platoons by unit id, and what each stands for. */
+  garrison: Record<string, 'militia' | 'pdu' | 'advanced-pdu'>
+  resolved: boolean
+  /** Once fought: the winner's player id, or null when neither side had the better of it. */
+  winner?: PlayerId | null
+}
+
 /** One line of the campaign log, stamped with where in the turn it happened. */
 export interface CampaignLogEntry {
   seq: number
@@ -655,6 +693,8 @@ export interface CampaignState {
   taskForces: TaskForce[]
   admirals: Admiral[]
   battles: PendingBattle[]
+  /** Landings made under rules reading 2 (More Thrust pp. 15–18). */
+  landings: PendingLanding[]
   log: CampaignLogEntry[]
 }
 
@@ -759,6 +799,16 @@ export type CampaignMove =
        * never stores the outcome, because the outcome is replayable from this.
        */
       savedGame: string
+    }
+  | {
+      kind: 'resolve-landing'
+      landing: string
+      /**
+       * The Dirtside battle file, as `(setup + journal)` JSON. The campaign
+       * replays its journal over the landing's own setup and folds the end
+       * state back: the colony taken or held, Marines and PDUs lost.
+       */
+      savedBattle: string
     }
   | { kind: 'end-phase'; player: PlayerId | null }
   /** The GM's ruling, for the places the rules hand the GM the pen (6.2.1). */

@@ -110,6 +110,60 @@ export interface GameSetup {
   sides: [SideSetup, SideSetup]
   /** The game ends after this many turns; null plays until someone declares it (p. 17). */
   turnLimit: number | null
+  /** Starships in low orbit giving fire support (More Thrust p. 17). */
+  orbital?: OrbitalSupport[]
+  /** Sides the computer plays at the table. The engine never reads it; the screen does. */
+  aiSides?: SideId[]
+}
+
+// ---------------------------------------------------------------------------
+// Orbital support (Dirtside p. 40, More Thrust p. 17)
+// ---------------------------------------------------------------------------
+
+/** A starship in low orbit over the table (More Thrust p. 17). */
+export interface OrbitalShip {
+  id: string
+  name: string
+  /** Converged sheafs from its ordinary armament each turn overhead: an escort one, a cruiser two, a capital ship three. */
+  sheafs: number
+  /** Working ortillery systems: one Planetary Bombardment Monitor attack each, each turn overhead. */
+  ortillery: number
+}
+
+export interface OrbitalSupport {
+  side: SideId
+  ships: OrbitalShip[]
+  /** The turn the ships are first overhead; rolled on a D6 as the game opens when absent (More Thrust p. 17). */
+  window?: number
+}
+
+/** A converged sheaf from a ship's own guns, or a bombardment monitor's ortillery (More Thrust p. 17). */
+export type OrbitalAttack = 'sheaf' | 'pbm'
+
+/** Fire called down and not yet arrived (Dirtside pp. 38–39). */
+export interface OrbitalStrike {
+  id: string
+  side: SideId
+  shipId: string
+  attack: OrbitalAttack
+  /** The impact marker as placed; the fire may deviate from it on arrival (p. 40). */
+  aim: Point
+  calledBy: string
+  turn: number
+  /** The opponent has made an activation since the call, so the fire is due (p. 39). */
+  opponentActed: boolean
+}
+
+export interface OrbitState {
+  /** The first turn each supported side's ships are overhead; again every sixth turn after (More Thrust p. 17). */
+  windows: Partial<Record<SideId, number>>
+  /** Attacks used this turn, by ship id. */
+  spent: Record<string, { sheafs: number; ortillery: number }>
+  strikes: OrbitalStrike[]
+  /** Ground zero of every orbital attack: unprotected troops and vehicles keep 2" away (More Thrust p. 17). */
+  nukes: Point[]
+  /** Strikes called so far, for their ids. */
+  count: number
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +320,8 @@ export interface GameState {
   objectives: Record<string, { heldBy: SideId | null }>
   /** Prepared positions left on the table when a dug-in element moved off; either side may re-occupy them (p. 20). */
   prepared: Point[]
+  /** Ships in orbit, fire in the air and the craters it left; null when neither side has orbital support. */
+  orbit: OrbitState | null
   journal: Action[]
   log: LogEntry[]
   result: GameResult | null
@@ -320,6 +376,10 @@ export type Action =
   | { kind: 'pass'; side: SideId }
   | { kind: 'done'; side: SideId }
   | { kind: 'declare-end'; side: SideId }
+  /** A unit leader or observer team calls fire down from a ship overhead; its combat action (Dirtside p. 38, More Thrust p. 17). */
+  | { kind: 'call-orbital'; side: SideId; elementId: string; shipId: string; attack: OrbitalAttack; aim: Point }
+  /** The fire called earlier arrives, and bringing it down is the side's turn (Dirtside p. 39). */
+  | { kind: 'orbital-strike'; side: SideId }
 
 export interface Refusal {
   ok: false

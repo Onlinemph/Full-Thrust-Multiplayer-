@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { HOME_DEFAULTS } from '../campaign/campaign'
+import { CAMPAIGN_RULES_VERSION, HOME_DEFAULTS } from '../campaign/campaign'
 import { STARTING_FLEET_RP, STARTING_TRANSPORTS, layoutStars, pickerScenario, startingShipsFrom } from '../campaign/setup'
 import { CAMPAIGN_BANNED_SYSTEMS } from '../campaign/turn'
 import type { CampaignSetup } from '../campaign/types'
@@ -69,6 +69,7 @@ export function CampaignSetupPanel({ onClose, onStarted }: CampaignSetupPanelPro
     if (currentCampaign() && !window.confirm('A campaign is under way in this browser. Start a new one over it? (Save it to a file first if you want it back.)')) return
     const setup: CampaignSetup = {
       seed,
+      rulesVersion: CAMPAIGN_RULES_VERSION,
       starHexes: layout.starHexes,
       radius,
       players: seats.map((seat, index) => ({

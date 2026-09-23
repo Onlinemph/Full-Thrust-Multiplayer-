@@ -18,6 +18,7 @@ import { describeInfantryHit, describeVehicleHit, fireShot, narrateShot } from '
 import { CONFIDENCE_LABELS, CONFIDENCE_LEVELS_INDEX, QUALITY_DIE, THREAT, casualtyThreat, confidenceTest, lowerConfidence, raiseConfidence, rallyTest, reactionTest, restrictionsOf } from './confidence'
 import { baseMovement, infantryPosition, planTableShot, resolveChitShot, rifleRange, type TableShotPlan, teamFiresRanged, touchesCover, unitKind } from './tableFire'
 import { bearing, distance, distanceToSegment, lineOfSight, onTable, pathCost, terrainAt, woodAt } from './terrain'
+import { ATTACK_LABELS, NUKE_EXCLUSION, OFF_TABLE_CALL, STRIKE_CHITS, callDie, caughtBy, falloutBreach, nextOverhead, orbitalShips, overhead, rollDeviation, strikeArmour, strikeValidity, attacksLeft } from './orbital'
 import {
   type Action,
   type ActivationElement,
@@ -26,6 +27,7 @@ import {
   type GameSetup,
   type GameState,
   type LogEntry,
+  type OrbitalStrike,
   type Point,
   type Refusal,
   type ShotOrder,
@@ -144,9 +146,23 @@ export function createGame(setup: GameSetup): GameState {
     owed: 0,
     objectives,
     prepared: [],
+    orbit: null,
     journal: [],
     log: [{ turn: 0, side: null, text: `${setup.name}: deployment. ${setup.battle === 'encounter' ? 'Both sides deploy within 6" of their baselines.' : `${state0Name(setup, defender!)} defends and deploys first.`}`, page: 'p. 17' }],
     result: null,
+  }
+  // Ships in orbit (More Thrust p. 17): a D6 as the game opens is the turn they are first overhead.
+  const supports = (setup.orbital ?? []).filter((s) => s.ships.length > 0)
+  if (supports.length > 0) {
+    state.orbit = { windows: {}, spent: {}, strikes: [], nukes: [], count: 0 }
+    for (const support of supports) {
+      if (state.orbit.windows[support.side] !== undefined) continue
+      const rolled = support.window === undefined
+      const first = support.window ?? rollD6(state.rng)
+      state.orbit.windows[support.side] = first
+      const names = supports.filter((s) => s.side === support.side).flatMap((s) => s.ships.map((ship) => ship.name))
+      log(state, support.side, `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} in low orbit${rolled ? `: the D6 rolls ${first}` : ''}, overhead on turn ${first} and every sixth turn after.`, 'More Thrust p. 17')
+    }
   }
   return state
 }
@@ -278,6 +294,10 @@ function dispatch(state: GameState, action: Action): Refusal | null {
       return pass(state, action.side)
     case 'done':
       return done(state, action.side)
+    case 'call-orbital':
+      return callOrbital(state, action)
+    case 'orbital-strike':
+      return orbitalStrike(state, action.side)
     case 'declare-end':
       return declareEnd(state, action.side)
   }
@@ -312,6 +332,7 @@ function startTurn(state: GameState): void {
   state.phase = 'turn-start'
   state.activation = null
   state.owed = 0
+  if (state.orbit) state.orbit.spent = {}
   for (const unit of Object.values(state.units)) unit.activated = false
   for (const side of Object.values(state.sides)) side.done = false
   const north = liveUnits(state, 'north').length
@@ -355,7 +376,7 @@ function chooseFirst(state: GameState, side: SideId, first: SideId): Refusal | n
  */
 function settleTurnFlow(state: GameState, current: SideId, justActed: boolean): void {
   if (state.result) return
-  const can = (s: SideId) => !state.sides[s].done && unactivatedUnits(state, s).length > 0
+  const can = (s: SideId) => canActivate(state, s) || strikesDue(state, s).length > 0
   const other = otherSide(current)
   if (justActed && state.owed > 0) state.owed -= 1
   let next: SideId | null
@@ -368,6 +389,30 @@ function settleTurnFlow(state: GameState, current: SideId, justActed: boolean): 
   }
   if (next !== current) state.owed = 0
   state.toAct = next
+}
+
+/** A side that has not declared itself done and still has a unit to activate (p. 18). */
+function canActivate(state: GameState, side: SideId): boolean {
+  return !state.sides[side].done && unactivatedUnits(state, side).length > 0
+}
+
+/**
+ * Orbital fire the side has called that is due to arrive (p. 39): the
+ * opponent has made an activation since, or has none left to make this turn.
+ */
+export function strikesDue(state: GameState, side: SideId): OrbitalStrike[] {
+  if (!state.orbit) return []
+  const opponentFinished = !canActivate(state, otherSide(side))
+  return state.orbit.strikes.filter((s) => s.side === side && (s.opponentActed || opponentFinished))
+}
+
+/** An activation by `side` is over: fire the other side called is now due (p. 39). */
+function activationMade(state: GameState, side: SideId): void {
+  for (const strike of state.orbit?.strikes ?? []) if (strike.side !== side) strike.opponentActed = true
+}
+
+function mustBringDownFire(state: GameState, side: SideId): Refusal | null {
+  return strikesDue(state, side).length > 0 ? refuse('The orbital fire you called is due: bring it down first.', 'p. 39') : null
 }
 
 function endTurn(state: GameState): void {
@@ -392,6 +437,8 @@ function finish(state: GameState, winner: SideId | 'draw', reason: string): void
 
 function pass(state: GameState, side: SideId): Refusal | null {
   if (state.phase !== 'activation' || state.toAct !== side || state.activation) return refuse('Not your activation to pass.', 'p. 17')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
   if (!canPass(state, side)) return refuse('A player may pass only with fewer unactivated units than the opponent.', 'p. 17')
   const other = otherSide(side)
   state.owed = 2
@@ -402,6 +449,8 @@ function pass(state: GameState, side: SideId): Refusal | null {
 
 function done(state: GameState, side: SideId): Refusal | null {
   if (state.phase !== 'activation' || state.toAct !== side || state.activation) return refuse('Not your activation to give up.', 'p. 18')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
   state.sides[side].done = true
   log(state, side, `${state.sides[side].name} makes no more activations this turn.`, 'p. 18')
   settleTurnFlow(state, side, false)
@@ -435,6 +484,8 @@ function activate(state: GameState, side: SideId, unitId: string): Refusal | nul
   if (state.phase !== 'activation') return refuse('No activations now.', 'p. 18')
   if (state.toAct !== side) return refuse(`It is ${state.sides[state.toAct!].name}'s activation.`, 'p. 18')
   if (state.activation) return refuse('An activation is under way; end it first.', 'p. 18')
+  const due = mustBringDownFire(state, side)
+  if (due) return due
   const unit = state.units[unitId]
   if (!unit || unit.sideId !== side) return refuse('Not one of your units.', 'p. 18')
   if (unit.activated) return refuse(`${unit.name} has used its activation this turn.`, 'p. 18')
@@ -445,6 +496,7 @@ function activate(state: GameState, side: SideId, unitId: string): Refusal | nul
     unit.underFire = false
     state.activationCount += 1
     log(state, side, `${unit.name} spends its activation recovering from panic.`, 'p. 23')
+    activationMade(state, side)
     settleTurnFlow(state, side, true)
     return null
   }
@@ -548,6 +600,9 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
     const mates = elementsOf(state, unit).filter((o) => o.id !== el.id && mobile(o))
     if (mates.length > 0 && !mates.some((o) => distance(o.position, end) <= limit + 1e-9)) return refuse(`${unit.name} is disorganised: this move must bring ${el.name} back within ${limit}" of the unit.`, 'p. 23')
   }
+
+  const crater = falloutBreach(el, action.path, state.orbit?.nukes ?? [])
+  if (crater) return refuse(`${el.name} is not protected against the fallout and may not come within ${NUKE_EXCLUSION}" of an orbital strike's ground zero.`, 'More Thrust p. 17')
 
   const wasDugIn = el.dugIn
   const from = { ...el.position }
@@ -755,6 +810,7 @@ function endActivation(state: GameState, side: SideId): Refusal | null {
   state.activation = null
   state.activationCount += 1
   log(state, side, `${unit.name} ends its activation; its command marker is inverted.`, 'p. 19')
+  activationMade(state, side)
   settleTurnFlow(state, side, true)
   return null
 }
@@ -780,6 +836,8 @@ interface UnitHit {
   leaderDestroyed: boolean
   antiPersonnel: boolean
   attacked: boolean
+  /** Caught in an artillery beaten zone (p. 39). */
+  bombarded?: boolean
 }
 
 /**
@@ -985,14 +1043,145 @@ function angleBetweenFacing(other: ElementState, from: ElementState): 'front' | 
   return Math.abs(a) <= 45 ? 'front' : 'side'
 }
 
+// ---------------------------------------------------------------------------
+// Fire from orbit (pp. 38–40; More Thrust p. 17)
+// ---------------------------------------------------------------------------
+
+/**
+ * A call for fire from a ship overhead (p. 38): the unit's commander or a
+ * specialist observer, in sight of the aim point, as that element's combat
+ * action; a D12 for an observer, D10/D8/D6 for a commander of leadership
+ * 1/2/3, and off-table fire answers on 6 or more. Answered, the impact
+ * marker goes down and the ship's attack is spent; the fire arrives after
+ * the opponent's next activation (p. 39).
+ *
+ * [reading] More Thrust says a ship may fire "at any point on the
+ * battlefield"; that is its reach, as all artillery reaches the whole table
+ * (p. 37). Ortillery is otherwise an off-table battery (p. 40), so the call
+ * is made as for one.
+ */
+function callOrbital(state: GameState, action: Extract<Action, { kind: 'call-orbital' }>): Refusal | null {
+  const got = activeUnit(state, action.side)
+  if ('ok' in got) return got
+  const { unit, activation } = got
+  const orbit = state.orbit
+  const ship = orbitalShips(state, action.side).find((s) => s.id === action.shipId)
+  if (!orbit || !ship) return refuse('No ship in orbit answers to your side.', 'More Thrust p. 17')
+  const el = state.elements[action.elementId]
+  if (!el || el.unitId !== unit.id) return refuse('The caller must belong to the activated unit.', 'p. 18')
+  if (!functional(el)) return refuse(`${el.name} is out of action.`, 'p. 30')
+  if (unit.leaderElementId !== el.id && el.infantry?.team !== 'observer') return refuse('Fire is called by a unit commander or a specialist observer team.', 'p. 38')
+  if (el.systemsDown) return refuse(`${el.name}'s systems are down.`, 'p. 31')
+  const record = activation.elements[el.id]!
+  if (record.fired) return refuse(`${el.name} has taken its combat action.`, 'p. 18')
+  if (record.travel) return refuse(`${el.name} moved in travel mode and cannot take a combat action.`, 'p. 25')
+  if (restrictionsOf(unit.confidence, unitKind(state, unit)).noFire) return refuse(`${unit.name} is routed and takes no combat action.`, 'p. 22')
+  if (!overhead(state, action.side)) {
+    const next = nextOverhead(state, action.side)
+    return refuse(`The ships are not overhead this turn${next ? `; next on turn ${next}` : ''}.`, 'More Thrust p. 17')
+  }
+  if (attacksLeft(state, ship)[action.attack] <= 0) return refuse(action.attack === 'pbm' ? `${ship.name} has no ortillery left to fire this turn.` : `${ship.name} has fired its sheafs this turn.`, 'More Thrust p. 17')
+  if (!onTable(action.aim, state.setup.table)) return refuse('Aim at a point on the table.', 'p. 38')
+  const sight = lineOfSight(el.position, action.aim, state.setup.table.terrain)
+  if (!sight.clear) return refuse(`${el.name} cannot see the aim point: ${sight.reason}.`, 'p. 38')
+
+  record.fired = true
+  if (!record.moved) record.firedBeforeMoving = true
+  const die = callDie(el, unit.leadership)
+  const rolled = roll(die, state.rng)
+  const who = el.infantry?.team === 'observer' ? 'the observer' : `leadership ${unit.leadership}`
+  if (rolled < OFF_TABLE_CALL) {
+    log(state, action.side, `${el.name} calls ${ship.name} for ${ATTACK_LABELS[action.attack]}: D${die} (${who}) rolls ${rolled}, needs ${OFF_TABLE_CALL} — no answer.`, 'p. 38')
+    return null
+  }
+  const spent = orbit.spent[ship.id] ?? { sheafs: 0, ortillery: 0 }
+  if (action.attack === 'sheaf') spent.sheafs += 1
+  else spent.ortillery += 1
+  orbit.spent[ship.id] = spent
+  orbit.count += 1
+  orbit.strikes.push({ id: `strike-${orbit.count}`, side: action.side, shipId: ship.id, attack: action.attack, aim: { ...action.aim }, calledBy: el.id, turn: state.turn, opponentActed: false })
+  log(state, action.side, `${el.name} calls ${ship.name} for ${ATTACK_LABELS[action.attack]}: D${die} (${who}) rolls ${rolled} — the impact marker goes down at (${action.aim.x.toFixed(1)}, ${action.aim.y.toFixed(1)}); the fire arrives after the next enemy activation.`, 'p. 38')
+  return null
+}
+
+/**
+ * The fire arrives (pp. 39–40, More Thrust p. 17): each strike that is due
+ * deviates on the clock and the D6-against-D8, then every element within its
+ * beaten zone draws three chits (a sheaf) or four (ortillery) as HEF if
+ * infantry and MAK if a vehicle; a NUKE marker is left at ground zero. It is
+ * the side's turn, as activating the battery would be.
+ */
+function orbitalStrike(state: GameState, side: SideId): Refusal | null {
+  if (state.phase !== 'activation' || state.toAct !== side) return refuse('Not your turn.', 'p. 18')
+  if (state.activation) return refuse('An activation is under way; end it first.', 'p. 39')
+  const due = strikesDue(state, side)
+  if (due.length === 0) return refuse('No orbital fire is due.', 'p. 39')
+  const orbit = state.orbit!
+  for (const strike of due) {
+    const ship = orbitalShips(state, side).find((s) => s.id === strike.shipId)
+    const name = ship?.name ?? 'The ship'
+    const dev = rollDeviation(strike.aim, state.rng)
+    log(state, side, `${name}'s ${ATTACK_LABELS[strike.attack]} arrives: the clock rolls ${dev.clock}, D6 ${dev.d6} against D8 ${dev.d8} — ${dev.inches === 0 ? 'on the aim point' : `${dev.inches}" off towards ${dev.clock} o'clock`}.`, 'p. 40')
+    const hits = new Map<string, UnitHit>()
+    for (const target of caughtBy(state, dev.impact, strike.attack)) {
+      const u = state.units[target.unitId]!
+      let h = hits.get(u.id)
+      if (!h) {
+        h = { unit: u, hit: new Set(), leaderDestroyed: false, antiPersonnel: false, attacked: true, bombarded: true }
+        hits.set(u.id, h)
+      }
+      const before = { damaged: target.damaged, destroyed: target.destroyed }
+      const validity = strikeValidity(target)
+      if (validity === null) {
+        log(state, side, `${target.name} is dug in: MAK is ineffective against it.`, 'p. 29')
+        continue
+      }
+      const chits = drawChits(STRIKE_CHITS[strike.attack], state.rng)
+      if (target.infantry) {
+        h.antiPersonnel = true
+        const result = resolveInfantryHit(chits, validity, INFANTRY_KILL_TOTAL[target.infantry.troops])
+        log(state, side, `${target.name} (HEF): ${describeInfantryHit(result)}`, 'p. 39')
+        if (result.killed) target.destroyed = true
+      } else {
+        const result = resolveVehicleHit(chits, validity, strikeArmour(target))
+        log(state, side, `${target.name} (MAK, top armour ${strikeArmour(target)}): ${describeVehicleHit(result)}`, 'p. 39')
+        if (result.knockedOut) {
+          target.destroyed = true
+          target.damaged = false
+          target.immobilised = false
+          target.systemsDown = false
+        } else {
+          if (result.damaged) target.damaged = true
+          if (result.immobilised) target.immobilised = true
+          if (result.systemsDown) {
+            target.systemsDown = true
+            target.systemsDownAt = state.activationCount
+          }
+        }
+      }
+      if ((target.damaged && !before.damaged) || (target.destroyed && !before.destroyed)) h.hit.add(target.id)
+      if (target.destroyed && !before.destroyed && u.leaderElementId === target.id) h.leaderDestroyed = true
+    }
+    if (hits.size === 0) log(state, side, 'Nothing is caught in the beaten zone.', 'p. 39')
+    orbit.nukes.push(dev.impact)
+    log(state, side, `A NUKE marker is left at ground zero: unprotected troops and vehicles may not come within ${NUKE_EXCLUSION}" of it for the rest of the game.`, 'More Thrust p. 17')
+    for (const h of hits.values()) afterAttack(state, h)
+  }
+  orbit.strikes = orbit.strikes.filter((s) => !due.includes(s))
+  activationMade(state, side)
+  settleTurnFlow(state, side, true)
+  return null
+}
+
 /** Markers and tests after one attack on a unit (pp. 23–24). */
 function afterAttack(state: GameState, h: UnitHit): void {
   const unit = h.unit
   const side = unit.sideId
   const kind = unitKind(state, unit)
   const hit = h.hit.size
-  // Under fire (p. 24): infantry by anti-personnel fire, vehicles only when hurt.
-  if ((kind === 'infantry' && h.antiPersonnel) || hit > 0) {
+  // Under fire (p. 24): infantry by anti-personnel fire, vehicles only when
+  // hurt; any unit with an element in an artillery beaten zone (p. 39).
+  if ((kind === 'infantry' && h.antiPersonnel) || hit > 0 || h.bombarded) {
     if (!unit.underFire) log(state, side, `${unit.name} is under fire.`, 'p. 24')
     unit.underFire = true
   }
@@ -1005,10 +1194,13 @@ function afterAttack(state: GameState, h: UnitHit): void {
       log(state, side, `${unit.name}, green, meets the enemy for the first time: D${test.die} rolls ${test.roll} against ${test.needed} — ${test.passed ? 'it holds' : 'it panics'}.`, 'p. 23')
     }
   }
-  if (hit === 0) return
+  // Dismounted infantry under artillery attack test at +0 (p. 23), whatever it cost them; the highest threat is the one taken.
+  const shelled = !!h.bombarded && kind === 'infantry'
+  if (hit === 0 && !shelled) return
   unit.casualties += hit
-  const threat = casualtyThreat({ hit, total: unit.casualties, strength: unit.strength, firstLossTaken: unit.firstLossTaken, leaderDestroyed: h.leaderDestroyed })
-  unit.firstLossTaken = true
+  const casualties = hit > 0 ? casualtyThreat({ hit, total: unit.casualties, strength: unit.strength, firstLossTaken: unit.firstLossTaken, leaderDestroyed: h.leaderDestroyed }) : null
+  if (hit > 0) unit.firstLossTaken = true
+  const threat = shelled ? Math.max(casualties ?? THREAT.bombardmentOnInfantry, THREAT.bombardmentOnInfantry) : casualties
   if (threat !== null) {
     const test = confidenceTest(unit.quality, unit.leadership, threat, state.rng)
     const from = unit.confidence

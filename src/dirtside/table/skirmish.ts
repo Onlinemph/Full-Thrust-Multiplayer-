@@ -35,8 +35,6 @@ export interface SkirmishOptions {
   southName?: string
 }
 
-let counter = 0
-const nextId = (stem: string) => `${stem}-${(counter += 1)}`
 
 export function unitFromSpec(spec: UnitSpec, side: SideId, index: number): UnitSetup {
   const id = `${side}-${index + 1}`
@@ -60,6 +58,9 @@ export function unitFromSpec(spec: UnitSpec, side: SideId, index: number): UnitS
 export function randomTerrain(stream: DiceStream, width: number, depth: number, density: 'none' | 'light' | 'dense'): TerrainFeature[] {
   if (density === 'none') return []
   const features: TerrainFeature[] = []
+  // Numbered within the one spread, so the same seed gives the same ids however often it is laid out.
+  let counter = 0
+  const nextId = (stem: string) => `${stem}-${(counter += 1)}`
   const rnd = (lo: number, hi: number) => lo + draw(stream) * (hi - lo)
   const count = density === 'light' ? 6 : 11
   const kinds: TerrainFeature['terrain'][] = ['light-woods', 'hills', 'rough', 'light-woods', 'light-scrub', 'dense-woods', 'hills', 'cultivated', 'swamp', 'light-woods', 'rough']
@@ -81,6 +82,19 @@ export function randomTerrain(stream: DiceStream, width: number, depth: number, 
   return features
 }
 
+/** The counter sheet's objective markers: seven worth 1, four worth 2, three worth 3. */
+export const OBJECTIVE_MARKERS: readonly number[] = [1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3]
+
+/** Draw markers face down from the counter sheet's fourteen, without putting any back; a fresh sheet once they run out. */
+export function objectiveDrawer(stream: DiceStream): () => number {
+  let pool: number[] = []
+  return () => {
+    if (pool.length === 0) pool = [...OBJECTIVE_MARKERS]
+    const at = Math.floor(draw(stream) * pool.length)
+    return pool.splice(at, 1)[0]!
+  }
+}
+
 /**
  * Objective markers for an encounter (p. 17): each side draws its own, at
  * least half in its own rear area, the rest in the main battle area, none
@@ -88,13 +102,14 @@ export function randomTerrain(stream: DiceStream, width: number, depth: number, 
  */
 export function placeObjectives(stream: DiceStream, width: number, depth: number, perSide: number): Objective[] {
   const out: Objective[] = []
+  const value = objectiveDrawer(stream)
   const rnd = (lo: number, hi: number) => lo + draw(stream) * (hi - lo)
   const tryPlace = (side: SideId, i: number, rear: boolean) => {
     for (let attempt = 0; attempt < 60; attempt++) {
       const y = rear ? (side === 'north' ? rnd(2, depth / 3 - 1) : rnd((2 * depth) / 3 + 1, depth - 2)) : rnd(depth / 3 + 1, (2 * depth) / 3 - 1)
       const p: Point = { x: rnd(3, width - 3), y }
       if (out.every((o) => distance(o.position, p) >= 6)) {
-        out.push({ id: `${side === 'north' ? 'N' : 'S'}${i + 1}`, position: p, value: 1 + Math.floor(draw(stream) * 3), drawnBy: side })
+        out.push({ id: `${side === 'north' ? 'N' : 'S'}${i + 1}`, position: p, value: value(), drawnBy: side })
         return
       }
     }
