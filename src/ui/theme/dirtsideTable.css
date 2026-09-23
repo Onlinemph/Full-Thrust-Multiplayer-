@@ -11,25 +11,11 @@
   min-height: 0;
 }
 
-.dst-table {
-  position: relative;
-  min-height: 0;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
 .dst-map {
   display: block;
   touch-action: none;
   cursor: crosshair;
   font-family: var(--font-body);
-}
-
-.dst-banner {
-  font-size: var(--text-sm);
-  color: var(--ink);
 }
 
 .dst-ground {
@@ -238,189 +224,6 @@
   pointer-events: none;
 }
 
-.dst-refusal {
-  position: absolute;
-  left: var(--gap);
-  right: var(--gap);
-  bottom: var(--gap);
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius);
-  background: rgba(20, 20, 20, 0.85);
-  color: #ffd27a;
-  font-size: var(--text-sm);
-}
-
-.dst-refusal.is-note {
-  color: var(--ink);
-}
-
-.dst-side {
-  gap: var(--gap);
-}
-
-.dst-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.dst-force h3 {
-  margin: 0 0 0.3rem;
-  font-size: var(--text-sm);
-}
-
-.dst-force.is-north h3 {
-  color: #8fb8ff;
-}
-
-.dst-force.is-south h3 {
-  color: #ffb877;
-}
-
-.dst-units {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.dst-unit {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: var(--text-xs);
-}
-
-.dst-unit.is-active .dst-unit-name {
-  outline: 1px solid #fff;
-}
-
-.dst-unit.is-firing .dst-unit-name {
-  outline: 1px solid #ff5050;
-}
-
-.dst-unit.is-gone {
-  opacity: 0.5;
-}
-
-.dst-unit-name {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  text-align: left;
-  padding: 0.2rem 0.4rem;
-}
-
-.dst-marker {
-  display: inline-block;
-  min-width: 1.2rem;
-  padding: 0 0.3rem;
-  border-radius: 0.2rem;
-  text-align: center;
-  font-weight: 700;
-  color: #111;
-}
-
-.dst-marker.is-green {
-  background: #6fbf5f;
-}
-
-.dst-marker.is-regular {
-  background: #6fa0ff;
-}
-
-.dst-marker.is-veteran {
-  background: #ff9f3f;
-}
-
-.dst-marker.is-spent {
-  opacity: 0.4;
-  text-decoration: line-through;
-}
-
-.dst-confidence {
-  display: inline-block;
-  padding: 0 0.3rem;
-  border-radius: 0.2rem;
-  background: #555;
-  color: #fff;
-  font-weight: 700;
-}
-
-.dst-confidence.is-SH {
-  background: #a08020;
-}
-
-.dst-confidence.is-BR {
-  background: #b04a20;
-}
-
-.dst-confidence.is-RO {
-  background: #8a1a1a;
-}
-
-.dst-flag {
-  padding: 0 0.3rem;
-  border-radius: 0.2rem;
-  background: rgba(255, 90, 60, 0.3);
-  color: #ffb0a0;
-}
-
-.dst-element h3,
-.dst-volley h3 {
-  margin: 0 0 0.3rem;
-  font-size: var(--text-sm);
-}
-
-.dst-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0.3rem 0;
-  font-size: var(--text-xs);
-}
-
-.dst-shots {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: var(--text-xs);
-}
-
-.dst-shots li {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem 0;
-}
-
-.dst-shots li span {
-  flex: 1;
-}
-
-.dst-log {
-  max-height: 30vh;
-  font-size: var(--text-xs);
-}
-
-.dst-log p {
-  margin: 0.15rem 0;
-}
-
-.dst-log p.is-north {
-  border-left: 2px solid #4f8fe0;
-  padding-left: 0.3rem;
-}
-
-.dst-log p.is-south {
-  border-left: 2px solid #e08a3a;
-  padding-left: 0.3rem;
-}
-
 /* The skirmish panel. */
 .dst-setup .yard {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
@@ -500,19 +303,6 @@
   fill: #d8ff70;
   pointer-events: none;
 }
-.dst-orbit .dst-ships {
-  list-style: none;
-  margin: 0.25rem 0 0.5rem;
-  padding: 0;
-}
-.dst-orbit .dst-ships li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-  padding: 0.15rem 0;
-}
-
 /* Interface craft (p. 43). */
 .dst-craft-mark polygon {
   stroke: #e8e8e8;
@@ -538,16 +328,4 @@
   stroke: rgba(255, 255, 255, 0.35);
   stroke-width: 0.08;
   stroke-dasharray: 0.5 0.4;
-}
-.dst-craft .dst-ships {
-  list-style: none;
-  margin: 0.25rem 0 0.5rem;
-  padding: 0;
-}
-.dst-craft .dst-ships li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-  padding: 0.15rem 0;
 }
