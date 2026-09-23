@@ -4,8 +4,15 @@
    ruled weapon table. On screen it is drawn in the plotting table's ink; on
    paper the print tokens turn it black on white. */
 
-.ds-pool .yard-controls {
-  max-height: 74vh;
+.modal.ds-pool {
+  width: min(86rem, 100%);
+  max-height: calc(100vh - 2 * var(--gap-2));
+  padding: var(--gap-2) var(--gap-3) var(--gap-3);
+}
+
+.ds-pool .yard-controls,
+.ds-pool .yard-side {
+  max-height: calc(100vh - 9rem);
 }
 
 /* The card needs the room a fleet's SSD does not: eleven columns of ranges,
@@ -13,6 +20,187 @@
    shrinks its type before it scrolls. */
 .ds-pool .yard {
   grid-template-columns: minmax(0, 1fr) minmax(30rem, 40rem);
+}
+
+/* Nothing in the side column gives up its height: the column scrolls instead. */
+.ds-pool .yard-side > * {
+  flex-shrink: 0;
+}
+
+/* ── The header: one line, one primary colour ─────────────────────────────── */
+
+.ds-pool .yard-head {
+  flex-wrap: nowrap;
+  padding-bottom: var(--gap);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.ds-pool .yard-head h2 {
+  white-space: nowrap;
+  flex: none;
+  font-size: var(--text-xl);
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+
+.ds-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.ds-pool .yard-head .spacer {
+  flex: 1 1 0;
+}
+
+.ds-pool .yard-head button,
+.ds-pool .yard-head label {
+  white-space: nowrap;
+  flex: none;
+  font-size: var(--text-sm);
+}
+
+.ds-shelf {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-dim);
+  margin-left: var(--gap);
+}
+
+.ds-pool .yard-head .yard-legal,
+.ds-pool .yard-head .ds-illegal {
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.ds-pool .yard-head .yard-legal {
+  color: var(--screens);
+}
+
+.ds-pool .yard-head .yard-legal::before {
+  content: '✓ ';
+}
+
+.ds-pool .yard-head .ds-illegal {
+  color: var(--warn);
+}
+
+/* ── Controls: every field the same size and colour ──────────────────────── */
+
+.ds-pool input:not([type]),
+.ds-pool input[type='text'],
+.ds-pool input[type='number'],
+.ds-pool select {
+  font: inherit;
+  font-size: var(--text-sm);
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.45rem;
+  min-width: 0;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ds-pool input[type='number'] {
+  font-family: var(--font-mono);
+}
+
+.ds-pool .code-field input:not([type]) {
+  width: 100%;
+}
+
+.ds-pool .yard-controls label {
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+}
+
+.ds-pool .yard-controls label:has(> input[type='checkbox']),
+.ds-pool .yard-controls label:has(> input[type='radio']) {
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ds-pool input[type='checkbox'],
+.ds-pool input[type='radio'],
+.ds-pool input[type='range'] {
+  accent-color: var(--side-a);
+}
+
+.ds-pool .yard-section h3 {
+  font-size: var(--text-sm);
+  letter-spacing: 0.1em;
+}
+
+.ds-pool .yard-section {
+  align-items: stretch;
+}
+
+.ds-pool .yard-controls button {
+  font-size: var(--text-sm);
+}
+
+/* Rule pages trail the heading, quietly: plain words first. */
+.ds-pool .rule-ref {
+  color: var(--ink-faint);
+  font-size: 0.625rem;
+}
+
+.ds-pool .yard-section h3 .rule-ref {
+  margin-left: 0.6em;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  vertical-align: 0.1em;
+}
+
+.ds-pool p.campaign-dim {
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.ds-pool .faults li .rule-ref {
+  margin-left: 0.3em;
+}
+
+.ds-pool .faults li.is-advisory {
+  color: var(--ink-dim);
+}
+
+/* The hovered primary button stays orange (the base hover rule outranks it). */
+.ds-pool button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--thrust) 85%, #fff);
+}
+
+.ds-pool button.primary:disabled {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--ink-faint);
+}
+
+.ds-pool .cost-scroll {
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.ds-pool .mass-bar {
+  flex-shrink: 0;
 }
 
 .ds-sheet .ds-card {
@@ -29,12 +217,46 @@
   max-width: 22rem;
 }
 
+/* A gun is one row: what it is, its class and mount, barrels, what it costs in capacity. */
 .ds-weapon {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.4rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
 }
 
-.ds-weapon select {
-  max-width: 13rem;
+.ds-weapon select[aria-label='Weapon type'] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.ds-weapon > .campaign-dim {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.ds-weapon > button {
+  padding: 0.15rem 0.5rem;
+  color: var(--ink-faint);
+  background: transparent;
+}
+
+.ds-weapon > button:hover:not(:disabled) {
+  color: var(--damage);
+}
+
+.ds-pool .ds-weapon select,
+.ds-pool .ds-weapon input {
+  background: var(--panel);
+}
+
+.ds-weapon .num {
+  width: 3.2rem;
 }
 
 .ds-sheet {
@@ -216,8 +438,91 @@
   grid-template-columns: minmax(0, 1fr) minmax(26rem, 32rem);
 }
 
-.ds-range .yard-controls {
-  max-height: 74vh;
+.ds-range .ds-plan h3 {
+  color: var(--ink);
+  letter-spacing: 0.08em;
+}
+
+.ds-range .ds-plan dl {
+  font-size: var(--text-sm);
+}
+
+.ds-range .ds-plan dd {
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+
+.ds-range .ds-odds {
+  font-size: var(--text-sm);
+}
+
+.ds-range .ds-odds td.num {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.ds-range .ds-bands {
+  font-size: var(--text-xs);
+}
+
+.ds-range .ds-bands th {
+  color: var(--ink-dim);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.625rem;
+}
+
+.ds-range .ds-bands tr.is-current td {
+  background: color-mix(in srgb, var(--thrust) 12%, var(--panel-2));
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--thrust) 50%, transparent);
+}
+
+.ds-range .ds-ticks {
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.ds-range .yard-section > .panel-row:has(input[type='range']) {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  flex-wrap: nowrap;
+}
+
+.ds-range .ds-inches.code-field {
+  width: auto;
+  flex: none;
+}
+
+.ds-pool .yard-actions {
+  align-items: center;
+}
+
+.ds-pool .yard-actions button {
+  font-size: var(--text-sm);
+}
+
+.ds-pool .yard-actions .campaign-dim {
+  font-size: var(--text-xs);
+}
+
+.ds-range .yard-actions .primary {
+  min-width: 6rem;
+}
+
+.ds-range .ds-log-entry b {
+  font-size: var(--text-xs);
+}
+
+.ds-range .ds-log-entry p {
+  color: var(--ink-dim);
+}
+
+.ds-range .ds-log-entry p.ds-verdict {
+  color: var(--ink);
+  font-size: var(--text-sm);
 }
 
 .ds-seed {

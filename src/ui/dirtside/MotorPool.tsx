@@ -106,7 +106,9 @@ export function MotorPool({ onClose }: MotorPoolProps) {
       <div className="modal is-wide yard-modal ds-pool" onClick={(event) => event.stopPropagation()}>
         <div className="yard-head">
           <h2>Motor Pool</h2>
-          <span className="campaign-kicker">Dirtside II</span>
+          <span className="ds-kicker" title="Dirtside II, Chapter 3 and the Appendix">
+            Dirtside II · vehicle design
+          </span>
           <label className="ds-shelf">
             Shelf{' '}
             <select value={onShelf ? design.id : ''} onChange={(e) => pick(e.target.value)}>
@@ -134,7 +136,7 @@ export function MotorPool({ onClose }: MotorPoolProps) {
             Firing range
           </button>
           <span className="spacer" />
-          {faults.filter((f) => !f.advisory).length === 0 ? <p className="yard-legal">A legal design.</p> : null}
+          {faults.filter((f) => !f.advisory).length === 0 ? <p className="yard-legal">A legal design.</p> : <p className="ds-illegal">{faults.filter((f) => !f.advisory).length} to fix</p>}
           <button onClick={onClose}>Close</button>
         </div>
 
@@ -473,8 +475,8 @@ export function MotorPool({ onClose }: MotorPoolProps) {
             {faults.length > 0 ? (
               <ul className="faults">
                 {faults.map((fault, i) => (
-                  <li key={i} style={fault.advisory ? { color: 'var(--ink-dim)' } : undefined}>
-                    <span className="rule-ref">{fault.page}</span> {fault.detail}
+                  <li key={i} className={fault.advisory ? 'is-advisory' : undefined}>
+                    {fault.detail} <span className="rule-ref">{fault.page}</span>
                   </li>
                 ))}
               </ul>
