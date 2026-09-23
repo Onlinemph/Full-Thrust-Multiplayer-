@@ -1091,20 +1091,33 @@ function angleBetweenFacing(other: ElementState, from: ElementState): 'front' | 
 // Interface landings (p. 43)
 // ---------------------------------------------------------------------------
 
-/** Put a craft's units on the table about the point it landed at, each unit in a tight row facing the enemy. */
+/**
+ * Put a craft's units on the table beside the point it landed at, each unit
+ * in a tight row facing the enemy. [reading] The 12" of p. 43 is measured to
+ * the craft; the rows go down on its far side from the nearest enemy, so no
+ * element comes out nearer that enemy than the craft stands.
+ */
 function unloadAt(state: GameState, craftId: string, at: Point): string[] {
   const craft = (state.setup.craft ?? []).find((c) => c.id === craftId)!
   const names: string[] = []
   const { width, depth } = state.setup.table
+  const enemies = Object.values(state.elements).filter((e) => e.sideId !== craft.side && functional(e))
+  const nearest = enemies.reduce<ElementState | null>((best, e) => (!best || distance(e.position, at) < distance(best.position, at) ? e : best), null)
+  // Away from the nearest enemy, or back towards the side's own baseline with none on the table.
+  const heading = nearest && distance(nearest.position, at) > 1e-9 ? bearing(nearest.position, at) : craft.side === 'north' ? 0 : 180
+  const rad = (heading * Math.PI) / 180
+  const away = { x: Math.sin(rad), y: -Math.cos(rad) }
+  const across = { x: -away.y, y: away.x }
   craft.unitIds.forEach((unitId, u) => {
     const unit = state.units[unitId]
     if (!unit) return
     const els = elementsOf(state, unit).filter((e) => e.aboard === craftId && !e.destroyed)
-    const rowY = at.y + (u % 2 === 0 ? 1 : -1) * (1.2 + Math.floor(u / 2) * 1.4)
+    const back = 1.2 + u * 1.4
     els.forEach((el, i) => {
+      const side = (i - (els.length - 1) / 2) * 1.2
       el.aboard = null
-      el.position = { x: Math.max(0.5, Math.min(width - 0.5, at.x + (i - (els.length - 1) / 2) * 1.2)), y: Math.max(0.5, Math.min(depth - 0.5, rowY)) }
-      el.facing = el.sideId === 'north' ? 180 : 0
+      el.position = { x: Math.max(0.5, Math.min(width - 0.5, at.x + away.x * back + across.x * side)), y: Math.max(0.5, Math.min(depth - 0.5, at.y + away.y * back + across.y * side)) }
+      el.facing = nearest ? bearing(el.position, nearest.position) : el.sideId === 'north' ? 180 : 0
       el.wood = woodAt(el.position, state.setup.table.terrain)?.where ?? null
     })
     if (els.length > 0) names.push(unit.name)

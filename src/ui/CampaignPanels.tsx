@@ -351,7 +351,7 @@ function PurchaseForm({ state, viewer, colony, act }: { state: CampaignState; vi
         ) : null}
         <button
           className="primary"
-          disabled={each * (kind === 'planet-shield' || kind === 'shipyard' ? 1 : quantity) > colony.stockpileRp}
+          disabled={each * (kind === 'planet-shield' || kind === 'shipyard' ? 1 : quantity) > colony.stockpileRp || (kind === 'ground-unit' && orderRefusal(unit) !== null)}
           onClick={() => act({ kind: 'purchase', player: viewer, colony: colony.id, item, quantity: kind === 'planet-shield' || kind === 'shipyard' ? 1 : quantity })}
         >
           Buy · <span className="num">{each * (kind === 'planet-shield' || kind === 'shipyard' ? 1 : quantity)} RP</span>
@@ -481,7 +481,7 @@ function Garrison({ state, viewer, colony, own, seen, act }: { state: CampaignSt
                 </select>
               ) : null}
               {state.phase === 'production' && present(u).length < u.elements.length ? (
-                <button onClick={() => act({ kind: 'reinforce', player: viewer, unit: u.id })} title="Replacements for the lost elements; the new men may cost the unit a quality level (Stargrunt p. 60)">
+                <button disabled={replacementPrice(u) > colony.stockpileRp} onClick={() => act({ kind: 'reinforce', player: viewer, unit: u.id })} title="Replacements for the lost elements; the new men may cost the unit a quality level (Stargrunt p. 60)">
                   Reinforce · <span className="num">{replacementPrice(u)} RP</span>
                 </button>
               ) : null}

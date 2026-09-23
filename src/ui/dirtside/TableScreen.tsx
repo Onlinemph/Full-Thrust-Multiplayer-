@@ -152,6 +152,12 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
 
   const onClickTable = (point: Point) => {
     if (mode === 'land' && placing) {
+      // A placement left over from a turn that has passed places nothing.
+      if (!toAct || !human(toAct) || state.phase !== 'activation' || activation || state.craft[placing]?.status !== 'aloft') {
+        setMode('idle')
+        setPlacing(null)
+        return
+      }
       setLandings((list) => [...list.filter((l) => l.craftId !== placing), { craftId: placing, at: point }])
       const next = craftToLand(state, toAct!).find((c) => c.id !== placing && !landings.some((l) => l.craftId === c.id))
       setPlacing(next?.id ?? null)
@@ -335,9 +341,9 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
             ) : null}
             {state.phase === 'activation' && !activation && toAct && !computerToAct && !due ? (
               <>
-                {canPass(state, toAct) ? <button onClick={() => act({ kind: 'pass', side: toAct })}>Pass</button> : null}
-                <button onClick={() => act({ kind: 'done', side: toAct })}>{sideName(toAct)}: no more activations</button>
-                <button onClick={() => act({ kind: 'declare-end', side: toAct })} title="Only while holding more than half the objectives (p. 17)">
+                {canPass(state, toAct) ? <button onClick={() => { if (act({ kind: 'pass', side: toAct })) reset() }}>Pass</button> : null}
+                <button onClick={() => { if (act({ kind: 'done', side: toAct })) reset() }}>{sideName(toAct)}: no more activations</button>
+                <button onClick={() => { if (act({ kind: 'declare-end', side: toAct })) reset() }} title="Only while holding more than half the objectives (p. 17)">
                   Declare game end
                 </button>
               </>
@@ -376,7 +382,18 @@ export function TableScreen({ onMenu, onNewSkirmish, campaign }: TableScreenProp
                         </button>
                       ) : null}
                       {planned ? <button onClick={() => setLandings((list) => list.filter((l) => l.craftId !== c.id))}>×</button> : null}
-                      {canUnload ? <button onClick={() => act({ kind: 'unload', side: c.side, craftId: c.id })}>Unload</button> : null}
+                      {placing === c.id ? (
+                        <button
+                          onClick={() => {
+                            setPlacing(null)
+                            setMode('idle')
+                            setNote(null)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                      {canUnload ? <button onClick={() => { if (act({ kind: 'unload', side: c.side, craftId: c.id })) reset() }}>Unload</button> : null}
                     </li>
                   )
                 })}

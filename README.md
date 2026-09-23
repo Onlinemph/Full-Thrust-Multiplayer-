@@ -594,10 +594,22 @@ strength: no higher than the number of replacements and the new men cost it a le
 Readings for ground units. A vehicle's crew is four men, or two in a vehicle of size 2 or less (More
 Thrust counts crews man by man; this matches its Medium Battle Tank and its size-2 command vehicle).
 Units come down by Dirtside's element-side costing, not More Thrust's ship-side dropships and hangar
-bays (pp. 15–16), so no ship needs new systems to land them. A ship declared civilian in the Shipyard
-carries troops, not Marines, and fires no support. Unloaded units still have their activation to make.
-Aircraft are not yet on the Dirtside table, so the form leaves them off. Stargrunt's fatigue is not
-carried.
+bays (pp. 15–16), so no ship needs new systems to land them. A hull marked civilian (the mark that
+already gives a merchant 10.4's smaller crew) carries troops, not Marines, and fires no support; no
+roster ship carries the mark and the Shipyard can't set it yet, so the SAMC's armed liner lands Marines
+as the capital ship its data says it is. A task force lands once a turn. The 12" is measured to the
+craft, and its units come out on the craft's far side from the nearest enemy, so none stands nearer
+than the craft. Unloaded units still have their activation to make. Aircraft are not yet on the
+Dirtside table, so the form leaves them off. Stargrunt's fatigue is not carried.
+
+Ground units went through the same review: three readers (the landing rules on the table, the campaign
+side, the screens), every finding put to a skeptic. Six survived and are fixed: units unloading beside
+a craft set down at exactly 12" could come out inside the 12"; one task force could land the same
+platoon on two colonies of one system at once; a placement left open when a side passed turned the next
+click on the table into a landing; Buy and Reinforce stayed clickable when the order was invalid or
+unaffordable; and the civilian-hull reading above now says plainly that no roster ship is civilian. A
+seventh, that a dropship waiting on the ground should check the 12" again before unloading, was
+refuted: p. 43 places the craft, not the unloading.
 
 The landing was then read against the pages and the code by three reviewers, one for the fire from
 orbit, one for the campaign side and one for the screens and the computer player, every finding put to

@@ -115,6 +115,15 @@ describe('landing (p. 43)', () => {
     expect(after.elements['n3-1']!.aboard).toBe('drop')
   })
 
+  it('puts the units out on the far side of the craft, never nearer the enemy than the 12" it landed at', () => {
+    const s = battle(standard())
+    const after = play(s, { kind: 'land-craft', side: 'north', landings: [{ craftId: 'lander', at: { x: 24, y: 12 } }] })
+    for (const id of ['n2-t1', 'n2-t2', 'n2-t3']) {
+      const el = after.elements[id]!
+      for (const enemy of ['s1-t1', 's1-t2', 's1-t3']) expect(Math.hypot(el.position.x - after.elements[enemy]!.position.x, el.position.y - after.elements[enemy]!.position.y)).toBeGreaterThanOrEqual(12)
+    }
+  })
+
   it('lets a craft land nearer an enemy that cannot see the spot', () => {
     const wood: TerrainFeature = { id: 'w', terrain: 'dense-woods', shape: { kind: 'rect', x: 18, y: 17, width: 14, height: 3 } }
     const s = battle(standard({ terrain: [wood] }))

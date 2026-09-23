@@ -814,6 +814,9 @@ function capture(state: CampaignState, colony: Colony, player: PlayerId): Player
 function land(state: CampaignState, tf: TaskForce, colony: Colony, system: StarSystem): MoveOutcome {
   if (colony.defences.planetShield) return refuse(`${colony.name}'s planet shield is intact: no landing can be made (6.4)`)
   if (state.landings.some((l) => l.colonyId === colony.id && l.id.startsWith(`landing-${state.turn}-`))) return refuse(`A landing has already been made on ${colony.name} this turn`)
+  // [reading] One landing a task force a turn: its Marines and the units aboard go down on one colony, not on two at once.
+  const made = state.landings.find((l) => l.taskForceId === tf.id && l.id.startsWith(`landing-${state.turn}-`))
+  if (made) return refuse(`${tf.name} has already landed its troops this turn, on ${state.colonies.find((c) => c.id === made.colonyId)?.name ?? made.colonyId}`)
   const before = landingShips(tf.ships)
   const coming = () => state.groundUnits.filter((u) => u.owner === tf.owner && 'ship' in u.at && tf.ships.some((s) => 'ship' in u.at && s.id === u.at.ship) && u.interfaceLanding && present(u).length > 0)
   if (before.every((s) => s.teams === 0) && coming().length === 0) return refuse(`${tf.name} has no Marines to land, and no ground unit aboard that can come down from orbit (More Thrust p. 17, Dirtside p. 43)`)

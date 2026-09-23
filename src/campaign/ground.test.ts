@@ -260,6 +260,15 @@ describe('a landing (rules reading 2)', () => {
     expect(c.play(assault)).toMatch(/already been made/)
   })
 
+  it('lands a task force once a turn, not on two colonies of one system at the same time', () => {
+    const c = overEurasia(2, { defences: { pdu: 1, advancedPdu: 0, planetShield: false } })
+    const home = colonyById(c.state, 'esu-home')!
+    c.state.colonies.push({ ...structuredClone(home), id: 'esu-second', name: `${home.name} Second` })
+    c.must(assault)
+    expect(c.play({ ...assault, colony: 'esu-second' })).toMatch(/already landed its troops this turn, on /)
+    expect(c.state.landings).toHaveLength(1)
+  })
+
   it('refuses a landing through an intact planet shield, and one with no Marines aboard', () => {
     expect(overEurasia(2, { defences: { pdu: 0, advancedPdu: 0, planetShield: true } }).play(assault)).toMatch(/planet shield is intact/)
     const c = overEurasia(2)

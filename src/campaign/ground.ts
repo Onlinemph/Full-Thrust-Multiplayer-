@@ -75,7 +75,7 @@ export const LANDING_TABLE = { width: 48, depth: 36 } as const
  * this gives seventeen.
  */
 export function contingentTeams(design: ShipDesign): number {
-  // "Most Naval Starships" (p. 17): a hull declared civilian — a merchant, an assault transport — carries troops in its holds, not Marines.
+  // "Most Naval Starships" (p. 17): a hull marked civilian, the engine's merchant mark (10.4's crew factors), carries troops in its holds, not Marines. No roster ship carries it.
   if (design.mass < FRIGATE_MASS || design.weapons.length === 0 || design.group === 'civilian') return 0
   return Math.floor((design.mass * MARINE_CS_PER_MASS) / TEAM_CS)
 }
