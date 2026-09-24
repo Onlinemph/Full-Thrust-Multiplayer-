@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
 import {
+  activeShips,
   currentThrust,
   logFor,
   phaseNumber,
@@ -111,6 +112,40 @@ const PHASE_CATEGORY: Record<Phase, PhaseFamily> = {
 }
 
 /**
+ * A ship's name split for a row that truncates: the hull's trailing number
+ * ("Bystry-class Destroyer 1") is what tells two sister ships of the same
+ * class apart, and it sits right where an ellipsis cuts first. Splitting off
+ * the last space-delimited word keeps it in its own, non-shrinking span; a
+ * custom name with no trailing number (or none at all) just truncates as a
+ * single span, same as before.
+ */
+function splitShipLabel(name: string): { main: string; tail: string } {
+  const cut = name.lastIndexOf(' ')
+  if (cut < 0) return { main: name, tail: '' }
+  return { main: name.slice(0, cut), tail: name.slice(cut) }
+}
+
+/**
+ * Appends whose ship a damage-control requirement line is actually about,
+ * when that is not obvious from a console scoped to one side (playtest #7).
+ * Only touches the one message it recognises — 10.4's whole-table "repair
+ * parties are assigned" line — and leaves anything else it is ever handed
+ * alone, so a wording change upstream just stops the note from appearing
+ * rather than mislabelling something it was never about.
+ */
+function sideNoteFor(line: string, game: GameState, viewingSide: string): string {
+  if (!line.startsWith('Repair parties are assigned aboard')) return line
+  const assigned = activeShips(game).filter((ship) => ship.damageControl.length > 0)
+  const mine = assigned.filter((ship) => ship.side === viewingSide)
+  if (assigned.length === 0 || mine.length === assigned.length) return line
+  if (mine.length === 0) {
+    const other = game.sides.find((side) => side.id !== viewingSide)
+    return `${line} — ${other?.name ?? 'the other side'}, not yours`
+  }
+  return `${line} (${mine.length} of them yours)`
+}
+
+/**
  * The battle screen: a plotting surface, the selected ship's form, and the
  * controls for whatever phase the turn is in.
  *
@@ -188,8 +223,19 @@ export function App() {
   // a dozen-system hull is easiest to read. The expand button opens the same
   // sheet, same data, inside the wide modal the Ship Library already uses.
   const [expandedSsd, setExpandedSsd] = useState(false)
-  // The header's overflow for the file actions a turn rarely needs.
+  // The header's overflow for the file actions a turn rarely needs. Besides
+  // its own item clicks, it closes on Escape and (via the backdrop it renders
+  // behind itself) on any click or tap outside it, so it can never survive a
+  // screen change or be left stuck open for a keyboard/touch player.
   const [showMore, setShowMore] = useState(false)
+  useEffect(() => {
+    if (!showMore) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMore(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showMore])
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
@@ -199,6 +245,12 @@ export function App() {
      battle was last on the table; a connected remote match goes straight to
      the table, since the other console is waiting. */
   const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign' | 'dirtside'>('menu')
+  // Safety net: the More menu is only ever meaningful on the battle screen,
+  // and App() itself never unmounts across a screen change, so without this
+  // a menu left open could otherwise ride along onto a fresh battle.
+  useEffect(() => {
+    if (screen !== 'battle') setShowMore(false)
+  }, [screen])
   const [showSkirmish, setShowSkirmish] = useState(false)
   const dirtside = useDirtsideBattle()
   const [showCampaignSetup, setShowCampaignSetup] = useState(false)
@@ -307,6 +359,17 @@ export function App() {
   }
 
   const debt = phaseDebt(game)
+  // 10.4's requirement spans both sides ("repair parties are assigned aboard
+  // N ships"), but DamageControlPanel right below the strip is scoped to the
+  // side this console is viewing — so a console looking at one side could
+  // see a headline about a ship neither its own panel nor its own fleet has
+  // anything to do with, reading as though the two disagreed. Naming whose
+  // ship it actually is keeps them consistent (playtest #7); the phase's
+  // requirement count itself (what gates the button) is untouched below.
+  const displayDebt: PhaseDebt =
+    game.phase === 'damage-control' && viewingSide !== null && debt.required.length > 0
+      ? { ...debt, required: debt.required.map((line) => sideNoteFor(line, game, viewingSide)) }
+      : debt
   const phaseKey = `${game.turn}:${game.phase}`
   const endPhase = () => {
     if (debt.required.length > 0) {
@@ -654,47 +717,53 @@ export function App() {
             More ▾
           </button>
           {showMore ? (
-            <div className="app-bar-menu" onMouseLeave={() => setShowMore(false)}>
-              <button
-                onClick={() => {
-                  download(exportGame())
-                  setShowMore(false)
-                }}
-              >
-                Save file
-              </button>
-              <button
-                title="This fleet's sheets and roster, as they stand, on paper"
-                onClick={() => {
-                  printFleet()
-                  setShowMore(false)
-                }}
-              >
-                Print sheets
-              </button>
-              <label className="file-button">
-                Load file
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) return
-                    const error = loadGame(await file.text())
-                    if (error) window.alert(error)
-                    event.target.value = ''
+            <>
+              {/* A light-dismiss scrim: closes the menu on any outside
+                  click/tap (touch has no hover to leave), and dims what it
+                  covers so that content reads as occluded, not gone. */}
+              <div className="app-bar-menu-backdrop" onClick={() => setShowMore(false)} aria-hidden="true" />
+              <div className="app-bar-menu" onMouseLeave={() => setShowMore(false)}>
+                <button
+                  onClick={() => {
+                    download(exportGame())
                     setShowMore(false)
                   }}
-                />
-              </label>
-            </div>
+                >
+                  Save file
+                </button>
+                <button
+                  title="This fleet's sheets and roster, as they stand, on paper"
+                  onClick={() => {
+                    printFleet()
+                    setShowMore(false)
+                  }}
+                >
+                  Print sheets
+                </button>
+                <label className="file-button">
+                  Load file
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      const error = loadGame(await file.text())
+                      if (error) window.alert(error)
+                      event.target.value = ''
+                      setShowMore(false)
+                    }}
+                  />
+                </label>
+              </div>
+            </>
           ) : null}
         </div>
 
         <PhaseStrip
           game={game}
           turnLimit={scenario?.turnLimit ?? null}
-          debt={debt}
+          debt={displayDebt}
           armed={armedSkip === phaseKey}
           primary={primary}
           decide={decide}
@@ -943,7 +1012,7 @@ export function App() {
               end of it: what just happened is the one thing a player reads
               every phase, and it was a screen and a half down. Dragging its
               top edge resizes it; the header folds it away. */}
-          <LogDock log={log} />
+          <LogDock log={log} sides={game.sides} />
         </aside>
       </main>
 
@@ -977,20 +1046,29 @@ export function App() {
       ) : null}
       {expandedSsd && selected ? (
         <div className="modal-backdrop" onClick={() => setExpandedSsd(false)}>
-          <div className="modal is-wide" onClick={(event) => event.stopPropagation()}>
+          {/* `.ssd-expanded` (ftPlay.css): the sheet and its damage grid laid
+              out side by side on a wide screen, and Close kept out of the
+              scrolling body so it is never the thing a player has to scroll
+              past the diagram to reach (visual #7, playtest #3). `.modal`
+              (modals.css) is already a flex column with its own max-height,
+              so the scrolling lives on `.ssd-expanded-body` alone — Close
+              stays a plain, always-visible flex item after it. */}
+          <div className="modal is-wide ssd-expanded" onClick={(event) => event.stopPropagation()}>
             <h2>{selected.name}</h2>
-            <Ssd
-              design={selected.design}
-              name={selected.name}
-              pricing={setup.cpv ? 'cpv' : 'points'}
-              redacted={
-                viewingSide !== null &&
-                selected.side !== viewingSide &&
-                Boolean(setup.sensorRules)
-              }
-              damage={sheetDamageOf(selected)}
-            />
-            <button className="primary" onClick={() => setExpandedSsd(false)}>
+            <div className="ssd-expanded-body">
+              <Ssd
+                design={selected.design}
+                name={selected.name}
+                pricing={setup.cpv ? 'cpv' : 'points'}
+                redacted={
+                  viewingSide !== null &&
+                  selected.side !== viewingSide &&
+                  Boolean(setup.sensorRules)
+                }
+                damage={sheetDamageOf(selected)}
+              />
+            </div>
+            <button className="primary ssd-expanded-close" onClick={() => setExpandedSsd(false)}>
               Close sheet
             </button>
           </div>
@@ -1248,13 +1326,17 @@ function PhaseControls({
                       name runs long ("Gagarin-class Fleet Carrier"), so the
                       name truncates rather than wrapping "Hold course" onto
                       its own line — the full name is still there in the
-                      title. */}
+                      title. The trailing hull number is what tells sister
+                      ships apart, so it gets its own non-shrinking span:
+                      "Bystry-class Destr…" and "Bystry-class Destr… 2" would
+                      otherwise be the same visible text. */}
                   <span
                     className="panel-row-name"
                     style={{ color: `var(--side-${ship.side})` }}
                     title={ship.name}
                   >
-                    {ship.name}
+                    <span className="panel-row-name-main">{splitShipLabel(ship.name).main}</span>
+                    <span className="panel-row-name-tail">{splitShipLabel(ship.name).tail}</span>
                   </span>
                   <span style={{ color: 'var(--ink-faint)' }}>no orders</span>
                   <button
@@ -1652,7 +1734,7 @@ function moveEveryone(): void {
  * they came from. The keyboard help lives in the header, because both are
  * things a player wants a glance at and neither deserves a panel of its own.
  */
-function LogDock({ log }: { log: GameState['log'] }) {
+function LogDock({ log, sides }: { log: GameState['log']; sides: GameState['sides'] }) {
   const [open, setOpen] = useState(true)
   const [keys, setKeys] = useState(false)
   const freshSeqs = useFreshEntries(log)
@@ -1689,18 +1771,41 @@ function LogDock({ log }: { log: GameState['log'] }) {
           {log
             .slice()
             .reverse()
-            .map((entry) => (
-              <div
-                key={entry.seq}
-                className={`log-entry is-${entry.kind}${freshSeqs.has(entry.seq) ? ' is-new' : ''}`}
-                style={entry.side ? { borderLeftColor: `var(--side-${entry.side})` } : undefined}
-              >
-                {entry.text}
-                {entry.dice?.length ? (
-                  <span className="log-dice"> [{entry.dice.join(' ')}]</span>
-                ) : null}
-              </div>
-            ))}
+            .map((entry) => {
+              // Colour and glyph are assigned by *kind* (fire, damage, …),
+              // which two fleets sharing a roster ("Frigate 1" on both
+              // sides) leaves unable to say whose ship is whose — a 2px
+              // border alone reads as the same warm hue as the fire-orange
+              // text sitting right next to it. The side's own name, as a
+              // small tag, and its colour carried through to the glyph
+              // (`--log-side`, read by `.log-entry::before` in panels.css)
+              // are what a hot-seat or spectating player actually needs.
+              const side = entry.side ? sides.find((s) => s.id === entry.side) : undefined
+              return (
+                <div
+                  key={entry.seq}
+                  className={`log-entry is-${entry.kind}${freshSeqs.has(entry.seq) ? ' is-new' : ''}`}
+                  style={
+                    entry.side
+                      ? ({
+                          borderLeftColor: `var(--side-${entry.side})`,
+                          '--log-side': `var(--side-${entry.side})`,
+                        } as CSSProperties)
+                      : undefined
+                  }
+                >
+                  {side ? (
+                    <span className="log-side" style={{ color: `var(--side-${entry.side})` }} title={side.name}>
+                      {side.name}
+                    </span>
+                  ) : null}
+                  {entry.text}
+                  {entry.dice?.length ? (
+                    <span className="log-dice"> [{entry.dice.join(' ')}]</span>
+                  ) : null}
+                </div>
+              )
+            })}
         </div>
       ) : null}
     </div>

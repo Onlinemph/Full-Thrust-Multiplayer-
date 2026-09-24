@@ -81,7 +81,7 @@ import {
   type SquadronViolation,
   type TableEdge,
 } from './movement'
-import { applyDamage, createTargetState, type DamageableTarget } from './combat'
+import { applyDamage, createTargetState, type DamageableTarget, type DamageApplication } from './combat'
 import {
   attenuatedScreens,
   cloudSpeedDamage,
@@ -4348,25 +4348,26 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
       flight.attackedThisTurn = true
       flight.targetId = target.id
       if (run.fired) {
-        pushLog(state, {
-          kind: 'fire',
-          side: flight.side,
-          shipId: target.id,
-          dice: run.dice,
-          text: `${flight.label} strafes ${target.name} while its Ace lines up: ${run.detail}`,
-        })
-        applyFighterDamage(state, target, {
+        const struck = applyFighterDamage(target, {
           normalDamage: run.normalDamage,
           penetratingDamage: run.penetratingDamage,
           mode: run.mode,
           dice: run.dice,
           detail: run.detail,
         })
+        pushLog(state, {
+          kind: struck.hullDamage > 0 ? 'damage' : 'fire',
+          side: flight.side,
+          shipId: target.id,
+          dice: run.dice,
+          text: `${flight.label} strafes ${target.name} while its Ace lines up: ${run.detail}`,
+        })
       }
+      let needleStruck: DamageApplication | null = null
       if (needle.damage > 0) {
         // 5.13: a needle beam is "not affected by screens", so its point goes
         // straight in.
-        applyFighterDamage(state, target, {
+        needleStruck = applyFighterDamage(target, {
           normalDamage: 0,
           penetratingDamage: needle.damage,
           mode: 'P',
@@ -4379,7 +4380,7 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
         target.unrepairable.add(action.systemId)
       }
       pushLog(state, {
-        kind: needle.systemDestroyed ? 'damage' : 'fire',
+        kind: needle.systemDestroyed || (needleStruck?.hullDamage ?? 0) > 0 ? 'damage' : 'fire',
         side: flight.side,
         shipId: target.id,
         dice: [needle.roll],
@@ -4387,6 +4388,7 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
           ? `${flight.label}'s Ace puts a needle shot through ${target.name}'s ${action.systemId} — beyond repair (8.18, 5.13)`
           : `${flight.label}'s Ace takes his needle shot at ${target.name} and scores ${needle.damage}`,
       })
+      logIfDestroyed(state, target)
       return OK
     }
 
@@ -4458,20 +4460,21 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
         })
         return OK
       }
-      pushLog(state, {
-        kind: 'fire',
-        side: flight.side,
-        shipId: target.id,
-        dice: result.run.dice,
-        text: `${flight.label} presses home on ${target.name}: ${result.run.detail}`,
-      })
-      applyFighterDamage(state, target, {
+      const pressStruck = applyFighterDamage(target, {
         normalDamage: result.run.normalDamage,
         penetratingDamage: result.run.penetratingDamage,
         mode: result.run.mode,
         dice: result.run.dice,
         detail: result.run.detail,
       })
+      pushLog(state, {
+        kind: pressStruck.hullDamage > 0 ? 'damage' : 'fire',
+        side: flight.side,
+        shipId: target.id,
+        dice: result.run.dice,
+        text: `${flight.label} presses home on ${target.name}: ${result.run.detail}`,
+      })
+      logIfDestroyed(state, target)
       return OK
     }
 
@@ -4778,8 +4781,15 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
 
       writeFlight(flight, result.group)
       flight.targetId = target.id
+      const payloadStruck = applyFighterDamage(target, {
+        normalDamage: result.damage,
+        penetratingDamage: 0,
+        mode: result.mode,
+        dice: result.rolls,
+        detail: `${result.hits} hit`,
+      })
       pushLog(state, {
-        kind: 'fire',
+        kind: payloadStruck.hullDamage > 0 ? 'damage' : 'fire',
         side: flight.side,
         shipId: target.id,
         dice: result.rolls,
@@ -4787,13 +4797,7 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
           `${flight.label} looses its ${payload === 'mkp' ? 'MKPs' : 'Pulse Torpedoes'} at ` +
           `${target.name}: ${result.hits} hit for ${result.damage}`,
       })
-      applyFighterDamage(state, target, {
-        normalDamage: result.damage,
-        penetratingDamage: 0,
-        mode: result.mode,
-        dice: result.rolls,
-        detail: `${result.hits} hit`,
-      })
+      logIfDestroyed(state, target)
       return OK
     }
 
@@ -4994,20 +4998,21 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
 
       writeFlight(flight, result.group)
       flight.targetId = target.id
-      pushLog(state, {
-        kind: 'fire',
-        side: flight.side,
-        shipId: target.id,
-        text: `${flight.label} strafes ${target.name}: ${result.detail}`,
-        dice: result.dice,
-      })
-      applyFighterDamage(state, target, {
+      const struck = applyFighterDamage(target, {
         normalDamage: result.normalDamage,
         penetratingDamage: result.penetratingDamage,
         mode: result.mode,
         dice: result.dice,
         detail: result.detail,
       })
+      pushLog(state, {
+        kind: struck.hullDamage > 0 ? 'damage' : 'fire',
+        side: flight.side,
+        shipId: target.id,
+        text: `${flight.label} strafes ${target.name}: ${result.detail}`,
+        dice: result.dice,
+      })
+      logIfDestroyed(state, target)
       return OK
     }
 
@@ -6453,20 +6458,10 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
 
       writeSquadron(squadron, result.squadron)
       squadron.targetId = target.id
-      pushLog(state, {
-        kind: 'fire',
-        side: squadron.side,
-        shipId: target.id,
-        text:
-          `${squadron.label} attacks ${target.name}: ` +
-          `${result.normalDamage} damage, ${result.penetratingDamage} penetrating`,
-        dice: result.dice,
-      })
       // Unlike a fighter, a gunboat's guns are ship guns (9.1), so the
       // optional rear-arc rule of 4.10 applies to them as it does to a
       // cruiser's — 8.9's "no advantage" is written about fighters only.
-      applyFighterDamage(
-        state,
+      const gunboatStruck = applyFighterDamage(
         target,
         {
           normalDamage: result.normalDamage,
@@ -6484,6 +6479,16 @@ function dispatch(state: GameState, action: GameAction): ActionOutcome {
           ),
         },
       )
+      pushLog(state, {
+        kind: gunboatStruck.hullDamage > 0 ? 'damage' : 'fire',
+        side: squadron.side,
+        shipId: target.id,
+        text:
+          `${squadron.label} attacks ${target.name}: ` +
+          `${result.normalDamage} damage, ${result.penetratingDamage} penetrating`,
+        dice: result.dice,
+      })
+      logIfDestroyed(state, target)
       return OK
     }
 
@@ -9493,12 +9498,20 @@ function carrierUnderThrust(carrier: ShipState): boolean {
  * assumed that they must avoid being melted by the drive", so the optional rule
  * of 4.10 does not apply however the game is configured.
  */
+/**
+ * Applies fighter/gunboat damage and hands back what actually landed, so the
+ * call site can colour its own log line `damage` (red) rather than `fire`
+ * (orange) whenever real hull damage went through — the same "red only once
+ * it draws blood" convention the ship-vs-ship fire case follows (`kind:
+ * applied.hullDamage > 0 ? 'damage' : 'fire'`). The "is destroyed" line is
+ * the call site's job too, pushed after its own descriptive line, so the log
+ * still reads in the order things happened: the strike, then the kill.
+ */
 function applyFighterDamage(
-  state: GameState,
   target: ShipState,
   result: WeaponResult,
   opts: { rearArcRule?: boolean; rearArc?: boolean } = {},
-): void {
+): DamageApplication {
   const applied = applyDamage(targetStateOf(target), result, {
     rearArcRule: opts.rearArcRule ?? false,
     rearArc: opts.rearArc ?? false,
@@ -9506,6 +9519,12 @@ function applyFighterDamage(
   })
   writeBackDamage(target, applied.target)
   markHullBoxes(target, applied.hullDamage)
+  return applied
+}
+
+/** Pushed after a strike's own descriptive log line, matching the
+ * ship-vs-ship convention of "the line, then the kill" (see above). */
+function logIfDestroyed(state: GameState, target: ShipState): void {
   if (target.destroyed) {
     pushLog(state, { kind: 'destroyed', shipId: target.id, text: `${target.name} is destroyed` })
   }

@@ -57,9 +57,24 @@
 .panel-row-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  white-space: nowrap;
+}
+
+/* The truncating part (a design's class name), and the trailing identifier
+   that disambiguates sister ships ("Bystry-class Destroyer 1" vs "… 2"):
+   split into two spans so the ellipsis only ever eats into the first one,
+   never the number a player actually needs to tell two hulls of the same
+   class apart. */
+.panel-row-name-main {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.panel-row-name-tail {
+  flex: none;
+  white-space: pre;
 }
 
 /* ── The SSD ──────────────────────────────────────────────────────────────── */
@@ -584,7 +599,9 @@
 
 .log-entry {
   padding: 0.15rem 0.3rem;
-  border-left: 2px solid transparent;
+  /* Wide enough to read as a side cue on its own (playtest #2), not just a
+     hairline sliver next to text already tinted by kind. */
+  border-left: 4px solid transparent;
   color: var(--ink-dim);
 }
 
@@ -638,13 +655,39 @@
 
 /* A small glyph ahead of the text says what kind of line it is before the
    words do; set in the body face, not the mono one `.log` uses, since the
-   mono face's symbol coverage is thin. */
+   mono face's symbol coverage is thin. Tinted by side when the entry carries
+   one (`--log-side`, set inline from `entry.side`) rather than always the
+   kind's own colour — a second, independent side cue alongside the border
+   and the name tag, for the two-fleets-one-roster case (playtest #2). */
 .log-entry::before {
   display: inline-block;
   width: 1em;
   margin-right: 0.3em;
   font-family: var(--font-body);
   text-align: center;
+  color: var(--log-side, currentColor);
+}
+
+/* The acting side's own name, ahead of the line, whenever both fleets can
+   otherwise read the same ("Frigate 1" on both sides): the 4px border is a
+   side cue for a glance, this is the one for actually reading who did what. */
+.log-side {
+  display: inline-block;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.92em;
+}
+
+.log-side::after {
+  content: '\00A0\00B7\00A0';
+  color: var(--ink-faint);
+  font-weight: 400;
 }
 .log-entry.is-initiative::before {
   content: '★';
@@ -863,6 +906,44 @@ dl.keys > div {
    actual range keeps that colour here too. */
 .range-bar-marker {
   fill: var(--side-a);
+}
+
+/* The weapons that don't bear on a target, folded behind one summary line
+   instead of a full row of dimmed chips each doubled by its own range bar —
+   the one chip a player can actually use should not have to compete with
+   five near-identical grey ones for attention (playtest #5). */
+.weapon-fold {
+  margin-top: 0.2rem;
+}
+
+.weapon-fold summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  list-style: none;
+}
+
+.weapon-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.weapon-fold summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  margin-right: 0.2em;
+}
+
+.weapon-fold[open] summary::before {
+  content: '▾';
+}
+
+.weapon-fold-why {
+  color: var(--ink-faint);
+}
+
+.weapon-fold .ssd-systems {
+  margin-top: 0.2rem;
 }
 
 /* ── Flight operations ────────────────────────────────────────────────────── */
