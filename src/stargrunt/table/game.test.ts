@@ -251,6 +251,18 @@ describe('the turn (p. 15)', () => {
     expect(unactivatedUnits(state, 'north').length).toBe(2)
   })
 
+  it('done lasts only the turn: the next turn the side activates again', () => {
+    let state = battle(twoEach(), 'north')
+    state = play(state, { kind: 'done', side: 'north' }, { kind: 'activate', side: 'south', unitId: 's1' }, { kind: 'end-activation', side: 'south' }, { kind: 'activate', side: 'south', unitId: 's2' }, { kind: 'end-activation', side: 'south' })
+    expect(state.turn).toBe(2)
+    expect(state.sides.north.done).toBe(false)
+    state = must(applyAction(state, { kind: 'choose-first', side: state.chooser!, first: 'south' }))
+    state = play(state, { kind: 'activate', side: 'south', unitId: 's1' }, { kind: 'end-activation', side: 'south' })
+    expect(state.toAct).toBe('north')
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect(state.activation?.unitId).toBe('n1')
+  })
+
   it('the turn end phase clears activation markers and per-turn weapon/transfer tallies', () => {
     let state = battle(twoEach(), 'north')
     state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))

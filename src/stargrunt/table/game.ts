@@ -447,6 +447,9 @@ function startTurn(state: GameState): void {
   state.phase = 'turn-start'
   state.activation = null
   state.owed = 0
+  // `done` means no more activations this turn (p. 15), so it lapses with the turn
+  state.sides.north.done = false
+  state.sides.south.done = false
   for (const unit of Object.values(state.units)) {
     unit.activated = false
     unit.firedThisTurn = []
