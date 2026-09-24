@@ -195,6 +195,26 @@ Rules whose source is silent are marked `[reading]` in the spec docs with the re
 why — what life-support failure costs a ship, for instance, or which way round Flawed Design's
 −1 DRM runs. A `[reading]` is a decision, not a guess, and each one names the alternative.
 
+## The look of the battle
+
+Ships are drawn two ways, joined by zoom. At the zoom a battle opens at, each counter is luminous line
+art in its side's colour: the outline its own sheet gives it, frame ribs where its batteries sit, turret
+rings, a bridge block and engine bells with a glow, and a minimum on-screen size so a frigate still reads
+as a ship. Zoomed in, it cross-fades into a painted model: a gunmetal hull shaded from the bow, the side's
+colour as rim and markings, turrets with barrels at the battery positions, a bridge tower and nacelles.
+Both show damage as scorch in red, destroyed ships as drifting wreckage, screens as a halo and the
+selected ship with a ring in its own colour; custom counter art from the Shipyard still wins. Names are
+chips drawn above the fire rose and nudged apart where ships crowd, the map has zoom buttons and a
+range ruler, and tracks end in arrowheads.
+
+Around the map, the header keeps the everyday buttons and folds the file actions under More; a phase strip
+shows where the turn stands, what the phase needs and the one orange button that ends it, with
+requirements in orange rather than damage red. Order rows fit on one line, the fire panel lists the
+weapons that bear first, the log marks each line with the acting fleet's initials and colour, and the
+sheet can open large. The main menu is grouped, New battle keeps its rules text behind "why?", and the
+fleet picker, library and lobby show each ship's counter. Section 1 of `tokens.css` is unchanged: sides
+stay cyan, amber and violet, orange is thrust and the next thing to press, red is damage.
+
 ## Playing against the computer
 
 Hand either fleet to the computer in **New battle**. It writes its orders in
