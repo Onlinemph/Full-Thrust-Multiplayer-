@@ -209,15 +209,28 @@
   stroke: var(--dst-label-halo);
   stroke-width: 0.06;
 }
-.sg-assault-line {
-  stroke: var(--damage);
-  stroke-width: 0.04;
-  stroke-dasharray: 0.05 0.05;
+/* K1: each charging figure's default contact path, coloured by how much of a combat-move roll it needs
+   to reach base contact — path colouring stands in for a reach ring here (both read the same plan). */
+.sg-assault-path line {
+  stroke-width: 0.045;
 }
-.sg-assault-target {
-  fill: none;
-  stroke: var(--damage);
-  stroke-width: 0.05;
+.sg-assault-path circle {
+  stroke-width: 0.03;
+  fill: var(--dst-surround);
+}
+.sg-assault-path.is-reach1 line,
+.sg-assault-path.is-reach1 circle {
+  stroke: var(--screens);
+}
+.sg-assault-path.is-reach2 line,
+.sg-assault-path.is-reach2 circle {
+  stroke: var(--warn);
+  stroke-dasharray: 0.07 0.05;
+}
+.sg-assault-path.is-far line,
+.sg-assault-path.is-far circle {
+  stroke: var(--ink-faint);
+  stroke-dasharray: 0.03 0.06;
 }
 
 /* ---- Fire preview --------------------------------------------------------- */

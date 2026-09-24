@@ -13,16 +13,20 @@ import {
   fit,
   liveUnits,
   objectiveValues,
+  planAssault,
   planFire,
   threatNow,
   unactivatedUnits,
   type AllowedActionKind,
+  type AssaultPlan,
 } from '../../stargrunt/table/game'
 import { combatMoveDie } from '../../stargrunt/table/movement'
 import { smallArmProfile, supportWeaponProfile } from '../../stargrunt/data/weapons'
 import type { Action, Confidence, FigureState, FireWith, GameState, Quality, Refusal, SideId, UnitState } from '../../stargrunt/types'
 import { QUALITY_DIE } from '../../stargrunt/types'
 import { HowToPlay } from './play/HowToPlay'
+import { groupLog as sgGroupLog, maskObjectiveIds, objectiveLabels, QUIET as SG_LOG_QUIET } from './play/journal'
+import { adviceFor as sgAdviceFor } from './play/words'
 import { LogDock } from '../dirtside/play/LogDock'
 import { RefusalToast } from '../dirtside/play/RefusalToast'
 import { StatusStrip, type StripAction, type StripModel } from '../dirtside/play/StatusStrip'
@@ -99,6 +103,10 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
   const [moveMode, setMoveMode] = useState<'normal' | 'combat' | 'travel' | null>(null)
   const [fireWith, setFireWith] = useState<FireWith | null>(null)
   const [joinSupport, setJoinSupport] = useState<string[]>([])
+  // K1: the charge flow's own two steps — pick the target (null until clicked), then review planAssault's
+  // default paths/odds/threat and the ifShort choice before committing.
+  const [assaultTargetUnitId, setAssaultTargetUnitId] = useState<string | null>(null)
+  const [assaultIfShort, setAssaultIfShort] = useState<'stay' | 'withdraw'>('stay')
   const [refusal, setRefusal] = useState<Shown | null>(null)
   const [guide, setGuide] = useState(false)
   const [resultHidden, setResultHidden] = useState(false)
@@ -131,6 +139,7 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
   const humans = SIDES.filter(human)
   const sideName = (s: SideId) => state.sides[s].name
   const codes = useMemo(() => unitCodes(state), [state.setup, state.units]) // eslint-disable-line react-hooks/exhaustive-deps
+  const objLabels = useMemo(() => objectiveLabels(state), [state.setup.table.objectives])
   const activation = state.activation
   const activeUnit = activation ? (state.units[activation.unitId] ?? null) : null
   const toAct = state.toAct
@@ -153,7 +162,7 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
     const live = currentStargruntBattle()
     const act = live?.activation
     if (live && act && !seats.includes(act.sideId)) setSelectedUnitId(act.unitId)
-    else if (live?.phase !== 'deployment') setSelectedUnitId((id) => (id && live && live.units[id]?.sideId === live.toAct && !live.activation ? id : id))
+    else if (live?.phase !== 'deployment') setSelectedUnitId((id) => (id && live && live.units[id]?.sideId === live.toAct && !live.activation ? id : null))
   }, [activeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!state.result) setResultHidden(false)
@@ -169,6 +178,8 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
     setMoveMode(null)
     setFireWith(null)
     setJoinSupport([])
+    setAssaultTargetUnitId(null)
+    setAssaultIfShort('stay')
   }
 
   // ---- Deployment.
@@ -210,16 +221,20 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
     if (!activeUnit || !fireWith) return
     if (act({ kind: 'fire', side: activeUnit.sideId, targetUnitId, with: fireWith })) resetMode()
   }
-  const attemptAssault = (targetUnitId: string) => {
-    if (!activeUnit) return
-    const target = state.units[targetUnitId]
-    if (!target) return
-    const targetAt = unitCentre(figuresOf(state, target).map((f) => f.position))
-    const moves = figuresOf(state, activeUnit)
-      .filter(fit)
-      .map((f) => ({ figureId: f.id, path: [{ ...targetAt }] }))
-    if (moves.length === 0) return
-    if (act({ kind: 'close-assault', side: activeUnit.sideId, targetUnitId, moves })) resetMode()
+
+  // K1: the charge flow's planning step — `planAssault`'s default contact paths for the picked target,
+  // its odds, its chance of contact by each roll and the defender's stand-test threat (p. 41), read
+  // fresh off the target whenever the pick or the table state changes. A refusal (not an enemy, nobody
+  // to fight, beyond two combat moves' reach…) greys the Charge button below with its own reason.
+  const assaultPlan: AssaultPlan | Refusal | null = useMemo(() => {
+    if (mode !== 'assault' || !activeUnit || !assaultTargetUnitId) return null
+    return planAssault(state, activeUnit.id, assaultTargetUnitId)
+  }, [mode, activeUnit, assaultTargetUnitId, state])
+  const assaultPreview = assaultPlan && !('ok' in assaultPlan) ? { moves: assaultPlan.moves, costs: assaultPlan.costs, maxOneRoll: assaultPlan.maxOneRoll } : null
+
+  const commitAssault = () => {
+    if (!activeUnit || !assaultTargetUnitId || !assaultPlan || 'ok' in assaultPlan) return
+    if (act({ kind: 'close-assault', side: activeUnit.sideId, targetUnitId: assaultTargetUnitId, moves: assaultPlan.moves, ifShort: assaultIfShort })) resetMode()
   }
   const attemptTransfer = (receiverUnitId: string) => {
     if (!activeUnit) return
@@ -237,7 +252,11 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
       if (unit.sideId !== activeUnit.sideId) return attemptFire(id)
     }
     if (mode === 'assault' && activeUnit) {
-      if (unit.sideId !== activeUnit.sideId) return attemptAssault(id)
+      if (unit.sideId !== activeUnit.sideId) {
+        setAssaultTargetUnitId(id)
+        setRefusal(null)
+        return
+      }
     }
     if (mode === 'transfer' && activeUnit) {
       if (unit.sideId === activeUnit.sideId && unit.id !== activeUnit.id) return attemptTransfer(id)
@@ -337,7 +356,8 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
       let hint = `${activeUnit.name} has ${left} action${left === 1 ? '' : 's'} left. ${threatNow(state, activeUnit.id)}`
       if (mode === 'move' && moveMode) hint = `Click the table for ${activeUnit.name}'s new position (${moveMode} move). Esc cancels.`
       else if (mode === 'fire' && fireWith) hint = `Click a lit enemy squad to fire on it. Esc cancels.`
-      else if (mode === 'assault') hint = `Click an enemy squad to charge it. Esc cancels.`
+      else if (mode === 'assault' && !assaultTargetUnitId) hint = `Click an enemy squad to charge it. Esc cancels.`
+      else if (mode === 'assault' && assaultTargetUnitId) hint = `Review the charge below, then Charge or pick another target. Esc cancels.`
       else if (mode === 'transfer') hint = `Click one of ${activeUnit.name}'s subordinates to hand it this activation.`
       else if (mode === 'rally') hint = `Click one of ${activeUnit.name}'s subordinates to rally it.`
       if (takeBack) secondary.push(takeBack)
@@ -455,11 +475,11 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
               toAct={toAct}
               hoverUnitId={selectedUnitId}
               moveGhost={moveGhost}
-              assaultTargetUnitId={null}
+              assaultPreview={assaultPreview}
               targeting={targeting}
               cursor={mapCursor}
             />
-            {refusal ? <RefusalToast reason={refusal.reason} page={refusal.page} at={null} pane={pane} onClose={() => setRefusal(null)} /> : null}
+            {refusal ? <RefusalToast reason={refusal.reason} page={refusal.page} at={null} pane={pane} onClose={() => setRefusal(null)} adviceFor={sgAdviceFor} /> : null}
             {resultOpen ? (
               <div className="modal-backdrop" onClick={() => setResultHidden(true)}>
                 <div className="modal sg-result" onClick={(e) => e.stopPropagation()}>
@@ -497,6 +517,15 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
                 transferTargets={transferTargets}
                 rallyTargets={rallyTargets}
                 codes={codes}
+                assaultTargetUnitId={assaultTargetUnitId}
+                assaultPlan={assaultPlan}
+                assaultIfShort={assaultIfShort}
+                onSetAssaultIfShort={setAssaultIfShort}
+                onConfirmAssault={commitAssault}
+                onPickAnotherAssaultTarget={() => {
+                  setAssaultTargetUnitId(null)
+                  setRefusal(null)
+                }}
                 onStartMove={(m) => {
                   setMode('move')
                   setMoveMode(m)
@@ -513,6 +542,7 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
                 onStartAssault={() => {
                   setMode('assault')
                   setFireWith(null)
+                  setAssaultTargetUnitId(null)
                 }}
                 onStartTransfer={() => setMode('transfer')}
                 onStartRally={() => setMode('rally')}
@@ -554,7 +584,7 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
               />
             ))}
           </div>
-          <LogDock log={state.log} northName={sideName('north')} southName={sideName('south')} />
+          <LogDock log={state.log} northName={sideName('north')} southName={sideName('south')} groupLog={sgGroupLog} quiet={SG_LOG_QUIET} transform={(text) => maskObjectiveIds(text, objLabels)} />
         </aside>
         {guide ? <HowToPlay onClose={() => setGuide(false)} /> : null}
       </main>
@@ -591,6 +621,13 @@ interface ActiveSquadPanelProps {
   transferTargets: UnitState[]
   rallyTargets: UnitState[]
   codes: Record<string, string>
+  /** K1: the charge flow's own state — see `Table`'s `assaultTargetUnitId`/`assaultPlan`. */
+  assaultTargetUnitId: string | null
+  assaultPlan: AssaultPlan | Refusal | null
+  assaultIfShort: 'stay' | 'withdraw'
+  onSetAssaultIfShort: (v: 'stay' | 'withdraw') => void
+  onConfirmAssault: () => void
+  onPickAnotherAssaultTarget: () => void
   onStartMove: (mode: 'normal' | 'combat' | 'travel') => void
   onArmSmallArms: () => void
   onArmSupport: (figureId: string) => void
@@ -603,10 +640,47 @@ interface ActiveSquadPanelProps {
 }
 
 function ActiveSquadPanel(p: ActiveSquadPanelProps) {
-  const { state, unit, code, allowed, left, mode, moveMode, fireWith, joinSupport, setJoinSupport, transferTargets, rallyTargets, codes, onStartMove, onArmSmallArms, onArmSupport, onStartAssault, onStartTransfer, onStartRally, onCancel, onSimple, onEnd } = p
+  const {
+    state,
+    unit,
+    code,
+    allowed,
+    left,
+    mode,
+    moveMode,
+    fireWith,
+    joinSupport,
+    setJoinSupport,
+    transferTargets,
+    rallyTargets,
+    codes,
+    assaultTargetUnitId,
+    assaultPlan,
+    assaultIfShort,
+    onSetAssaultIfShort,
+    onConfirmAssault,
+    onPickAnotherAssaultTarget,
+    onStartMove,
+    onArmSmallArms,
+    onArmSupport,
+    onStartAssault,
+    onStartTransfer,
+    onStartRally,
+    onCancel,
+    onSimple,
+    onEnd,
+  } = p
   const figures = figuresOf(state, unit)
   const supportCandidates = figures.filter((f) => fit(f) && f.supportWeapon && !unit.firedThisTurn.includes(f.id))
   const canSmallArms = allowed?.fire.ok && !unit.firedThisTurn.includes('small-arms') && figures.some(fit)
+  // K2: the figure list starts folded to a one-line count — a full squad's rows are the single biggest
+  // item in this panel, and the actions and the primary End button below need the room far more often
+  // than the roster of names does.
+  const [figuresOpen, setFiguresOpen] = useState(false)
+  const fitCount = figures.filter(fit).length
+  const woundedCount = figures.filter((f) => f.status === 'wounded').length
+  const deadCount = figures.filter((f) => f.status === 'dead').length
+  const showActions = mode === 'idle' || mode === 'move' || mode === 'fire' || mode === 'assault' || mode === 'transfer' || mode === 'rally'
   return (
     <div className={`panel dst-active sg-active is-${unit.sideId}`}>
       <div className="dst-active-head">
@@ -620,97 +694,195 @@ function ActiveSquadPanel(p: ActiveSquadPanelProps) {
       </div>
       <p className="sg-threat">{threatNow(state, unit.id)}</p>
 
-      <ul className="sg-figures-list">
-        {figures.map((f) => (
-          <li key={f.id} className={`sg-figure-row is-${f.status}`}>
-            <span className="sg-figure-name">
-              {f.name}
-              {unit.leaderId === f.id ? ' ★' : ''}
-            </span>
-            <span className="campaign-dim">{weaponLabel(f)}</span>
-            <span className={`sg-figure-status is-${f.status}`}>{figureStatusWord(f)}</span>
-          </li>
-        ))}
-      </ul>
-
-      {mode === 'idle' || mode === 'move' || mode === 'fire' || mode === 'assault' || mode === 'transfer' || mode === 'rally' ? (
-        <div className="sg-actions">
-          <div className="sg-action-group">
-            <span className="sg-action-label">Move</span>
-            <ActionButton label="Normal" active={mode === 'move' && moveMode === 'normal'} onClick={() => onStartMove('normal')} refusal={allowed?.move} />
-            <ActionButton label="Combat" active={mode === 'move' && moveMode === 'combat'} onClick={() => onStartMove('combat')} refusal={allowed?.move} />
-            <ActionButton label="Travel" active={mode === 'move' && moveMode === 'travel'} onClick={() => onStartMove('travel')} refusal={allowed?.move} />
-            {mode === 'move' ? (
-              <button className="dst-quiet" onClick={onCancel}>
-                Cancel
-              </button>
-            ) : null}
-          </div>
-
-          <div className="sg-action-group">
-            <span className="sg-action-label">Fire</span>
-            <ActionButton label="Small arms" active={mode === 'fire' && fireWith?.kind === 'small-arms'} onClick={onArmSmallArms} refusal={canSmallArms ? { ok: true } : allowed?.fire} />
-            {supportCandidates.length > 0 ? (
-              <span className="sg-join">
-                join:
-                {supportCandidates.map((f) => (
-                  <label key={f.id}>
-                    <input type="checkbox" checked={joinSupport.includes(f.id)} onChange={(e) => setJoinSupport(e.target.checked ? [...joinSupport, f.id] : joinSupport.filter((id) => id !== f.id))} />
-                    {f.name}
-                  </label>
-                ))}
-              </span>
-            ) : null}
-            {mode === 'fire' ? (
-              <button className="dst-quiet" onClick={onCancel}>
-                Cancel
-              </button>
-            ) : null}
-          </div>
-          {supportCandidates.map((f) => (
-            <div className="sg-action-group" key={f.id}>
-              <span className="sg-action-label">Alone</span>
-              <ActionButton label={`${f.name} — ${weaponLabel(f)}`} active={mode === 'fire' && fireWith?.kind === 'support' && fireWith.figureId === f.id} onClick={() => onArmSupport(f.id)} refusal={allowed?.fire} />
-            </div>
-          ))}
-
-          <div className="sg-action-group">
-            <span className="sg-action-label">Close assault</span>
-            <ActionButton label="Charge" active={mode === 'assault'} onClick={onStartAssault} refusal={allowed?.['close-assault']} />
-            {mode === 'assault' ? (
-              <button className="dst-quiet" onClick={onCancel}>
-                Cancel
-              </button>
-            ) : null}
-          </div>
-
-          <div className="sg-action-group">
-            <span className="sg-action-label">Squad</span>
-            <ActionButton label="Reorganise" onClick={() => onSimple('reorganise')} refusal={allowed?.reorganise} />
-            <ActionButton label="Remove suppression" onClick={() => onSimple('remove-suppression')} refusal={allowed?.['remove-suppression']} />
-            <ActionButton label="Go in position" onClick={() => onSimple('go-in-position')} refusal={allowed?.['go-in-position']} />
-            <ActionButton label="Leave position" onClick={() => onSimple('leave-position')} refusal={allowed?.['leave-position']} />
-            {unit.panic ? <ActionButton label="Recover from panic" onClick={() => onSimple('recover-panic')} refusal={allowed?.['recover-panic']} /> : null}
-          </div>
-
-          {transferTargets.length > 0 ? (
-            <div className="sg-action-group">
-              <span className="sg-action-label">Command</span>
-              <ActionButton label="Transfer activation to…" active={mode === 'transfer'} onClick={onStartTransfer} refusal={allowed?.transfer} />
-              {rallyTargets.length > 0 ? <ActionButton label="Rally…" active={mode === 'rally'} onClick={onStartRally} refusal={allowed?.rally} /> : null}
-              {mode === 'transfer' || mode === 'rally' ? (
-                <span className="campaign-dim">
-                  {(mode === 'transfer' ? transferTargets : rallyTargets).map((u) => `${codes[u.id] ?? ''} ${u.name}`).join(', ')} — click one on the map or roster.
+      {/* K2: everything but the primary End button scrolls inside its own bounded area, so a busy
+          panel (a full figure list, several fire weapons, a Command section) never pushes the End
+          button — or the log docked below this whole panel — out of sight (compare Dirtside's own
+          `.dst-active`, whose single-element content never grows this tall). */}
+      <div className="sg-active-scroll">
+        <div className="sg-figures-head">
+          <button className="dst-quiet sg-figures-toggle" onClick={() => setFiguresOpen((o) => !o)} aria-expanded={figuresOpen}>
+            {figuresOpen ? 'Figures ▴' : 'Figures ▾'}
+          </button>
+          <span className="campaign-dim">
+            {fitCount} fit{woundedCount ? `, ${woundedCount} wounded` : ''}{deadCount ? `, ${deadCount} dead` : ''}
+          </span>
+        </div>
+        {figuresOpen ? (
+          <ul className="sg-figures-list">
+            {figures.map((f) => (
+              <li key={f.id} className={`sg-figure-row is-${f.status}`}>
+                <span className="sg-figure-name">
+                  {f.name}
+                  {unit.leaderId === f.id ? ' ★' : ''}
                 </span>
+                <span className="campaign-dim">{weaponLabel(f)}</span>
+                <span className={`sg-figure-status is-${f.status}`}>{figureStatusWord(f)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {showActions ? (
+          <div className="sg-actions">
+            <div className="sg-action-group">
+              <span className="sg-action-label">Move</span>
+              <ActionButton label="Normal" active={mode === 'move' && moveMode === 'normal'} onClick={() => onStartMove('normal')} refusal={allowed?.move} />
+              <ActionButton label="Combat" active={mode === 'move' && moveMode === 'combat'} onClick={() => onStartMove('combat')} refusal={allowed?.move} />
+              <ActionButton label="Travel" active={mode === 'move' && moveMode === 'travel'} onClick={() => onStartMove('travel')} refusal={allowed?.move} />
+              {mode === 'move' ? (
+                <button className="dst-quiet" onClick={onCancel}>
+                  Cancel
+                </button>
               ) : null}
             </div>
-          ) : null}
 
-          <button className="primary sg-end" onClick={onEnd}>
-            End {unit.name}'s activation
-          </button>
-        </div>
+            <div className="sg-action-group">
+              <span className="sg-action-label">Fire</span>
+              <ActionButton label="Small arms" active={mode === 'fire' && fireWith?.kind === 'small-arms'} onClick={onArmSmallArms} refusal={canSmallArms ? { ok: true } : allowed?.fire} />
+              {supportCandidates.length > 0 ? (
+                <span className="sg-join">
+                  join:
+                  {supportCandidates.map((f) => (
+                    <label key={f.id}>
+                      <input type="checkbox" checked={joinSupport.includes(f.id)} onChange={(e) => setJoinSupport(e.target.checked ? [...joinSupport, f.id] : joinSupport.filter((id) => id !== f.id))} />
+                      {f.name}
+                    </label>
+                  ))}
+                </span>
+              ) : null}
+              {mode === 'fire' ? (
+                <button className="dst-quiet" onClick={onCancel}>
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+            {supportCandidates.map((f) => (
+              <div className="sg-action-group" key={f.id}>
+                <span className="sg-action-label">Alone</span>
+                <ActionButton label={`${f.name} — ${weaponLabel(f)}`} active={mode === 'fire' && fireWith?.kind === 'support' && fireWith.figureId === f.id} onClick={() => onArmSupport(f.id)} refusal={allowed?.fire} />
+              </div>
+            ))}
+
+            <div className="sg-action-group">
+              <span className="sg-action-label">Close assault</span>
+              <ActionButton label="Charge" active={mode === 'assault'} onClick={onStartAssault} refusal={allowed?.['close-assault']} />
+              {mode === 'assault' ? (
+                <button className="dst-quiet" onClick={onCancel}>
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+            {mode === 'assault' && assaultTargetUnitId ? (
+              <AssaultPreview
+                state={state}
+                codes={codes}
+                targetId={assaultTargetUnitId}
+                plan={assaultPlan}
+                ifShort={assaultIfShort}
+                onSetIfShort={onSetAssaultIfShort}
+                onConfirm={onConfirmAssault}
+                onPickAnother={onPickAnotherAssaultTarget}
+              />
+            ) : null}
+
+            <div className="sg-action-group">
+              <span className="sg-action-label">Squad</span>
+              <ActionButton label="Reorganise" onClick={() => onSimple('reorganise')} refusal={allowed?.reorganise} />
+              <ActionButton label="Remove suppression" onClick={() => onSimple('remove-suppression')} refusal={allowed?.['remove-suppression']} />
+              <ActionButton label="Go in position" onClick={() => onSimple('go-in-position')} refusal={allowed?.['go-in-position']} />
+              <ActionButton label="Leave position" onClick={() => onSimple('leave-position')} refusal={allowed?.['leave-position']} />
+              {unit.panic ? <ActionButton label="Recover from panic" onClick={() => onSimple('recover-panic')} refusal={allowed?.['recover-panic']} /> : null}
+            </div>
+
+            {transferTargets.length > 0 ? (
+              <div className="sg-action-group">
+                <span className="sg-action-label">Command</span>
+                <ActionButton label="Transfer activation to…" active={mode === 'transfer'} onClick={onStartTransfer} refusal={allowed?.transfer} />
+                {rallyTargets.length > 0 ? <ActionButton label="Rally…" active={mode === 'rally'} onClick={onStartRally} refusal={allowed?.rally} /> : null}
+                {mode === 'transfer' || mode === 'rally' ? (
+                  <span className="campaign-dim">
+                    {(mode === 'transfer' ? transferTargets : rallyTargets).map((u) => `${codes[u.id] ?? ''} ${u.name}`).join(', ')} — click one on the map or roster.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {showActions ? (
+        <button className="primary sg-end" onClick={onEnd}>
+          End {unit.name}'s activation
+        </button>
       ) : null}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// K1: the charge under review — planAssault's odds, reach and threat, and the ifShort choice.
+// ---------------------------------------------------------------------------
+
+const pct = (x: number) => `${Math.round(x * 100)}%`
+
+function AssaultPreview({
+  state,
+  codes,
+  targetId,
+  plan,
+  ifShort,
+  onSetIfShort,
+  onConfirm,
+  onPickAnother,
+}: {
+  state: GameState
+  codes: Record<string, string>
+  targetId: string
+  plan: AssaultPlan | Refusal | null
+  ifShort: 'stay' | 'withdraw'
+  onSetIfShort: (v: 'stay' | 'withdraw') => void
+  onConfirm: () => void
+  onPickAnother: () => void
+}) {
+  const target = state.units[targetId]
+  if (!target || !plan) return null
+  const isRefusal = 'ok' in plan
+  return (
+    <div className={`sg-assault-preview${isRefusal ? ' is-refused' : ''}`}>
+      <p className="sg-assault-preview-head">
+        <b>
+          {codes[targetId] ?? ''} {target.name}
+        </b>
+      </p>
+      {isRefusal ? (
+        <p className="campaign-dim">
+          {plan.reason} <span className="sg-assault-page">{plan.page}</span>
+        </p>
+      ) : (
+        <>
+          <p className="campaign-dim">
+            Odds {plan.odds}:1 · stands the charge at +{plan.standThreat}
+          </p>
+          <p className="campaign-dim">
+            Contact: {pct(plan.pContactFirst)} on the first roll, {pct(plan.pContactSecond)} by the second
+          </p>
+          <div className="sg-assault-ifshort">
+            <span className="sg-action-label">If short</span>
+            <button type="button" className={ifShort === 'stay' ? 'is-on' : undefined} aria-pressed={ifShort === 'stay'} onClick={() => onSetIfShort('stay')} title="Stay where the second roll left them (p. 43)">
+              Stay in the open
+            </button>
+            <button type="button" className={ifShort === 'withdraw' ? 'is-on' : undefined} aria-pressed={ifShort === 'withdraw'} onClick={() => onSetIfShort('withdraw')} title="Fall back to where the charge started, as if the reaction test had failed (p. 43)">
+              Fall back
+            </button>
+          </div>
+        </>
+      )}
+      <div className="sg-assault-preview-acts">
+        <ActionButton label="Charge" onClick={onConfirm} refusal={isRefusal ? plan : { ok: true }} />
+        <button className="dst-quiet" onClick={onPickAnother}>
+          Pick another target
+        </button>
+      </div>
     </div>
   )
 }

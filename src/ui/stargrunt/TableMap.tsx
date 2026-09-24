@@ -4,15 +4,15 @@ import { figuresOf, liveUnits } from '../../stargrunt/table/game'
 import { isInIntegrity, unitCentre } from '../../stargrunt/table/cover'
 import { onTable } from '../../dirtside/table/terrain'
 import type { TerrainType } from '../../dirtside/data/mobility'
-import type { FigureState, GameState, MobilityKind, Point, SideId, UnitState } from '../../stargrunt/types'
+import type { FigureMove, FigureState, GameState, MobilityKind, Point, SideId, UnitState } from '../../stargrunt/types'
 import { Board, BoardMarks } from '../dirtside/map/board'
 import { MapDefs } from '../dirtside/map/defs'
 import { TerrainLabels, TerrainLayer, TerrainOutline } from '../dirtside/map/terrain'
 import { type Margin, useTableView } from '../dirtside/map/useTableView'
 import { DeploymentZones } from './map/board'
 import { Legend } from './map/Legend'
-import { FigureMark, IntegrityMarks, SquadPennant } from './map/figures'
-import { AssaultGhost, FireLine, MoveGhost, type TargetVerdict } from './map/overlays'
+import { FigureMark, IntegrityMarks, PENNANT_H, PENNANT_STAFF, SquadPennant } from './map/figures'
+import { AssaultPlanGhost, FireLine, MoveGhost, type TargetVerdict } from './map/overlays'
 import { unitCodes } from '../dirtside/unitCodes'
 
 export type { TargetVerdict }
@@ -38,15 +38,18 @@ export interface TableMapProps {
   onHoverUnit?: (id: string | null) => void
   /** A move being plotted for the selected (activated) squad, as one group translation. */
   moveGhost?: { mobility: MobilityKind; figureIds: string[]; mode: 'normal' | 'combat' | 'travel'; inches: number | null } | null
-  /** A close assault's combat move: the attacking figures converging on the target unit. */
-  assaultTargetUnitId?: string | null
+  /** K1: a close assault under consideration — `planAssault`'s own default contact paths, read off the target's own name/pennant so nothing here decides who they are. */
+  assaultPreview?: { moves: readonly FigureMove[]; costs: readonly number[]; maxOneRoll: number } | null
   /** Fire being considered: the firing unit and each enemy unit's verdict. */
   targeting?: { firingUnitId: string; verdicts: Record<string, TargetVerdict> } | null
   cursor?: 'default' | 'crosshair' | 'move'
   readOnly?: boolean
 }
 
-const MARGIN: Margin = { left: 1.45, right: 1.45, top: 1.5, bottom: 0.75 }
+/* K3: `top` gives a squad pennant near the table's own top edge (a north-side deployment row, say) room
+   to fly above its figures without the fit view alone clipping it; `SquadPennant`'s own `flip`/`stack`
+   (below) still carry the case a pan or zoom outgrows this margin, or two pennants land on each other. */
+const MARGIN: Margin = { left: 1.45, right: 1.45, top: 2.1, bottom: 0.75 }
 const PREVIEW_MARGIN: Margin = { left: 0.6, right: 0.6, top: 0.6, bottom: 0.6 }
 const LEGEND_KEY = 'ftpc.stargrunt.mapkey.v1'
 
@@ -83,7 +86,7 @@ function pennantAt(unit: UnitState, figures: FigureState[]): Point {
 export function TableMap(props: TableMapProps) {
   // `viewer` is accepted for symmetry with Dirtside's TableMap but unused: Stargrunt's objectives (p. 17,
   // reused) carry no hidden value, so nothing on this map depends on who is looking.
-  const { state, selectedUnitId, onSelectUnit, onClickTable, selectedFigureId, onSelectFigure, toAct, hoverUnitId, onHoverUnit, moveGhost, assaultTargetUnitId, targeting, cursor, readOnly = false } = props
+  const { state, selectedUnitId, onSelectUnit, onClickTable, selectedFigureId, onSelectFigure, toAct, hoverUnitId, onHoverUnit, moveGhost, assaultPreview, targeting, cursor, readOnly = false } = props
   const deployPhase = state.phase === 'deployment' && !!onSelectFigure
   const { width: W, depth: D } = state.setup.table
   const features = state.setup.table.terrain
@@ -244,6 +247,26 @@ export function TableMap(props: TableMapProps) {
   const onBoard = !!pointer && onTable(pointer, state.setup.table)
 
   const targetSet = useMemo(() => (targeting ? new Set(Object.keys(targeting.verdicts)) : new Set<string>()), [targeting])
+
+  /* K3: a pennant flips below its figures when the current view has no room above for it (near the
+     table's top edge, or panned/zoomed close to it), and stacks one staff-length further out from any
+     other pennant that already claims the same on-screen spot (squads left in base contact after an
+     assault, say) — both read off the anchor's own screen position, so they hold at any zoom or pan. */
+  const pennantPlacements = useMemo(() => {
+    const placements = new Map<string, { at: Point; flip: boolean; stack: number }>()
+    const bucketPx = 60
+    const buckets = new Map<string, number>()
+    for (const u of liveUnitsList) {
+      const at = pennantAt(u, figuresOf(state, u))
+      const roomAbovePx = (at.y - view.y) * pxPerInch
+      const flip = roomAbovePx < PENNANT_STAFF + PENNANT_H + 6
+      const key = `${Math.round((at.x * pxPerInch) / bucketPx)},${Math.round((at.y * pxPerInch) / bucketPx)},${flip}`
+      const stack = buckets.get(key) ?? 0
+      buckets.set(key, stack + 1)
+      placements.set(u.id, { at, flip, stack })
+    }
+    return placements
+  }, [liveUnitsList, state, view.y, pxPerInch])
   const far = pxPerInch < 12
   const lod = pxPerInch >= 30 ? ' lod-near' : far ? ' lod-far' : ''
   const style = { '--k': k } as CSSProperties
@@ -306,19 +329,21 @@ export function TableMap(props: TableMapProps) {
       </g>
       {liveUnitsList.map((u) => {
         const figs = figuresOf(state, u)
-        const at = pennantAt(u, figs)
+        const placement = pennantPlacements.get(u.id)
         const organised = isInIntegrity(figs.filter((f) => f.status !== 'dead').map((f) => f.position))
         return (
           <SquadPennant
             key={u.id}
             unit={u}
             code={codes[u.id] ?? ''}
-            at={at}
+            at={placement?.at ?? pennantAt(u, figs)}
             active={u.id === activeUnitId}
             selected={u.id === selectedUnitId}
             hovered={u.id === hoverUnit}
             organised={organised}
             k={k}
+            flip={placement?.flip}
+            stack={placement?.stack}
           />
         )
       })}
@@ -327,14 +352,7 @@ export function TableMap(props: TableMapProps) {
         const origin = unitCentre(figs.map((f) => f.position))
         return onBoard && pointer ? <MoveGhost state={state} mobility={moveGhost.mobility} from={figs.map((f) => f.position)} to={pointer} origin={origin} mode={moveGhost.mode} inches={moveGhost.inches} fits /> : null
       })() : null}
-      {assaultTargetUnitId && selectedUnitId ? (() => {
-        const target = state.units[assaultTargetUnitId]
-        if (!target) return null
-        const targetAt = unitCentre(figuresOf(state, target).map((f) => f.position))
-        const attacker = state.units[selectedUnitId]
-        if (!attacker) return null
-        return <AssaultGhost from={figuresOf(state, attacker).map((f) => f.position)} targetAt={targetAt} />
-      })() : null}
+      {assaultPreview ? <AssaultPlanGhost state={state} moves={assaultPreview.moves} costs={assaultPreview.costs} maxOneRoll={assaultPreview.maxOneRoll} /> : null}
       {targeting
         ? Object.entries(targeting.verdicts).map(([unitId, v]) => {
             const firer = state.units[targeting.firingUnitId]
