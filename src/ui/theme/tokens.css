@@ -65,6 +65,17 @@
   --counter-glow: #cfe6ff;
   --counter-shade: rgba(1, 3, 10, 0.55); /* the unlit side of a hull */
 
+  /* The painted-miniature counter's own gunmetal, once zoomed in past the
+     luminous line art (ft-design/ART-miniature.md): a shaded hull tone, not
+     a rules colour, so it sits beside the frozen set above rather than in
+     it. --gunmetal-light also lights the bow and a turret's rim; -dark also
+     strokes panel seams and a barrel; -panel is the bridge tower's own
+     shaded face. */
+  --gunmetal-light: #aab4c4;
+  --gunmetal-mid: #7a8494;
+  --gunmetal-dark: #4b5262;
+  --gunmetal-panel: #5e6779;
+
   /* A small round-robin set for grouping chrome that has no rules meaning of
      its own — the house-rules gear grid's family headers (Beams, Kinetic,
      Ordnance…), assigned by group index, not by what the family is. */

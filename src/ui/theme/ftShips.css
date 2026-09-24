@@ -1,1 +1,378 @@
 /* Full Thrust — the ship art: counters drawn as luminous line art when zoomed out and as painted models when zoomed in (Counter, CounterPreview, src/ui/plot/art/). Loads after ftMap.css. */
+
+/* Both styles are drawn together and crossfaded by JS-set opacity on their own
+   wrapping `<g>` (`.counter-art-luminous` / `.counter-art-miniature`), so this
+   file only ever needs to scope a rule to one style when the two disagree on
+   how a shared element (`.hull`, `.counter-bow`, `.counter-battery`, plot.css
+   and ftMap.css's own) should look — never on whether it renders, which is
+   settled in Counter.tsx/the two art components themselves. */
+
+/* ── Shared across styles ─────────────────────────────────────────────────── */
+
+/* New chrome a cloaked ship never shows (ft-design/ART-luminous.md,
+   "Cloaked"): visible to its own side as a bare outline, not the busy hull
+   the new styles otherwise draw. The painted style never renders any of this
+   to begin with when cloaked, so this rule only ever has luminous elements to
+   hide; kept general rather than named per element so a later addition here
+   is covered for free. */
+.counter.is-cloaked .counter-chrome {
+  display: none;
+}
+
+/* ── Luminous line art ────────────────────────────────────────────────────── */
+
+/* A crisper rim than the painted style's: the hull fill is much more
+   translucent now, and a thinner line reads as glass rather than plate. */
+.counter-art-luminous .hull {
+  stroke-width: 1.4;
+}
+
+/* The soft luminous halo around the outline — a wide, low-opacity duplicate
+   of the hull's own path, not a blur filter, so it grows proportionally with
+   the hull rather than staying a fixed screen size. */
+.counter-hull-glow {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 34;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* Frame ribs off the ship's own battery rows, and the keel between them. */
+.counter-rib {
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.counter-keel {
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* Brighter than the keel it sits on top of, and non-scaling like every other
+   hairline here (plot.css's own `.counter-spinal` is already close; this
+   just nudges it up for the busier luminous chrome around it). */
+.counter-art-luminous .counter-spinal {
+  stroke-width: 1.6;
+  opacity: 0.75;
+}
+
+.counter.is-cloaked .counter-art-luminous .counter-spinal {
+  opacity: 0.4;
+}
+
+/* A carrier's flight deck reads as a runway, not just a groove, once the
+   rungs are crisp hairlines rather than a thick scaling stroke. */
+.counter-art-luminous .counter-flightdeck {
+  stroke-width: 1.4;
+  opacity: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.counter-deck-rung {
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* A station reads as a wheel/drum: two concentric rings rather than an
+   outline with nothing inside it. */
+.counter-station-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.counter-station-ring.is-outer {
+  opacity: 0.28;
+}
+
+.counter-station-ring.is-inner {
+  opacity: 0.2;
+}
+
+/* The centreline command block: a bridge every hull gets, carrier and
+   station included at their own size and place — pure decoration, no rule
+   reads it, so it borrows the hull's own bright ink rather than the side
+   colour. */
+.counter-bridge {
+  fill: var(--on-bright);
+  fill-opacity: 0.2;
+  stroke: currentColor;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* A nacelle-ring motif in place of the old plain filled dot: a barbette
+   rather than a smudge, at the same engine-pod positions and count. */
+.counter-engine-ring {
+  fill: var(--void);
+  stroke: currentColor;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.counter-engine-core {
+  fill: var(--on-bright);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Bumped from the shared plot.css default: the hull fill is now much more
+   translucent and needs the bow to still read as the brightest point. */
+.counter-art-luminous .counter-bow {
+  opacity: 0.72;
+}
+
+/* A cloaked ship's bow: an outline only, not the filled chevron plot.css's
+   own `.is-cloaked .counter-bow` draws — genuinely just direction, no hull. */
+.counter-bow-cloak {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* A turret barbette: a ring around the bright stud `.counter-gun` already
+   draws, rather than the stud on its own. */
+.counter-art-luminous .counter-turret-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* The soft duplicate under a battery bar, the bar's own glow. */
+.counter-battery-glow {
+  stroke: currentColor;
+  stroke-linecap: round;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+/* A scratch on the glass, not a blotch: two crossed lines rather than the
+   painted style's scorch circle. */
+.counter-scar line {
+  stroke: var(--damage);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.counter-wreck-crack {
+  stroke: var(--damage);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* A little more hollowed-out than the shared plot.css default, since the
+   luminous hull was never very opaque to begin with. */
+.counter-art-luminous .hull.is-wreck {
+  fill-opacity: 0.4;
+}
+
+/* ── Painted miniature ────────────────────────────────────────────────────── */
+
+/* The second, directional shading pass over the hull-grad fill — a plain
+   overlay path, not a blend mode, so it costs the same as any other shape
+   here. */
+.counter-hull-shade {
+  stroke: none;
+  pointer-events: none;
+}
+
+.counter-bow-chevron {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.counter-pinstripe {
+  stroke: currentColor;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* Recoloured to the side's own colour at slightly fuller strength than the
+   shared plot.css default, since a stripe next to bare gunmetal needs to
+   read as marking rather than trim. */
+.counter-art-miniature .counter-stern-band {
+  opacity: 0.9;
+}
+
+.counter-panel-line {
+  stroke: var(--gunmetal-dark);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.counter-panel-line.is-long {
+  opacity: 0.3;
+}
+
+.counter-panel-line.is-bright {
+  stroke: var(--gunmetal-light);
+}
+
+/* Gunmetal-toned rather than the luminous style's void/bright pairing. */
+.counter-art-miniature .counter-flightdeck {
+  fill: var(--gunmetal-dark);
+  stroke: var(--gunmetal-light);
+}
+
+/* A station has no bow or stern to shade by, so it gets a facet ring instead. */
+.counter-station-facet {
+  fill: none;
+  stroke: var(--gunmetal-dark);
+  stroke-width: 10;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* One hollow chevron tick per gunboat squadron, capped at three. */
+.counter-tender-tick {
+  fill: none;
+  stroke: var(--gunmetal-light);
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.counter-bridge-shadow {
+  fill: #000000;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.counter-bridge-tower {
+  stroke: var(--gunmetal-dark);
+  stroke-width: 8;
+  pointer-events: none;
+}
+
+.counter-bridge-window {
+  stroke: var(--gunmetal-dark);
+  stroke-width: 6;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.counter-nacelle-shadow {
+  fill: #000000;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.counter-nacelle {
+  fill: var(--gunmetal-mid);
+  stroke: var(--gunmetal-dark);
+  stroke-width: 8;
+  pointer-events: none;
+}
+
+/* Hull-toned and length-relative, unlike the luminous style's fixed-screen-px
+   `.counter-spinal` — the painted look wants the barrel to scale with the
+   hull it's bolted to. */
+.counter-spinal-miniature {
+  stroke: var(--gunmetal-light);
+  stroke-linecap: round;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.counter-turret-shadow {
+  fill: #000000;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.counter-turret-barrel {
+  fill: var(--gunmetal-dark);
+  pointer-events: none;
+}
+
+.counter-art-miniature .counter-turret-ring {
+  fill: var(--gunmetal-mid);
+  stroke: var(--gunmetal-light);
+  pointer-events: none;
+}
+
+/* Recoloured from the shared plot.css default (`--on-bright`) to gunmetal, so
+   a bar battery reads as part of the painted hull rather than a stencil
+   over it. */
+.counter-art-miniature .counter-battery {
+  stroke: var(--gunmetal-light);
+}
+
+.counter-art-miniature .counter-bow {
+  fill: var(--gunmetal-light);
+  opacity: 0.85;
+}
+
+.counter-scorch-crack {
+  stroke: #1a0d0d;
+  stroke-width: 8;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.counter-thrust-flare {
+  pointer-events: none;
+}
+
+.counter-wreck-wash {
+  fill: #000000;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* A hull-toned husk rather than the shared plot.css `--ink-faint`, which
+   nearly disappeared against the void once the living hull stopped being a
+   flat side-colour fill. */
+.counter-art-miniature .hull.is-wreck {
+  fill: #2a3040;
+  fill-opacity: 0.85;
+}
+
+.counter-art-miniature .counter-debris {
+  opacity: 0.75;
+}
+
+/* Two small flat circles — "still smouldering" — rather than a single ember
+   big enough to hide the hull under it. */
+.counter-ember {
+  fill: var(--thrust);
+  pointer-events: none;
+}
+
+.counter-ember.is-outer {
+  opacity: 0.14;
+}
+
+.counter-ember.is-inner {
+  opacity: 0.35;
+}
