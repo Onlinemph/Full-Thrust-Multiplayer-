@@ -72,3 +72,10 @@
 .rule-why .rule-detail {
   margin: 0.3rem 0 0;
 }
+
+/* On the orange primary button the hint takes the button's own dark ink,
+   dimmed, instead of the grey that vanished into the orange. */
+.menu button.primary .menu-hint {
+  color: var(--on-bright);
+  opacity: 0.72;
+}
