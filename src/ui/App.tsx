@@ -1796,7 +1796,7 @@ function LogDock({ log, sides }: { log: GameState['log']; sides: GameState['side
                 >
                   {side ? (
                     <span className="log-side" style={{ color: `var(--side-${entry.side})` }} title={side.name}>
-                      {side.name}
+                      {sideTag(side.name)}
                     </span>
                   ) : null}
                   {entry.text}
@@ -1979,4 +1979,11 @@ function RefusalNotice() {
       </button>
     </div>
   )
+}
+
+/** A fleet's name short enough for the log: its initials ("New Anglian Confederation" → NAC), or the name itself when it is one short word. */
+function sideTag(name: string): string {
+  const words = name.split(/[\s-]+/).filter((w) => /^[A-Za-z]/.test(w) && !/^(of|the|and)$/i.test(w))
+  if (words.length <= 1) return name.length <= 10 ? name : name.slice(0, 8)
+  return words.map((w) => w[0]!.toUpperCase()).join('')
 }
