@@ -8,6 +8,7 @@
 import { bookExample } from '../data/examples'
 import { type DiceStream, draw, newStream } from '../dice'
 import type { InfantryElement, InfantryTeam, InfantryTroops, VehicleDesign } from '../types'
+import { generateGroundTerrain } from './ground/generate'
 import { distance } from './terrain'
 import type { GameSetup, Leadership, Objective, Point, Quality, SideId, TerrainFeature, UnitSetup } from './types'
 
@@ -68,34 +69,16 @@ export function unitFromSpec(spec: UnitSpec, side: SideId, index: number): UnitS
   return unit
 }
 
-/** A seeded spread of woods, hills, rough ground, a road and a village (p. 25–26). */
+/**
+ * A seeded spread of terrain (p. 25–26): irregular woods, hills, rough
+ * ground and fields, curving roads and rivers, and (from `village` up)
+ * buildings and streets — every style at both the platoon scale Dirtside
+ * plays at and the squad scale Stargrunt does (`src/dirtside/table/
+ * ground/generate.ts` does the actual shape-making; this is its one call
+ * site so every caller keeps working unchanged).
+ */
 export function randomTerrain(stream: DiceStream, width: number, depth: number, style: TerrainStyle, opts: { scale?: TerrainScale } = {}): TerrainFeature[] {
-  void opts
-  const density = style === 'light' ? 'light' : style === 'none' ? 'none' : 'dense'
-  if (density === 'none') return []
-  const features: TerrainFeature[] = []
-  // Numbered within the one spread, so the same seed gives the same ids however often it is laid out.
-  let counter = 0
-  const nextId = (stem: string) => `${stem}-${(counter += 1)}`
-  const rnd = (lo: number, hi: number) => lo + draw(stream) * (hi - lo)
-  const count = density === 'light' ? 6 : 11
-  const kinds: TerrainFeature['terrain'][] = ['light-woods', 'hills', 'rough', 'light-woods', 'light-scrub', 'dense-woods', 'hills', 'cultivated', 'swamp', 'light-woods', 'rough']
-  // A road across the table.
-  const roadX = rnd(width * 0.3, width * 0.7)
-  features.push({ id: nextId('road'), terrain: 'road', shape: { kind: 'path', points: [{ x: roadX, y: 0 }, { x: roadX + rnd(-6, 6), y: depth / 2 }, { x: roadX + rnd(-8, 8), y: depth }], width: 1 }, label: 'road' })
-  for (let i = 0; i < count; i++) {
-    const terrain = kinds[i % kinds.length]!
-    if (terrain === 'cultivated') {
-      features.push({ id: nextId('field'), terrain, shape: { kind: 'rect', x: rnd(2, width - 12), y: rnd(8, depth - 16), width: rnd(6, 10), height: rnd(5, 8) }, label: 'fields' })
-      continue
-    }
-    features.push({ id: nextId(terrain), terrain, shape: { kind: 'circle', centre: { x: rnd(4, width - 4), y: rnd(8, depth - 8) }, radius: rnd(2.5, 5) }, label: terrain.replace('-', ' ') })
-  }
-  if (density === 'dense') features.push({ id: nextId('village'), terrain: 'urban', shape: { kind: 'rect', x: rnd(6, width - 14), y: rnd(10, depth - 16), width: 8, height: 6 }, label: 'village' })
-  // The road on top so a point on it reads as road.
-  const road = features.shift()!
-  features.push(road)
-  return features
+  return generateGroundTerrain(stream, width, depth, style, opts.scale ?? 'platoon')
 }
 
 /** The counter sheet's objective markers: seven worth 1, four worth 2, three worth 3. */
