@@ -680,6 +680,82 @@ population = 20 RP*, and its production phase says *50 RP for every 1 million po
 Production uses the 50, since that is the rule in the phase that spends it, and
 `src/campaign/economy.ts` notes the discrepancy at the constant rather than quietly picking one.
 
+## Stargrunt II
+
+The squad game, the third in the repository: 25mm troopers instead of Dirtside's platoons of vehicles,
+played on the same ground with the same seeded dice and the same shape of engine, under `src/stargrunt/`.
+The **Stargrunt table** on the main menu sets up a battle between two of chapter 25's forces and plays it
+hot seat or against the computer. The rules digest is `docs/rules/stargrunt.md`, read page by page from the
+1996 book and its quick reference; the engine cites the printed page on every refusal and every log line.
+
+- `types.ts` and `dice.ts` are the contract. A battle is a setup plus a journal of actions, `applyAction`
+  is the one door, and every roll comes out of the state's own stream, so a saved battle replays exactly.
+  The dice are Dirtside's D4 to D12 with Stargrunt's three rolls (p. 6): against a target, opposed, and the
+  multiple opposed roll, with closed and open die shifts.
+- `data/` is the kit and the forces: the generic weapons table (p. 34), armour dice, mobility, range bands
+  by quality, the firepower die a squad's summed firepower buys, and chapter 25's four platoons (New Anglian
+  Confederation marines, Neu Swabian panzergrenadiers, Eurasian Solar Union naval infantry, and the
+  "Federal Stats Europa" colonial legion, the book's own spelling on p. 69). There is no points
+  system, because the book has none.
+- `checks.ts` holds the morale: both threat tables, the confidence test (one level lost on a failure, two
+  on less than half the target), the reaction test, panic, communications a die type worse for each rung
+  bypassed, transfers, rallying, removing suppression, going in position, and the new leader's D6 (p. 10).
+- `fire.ts` is fire against a dispersed target (pp. 33–38): the range die from the bands, cover and in
+  position; the firer's quality die, firepower die and any support weapons joining in; the multiple opposed
+  roll for suppression or a fully effective shot; potential hits, impact against armour shifted by cover,
+  wound or kill, and random allocation among the figures.
+- `assault.ts` and `medical.ts` are close combat (pp. 41–43: the charge test, the defender's stand test on
+  the odds, pairing off, rounds with weapon and cover shifts, power armour's doubled roll, casualties rolled
+  when it is over) and treating the wounded in a reorganise (p. 39). On the table a charge takes both
+  actions: a failed nerve test costs only the first; a defender who will not stand withdraws; one who does
+  makes the attackers roll their combat move, and if it falls short they take final defensive fire, may be
+  turned back suppressed, and roll again with the second action (p. 43).
+- `table/cover.ts` and `table/movement.ts` read Dirtside's terrain the Stargrunt way: soft and hard cover,
+  the majority rule for a squad split across cover (p. 12), wood edges and wood interiors, line of sight,
+  range between units, integrity as a 6" circle or a 2" chain (p. 11), and the cost of a figure's path by
+  the going.
+- `table/game.ts` is the battle: deployment, the side with fewer units choosing who goes first, alternate
+  activations with a pass paid for by two in a row (p. 15), two actions a squad checked against the actions
+  table, every action the core rules give a squad (normal, combat and travel moves; small-arms fire with
+  support weapons joining or a support weapon alone; close assault; reorganise; removing suppression; in
+  position; transfer; rally; recovering from panic), the confidence cascade fire and assault set off, what
+  each confidence level and suppression forbids, objectives, and the end of the battle. `allowedActions`,
+  `planMove`, `planFire` (the odds, exact by enumerating the dice) and `planAssault` tell the screen and the
+  computer what an action would meet before it is tried.
+- `table/ai.ts` is the computer player: it takes cover, heads for objectives, fires the weapon with the
+  best odds, shakes off suppression, reorganises, rallies and charges only when the odds and the reach are
+  good, and never sends an action the engine refuses. `table/autoplay.ts` plays random legal battles; the
+  tests play hundreds of battles with each to a result and replay every journal exactly.
+
+A review then played the game through the screen and read the engine against the book, every finding put
+to a skeptic; the eleven that survived are fixed (among them objectives scored for a side whose troops on
+them had been shot, the defender's first-round cover bonus given in the open, a support weapon firing twice
+in a turn, and a squad travelling in column and pinned in the open with no legal action left).
+
+The screen (`src/ui/stargrunt/`) is built from the Dirtside table's parts: the same board and terrain, the
+status strip that says whose turn it is and which one orange button to press, the docked log grouped by
+turn, the keys. Each trooper is a small base in the side's colour with a mark for its kit (the leader's
+star, a support weapon, a medic), wounded and dead marked where they fell; each squad has a pennant with its
+code, quality die, leadership, confidence and up to three suppression pips. The side column shows the active
+squad's figures and every action, greyed out with the engine's reason when it would be refused; pointing at
+an enemy draws the line of fire with the chance of suppression and of a fully effective shot; a charge shows
+each figure's path to its opponent, coloured by whether one roll or two will get it there, the odds, the
+defender's stand test and the choice if the charge falls short. The
+setup offers a first game (one squad a side against the computer), full platoons, or any mix of chapter 25's
+units at any quality and leadership, with a live preview of the table. `tools/drive_stargrunt_table.mjs`
+walks it in a browser.
+
+Readings to know about. Both battle types have a pregame deployment 6" deep, as Dirtside's does, although the
+book's encounter battle has the forces enter over their baselines on turn 1. A transfer spends the
+commander's whole activation, where the book lets the commander keep one action; the contract has no way yet
+to pause one activation inside another. A broken unit fires only at a unit that fired on it this turn or
+last. Attackers turned back by final defensive fire return to where the charge began, not to the nearest
+cover the book also allows, and the defenders' free volley may use weapons already fired that turn. Panic is tested the first time a unit is attacked, for untrained and green troops (regulars panic only
+at terror, which is not in yet). Objectives are taken by moving within 1" with no enemy nearer, Dirtside's
+rule, since Stargrunt's scenarios each set their own. Not yet on the table: vehicles, heavy weapons and
+guided missiles, artillery and air support, observation and hidden units, snipers, detached elements,
+field defences, encumbrance, prisoners (a captured trooper counts as dead), and the campaign.
+
 ## Architecture
 
 See `docs/architecture.md` for the full account. In brief:
@@ -691,6 +767,7 @@ src/
   ui/        React. The only mutable-state boundary is store.ts
   campaign/  The strategic layer
   dirtside/  Dirtside II: the ground game's engine — design, pricing, dice, chits, direct fire, and table/ the battle
+  stargrunt/ Stargrunt II: the squad game's engine — kit and forces, morale, fire, close assault, and table/ the battle
 docs/rules/  Where every rule in the engine comes from, and what is missing
 ```
 
