@@ -59,6 +59,12 @@
   --panel-2: #131a2b; /* row, chip, control at rest */
   --panel-3: #1d263d; /* hover and selection — the only lit state */
 
+  /* Counter chrome: decoration on a ship counter that carries no rule. The
+     drive's exhaust glow is a pale ion blue, deliberately neither --side-a
+     (a side) nor --thrust (thrust being spent). */
+  --counter-glow: #cfe6ff;
+  --counter-shade: rgba(1, 3, 10, 0.55); /* the unlit side of a hull */
+
   /* ══ 3. LINES AND TYPE ════════════════════════════════════════════════════ */
   --line: #253150; /* panel edges and table rules */
   --line-soft: #18213a; /* grid lines on the plotting surface */
