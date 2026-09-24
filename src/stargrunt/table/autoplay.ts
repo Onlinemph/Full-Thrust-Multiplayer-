@@ -6,7 +6,7 @@
  */
 
 import { draw, newStream, type DiceStream } from '../dice'
-import { allowedActions, applyAction, canBeHit, canPass, createGame, figuresOf, fit, actionsLeft } from './game'
+import { allowedActions, applyAction, assaultMoves, canBeHit, canPass, createGame, figuresOf, fit, actionsLeft } from './game'
 import type { Action, FigureMove, GameSetup, GameState, Point, SideId, UnitState } from '../types'
 
 export interface AutoplayOptions {
@@ -93,11 +93,12 @@ export function chooseAction(state: GameState, stream: DiceStream): Action | nul
         const enemies = enemyUnits(state, side)
         if (enemies.length === 0) return { kind: 'end-activation', side }
         const target = pick(enemies, stream)
-        const targetCentre = figuresOf(state, target)[0]?.position ?? { x: 0, y: 0 }
-        const figures = figuresOf(state, unit).filter(fit)
-        const attackers = figures.filter(() => draw(stream) < 0.8)
-        const chosen = attackers.length > 0 ? attackers : figures.slice(0, 1)
-        return { kind: 'close-assault', side, targetUnitId: target.id, moves: chosen.map((f) => ({ figureId: f.id, path: [{ ...targetCentre }] })) }
+        // Legal-shaped moves (each figure's path ending in base contact, p. 41) instead of a hand-rolled
+        // single point every named figure walks to — `assaultMoves` is the same default the screen and
+        // the computer player use.
+        const moves = assaultMoves(state, unit.id, target.id)
+        if (moves.length === 0) return { kind: 'end-activation', side }
+        return { kind: 'close-assault', side, targetUnitId: target.id, moves, ifShort: draw(stream) < 0.5 ? 'stay' : 'withdraw' }
       }
       case 'reorganise':
         return { kind: 'reorganise', side }

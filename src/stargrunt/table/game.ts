@@ -514,6 +514,7 @@ function endTurn(state: GameState): void {
   log(state, null, `Turn ${state.turn} ends: every activation marker turns face up.`, 'p. 15')
   const limit = state.setup.turnLimit
   if (limit !== null && state.turn >= limit) {
+    updateObjectives(state)
     const values = objectiveValues(state)
     finish(state, values.north === values.south ? 'draw' : values.north > values.south ? 'north' : 'south', `turn ${limit} is over`)
     return
@@ -522,6 +523,10 @@ function endTurn(state: GameState): void {
 }
 
 function finish(state: GameState, winner: SideId | 'draw', reason: string): void {
+  // A side can be wiped out or broken by fire, which never calls `updateObjectives` on its own
+  // (only `move`/`reorganise`/close-assault outcomes do) — recompute here so a side that no longer
+  // holds any figure near an objective is never scored as still holding it (p. 14, p. 17).
+  updateObjectives(state)
   const values = objectiveValues(state)
   state.result = { winner, reason, values }
   state.phase = 'ended'
@@ -612,14 +617,18 @@ function endActivationAction(state: GameState, side: SideId): Refusal | null {
  * confidence bar (BROKEN/ROUTED may not attempt one, p. 41) is left to
  * `assault.ts`'s own refusal.
  */
-function restrictionRefusal(state: GameState, unit: UnitState, kind: Action['kind']): Refusal | null {
+function restrictionRefusal(state: GameState, unit: UnitState, kind: Action['kind'], targetUnitId?: string): Refusal | null {
   if (unit.panic) return kind === 'recover-panic' ? null : refuse(`${unit.name} is panicked and can attempt only to recover.`, 'p. 21')
   // [reading]: a disorganised unit's forced-reorganise-first rule (p. 11) and suppression's own
   // "reorganise only in cover" rule (p. 18) can otherwise deadlock a unit disorganised AND suppressed
   // in the open — neither action would be legal, and nothing could ever free it. Removing suppression
   // doesn't require repositioning, so it stays open as the escape valve; everything else still waits.
   if (!isOrganised(state, unit) && kind !== 'reorganise' && kind !== 'remove-suppression') return refuse(`${unit.name} is disorganised and must reorganise first.`, 'p. 11')
-  if (unit.travelling && kind !== 'move' && kind !== 'reorganise') return refuse(`${unit.name} is travel-formed and may only move or reorganise.`, 'p. 24')
+  // The same deadlock class hits a unit that is travel-formed AND suppressed in the open: 'move' is
+  // barred by suppression, 'reorganise' is barred by suppression-in-the-open, so 'remove-suppression'
+  // must stay open here too, or the unit can never act again for the rest of the battle (p. 24 itself
+  // expects exactly this sequence: shake off the marker, then reorganise out of column).
+  if (unit.travelling && kind !== 'move' && kind !== 'reorganise' && kind !== 'remove-suppression') return refuse(`${unit.name} is travel-formed and may only move or reorganise.`, 'p. 24')
   if (unit.suppression > 0) {
     const allowed: Action['kind'][] = ['reorganise', 'remove-suppression', 'transfer', 'rally']
     if (!allowed.includes(kind)) return refuse(`${unit.name} is suppressed: only reorganise in cover, remove suppression, or a leader action.`, 'p. 18')
@@ -627,9 +636,21 @@ function restrictionRefusal(state: GameState, unit: UnitState, kind: Action['kin
   }
   if (kind === 'fire') {
     if (unit.confidence === 'RO') return refuse(`${unit.name} is routed and will not fire.`, 'p. 21')
-    if (unit.confidence === 'BR' && !unit.everHit && !unit.everSuppressed) return refuse(`${unit.name} is broken and fires only once it has been fired on.`, 'p. 21')
+    if (unit.confidence === 'BR') {
+      // A broken unit only fires back at whoever actually fired on it (p. 21) — per-target, not a
+      // once-ever unlock; `targetUnitId` is absent for the advisory `allowedActions` call, which asks
+      // only whether firing at SOME enemy is possible at all.
+      const recently = (id: string) => (unit.firedOnBy[id] ?? Number.NEGATIVE_INFINITY) >= state.turn - 1
+      const mayFire = targetUnitId ? recently(targetUnitId) : Object.keys(unit.firedOnBy).some(recently)
+      if (!mayFire) return refuse(`${unit.name} is broken and fires only on an enemy that has fired on it recently.`, 'p. 21')
+    }
   }
-  if (kind === 'close-assault' && (unit.confidence === 'BR' || unit.confidence === 'RO')) return refuse(`${unit.name} is ${unit.confidence === 'BR' ? 'broken' : 'routed'} and may not close assault.`, 'p. 41')
+  if (kind === 'close-assault') {
+    if (unit.confidence === 'BR' || unit.confidence === 'RO') return refuse(`${unit.name} is ${unit.confidence === 'BR' ? 'broken' : 'routed'} and may not close assault.`, 'p. 41')
+    // A close assault "is assumed to use up both actions of the unit... the unit cannot expend one
+    // action on something else and then close-assault with its second action" (p. 41).
+    if (actionsLeft(state) < 2) return refuse(`${unit.name} must close assault with both of its actions.`, 'p. 41')
+  }
   return null
 }
 
@@ -948,7 +969,10 @@ function recoverPanic(state: GameState, side: SideId): Refusal | null {
 }
 
 function panicCheck(state: GameState, unit: UnitState): void {
-  if (unit.panicTested || unit.quality === 'veteran' || unit.quality === 'elite') return
+  // Regular troops only test for Panic against a Terror-provoking attack (p. 21), which this engine
+  // does not yet model (no Terror mechanic exists) — so a Regular unit never tests on ordinary fire or
+  // an ordinary close assault, same as Veteran and Elite.
+  if (unit.panicTested || unit.quality === 'veteran' || unit.quality === 'elite' || unit.quality === 'regular') return
   if (!figuresOf(state, unit).some(alive)) return
   unit.panicTested = true
   const t = panicTest(unit.quality, unit.leadership, state.rng)
@@ -1036,7 +1060,7 @@ function fire(state: GameState, action: Extract<Action, { kind: 'fire' }>): Refu
   const got = activeUnit(state, action.side)
   if ('ok' in got) return got
   const { unit, activation } = got
-  const restriction = restrictionRefusal(state, unit, 'fire')
+  const restriction = restrictionRefusal(state, unit, 'fire', action.targetUnitId)
   if (restriction) return restriction
   const target = state.units[action.targetUnitId]
   if (!target || target.sideId === unit.sideId) return refuse('Fire on an enemy unit.', 'p. 33')
@@ -1065,6 +1089,11 @@ function fire(state: GameState, action: Extract<Action, { kind: 'fire' }>): Refu
       : fireSupportWeaponAlone(unit.quality, supportWeaponProfile(state.figures[action.with.figureId]!.supportWeapon!), range, band, fireTarget, state.rng)
 
   unit.firedThisTurn.push(assembly.weaponKey)
+  // A support weapon that joins squad small arms is spent too (p. 33, p. 35): it may not then fire
+  // again alone this turn. `assembly.weaponKey` alone only ever records the 'small-arms' sentinel.
+  if (action.with.kind === 'small-arms') unit.firedThisTurn.push(...(action.with.supportFigureIds ?? []))
+  // A broken target now counts this firer among the enemies it may shoot back at (p. 21).
+  target.firedOnBy[unit.id] = state.turn
 
   const weaponLabel = assembly.weaponKey === 'small-arms' ? 'small arms' : `${state.figures[assembly.weaponKey]!.name}'s support weapon`
   if ('impossible' in result.rangeDie) {
@@ -1114,7 +1143,7 @@ function applyCloseCombatCasualty(state: GameState, figureId: string, result: Cl
   f.status = result.outcome === 'dead' ? 'dead' : result.outcome === 'wounded' ? 'wounded' : result.outcome === 'stunned-recovers' ? 'ok' : 'dead'
 }
 
-/** Once every down figure's severity is settled (p. 42–43), check each side's leader once — not per figure, so a leader appointed mid-resolution can't itself be "lost" a second time from a casualty that had already happened before the appointment. */
+/** Once every down figure's severity is settled (p. 42–43), check each side's leader once — not per figure, so a leader appointed mid-resolution can't itself be "lost" a second time from a casualty that had already happened before the appointment. A leader lost this way owes the same mandatory "leader becomes a casualty" Confidence Test as one lost to fire (p. 10) — this suppression/test still applies even to a HIGH-motivation unit. */
 function checkLeaderAfterAssault(state: GameState, unit: UnitState): void {
   if (unit.leaderId && fit(state.figures[unit.leaderId]!)) return
   unit.suppression = Math.min(3, unit.suppression + 1) as UnitState['suppression']
@@ -1122,6 +1151,12 @@ function checkLeaderAfterAssault(state: GameState, unit: UnitState): void {
   unit.leadership = roll.leadership
   unit.leaderId = figuresOf(state, unit).find(fit)?.id ?? null
   log(state, unit.sideId, `${unit.name}'s leader falls in the assault: D6 rolls ${roll.roll}, leadership becomes ${roll.leadership}.`, 'p. 10', [roll.roll])
+  const threat = confidenceThreatLevel(unit.motivation, { leaderCasualty: true })
+  if (threat === 'not-required') return
+  const test = confidenceTest(unit.quality, unit.leadership, threat, state.rng)
+  const before = unit.confidence
+  if (test.drop > 0) unit.confidence = lowerConfidence(unit.confidence, test.drop)
+  log(state, unit.sideId, `${unit.name} tests confidence at +${threat}: D${QUALITY_DIE[unit.quality]} rolls ${test.roll} against ${test.target} — ${test.drop === 0 ? 'holds' : `drops ${test.drop === 2 ? 'two levels' : 'a level'} from ${before} to ${unit.confidence}`}.`, 'p. 20', [test.roll])
 }
 
 interface CloseCombatOutcome {
@@ -1141,6 +1176,9 @@ function autoExtraAssignments(count: number, fewLen: number, rng: DiceStream): n
 }
 
 function runCloseCombat(state: GameState, attacker: UnitState, defender: UnitState, attackerFigureIds: readonly string[]): CloseCombatOutcome {
+  // First-round cover bonus (p. 42) only when the defenders are actually in cover, in position, or
+  // occupying field defences (no field-defence model yet) — never in the open.
+  const defenderInCover = unitCover(state, defender) !== 'open' || defender.inPosition
   let attackerStanding = [...attackerFigureIds]
   let defenderStanding = figuresOf(state, defender)
     .filter(fit)
@@ -1163,7 +1201,7 @@ function runCloseCombat(state: GameState, attacker: UnitState, defender: UnitSta
       }),
       ...defenderStanding.map((id) => {
         const f = state.figures[id]!
-        return { id, quality: defender.quality, weaponShift: weaponShiftFor(f), powerArmoured: isPowerArmoured(f), firstRoundCoverBonus: round === 1, opponents: pairing.fights[id]! }
+        return { id, quality: defender.quality, weaponShift: weaponShiftFor(f), powerArmoured: isPowerArmoured(f), firstRoundCoverBonus: round === 1 && defenderInCover, opponents: pairing.fights[id]! }
       }),
     ]
     const result = resolveCloseCombatRound(fighters, state.rng)
@@ -1216,6 +1254,18 @@ function withdrawUnit(state: GameState, u: UnitState, awayFrom: Point): void {
   }
 }
 
+/** The small-arms-plus-support-weapons assembly for Final Defensive Fire (p. 43): every fit defending figure shoots, support weapons joining exactly as an ordinary small-arms fire action would (p. 35) — FDF gives the defenders no choice to hold any of it back. */
+function assembleFdf(state: GameState, defender: UnitState): { profiles: SmallArmProfile[]; supportDice: DieType[]; impact: DieType } {
+  const shooters = figuresOf(state, defender).filter(fit)
+  const supportFigs = shooters.filter((f) => f.supportWeapon)
+  const supportSet = new Set(supportFigs.map((f) => f.id))
+  const riflemen = shooters.filter((f) => !supportSet.has(f.id))
+  const profiles = riflemen.map((f) => smallArmProfile(f.smallArm))
+  const supportDice = supportFigs.map((f) => supportWeaponProfile(f.supportWeapon!).firepowerDie)
+  const impact = profiles[0]?.impact ?? (supportFigs[0] ? supportWeaponProfile(supportFigs[0].supportWeapon!).impact : 4)
+  return { profiles, supportDice, impact }
+}
+
 function closeAssault(state: GameState, action: Extract<Action, { kind: 'close-assault' }>): Refusal | null {
   const got = activeUnit(state, action.side)
   if ('ok' in got) return got
@@ -1224,31 +1274,32 @@ function closeAssault(state: GameState, action: Extract<Action, { kind: 'close-a
   if (restriction) return restriction
   const target = state.units[action.targetUnitId]
   if (!target || target.sideId === unit.sideId) return refuse('Close assault an enemy unit.', 'p. 41')
-  if (!figuresOf(state, target).some(fit)) return refuse(`${target.name} has no one left to fight.`, 'p. 41')
-  if (action.moves.length === 0) return refuse('Name at least one figure making the combat move.', 'p. 41')
-  for (const m of action.moves) {
-    const f = state.figures[m.figureId]
-    if (!f || f.unitId !== unit.id) return refuse('Every figure must belong to the activated unit.', 'p. 41')
-    if (!fit(f)) return refuse(`${f.name} cannot fight.`, 'p. 41')
-    if (m.path.some((p) => !onTable(p, state.setup.table))) return refuse('The combat move leaves the table.', 'p. 14')
-  }
 
+  // `planAssault` is the one source of truth for whether this charge is even legal (a fit defender to
+  // fight, every path ending in base contact, the target within the reach of two combat moves) — the
+  // handler refuses with exactly its refusal rather than re-deriving these checks (per the round's brief).
+  const plan = planAssault(state, unit.id, target.id, action.moves)
+  if ('ok' in plan) return plan
+
+  // `restrictionRefusal` above already bars BROKEN/ROUTED, so `attemptCloseAssaultReaction`'s own
+  // confidence gate (the same rule, in `assault.ts`) can never actually refuse here; the check stays to
+  // narrow the type rather than to do further work.
   const attempt = attemptCloseAssaultReaction(unit.quality, unit.leadership, unit.confidence, state.rng)
   if (!attempt.ok) return attempt
   log(state, action.side, `${unit.name} nerves itself to close assault ${target.name}: D${QUALITY_DIE[unit.quality]} rolls ${attempt.roll} against ${attempt.target} — ${attempt.passed ? 'it charges' : 'it balks'}.`, 'p. 41', [attempt.roll])
   if (!attempt.passed) {
-    advanceActivation(state, unit, activation, 2)
+    // "the unit loses its first action but may still use its second action for something else (it may
+    // not retry the close-assault that activation)" (p. 41) — the second action's own restriction check
+    // sees `actionsLeft(state) < 2` and refuses another close-assault attempt on its own.
+    advanceActivation(state, unit, activation, 1)
     return null
   }
 
   const attackerFigureIds = action.moves.map((m) => m.figureId)
-  const defenderFigureIds = figuresOf(state, target)
-    .filter(fit)
-    .map((f) => f.id)
-  const paCount = (ids: readonly string[]) => ids.filter((id) => isPowerArmoured(state.figures[id]!)).length
-  const odds = assaultOdds(attackerFigureIds.length, paCount(attackerFigureIds), defenderFigureIds.length, paCount(defenderFigureIds))
-  const stand = defenderStandTest(target.quality, target.leadership, target.confidence, odds, false, state.rng)
+  const startPositions: Record<string, Point> = {}
+  for (const id of attackerFigureIds) startPositions[id] = { ...state.figures[id]!.position }
 
+  const stand = defenderStandTest(target.quality, target.leadership, target.confidence, plan.odds, false, state.rng)
   panicCheck(state, target)
 
   let defenderFellBack = false
@@ -1259,13 +1310,15 @@ function closeAssault(state: GameState, action: Extract<Action, { kind: 'close-a
   } else if (stand.drop > 0) {
     const before = target.confidence
     target.confidence = lowerConfidence(target.confidence, stand.drop)
-    log(state, target.sideId, `${target.name} tests to stand at +${defenderStandThreatLevel(odds, false)}: D${QUALITY_DIE[target.quality]} rolls ${stand.roll} against ${stand.target} — falls back from ${before} to ${target.confidence}.`, 'p. 41', [stand.roll])
+    log(state, target.sideId, `${target.name} tests to stand at +${plan.standThreat}: D${QUALITY_DIE[target.quality]} rolls ${stand.roll} against ${stand.target} — falls back from ${before} to ${target.confidence}.`, 'p. 41', [stand.roll])
     defenderFellBack = true
   } else {
-    log(state, target.sideId, `${target.name} stands to receive the charge at +${defenderStandThreatLevel(odds, false)}: D${QUALITY_DIE[target.quality]} rolls ${stand.roll} against ${stand.target} — holds.`, 'p. 41', [stand.roll])
+    log(state, target.sideId, `${target.name} stands to receive the charge at +${plan.standThreat}: D${QUALITY_DIE[target.quality]} rolls ${stand.roll} against ${stand.target} — holds.`, 'p. 41', [stand.roll])
   }
 
   if (defenderFellBack) {
+    // Uncontested: the defender gives up the ground outright, so the attackers simply occupy it (p. 41)
+    // — no combat move is rolled for this.
     const attackerCentre = unitCentre(attackerFigureIds.map((id) => state.figures[id]!.position))
     withdrawUnit(state, target, attackerCentre)
     for (const m of action.moves) state.figures[m.figureId]!.position = { ...m.path[m.path.length - 1]! }
@@ -1274,15 +1327,147 @@ function closeAssault(state: GameState, action: Extract<Action, { kind: 'close-a
     return null
   }
 
-  // Contact (p. 41): the attacker's combat move is simplified to always reach the defenders once both tests above resolve in
-  // favour of a fight — the roll-short-of-contact branch and Final Defensive Fire (p. 43) are left for a later round; see the
-  // report. `assault.ts`'s `finalDefensiveFireGate`/`interpretFinalDefensiveFire`/`attackerReactionAfterFdf` stay unused here.
-  void finalDefensiveFireGate
-  void interpretFinalDefensiveFire
-  void attackerReactionAfterFdf
-  for (const m of action.moves) state.figures[m.figureId]!.position = { ...m.path[m.path.length - 1]! }
+  // The defender stands: the attacker's Combat Move for the first action (p. 41), each named figure
+  // advancing along its own declared path with the roll's allowance (terrain costs as `move` charges
+  // them). [reading]: a figure's declared path is read as a single leg toward its contact point in the
+  // overwhelmingly common case (`assaultMoves`/`planAssault`'s own defaults, and what the screen is
+  // expected to hand in); a longer, multi-waypoint path is advanced the same way `move` does, without
+  // trying to reconstruct exactly which waypoint a roll that fell short of the whole path stopped short
+  // of, since Close Assault gives no second declaration to correct for it anyway.
+  const mobility = unit.mobility
+  const die = combatMoveDie(mobility)
+  const positions: Record<string, Point> = {}
+  const remainingPaths: Record<string, Point[]> = {}
+  for (const m of action.moves) {
+    positions[m.figureId] = { ...state.figures[m.figureId]!.position }
+    remainingPaths[m.figureId] = [...m.path]
+  }
+  const advance = (allowanceInches: number): void => {
+    for (const id of attackerFigureIds) {
+      const rest = remainingPaths[id]!
+      if (rest.length === 0) continue
+      const path = [positions[id]!, ...rest]
+      const cost = pathCost(path, mobility, state.setup.table.terrain)
+      if (!cost.blockedAt && cost.factors <= allowanceInches + 1e-9) {
+        positions[id] = { ...rest[rest.length - 1]! }
+        remainingPaths[id] = []
+      } else {
+        const progress = advanceAlongPath(path, allowanceInches, mobility, state.setup.table.terrain)
+        positions[id] = { ...progress.reached }
+      }
+    }
+  }
+  const writePositions = (): void => {
+    for (const id of attackerFigureIds) state.figures[id]!.position = { ...positions[id]! }
+  }
+  const contactFigures = (): string[] => {
+    const defenderPositions = figuresOf(state, target)
+      .filter(fit)
+      .map((f) => f.position)
+    return attackerFigureIds.filter((id) => defenderPositions.some((p) => distance(positions[id]!, p) <= CONTACT_REACH + 1e-9))
+  }
 
-  const outcome = runCloseCombat(state, unit, target, attackerFigureIds)
+  const roll1 = rollDie(die, state.rng)
+  const allowance1 = combatMoveInches(roll1)
+  advance(allowance1)
+  writePositions()
+  log(state, action.side, `${unit.name} makes its Combat Move to close: D${die} rolls ${roll1}, ${allowance1}".`, 'p. 41', [roll1])
+
+  let contacted = contactFigures()
+
+  if (contacted.length === 0) {
+    // Short (p. 43): Final Defensive Fire. The defenders, having already passed their stand test, take
+    // a free small-arms action at the attackers, whether or not they have activated this turn — a
+    // suppressed defender must first pass a Reaction Test at TL = its suppression markers, or it never
+    // fires at all.
+    const gate = finalDefensiveFireGate(target.suppression)
+    let fdfHappened = !gate.needsReactionTest
+    if (gate.needsReactionTest) {
+      const t = reactionTest(target.quality, target.leadership, gate.threatLevel, state.rng)
+      log(
+        state,
+        target.sideId,
+        `${target.name}, suppressed, tries to give final defensive fire: D${QUALITY_DIE[target.quality]} rolls ${t.roll} against ${t.target} — ${t.passed ? 'they fire' : 'too pinned to react'}.`,
+        'p. 43',
+        [t.roll],
+      )
+      fdfHappened = t.passed
+    }
+
+    let fdfCasualties = 0
+    if (fdfHappened) {
+      const fdf = assembleFdf(state, target)
+      const attackerCentreNow = unitCentre(attackerFigureIds.map((id) => positions[id]!))
+      const defenderCentre = unitPosition(state, target)
+      const range = rangeBetweenUnits(defenderCentre, attackerCentreNow)
+      const band = rangeBandInches(target.quality)
+      const attackerCover = unitCoverGrade(attackerFigureIds.map((id) => figureCoverGrade(positions[id]!, state.setup.table.terrain)))
+      const fdfTargetFigures = attackerFigureIds.map((id) => ({ armourDie: armourDie(state.figures[id]!.armour) }))
+      const fdfTarget = { cover: attackerCover as FireCoverGrade, inPosition: false, figures: fdfTargetFigures }
+      const fdfResult = fireSquadSmallArms(target.quality, fdf.profiles, range, band, fdfTarget, fdf.supportDice, state.rng)
+
+      const fdfDice: number[] = fdfResult.fireEffect ? [fdfResult.fireEffect.targetRoll, ...fdfResult.fireEffect.firerRolls] : []
+      if (fdfResult.potentialHits?.extraRoll) fdfDice.push(fdfResult.potentialHits.extraRoll)
+      for (const h of fdfResult.hits) fdfDice.push(h.allocationRoll, h.penetration.impactRoll, h.penetration.armourRoll)
+
+      // "there is no normal SUPPRESSION result used... if the fire fails to score actual casualties,
+      // then there is no effect" (p. 43) — only `figureResults` (actual wounds/kills) count here.
+      fdfCasualties = interpretFinalDefensiveFire(fdfResult).casualties
+      for (const [idxStr, outcome] of Object.entries(fdfResult.figureResults)) state.figures[attackerFigureIds[Number(idxStr)]!]!.status = outcome
+      unit.firedOnBy[target.id] = state.turn // the attacker has now been fired on by this defender (p. 21)
+      const rangeWord = 'impossible' in fdfResult.rangeDie ? (fdfResult.rangeDie.reason === 'over-d12' ? 'beyond effective range' : 'beyond close range') : null
+      const effectWord = rangeWord ?? (fdfCasualties > 0 ? `${fdfCasualties} casualt${fdfCasualties === 1 ? 'y' : 'ies'}` : 'no effect')
+      log(state, target.sideId, `${target.name} gives final defensive fire at ${unit.name}, ${range.toFixed(1)}": ${effectWord}.`, 'p. 43', fdfDice)
+      if (fdfResult.fireEffect && fdfResult.fireEffect.effect !== 'no-effect') panicCheck(state, unit)
+    }
+
+    if (fdfCasualties > 0) {
+      const reaction = attackerReactionAfterFdf(unit.quality, unit.leadership, fdfCasualties, state.rng)
+      log(
+        state,
+        action.side,
+        `${unit.name} tests reaction under final defensive fire at +${fdfCasualties}: D${QUALITY_DIE[unit.quality]} rolls ${reaction.roll} against ${reaction.target} — ${reaction.passed ? 'presses on' : 'falls back'}.`,
+        'p. 43',
+        [reaction.roll],
+      )
+      if (!reaction.passed) {
+        // [reading]: back to where the assault started, one of the two choices the book gives ("the
+        // nearest cover, or to the point it started the assault from") — the simpler of the two, and
+        // one `applyAction` can always resolve without a further terrain search.
+        for (const id of attackerFigureIds) state.figures[id]!.position = { ...startPositions[id]! }
+        unit.suppression = Math.min(3, unit.suppression + 1) as UnitState['suppression']
+        log(state, action.side, `${unit.name} abandons the assault and pulls back, suppressed.`, 'p. 43')
+        advanceActivation(state, unit, activation, 2)
+        return null
+      }
+    }
+
+    // No casualties, or the reaction test passed: the second action rolls the Combat Move again, the
+    // figures carrying on from wherever the first roll left them (p. 43).
+    const roll2 = rollDie(die, state.rng)
+    const allowance2 = combatMoveInches(roll2)
+    advance(allowance2)
+    writePositions()
+    log(state, action.side, `${unit.name} rolls its Combat Move again: D${die} rolls ${roll2}, ${allowance2}".`, 'p. 43', [roll2])
+    contacted = contactFigures()
+
+    if (contacted.length === 0) {
+      const ifShort = action.ifShort ?? 'stay'
+      if (ifShort === 'withdraw') {
+        for (const id of attackerFigureIds) state.figures[id]!.position = { ...startPositions[id]! }
+        unit.suppression = Math.min(3, unit.suppression + 1) as UnitState['suppression']
+        log(state, action.side, `${unit.name} still falls short and gives up the assault, suppressed.`, 'p. 43')
+      } else {
+        log(state, action.side, `${unit.name} still falls short and holds where the dash left it.`, 'p. 43')
+      }
+      advanceActivation(state, unit, activation, 2)
+      return null
+    }
+  }
+
+  // Contact (p. 41): the figures that reached fight; any others sit this round out where their roll
+  // left them.
+  const outcome = runCloseCombat(state, unit, target, contacted)
 
   for (const id of outcome.attackerDown) {
     const r = closeCombatCasualtyRoll(outcome.winner === 'attacker', state.rng)
@@ -1329,8 +1514,14 @@ export function allowedActions(state: GameState): Record<AllowedActionKind, { ok
 function coarseCheck(state: GameState, unit: UnitState | null, activation: ActivationState | null, kind: AllowedActionKind): { ok: true } | Refusal {
   if (!unit || !activation) return refuse('No unit is activated.', 'p. 15')
   if (kind !== 'end-activation' && actionsLeft(state) <= 0) return refuse('No actions left this activation.', 'p. 15')
-  const restriction = restrictionRefusal(state, unit, kind)
-  if (restriction) return restriction
+  // `end-activation` is dispatched by `endActivationAction`, which never calls `restrictionRefusal` at
+  // all — ending an activation is always legal, whatever the unit's panic/suppression/disorganisation/
+  // travel state, so the advisory API must not claim otherwise for the one action a restricted unit can
+  // always take.
+  if (kind !== 'end-activation') {
+    const restriction = restrictionRefusal(state, unit, kind)
+    if (restriction) return restriction
+  }
   switch (kind) {
     case 'move':
       return figuresOf(state, unit).some(fit) ? { ok: true } : refuse(`${unit.name} has no one able to move.`, 'p. 22')
@@ -1498,11 +1689,16 @@ export const CONTACT_GAP = 1
 /** A combat move ending this close to a defender counts as base contact. */
 export const CONTACT_REACH = 1.25
 
+/** Two contact points closer than this read as figures standing on top of one another (p. 41's own diagram never draws them that way); `assaultMoves` keeps every pair — two attackers, or an attacker and a defender other than its own — at least this far apart. */
+const MIN_FIGURE_GAP = 0.8
+
 /**
  * Where each fit figure of an attacking unit would charge to (p. 41): one attacker to each defender
- * first, nearest first, the rest spread round the defenders already taken, each ending in base
- * contact on its own side of its opponent. The screen and the computer start from this; a player may
- * change any path as long as it still ends in contact.
+ * first, nearest first, the rest going to whichever defender they are nearest, each ending in base
+ * contact on its own side of its opponent. Figures sharing a defender fan out evenly around it (wide
+ * enough apart that no two land within `MIN_FIGURE_GAP`), and any point that would still crowd a
+ * *different* defender's figure, or another attacker's, is nudged further round the circle. The screen
+ * and the computer start from this; a player may change any path as long as it still ends in contact.
  */
 export function assaultMoves(state: GameState, unitId: string, targetUnitId: string): FigureMove[] {
   const unit = state.units[unitId]
@@ -1513,20 +1709,67 @@ export function assaultMoves(state: GameState, unitId: string, targetUnitId: str
   if (attackers.length === 0 || defenders.length === 0) return []
   const centre = unitCentre(defenders.map((d) => d.position))
   const order = [...attackers].sort((a, b) => distance(a.position, centre) - distance(b.position, centre))
-  const taken = new Map<string, number>()
-  const moves: FigureMove[] = []
+  const posOf = new Map(attackers.map((a) => [a.id, a.position]))
+
+  // Pass 1 (p. 41-42): one attacker to each defender first; the rest to whichever defender they are
+  // nearest, forming the groups that will fight together.
+  const groupOf = new Map<string, string[]>()
+  for (const d of defenders) groupOf.set(d.id, [])
   order.forEach((a, i) => {
-    const free = defenders.filter((d) => !taken.has(d.id))
+    const free = defenders.filter((d) => groupOf.get(d.id)!.length === 0)
     const pool = i < defenders.length && free.length > 0 ? free : defenders
     const d = pool.reduce((best, x) => (distance(a.position, x.position) < distance(a.position, best.position) ? x : best))
-    const k = taken.get(d.id) ?? 0
-    taken.set(d.id, k + 1)
-    const away = Math.atan2(a.position.y - d.position.y, a.position.x - d.position.x) + (k === 0 ? 0 : (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 4))
-    const end = { x: d.position.x + Math.cos(away) * CONTACT_GAP, y: d.position.y + Math.sin(away) * CONTACT_GAP }
-    const clamped = { x: Math.max(0.25, Math.min(state.setup.table.width - 0.25, end.x)), y: Math.max(0.25, Math.min(state.setup.table.depth - 0.25, end.y)) }
-    moves.push({ figureId: a.id, path: [clamped] })
+    groupOf.get(d.id)!.push(a.id)
   })
-  return moves
+
+  // Pass 2: place each group's figures around their own defender, spaced apart, then nudge away from
+  // any point (a foreign defender, or an already-placed attacker) it would otherwise crowd.
+  const placed: Point[] = []
+  const endFor = new Map<string, Point>()
+  for (const d of defenders) {
+    const ids = groupOf.get(d.id)!
+    const n = ids.length
+    if (n === 0) continue
+    const others = defenders.filter((o) => o.id !== d.id)
+    const angles = ids.map((id) => {
+      const p = posOf.get(id)!
+      return Math.atan2(p.y - d.position.y, p.x - d.position.x)
+    })
+    const baseAngle = Math.atan2(
+      angles.reduce((s, a) => s + Math.sin(a), 0),
+      angles.reduce((s, a) => s + Math.cos(a), 0),
+    )
+    // A lone attacker keeps the plain contact gap, aimed straight from where it stands; several
+    // sharing a defender fan out on a slightly wider ring, spaced far enough apart (chord = 2·r·sinθ/2)
+    // to clear `MIN_FIGURE_GAP`, but never past `CONTACT_REACH` (planAssault's own reach check).
+    const radius = n === 1 ? CONTACT_GAP : Math.min(CONTACT_REACH - 0.05, 1.2)
+    const minStep = n === 1 ? 0 : 2 * Math.asin(Math.min(1, MIN_FIGURE_GAP / (2 * radius)))
+    const step = n === 1 ? 0 : Math.max(minStep, (2 * Math.PI) / Math.max(n, 6))
+    const baseStep = step > 1e-6 ? step / 2 : Math.PI / 6
+    ids.forEach((attackerId, k) => {
+      const startAngle = baseAngle + (k - (n - 1) / 2) * step
+      let angle = startAngle
+      let r = radius
+      let end = { x: d.position.x + Math.cos(angle) * r, y: d.position.y + Math.sin(angle) * r }
+      // Search both ways round the circle first (a crowded neighbour usually clears on one side or the
+      // other); only once that's exhausted does standing a little further out (still short of
+      // `CONTACT_REACH`) get tried, for the rare cluster too tight to route around at all.
+      for (let attempt = 1; attempt <= 16; attempt++) {
+        const crowdsOtherDefender = others.some((o) => distance(end, o.position) < MIN_FIGURE_GAP)
+        const crowdsAnAttacker = placed.some((p) => distance(end, p) < MIN_FIGURE_GAP)
+        if (!crowdsOtherDefender && !crowdsAnAttacker) break
+        const dir = attempt % 2 === 1 ? 1 : -1
+        const mag = Math.ceil(attempt / 2)
+        angle = startAngle + dir * mag * baseStep
+        if (attempt > 10) r = Math.min(CONTACT_REACH - 0.05, radius + (attempt - 10) * 0.1)
+        end = { x: d.position.x + Math.cos(angle) * r, y: d.position.y + Math.sin(angle) * r }
+      }
+      const clamped = { x: Math.max(0.25, Math.min(state.setup.table.width - 0.25, end.x)), y: Math.max(0.25, Math.min(state.setup.table.depth - 0.25, end.y)) }
+      placed.push(clamped)
+      endFor.set(attackerId, clamped)
+    })
+  }
+  return order.map((a) => ({ figureId: a.id, path: [endFor.get(a.id)!] }))
 }
 
 export interface AssaultPlan {
@@ -1567,6 +1810,7 @@ export function planAssault(state: GameState, unitId: string, targetUnitId: stri
     const f = state.figures[m.figureId]
     if (!f || f.unitId !== unit.id || !fit(f)) return refuse('Every charging figure must be a fit member of the unit.', 'p. 41')
     if (m.path.length === 0) return refuse('Give each charging figure a path.', 'p. 41')
+    if (m.path.some((p) => !onTable(p, state.setup.table))) return refuse('The combat move leaves the table.', 'p. 14')
     const end = m.path[m.path.length - 1]!
     if (!defenders.some((d) => distance(end, d.position) <= CONTACT_REACH + 1e-9)) return refuse(`${f.name}'s charge must end in base contact with ${target.name}.`, 'p. 41')
     const cost = pathCost([f.position, ...m.path], unit.mobility, state.setup.table.terrain)

@@ -12,7 +12,6 @@
  * shape as `src/dirtside/table/ai.ts`.
  */
 
-import { assaultOdds } from '../assault'
 import { draw, newStream, type DiceStream } from '../dice'
 import {
   distance,
@@ -36,13 +35,14 @@ import {
   figuresOf,
   fit,
   nearestEnemyDistance,
+  planAssault,
   planFire,
   planMove,
   unactivatedUnits,
   unitsOf,
+  type AssaultPlan,
 } from './game'
-import { normalMoveInches } from './movement'
-import { otherSide, type Action, type FigureMove, type FigureState, type FireWith, type GameSetup, type GameState, type Point, type SideId, type UnitState } from '../types'
+import { otherSide, type Action, type FigureMove, type FireWith, type GameSetup, type GameState, type Point, type SideId, type UnitState } from '../types'
 import type { Shape } from '../../dirtside/table/types'
 
 // ---------------------------------------------------------------------------
@@ -61,10 +61,6 @@ function coverOf(state: GameState, unit: UnitState): CoverGrade {
 /** In integrity (p. 11): the AI's own reading of `isInIntegrity`, since the engine keeps this check private. */
 function organised(state: GameState, unit: UnitState): boolean {
   return isInIntegrity(figuresOf(state, unit).filter(alive).map((f) => f.position))
-}
-
-function isPowerArmoured(f: FigureState): boolean {
-  return f.armour === 'light-power' || f.armour === 'heavy-power'
 }
 
 function clampToTable(state: GameState, p: Point): Point {
@@ -198,10 +194,15 @@ interface ScoredFire {
  */
 function fireCandidates(state: GameState, unit: UnitState): ScoredFire[] {
   if (unit.confidence === 'RO') return []
-  if (unit.confidence === 'BR' && !unit.everHit && !unit.everSuppressed) return []
   const pos = centreOf(state, unit)
-  const enemies = unitsOf(state, otherSide(unit.sideId))
-    .filter((u) => figuresOf(state, u).some(canBeHit))
+  let enemyPool = unitsOf(state, otherSide(unit.sideId)).filter((u) => figuresOf(state, u).some(canBeHit))
+  if (unit.confidence === 'BR') {
+    // A broken unit fires only on an enemy that has fired on it this turn or last (p. 21) —
+    // `firedOnBy` is keyed per enemy unit, not a one-time unlock.
+    const recently = (id: string) => (unit.firedOnBy[id] ?? Number.NEGATIVE_INFINITY) >= state.turn - 1
+    enemyPool = enemyPool.filter((u) => recently(u.id))
+  }
+  const enemies = enemyPool
     .map((u) => ({ u, dist: distance(pos, centreOf(state, u)) }))
     .sort((a, b) => a.dist - b.dist)
     .slice(0, 4)
@@ -237,26 +238,28 @@ function fireCandidates(state: GameState, unit: UnitState): ScoredFire[] {
 // Close assault — only with both actions and good odds
 // ---------------------------------------------------------------------------
 
-/** The nearest enemy within a plausible charge, only when `assaultOdds` (p. 41) gives the attacker at least a 2:1 edge. */
+/**
+ * The best enemy to charge, only among targets `planAssault` (p. 41) does not itself refuse (a fit
+ * defender within the reach of two Combat Moves, every path ending in base contact) — the computer
+ * never hands the engine a charge it would refuse. Scored by the chance of contact on the first roll,
+ * the attacker:defender odds, and the defender's cover (a dug-in target is worth less to charge, since
+ * its first-round cover bonus in the fight itself cuts into the numeric edge the odds alone suggest).
+ */
 function closeAssaultCandidate(state: GameState, unit: UnitState): Action | null {
   const figs = figuresOf(state, unit).filter(fit)
   if (figs.length === 0) return null
-  const pos = unitCentre(figs.map((f) => f.position))
-  const reach = Math.max(normalMoveInches(unit.mobility, 1) * 2, 8)
   const enemies = unitsOf(state, otherSide(unit.sideId)).filter((u) => figuresOf(state, u).some(fit))
-  let best: { target: UnitState; odds: number; dist: number } | null = null
+  let best: { target: UnitState; plan: AssaultPlan; score: number } | null = null
   for (const target of enemies) {
-    const defFigs = figuresOf(state, target).filter(fit)
-    const tpos = unitCentre(defFigs.map((f) => f.position))
-    const dist = distance(pos, tpos)
-    if (dist > reach) continue
-    const odds = assaultOdds(figs.length, figs.filter(isPowerArmoured).length, defFigs.length, defFigs.filter(isPowerArmoured).length)
-    if (odds < 2) continue
-    if (!best || odds > best.odds || (odds === best.odds && dist < best.dist)) best = { target, odds, dist }
+    const plan = planAssault(state, unit.id, target.id)
+    if ('ok' in plan) continue // planAssault refuses this one: out of reach, or no path reaches contact
+    if (plan.odds < 2) continue // only when the numbers are good
+    const coverPenalty = coverOf(state, target) === 'open' ? 0 : coverOf(state, target) === 'soft' ? 1 : 2
+    const score = plan.pContactFirst * 3 + plan.odds - coverPenalty
+    if (!best || score > best.score) best = { target, plan, score }
   }
   if (!best) return null
-  const tpos = clampToTable(state, unitCentre(figuresOf(state, best.target).filter(fit).map((f) => f.position)))
-  return { kind: 'close-assault', side: unit.sideId, targetUnitId: best.target.id, moves: figs.map((f) => ({ figureId: f.id, path: [tpos] })) }
+  return { kind: 'close-assault', side: unit.sideId, targetUnitId: best.target.id, moves: best.plan.moves }
 }
 
 // ---------------------------------------------------------------------------

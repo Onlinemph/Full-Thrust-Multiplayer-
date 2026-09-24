@@ -11,6 +11,7 @@ import {
   actionsLeft,
   allowedActions,
   applyAction,
+  assaultMoves,
   canPass,
   createGame,
   liveUnits,
@@ -409,12 +410,13 @@ describe('fire (pp. 33–37)', () => {
     expect(refused(applyAction(state, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).page).toBe('p. 11')
   })
 
-  it('a routed unit will not fire, and a broken one only once fired upon (p. 21)', () => {
+  it('a routed unit will not fire, and a broken one only on an enemy that has fired on it recently (p. 21)', () => {
     // A spare, confident north unit keeps the side from being instantly beaten by n1's own bad confidence,
     // so the fire refusal itself is what's under test.
     const withSpare = () => {
       const setup = facingOff(6)
       setup.sides[0].units.push({ id: 'n2', name: 'n2', quality: 'regular', leadership: 2, armour: 'partial-light', mobility: 'foot', commandLevel: 'squad', figures: [{ id: 'n2-f1', smallArm: 'advanced-rifle', leader: true, position: { x: 30, y: 10 } }] })
+      setup.sides[1].units.push({ id: 's2', name: 's2', quality: 'regular', leadership: 2, armour: 'partial-light', mobility: 'foot', commandLevel: 'squad', figures: [{ id: 's2-f1', smallArm: 'advanced-rifle', leader: true, position: { x: 30, y: 16 } }] })
       return setup
     }
     let state = battle(withSpare(), 'north')
@@ -423,12 +425,36 @@ describe('fire (pp. 33–37)', () => {
     let ok = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
     expect(refused(applyAction(ok, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).page).toBe('p. 21')
 
+    // Broken and never fired on at all: fire is refused on every enemy, s1 included.
     let brState = battle(withSpare(), 'north')
     brState.units['n1']!.confidence = 'BR'
     let br = must(applyAction(brState, { kind: 'activate', side: 'north', unitId: 'n1' }))
     expect(refused(applyAction(br, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).page).toBe('p. 21')
-    br.units['n1']!.everHit = true
+    expect(allowedActions(br)['fire'].ok).toBe(false)
+
+    // Fired on by s1 (this turn): it may fire back on s1, but not on s2, who never fired on it (p. 21) —
+    // a per-target rule, not a once-ever unlock.
+    br.units['n1']!.firedOnBy['s1'] = br.turn
+    expect(allowedActions(br)['fire'].ok).toBe(true) // some enemy is a legal target, advisory-wise
     expect('ok' in applyAction(br, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).toBe(false)
+    expect(refused(applyAction(br, { kind: 'fire', side: 'north', targetUnitId: 's2', with: { kind: 'small-arms' } })).page).toBe('p. 21')
+
+    // Fired on by s1 last turn, but not since: still counts (p. 21, [reading]: this turn or last).
+    let stale = must(applyAction(brState, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    stale.units['n1']!.firedOnBy['s1'] = stale.turn - 1
+    expect('ok' in applyAction(stale, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).toBe(false)
+
+    // Fired on two turns ago: too stale, refused again.
+    let old = must(applyAction(brState, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    old.units['n1']!.firedOnBy['s1'] = old.turn - 2
+    expect(refused(applyAction(old, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).page).toBe('p. 21')
+  })
+
+  it('fire records who fired on the target, for the broken-unit fire-back rule (p. 21)', () => {
+    let state = battle(facingOff(6), 'north')
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    const fired = must(applyAction(state, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } }))
+    expect(fired.units['s1']!.firedOnBy['n1']).toBe(fired.turn)
   })
 
   it('planFire reports the range die and odds without rolling', () => {
@@ -675,6 +701,289 @@ describe('close assault (pp. 41–43)', () => {
     // Either the attacker balked (a Veteran's threat-0 reaction rarely fails) or the assault ran to a conclusion.
     if (/it balks/.test(text)) return
     expect(text).toMatch(/wins the close assault|routs rather than stand|falls back from/)
+  })
+
+  it('a failed reaction test to charge costs only the first action; the second is free for something else, not a retry (p. 41)', () => {
+    let state = battle(
+      setupWith([
+        { id: 'n1', side: 'north', quality: 'untrained', leadership: 3, confidence: 'SH', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] },
+        { id: 's1', side: 'south', figures: [{ id: 's1-f1', at: { x: 10, y: 12 }, leader: true }] },
+      ]),
+      'north',
+    )
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    // Threat +3 (SH) against leadership 3 needs a roll over 6 on an Untrained D4: impossible, so this always balks.
+    const after = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves: [{ figureId: 'n1-f1', path: [{ x: 10, y: 12 }] }] }))
+    expect(lastLog(after)).toMatch(/it balks/)
+    expect(after.activation).not.toBeNull()
+    expect(actionsLeft(after)).toBe(1)
+    expect(refused(applyAction(after, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves: [{ figureId: 'n1-f1', path: [{ x: 10, y: 12 }] }] })).page).toBe('p. 41')
+    const usedSecond = must(applyAction(after, { kind: 'reorganise', side: 'north' }))
+    expect(usedSecond.activation).toBeNull()
+  })
+
+  it('refuses a target beyond the reach of two combat moves, and a path that does not end in base contact (p. 41)', () => {
+    let state = battle(
+      setupWith([
+        { id: 'n1', side: 'north', figures: [{ id: 'n1-f1', at: { x: 10, y: 5 }, leader: true }] },
+        { id: 's1', side: 'south', figures: [{ id: 's1-f1', at: { x: 10, y: 34 }, leader: true }] },
+      ]),
+      'north',
+    )
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    // 29" away: beyond 24" (two D6 combat moves, doubled, at best).
+    expect(refused(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves: [{ figureId: 'n1-f1', path: [{ x: 10, y: 34 }] }] })).page).toBe('p. 41')
+    // Close enough, but the declared path ends nowhere near the defender.
+    expect(refused(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves: [{ figureId: 'n1-f1', path: [{ x: 40, y: 5 }] }] })).page).toBe('p. 41')
+  })
+
+  it('the defender withdrawing on a failed stand test: the attackers occupy the vacated ground uncontested, no Combat Move rolled (p. 41)', () => {
+    const setup = () =>
+      setupWith([
+        {
+          id: 'n1',
+          side: 'north',
+          quality: 'elite',
+          leadership: 1,
+          confidence: 'CO',
+          figures: [
+            { id: 'n1-f1', at: { x: 10, y: 10 }, leader: true },
+            { id: 'n1-f2', at: { x: 11, y: 10 } },
+            { id: 'n1-f3', at: { x: 12, y: 10 } },
+            { id: 'n1-f4', at: { x: 13, y: 10 } },
+          ],
+        },
+        { id: 's1', side: 'south', quality: 'untrained', leadership: 3, confidence: 'CO', figures: [{ id: 's1-f1', at: { x: 10, y: 12 }, leader: true }] },
+      ])
+    const moves = [
+      { figureId: 'n1-f1', path: [{ x: 10, y: 12 }] },
+      { figureId: 'n1-f2', path: [{ x: 10, y: 12 }] },
+      { figureId: 'n1-f3', path: [{ x: 10, y: 12 }] },
+      { figureId: 'n1-f4', path: [{ x: 10, y: 12 }] },
+    ]
+    let after: GameState | null = null
+    // 4:1 odds (standThreat 4) against an Untrained D4 defender (leadership 3) can never pass (target 7):
+    // only the attacker's own Elite threat-0 charge roll (near-certain, but not the impossible roll of 1) gates this.
+    for (let seed = 1; seed <= 300 && !after; seed++) {
+      let state = battle({ ...setup(), seed }, 'north')
+      state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+      const next = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves }))
+      if (!lastLog(next, 8).includes('it balks')) after = next
+    }
+    expect(after).not.toBeNull()
+    const text = after!.log.map((l) => l.text).join(' | ')
+    expect(text).toMatch(/falls back from/)
+    expect(text).not.toMatch(/Combat Move to close/)
+    for (const m of moves) expect(after!.figures[m.figureId]!.position).toEqual(m.path[0])
+    expect(after!.activation).toBeNull()
+  })
+
+  it('contact on the first Combat Move roll: the figures that reached fight it out at once, with no Final Defensive Fire (p. 41–42)', () => {
+    const setup = () =>
+      setupWith([
+        { id: 'n1', side: 'north', quality: 'elite', leadership: 1, confidence: 'CO', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] },
+        {
+          id: 's1',
+          side: 'south',
+          quality: 'regular',
+          leadership: 1,
+          confidence: 'CO',
+          figures: [
+            { id: 's1-f1', at: { x: 10, y: 12 }, leader: true },
+            { id: 's1-f2', at: { x: 11, y: 12 } },
+            { id: 's1-f3', at: { x: 9, y: 12 } },
+            { id: 's1-f4', at: { x: 10, y: 13 } },
+          ],
+        },
+      ])
+    // Exactly 2" from the target figure: even the worst Combat Move roll (D6 rolls 1, 2") reaches it.
+    const moves = [{ figureId: 'n1-f1', path: [{ x: 10, y: 12 }] }]
+    let after: GameState | null = null
+    for (let seed = 1; seed <= 300 && !after; seed++) {
+      let state = battle({ ...setup(), seed }, 'north')
+      state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+      const next = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves }))
+      const text = next.log.map((l) => l.text).join(' | ')
+      if (/it charges/.test(text) && /stands to receive the charge/.test(text)) after = next
+    }
+    expect(after).not.toBeNull()
+    const text = after!.log.map((l) => l.text).join(' | ')
+    expect(text).toMatch(/Combat Move to close: D6 rolls/)
+    expect(text).not.toMatch(/final defensive fire/)
+    expect(text).toMatch(/wins the close assault|falls back from/)
+    expect(after!.figures['n1-f1']!.position).toEqual({ x: 10, y: 12 })
+  })
+
+  it('short on the first roll: Final Defensive Fire that inflicts a casualty turns the attacker back, suppressed (p. 43)', () => {
+    const setup = () =>
+      setupWith([
+        { id: 'n1', side: 'north', quality: 'untrained', leadership: 1, confidence: 'CO', armour: 'battledress', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] },
+        {
+          id: 's1',
+          side: 'south',
+          quality: 'regular',
+          leadership: 1,
+          confidence: 'CO',
+          figures: [
+            { id: 's1-f1', at: { x: 10, y: 23 }, leader: true },
+            { id: 's1-f2', at: { x: 11, y: 23 } },
+            { id: 's1-f3', at: { x: 9, y: 23 } },
+            { id: 's1-f4', at: { x: 10, y: 24 } },
+          ],
+        },
+      ])
+    // 13" away: no single Combat Move roll (max 12") can ever reach it, so the first roll always falls short.
+    const moves = [{ figureId: 'n1-f1', path: [{ x: 10, y: 23 }] }]
+    let after: GameState | null = null
+    for (let seed = 1; seed <= 6000 && !after; seed++) {
+      let state = battle({ ...setup(), seed }, 'north')
+      state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+      const next = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves }))
+      if (next.log.some((l) => l.text.includes('abandons the assault and pulls back'))) after = next
+    }
+    expect(after).not.toBeNull()
+    const text = after!.log.map((l) => l.text).join(' | ')
+    expect(text).toMatch(/gives final defensive fire.*casualt/)
+    expect(text).toMatch(/tests reaction under final defensive fire.*falls back/)
+    expect(after!.units['n1']!.suppression).toBe(1)
+    expect(after!.figures['n1-f1']!.position).toEqual({ x: 10, y: 10 }) // back to where the assault started
+    expect(after!.activation).toBeNull()
+  }, 20_000)
+
+  it('short, Final Defensive Fire that never gets off a shot (a suppressed defender fails its reaction test), then contact on the second roll (p. 43)', () => {
+    const setup = () =>
+      setupWith([
+        { id: 'n1', side: 'north', quality: 'elite', leadership: 1, confidence: 'CO', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] },
+        {
+          id: 's1',
+          side: 'south',
+          quality: 'untrained',
+          leadership: 1,
+          confidence: 'CO',
+          figures: [
+            { id: 's1-f1', at: { x: 10, y: 33 }, leader: true },
+            { id: 's1-f2', at: { x: 11, y: 33 } },
+            { id: 's1-f3', at: { x: 9, y: 33 } },
+            { id: 's1-f4', at: { x: 10, y: 34 } },
+          ],
+        },
+      ])
+    // 23" away: always short of a single roll (max 12"), but only the rare (6,6) pair of rolls covers it in two.
+    const moves = [{ figureId: 'n1-f1', path: [{ x: 10, y: 33 }] }]
+    let after: GameState | null = null
+    for (let seed = 1; seed <= 4000 && !after; seed++) {
+      let state = battle({ ...setup(), seed }, 'north')
+      state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+      // An Untrained defender, leadership 1, at 3 suppression markers can never pass its TL-3 reaction
+      // test (target 4, D4 max 4): Final Defensive Fire never actually gets a shot off.
+      state.units['s1']!.suppression = 3
+      const next = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves }))
+      const text = next.log.map((l) => l.text).join(' | ')
+      if (/rolls its Combat Move again/.test(text) && !/still falls short/.test(text)) after = next
+    }
+    expect(after).not.toBeNull()
+    const text = after!.log.map((l) => l.text).join(' | ')
+    expect(text).toMatch(/too pinned to react/)
+    expect(text).not.toMatch(/final defensive fire at/) // the gated attempt never actually fires
+    expect(text).toMatch(/wins the close assault|falls back from/)
+  }, 20_000)
+
+  it('still short after both rolls: \'stay\' leaves the figures where the dash ended, \'withdraw\' sends them back suppressed, as if the reaction test had failed (p. 43)', () => {
+    const setup = () =>
+      setupWith([
+        { id: 'n1', side: 'north', quality: 'elite', leadership: 1, confidence: 'CO', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] },
+        {
+          id: 's1',
+          side: 'south',
+          quality: 'untrained',
+          leadership: 1,
+          confidence: 'CO',
+          figures: [
+            { id: 's1-f1', at: { x: 10, y: 33 }, leader: true },
+            { id: 's1-f2', at: { x: 11, y: 33 } },
+            { id: 's1-f3', at: { x: 9, y: 33 } },
+            { id: 's1-f4', at: { x: 10, y: 34 } },
+          ],
+        },
+      ])
+    const moves = [{ figureId: 'n1-f1', path: [{ x: 10, y: 33 }] }]
+    let base: GameState | null = null
+    for (let seed = 1; seed <= 4000 && !base; seed++) {
+      let state = battle({ ...setup(), seed }, 'north')
+      state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+      state.units['s1']!.suppression = 3
+      const stay = must(applyAction(state, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves, ifShort: 'stay' }))
+      if (lastLog(stay, 2).includes('still falls short')) base = state
+    }
+    expect(base).not.toBeNull()
+
+    const stay = must(applyAction(base!, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves, ifShort: 'stay' }))
+    expect(lastLog(stay, 2)).toMatch(/holds where the dash left it/)
+    expect(stay.units['n1']!.suppression).toBe(0)
+    expect(stay.figures['n1-f1']!.position).not.toEqual({ x: 10, y: 10 })
+    expect(stay.activation).toBeNull()
+
+    // The identical seed, replayed with the other choice: the same two rolls, a different outcome.
+    const withdraw = must(applyAction(base!, { kind: 'close-assault', side: 'north', targetUnitId: 's1', moves, ifShort: 'withdraw' }))
+    expect(lastLog(withdraw, 2)).toMatch(/gives up the assault, suppressed/)
+    expect(withdraw.units['n1']!.suppression).toBe(1)
+    expect(withdraw.figures['n1-f1']!.position).toEqual({ x: 10, y: 10 })
+    expect(withdraw.activation).toBeNull()
+  }, 20_000)
+
+  describe('assaultMoves (p. 41)', () => {
+    const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
+
+    it('keeps every default contact point at least 0.8" from every other attacker and from a defender other than its own', () => {
+      // More attackers than defenders, and two of the defenders close together, is exactly the shape
+      // that used to overlap: several extras fanned around one point at less than 0.8" apart, and a
+      // fan around one defender landing on top of a neighbouring one.
+      const setup = setupWith([
+        {
+          id: 'n1',
+          side: 'north',
+          figures: [
+            { id: 'n1-f1', at: { x: 10, y: 4 }, leader: true },
+            { id: 'n1-f2', at: { x: 11, y: 4 } },
+            { id: 'n1-f3', at: { x: 12, y: 4 } },
+            { id: 'n1-f4', at: { x: 9, y: 4 } },
+            { id: 'n1-f5', at: { x: 13, y: 4 } },
+            { id: 'n1-f6', at: { x: 8, y: 4 } },
+            { id: 'n1-f7', at: { x: 14, y: 4 } },
+          ],
+        },
+        {
+          id: 's1',
+          side: 'south',
+          figures: [
+            { id: 's1-f1', at: { x: 10, y: 10 }, leader: true },
+            { id: 's1-f2', at: { x: 11.5, y: 10 } },
+          ],
+        },
+      ])
+      const state = createGame(setup)
+      const moves = assaultMoves(state, 'n1', 's1')
+      expect(moves.length).toBe(7)
+      const ends = moves.map((m) => m.path[0]!)
+      for (let i = 0; i < ends.length; i++) {
+        for (let j = i + 1; j < ends.length; j++) expect(dist(ends[i]!, ends[j]!)).toBeGreaterThanOrEqual(0.8 - 1e-6)
+      }
+      // A figure's own defender is allowed to be close (that's the point of a contact move); only a
+      // *different* defender's figure must stay clear.
+      const defenderPos = (id: string) => state.figures[id]!.position
+      const nearestDefender = (p: Point) => (dist(p, defenderPos('s1-f1')) <= dist(p, defenderPos('s1-f2')) ? 's1-f1' : 's1-f2')
+      for (const m of moves) {
+        const end = m.path[0]!
+        const own = nearestDefender(end)
+        const foreign = own === 's1-f1' ? 's1-f2' : 's1-f1'
+        expect(dist(end, defenderPos(foreign))).toBeGreaterThanOrEqual(0.8 - 1e-6)
+      }
+      // Every path still ends in base contact with a fit defender (planAssault's own reach check).
+      for (const m of moves) {
+        const end = m.path[0]!
+        expect(Math.min(dist(end, defenderPos('s1-f1')), dist(end, defenderPos('s1-f2')))).toBeLessThanOrEqual(1.25 + 1e-6)
+      }
+    })
   })
 })
 
