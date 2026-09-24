@@ -29,6 +29,10 @@ export const TERRAIN_NAMES: Record<TerrainType, string> = {
   'light-woods': 'Light woods',
   'dense-woods': 'Dense woods',
   ford: 'Ford',
+  building: 'Building',
+  rubble: 'Rubble',
+  wall: 'Wall',
+  hedge: 'Hedge',
 }
 
 /** What a terrain type does besides slowing movement, in plain words (p. 20, p. 26). */
@@ -51,6 +55,7 @@ const line = (name: string, width: number, dash?: string): CSSProperties => ({ s
 export function ShapeEl({ shape, style, className, dx = 0, dy = 0, rx }: { shape: Shape; style?: CSSProperties; className?: string; dx?: number; dy?: number; rx?: number }) {
   if (shape.kind === 'circle') return <circle cx={shape.centre.x + dx} cy={shape.centre.y + dy} r={shape.radius} style={style} className={className} />
   if (shape.kind === 'rect') return <rect x={shape.x + dx} y={shape.y + dy} width={shape.width} height={shape.height} rx={rx} style={style} className={className} />
+  if (shape.kind === 'polygon') return <polygon points={pts(shape.points.map((p) => ({ x: p.x + dx, y: p.y + dy })))} style={style} className={className} />
   return <polyline points={pts(shape.points)} style={{ fill: 'none', strokeWidth: shape.width, strokeLinecap: 'round', strokeLinejoin: 'round', ...style }} className={className} />
 }
 

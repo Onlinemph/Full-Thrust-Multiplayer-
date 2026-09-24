@@ -3,9 +3,11 @@
  * between two elements is clear (p. 4, p. 20), and what a path costs a
  * mobility type in movement factors (pp. 25–26).
  *
- * Features are circles, rectangles and wide polylines because that is what
- * a scenario can be typed in as; the rules only ever ask "is this point in
- * it" and "does this line cross it".
+ * Features are circles, rectangles, wide polylines and irregular polygons;
+ * the rules only ever ask "is this point in it" and "does this line cross
+ * it". A town's buildings and streets (`partOf` an urban area) are pieces
+ * Stargrunt reads at squad scale; Dirtside reads the area and passes over
+ * them (p. 46).
  */
 
 import { FACTORS_PER_INCH, type Going, type MobilityFamily, type TerrainType, goingOf } from '../data/mobility'
@@ -19,7 +21,7 @@ export const MAX_SIGHT = 60
  */
 export const WOOD_EDGE = 1
 /** Terrain that blocks a line of sight when the line passes through it (p. 4, p. 20). */
-export const BLOCKS_SIGHT: readonly TerrainType[] = ['light-woods', 'dense-woods', 'urban', 'hills', 'mountains']
+export const BLOCKS_SIGHT: readonly TerrainType[] = ['light-woods', 'dense-woods', 'urban', 'hills', 'mountains', 'building']
 export const WOODS: readonly TerrainType[] = ['light-woods', 'dense-woods']
 export const HIGH_GROUND: readonly TerrainType[] = ['hills', 'mountains']
 
@@ -48,7 +50,65 @@ export function distanceToSegment(point: Point, a: Point, b: Point): number {
   return distance(point, { x: a.x + t * dx, y: a.y + t * dy })
 }
 
+/** A shape's bounding box, cached per shape object, so a query can pass over a far-off feature cheaply. */
+const BOUNDS = new WeakMap<Shape, { minX: number; minY: number; maxX: number; maxY: number }>()
+
+export function shapeBounds(shape: Shape): { minX: number; minY: number; maxX: number; maxY: number } {
+  const cached = BOUNDS.get(shape)
+  if (cached) return cached
+  let out: { minX: number; minY: number; maxX: number; maxY: number }
+  switch (shape.kind) {
+    case 'circle':
+      out = { minX: shape.centre.x - shape.radius, minY: shape.centre.y - shape.radius, maxX: shape.centre.x + shape.radius, maxY: shape.centre.y + shape.radius }
+      break
+    case 'rect':
+      out = { minX: shape.x, minY: shape.y, maxX: shape.x + shape.width, maxY: shape.y + shape.height }
+      break
+    case 'path':
+    case 'polygon': {
+      const pad = shape.kind === 'path' ? shape.width / 2 : 0
+      out = { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY }
+      for (const p of shape.points) {
+        out.minX = Math.min(out.minX, p.x - pad)
+        out.minY = Math.min(out.minY, p.y - pad)
+        out.maxX = Math.max(out.maxX, p.x + pad)
+        out.maxY = Math.max(out.maxY, p.y + pad)
+      }
+      break
+    }
+  }
+  BOUNDS.set(shape, out)
+  return out
+}
+
+/** Roughly the middle of a shape: a circle's centre, a rectangle's, the mean of a path's or polygon's points. */
+export function shapeCentre(shape: Shape): Point {
+  switch (shape.kind) {
+    case 'circle':
+      return shape.centre
+    case 'rect':
+      return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 }
+    case 'path':
+    case 'polygon': {
+      const n = Math.max(1, shape.points.length)
+      return { x: shape.points.reduce((s, p) => s + p.x, 0) / n, y: shape.points.reduce((s, p) => s + p.y, 0) / n }
+    }
+  }
+}
+
+function inPolygon(point: Point, points: readonly Point[]): boolean {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]!
+    const b = points[j]!
+    if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
 export function insideShape(point: Point, shape: Shape): boolean {
+  const box = shapeBounds(shape)
+  if (point.x < box.minX || point.x > box.maxX || point.y < box.minY || point.y > box.maxY) return false
   switch (shape.kind) {
     case 'circle':
       return distance(point, shape.centre) <= shape.radius
@@ -57,6 +117,8 @@ export function insideShape(point: Point, shape: Shape): boolean {
     case 'path':
       for (let i = 1; i < shape.points.length; i++) if (distanceToSegment(point, shape.points[i - 1]!, shape.points[i]!) <= shape.width / 2) return true
       return false
+    case 'polygon':
+      return shape.points.length >= 3 && inPolygon(point, shape.points)
   }
 }
 
@@ -73,6 +135,11 @@ export function depthInside(point: Point, shape: Shape): number {
       for (let i = 1; i < shape.points.length; i++) nearest = Math.min(nearest, distanceToSegment(point, shape.points[i - 1]!, shape.points[i]!))
       return shape.width / 2 - nearest
     }
+    case 'polygon': {
+      let nearest = Number.POSITIVE_INFINITY
+      for (let i = 0; i < shape.points.length; i++) nearest = Math.min(nearest, distanceToSegment(point, shape.points[i]!, shape.points[(i + 1) % shape.points.length]!))
+      return nearest
+    }
   }
 }
 
@@ -81,10 +148,11 @@ export function depthInside(point: Point, shape: Shape): number {
  * over areas — except that an ordinary road through an urban area does
  * not lift the urban restrictions; only a major highway does (p. 26).
  */
-export function featureAt(point: Point, features: readonly TerrainFeature[]): TerrainFeature | null {
+export function featureAt(point: Point, features: readonly TerrainFeature[], opts: { pieces?: boolean } = {}): TerrainFeature | null {
   let found: TerrainFeature | null = null
   let urban: TerrainFeature | null = null
   for (const feature of features) {
+    if (feature.partOf && !opts.pieces) continue
     if (!insideShape(point, feature.shape)) continue
     found = feature
     if (feature.terrain === 'urban') urban = feature
@@ -149,7 +217,7 @@ export function lineOfSight(from: Point, to: Point, features: readonly TerrainFe
   const toHigh = onHighGround(to, features)
   const samples = samplesAlong(from, to, 0.2)
   for (const feature of features) {
-    if (!BLOCKS_SIGHT.includes(feature.terrain)) continue
+    if (feature.partOf || !BLOCKS_SIGHT.includes(feature.terrain)) continue
     const high = HIGH_GROUND.includes(feature.terrain)
     const fromIn = insideShape(from, feature.shape)
     const toIn = insideShape(to, feature.shape)

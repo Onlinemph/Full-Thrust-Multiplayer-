@@ -21,12 +21,26 @@ export interface UnitSpec {
   infantry?: { troops: InfantryTroops; teams: InfantryTeam[] }
 }
 
+/**
+ * The kinds of table the generator lays out: open, the two rural spreads (light and dense), and the
+ * built-up ones, a village on a road, a town of blocks and streets round a square, a city.
+ */
+export type TerrainStyle = 'none' | 'light' | 'dense' | 'village' | 'town' | 'city'
+export const TERRAIN_STYLES: readonly TerrainStyle[] = ['none', 'light', 'dense', 'village', 'town', 'city']
+
+/**
+ * The ground scale a table is laid out for: Dirtside's platoons, where a building is under an inch
+ * and a town a few inches of urban ground, or Stargrunt's squads, where a building is several
+ * inches across and walls and hedges matter.
+ */
+export type TerrainScale = 'platoon' | 'squad'
+
 export interface SkirmishOptions {
   seed: number
   name?: string
   width?: number
   depth?: number
-  terrain?: 'none' | 'light' | 'dense'
+  terrain?: TerrainStyle
   objectivesPerSide?: number
   turnLimit?: number | null
   north?: UnitSpec[]
@@ -55,7 +69,9 @@ export function unitFromSpec(spec: UnitSpec, side: SideId, index: number): UnitS
 }
 
 /** A seeded spread of woods, hills, rough ground, a road and a village (p. 25–26). */
-export function randomTerrain(stream: DiceStream, width: number, depth: number, density: 'none' | 'light' | 'dense'): TerrainFeature[] {
+export function randomTerrain(stream: DiceStream, width: number, depth: number, style: TerrainStyle, opts: { scale?: TerrainScale } = {}): TerrainFeature[] {
+  void opts
+  const density = style === 'light' ? 'light' : style === 'none' ? 'none' : 'dense'
   if (density === 'none') return []
   const features: TerrainFeature[] = []
   // Numbered within the one spread, so the same seed gives the same ids however often it is laid out.

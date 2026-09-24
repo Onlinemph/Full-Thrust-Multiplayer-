@@ -11,7 +11,7 @@
  * same standard platoon shape.
  */
 
-import { placeObjectives, randomTerrain } from '../../dirtside/table/skirmish'
+import { placeObjectives, randomTerrain, type TerrainStyle } from '../../dirtside/table/skirmish'
 import { NAC, NSL, sideFromForce } from '../data/forces'
 import { newStream } from '../dice'
 import type { GameSetup } from '../types'
@@ -21,7 +21,7 @@ export interface SkirmishOptions {
   name?: string
   width?: number
   depth?: number
-  terrain?: 'none' | 'light' | 'dense'
+  terrain?: TerrainStyle
   objectivesPerSide?: number
   turnLimit?: number | null
 }
@@ -48,7 +48,7 @@ export function defaultSkirmish(opts: SkirmishOptions): GameSetup {
     table: {
       width,
       depth,
-      terrain: randomTerrain(stream, width, depth, opts.terrain ?? 'light'),
+      terrain: randomTerrain(stream, width, depth, opts.terrain ?? 'light', { scale: 'squad' }),
       objectives: placeObjectives(stream, width, depth, opts.objectivesPerSide ?? 3),
     },
     sides: [north, south],

@@ -74,6 +74,13 @@ export type TerrainType =
   | 'dense-woods'
   /** A designated crossing of a river, drawn over it (p. 26). */
   | 'ford'
+  /** One building's footprint (Dirtside p. 46, Stargrunt p. 56): standing alone, or one of a town's. */
+  | 'building'
+  /** What a destroyed building leaves (Dirtside p. 46, Stargrunt p. 57): cover, no longer a screen. */
+  | 'rubble'
+  /** A wall or a hedge along a line (Stargrunt pp. 12–13): cover to a figure behind it, at squad scale only. */
+  | 'wall'
+  | 'hedge'
 
 export type Going = 'easy' | 'normal' | 'poor' | 'difficult' | 'impassable'
 

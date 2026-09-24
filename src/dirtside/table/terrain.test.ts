@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { lineOfSight, pathCost, terrainAt, woodAt } from './terrain'
-import type { TerrainFeature } from './types'
+import { depthInside, featureAt, insideShape, lineOfSight, pathCost, terrainAt, woodAt } from './terrain'
+import type { Shape, TerrainFeature } from './types'
 
 const wood: TerrainFeature = { id: 'w', terrain: 'light-woods', shape: { kind: 'circle', centre: { x: 20, y: 10 }, radius: 4 }, label: 'a wood' }
 const hill: TerrainFeature = { id: 'h', terrain: 'hills', shape: { kind: 'circle', centre: { x: 20, y: 30 }, radius: 4 }, label: 'a hill' }
@@ -95,5 +95,31 @@ describe('the cost of a path (p. 25)', () => {
     const edge = pathCost([{ x: 10, y: 10 }, { x: 16.5, y: 10 }], 'high-wheeled', [wood])
     expect(edge.blockedAt).toBeNull()
     expect(edge.intoWood).toBe(true)
+  })
+})
+
+describe('irregular polygons and town pieces', () => {
+  const blob: Shape = { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 6, y: 1 }, { x: 7, y: 5 }, { x: 3, y: 7 }, { x: -1, y: 4 }] }
+
+  it('tests a point inside and outside an irregular outline, and how deep inside it is', () => {
+    expect(insideShape({ x: 3, y: 3 }, blob)).toBe(true)
+    expect(insideShape({ x: 8, y: 8 }, blob)).toBe(false)
+    expect(insideShape({ x: 6.9, y: 1.2 }, blob)).toBe(false)
+    expect(depthInside({ x: 3, y: 3 }, blob)).toBeGreaterThan(2)
+    expect(depthInside({ x: 8, y: 8 }, blob)).toBe(0)
+  })
+
+  it('reads a town as urban ground for Dirtside and as its buildings for squad scale', () => {
+    const town: TerrainFeature = { id: 'town', terrain: 'urban', shape: { kind: 'polygon', points: [{ x: 10, y: 10 }, { x: 20, y: 10 }, { x: 20, y: 18 }, { x: 10, y: 18 }] } }
+    const house: TerrainFeature = { id: 'house', terrain: 'building', partOf: 'town', shape: { kind: 'polygon', points: [{ x: 12, y: 12 }, { x: 14, y: 12 }, { x: 14, y: 14 }, { x: 12, y: 14 }] } }
+    const lone: TerrainFeature = { id: 'barn', terrain: 'building', shape: { kind: 'rect', x: 30, y: 30, width: 1, height: 1 } }
+    const features = [town, house, lone]
+    expect(featureAt({ x: 13, y: 13 }, features)?.id).toBe('town')
+    expect(featureAt({ x: 13, y: 13 }, features, { pieces: true })?.id).toBe('house')
+    expect(featureAt({ x: 16, y: 16 }, features, { pieces: true })?.id).toBe('town')
+    expect(featureAt({ x: 30.5, y: 30.5 }, features)?.id).toBe('barn')
+    // A lone building screens; a town's own buildings leave Dirtside's sight to the town area.
+    expect(lineOfSight({ x: 30.5, y: 27 }, { x: 30.5, y: 34 }, features).clear).toBe(false)
+    expect(lineOfSight({ x: 5, y: 13 }, { x: 25, y: 13 }, features).blockedBy?.id).toBe('town')
   })
 })

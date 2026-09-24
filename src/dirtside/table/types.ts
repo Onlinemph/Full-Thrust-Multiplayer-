@@ -30,6 +30,8 @@ export type Shape =
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
   /** A road or a river: a polyline with a width. */
   | { kind: 'path'; points: Point[]; width: number }
+  /** An irregular outline, closed, not crossing itself: a wood, a hill, a town's edge, a building's footprint. */
+  | { kind: 'polygon'; points: Point[] }
 
 /** A piece of terrain (p. 25–26). Later features lie on top of earlier ones. */
 export interface TerrainFeature {
@@ -39,6 +41,11 @@ export interface TerrainFeature {
   label?: string
   /** A road that is a major highway keeps road going through an urban area; an ordinary street does not (p. 26). */
   majorHighway?: boolean
+  /**
+   * The id of the urban area a building, street or ruin stands in. Dirtside reads a town as one area of
+   * urban ground and passes over its pieces (p. 46); Stargrunt, at squad scale, reads the pieces.
+   */
+  partOf?: string
 }
 
 /** An objective marker (p. 17): face down, taken by moving over it. */
