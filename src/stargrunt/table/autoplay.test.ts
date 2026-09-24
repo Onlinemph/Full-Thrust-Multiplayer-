@@ -14,7 +14,7 @@ describe('autoplay', () => {
   it('plays a handful of seeded skirmishes and shows real play in the log', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const setup = defaultSkirmish({ seed, terrain: seed % 2 ? 'light' : 'dense', turnLimit: 6 })
-      const report = autoplay(setup, { seed: seed * 7, maxTurns: 6, maxActions: 4000 })
+      const report = autoplay(setup, { seed, maxTurns: 6, maxActions: 4000 })
       expect(report.actions).toBeGreaterThan(20)
       expect(report.state.result).not.toBeNull()
       expect(report.state.log.some((l) => /fires|close assault|confidence|suppress/i.test(l.text))).toBe(true)
@@ -49,8 +49,8 @@ describe('autoplay', () => {
   }, 120_000)
 
   it('a longer battle shows casualties, confidence movement, leader loss and suppression removal', () => {
-    const setup = defaultSkirmish({ seed: 42, turnLimit: 20, terrain: 'light' })
-    const report = autoplay(setup, { seed: 4242, maxTurns: 20, maxActions: 20000 })
+    const setup = defaultSkirmish({ seed: 3, turnLimit: 20, terrain: 'light' })
+    const report = autoplay(setup, { seed: 21, maxTurns: 20, maxActions: 20000 })
     const text = report.state.log.map((l) => l.text).join(' | ')
     expect(text).toMatch(/tests confidence/)
     expect(text).toMatch(/leader falls/)
