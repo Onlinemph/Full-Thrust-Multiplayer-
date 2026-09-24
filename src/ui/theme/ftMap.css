@@ -1,1 +1,320 @@
-/* Full Thrust — the plotting surface: counters, tracks, arcs, markers, effects and map controls (MapView, Counter and friends). Loads after plot.css. */
+/* Full Thrust — the plotting surface: counters, tracks, arcs, markers, effects
+   and map controls (MapView, Counter and friends). Loads after plot.css, so
+   everything here is the beautification pass over what plot.css still lays
+   out: the grid, the table edge, the base shapes. Nothing here is a filter —
+   every glow is a gradient fill or a wide, faint stroke, because the plot
+   pans and re-renders and a blurred filter would be re-rasterised every time
+   it does. */
+
+/* ── The hull's own chrome (ships-map #1, #2, #4) ─────────────────────────── */
+
+/* Two faint deckplating seams, so the shaded fill reads as plating rather
+   than a flat tint. Void, because a seam is a shadow line, not a marking. */
+.counter-deckline {
+  stroke: var(--void);
+  stroke-width: 14;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* The one hull marking a real ship would carry: the strongest, purest hit of
+   side colour, exactly at the stern — everything else on the hull is shaded
+   or dimmed, so this is deliberately not. */
+.counter-stern-band {
+  fill: currentColor;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* A carrier's flight deck: a hollow groove down the spine, the way a real
+   carrier reads from directly above (ships-map #4). */
+.counter-flightdeck {
+  fill: var(--void);
+  stroke: var(--on-bright);
+  stroke-width: 6;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Everyone else's engine-pod count — 1 for an escort, 2 for a cruiser, 3 for
+   a capital hull and up — a size tell that doesn't depend on the silhouette's
+   own scale (ships-map #4). */
+.counter-engine-pod {
+  fill: var(--on-bright);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* A station never moves, and its rim says so: dashed rather than solid — a
+   genuinely different fact about the hull, drawn for free (ships-map #4). */
+.counter.is-radial .hull {
+  stroke-dasharray: 10 7;
+}
+
+/* The engine glow, sized by thrust rating (ships-map #2): a gradient circle
+   behind the hull, peeking out past the stern. */
+.counter-exhaust {
+  pointer-events: none;
+}
+
+/* ── Selection, screens, health (screens #1, ships-map #7, battle-ui #3) ──── */
+
+/* A crisp ring in the side's own colour and a wider, fainter duplicate behind
+   it — a glow built from two circles, not a blur filter, so selecting a ship
+   costs the plot nothing extra to redraw. Both sit behind the hull. */
+.counter-select-ring {
+  fill: none;
+  stroke: currentColor;
+  pointer-events: none;
+}
+
+.counter-select-ring.is-crisp {
+  stroke-width: 1.6;
+  opacity: 0.85;
+}
+
+.counter-select-ring.is-soft {
+  stroke-width: 5;
+  opacity: 0.22;
+}
+
+/* 7.20's screens: the one colour that already means exactly this everywhere
+   else on the sheet, borrowed here for the one surface where a screened
+   ship's status was otherwise invisible without opening its panel. */
+.counter-screens-halo {
+  fill: none;
+  stroke: var(--screens);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.counter-screens-halo.is-level-2 {
+  opacity: 0.8;
+}
+
+/* The health ring (battle-ui #3): a sweep proportional to hull boxes
+   remaining, in the sheet's own three-tier damage vocabulary. `stroke` and
+   `stroke-dasharray` are set inline, since both are data, not style. */
+.counter-health-ring {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ── Damage as scorch marks (ships-map #5) ────────────────────────────────── */
+
+.counter-damage-wash {
+  fill: var(--damage);
+  pointer-events: none;
+}
+
+.counter-scorch {
+  fill: var(--damage);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ── Wreckage (ships-map #6) ───────────────────────────────────────────────── */
+
+.hull.is-wreck {
+  fill: var(--ink-faint);
+  fill-opacity: 0.5;
+  stroke: var(--ink-faint);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.counter-debris {
+  fill: var(--ink-faint);
+  opacity: 0.55;
+}
+
+/* A slow drift, gated by tokens.css's own reduced-motion rule, which zeroes
+   every animation's duration — no separate guard needed here. */
+.counter-wreck-drift {
+  animation: wreck-drift 11s ease-in-out infinite alternate;
+  transform-origin: center;
+}
+
+@keyframes wreck-drift {
+  from {
+    transform: rotate(-1.4deg);
+  }
+  to {
+    transform: rotate(1.4deg);
+  }
+}
+
+/* ── Name chips above the fire rose (ships-map #3) ────────────────────────── */
+
+.counter-labels {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.counter-chip {
+  position: absolute;
+  transform: translate(-50%, 0);
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.counter-chip-note {
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
+/* ── Ranges and the ruler (ships-map #8) ───────────────────────────────────── */
+
+.range-ring-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--side-a);
+  opacity: 0.75;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--void);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.table-ruler-tick {
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.table-ruler-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: var(--ink-faint);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ── Zoom controls (ships-map #9) ──────────────────────────────────────────── */
+
+.zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  border-color: var(--side-a);
+  color: var(--side-a);
+}
+
+.zoom-btn.is-fit {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Beam two-tone and the hit shockwave (ships-map #11) ──────────────────── */
+
+.shot-core {
+  stroke: #f4f8ff;
+  stroke-width: 0.8;
+  opacity: 0;
+  animation: shot-flash 620ms ease-out forwards;
+}
+
+.hit-shock {
+  fill: none;
+  stroke: var(--damage);
+  stroke-width: 1.2;
+  animation: hit-shock 560ms ease-out forwards;
+}
+
+@keyframes hit-shock {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+/* ── Fighter, gunboat and ordnance markers (ships-map #12, screens #3) ────── */
+
+.flight-group.is-a {
+  color: var(--side-a);
+}
+.flight-group.is-b {
+  color: var(--side-b);
+}
+.flight-group.is-c {
+  color: var(--side-c);
+}
+
+.marker-halo {
+  pointer-events: none;
+}
+
+/* A notch cut into the marker, oriented to the group's own facing — a void-
+   coloured bite at the leading edge, so a flying group with a heading stops
+   reading as a plain waypoint dot (ships-map #12). */
+.flight-notch {
+  fill: var(--void);
+  pointer-events: none;
+}
+
+.missile-halo {
+  pointer-events: none;
+}
+
+/* ── The thrust-glow trail (battle-ui #9) ─────────────────────────────────── */
+
+.thrust-trail rect {
+  fill: var(--thrust);
+  opacity: 0.4;
+  animation: thrust-trail-pulse 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes thrust-trail-pulse {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
