@@ -26,7 +26,7 @@ import { chromium } from 'playwright'
  *   npx vite --port 5231 --strictPort &
  *   node tools/drive_stargrunt_table.mjs
  */
-const URL = process.env.DRIVE_URL ?? 'http://localhost:5231/'
+const URL = process.env.DRIVE_URL ?? 'http://localhost:5199/'
 const SHOTS = process.env.DRIVE_SHOT_DIR ?? null
 const errors = []
 const fail = (why) => {
@@ -120,6 +120,18 @@ async function runDrive(width, height) {
     if (geo && (geo.endBottom > geo.clipBottom || geo.endTop < geo.clipTop)) {
       fail(`[${tag}] K2: the primary End button needs the side column scrolled to reach (${JSON.stringify(geo)})`)
     }
+  }
+
+  // The battle survives a reload and the menu offers to continue it. Checked before the charge below,
+  // whose staging moves figures through the dev handle without a journal entry, so a battle saved after
+  // it no longer replays (the engine now checks a charge's reach).
+  await page.reload({ waitUntil: 'networkidle' })
+  const cont = page.getByRole('button', { name: /Continue the squad battle/ })
+  if (!(await cont.count())) fail(`[${tag}] the menu does not offer to continue the squad battle`)
+  else {
+    await cont.click()
+    await page.waitForSelector('.dst-mapsvg')
+    if (!/makes a normal move/.test(await logText())) fail(`[${tag}] the reloaded battle lost its log`)
   }
 
   // ---- K1: the charge flow. Right now the table is between activations (a side is "to activate a
@@ -232,16 +244,6 @@ async function runDrive(width, height) {
   if (await page.locator('.sg-end').count()) await page.locator('.sg-end').click()
   await shot('table')
 
-  // The battle survives a reload and the menu offers to continue it.
-  await page.reload({ waitUntil: 'networkidle' })
-  const cont = page.getByRole('button', { name: /Continue the squad battle/ })
-  if (!(await cont.count())) fail(`[${tag}] the menu does not offer to continue the squad battle`)
-  else {
-    await cont.click()
-    await page.waitForSelector('.dst-mapsvg')
-    if (!/makes a normal move/.test(await logText())) fail(`[${tag}] the reloaded battle lost its log`)
-    await page.getByRole('button', { name: 'Menu' }).click()
-  }
 
   await browser.close()
 }
