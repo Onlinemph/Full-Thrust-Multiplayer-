@@ -199,12 +199,16 @@ export function SetupForm({
 
       <section>
         <h3>Movement</h3>
-        <p>
-          12.12 is a second movement system, not a variant of the first. Under it a ship&rsquo;s
-          course and its facing come apart: you write a sheet like <code>TP3, MD6</code> and the
-          ship flies a chord that has nothing to do with where its bow is pointing, which is what
-          lets it shoot over its shoulder at the thing it is running from.
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            12.12 is a second movement system, not a variant of the first. Under it a
+            ship&rsquo;s course and its facing come apart: you write a sheet like{' '}
+            <code>TP3, MD6</code> and the ship flies a chord that has nothing to do with where
+            its bow is pointing, which is what lets it shoot over its shoulder at the thing it
+            is running from.
+          </p>
+        </details>
         <label className="code-field">
           System
           <select
@@ -232,12 +236,15 @@ export function SetupForm({
 
       <section>
         <h3>Deployment</h3>
-        <p>
-          18.1 gives three battles, and each of them puts the fleets on the table differently.
-          Pick one and the scenario&rsquo;s written positions are replaced by a deployment: the
-          lower die places first, then you alternate, ship by ship, inside your own zone. Leave
-          it as the scenario wrote it and the fleets start where they always have.
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            18.1 gives three battles, and each of them puts the fleets on the table differently.
+            Pick one and the scenario&rsquo;s written positions are replaced by a deployment: the
+            lower die places first, then you alternate, ship by ship, inside your own zone. Leave
+            it as the scenario wrote it and the fleets start where they always have.
+          </p>
+        </details>
         <label className="code-field">
           Battle type
           <select
@@ -266,17 +273,20 @@ export function SetupForm({
 
       <section>
         <h3>Factions</h3>
-        <p>
-          The campaign supplement&rsquo;s fourteen navies, each with its own traits and its own
-          list of things it will not build. Separate from the tech base: a hull can be legal
-          under section 15 and barred by the faction flying it.{' '}
-          {(() => {
-            const coverage = factionTraitCoverage()
-            return `${coverage.implemented} of ${coverage.total} traits are enforced so far — the
-              prohibitions and the design limits. The ones that change a roll in a battle are
-              typed and not yet read by anything.`
-          })()}
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            The campaign supplement&rsquo;s fourteen navies, each with its own traits and its own
+            list of things it will not build. Separate from the tech base: a hull can be legal
+            under section 15 and barred by the faction flying it.{' '}
+            {(() => {
+              const coverage = factionTraitCoverage()
+              return `${coverage.implemented} of ${coverage.total} traits are enforced so far — the
+                prohibitions and the design limits. The ones that change a roll in a battle are
+                typed and not yet read by anything.`
+            })()}
+          </p>
+        </details>
         {(scenario?.sides ?? []).map((side) => {
           const chosen = draft.factions?.[side.id] ?? ''
           const faction = chosen ? factionById(chosen) : undefined
@@ -336,12 +346,15 @@ export function SetupForm({
 
       <section>
         <h3>Tech base</h3>
-        <p>
-          Section 15 buys an empire a short list of technologies and lets it build nothing else.
-          The roster here was not built to either of the book&rsquo;s example lists, so a side
-          plays unrestricted unless you pick one — and picking one tells you which of the ships
-          you have chosen could not have been built.
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            Section 15 buys an empire a short list of technologies and lets it build nothing else.
+            The roster here was not built to either of the book&rsquo;s example lists, so a side
+            plays unrestricted unless you pick one — and picking one tells you which of the ships
+            you have chosen could not have been built.
+          </p>
+        </details>
         {(scenario?.sides ?? []).map((side) => (
           <label key={side.id} className="code-field">
             {side.name}
@@ -381,13 +394,16 @@ export function SetupForm({
 
       <section>
         <h3>Non-FTL hulls</h3>
-        <p>
-          11.8 keeps in-system ships &mdash; monitors, freighters, System Defense Ships &mdash;
-          out of a one-off battle &ldquo;unless specifically permitted by player agreement or
-          scenario design&rdquo;. This is that permission. Battleriders that brought their
-          Mothership are exempt either way; everything else is named in the log at the start of
-          the battle rather than refused.
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            11.8 keeps in-system ships &mdash; monitors, freighters, System Defense Ships &mdash;
+            out of a one-off battle &ldquo;unless specifically permitted by player agreement or
+            scenario design&rdquo;. This is that permission. Battleriders that brought their
+            Mothership are exempt either way; everything else is named in the log at the start of
+            the battle rather than refused.
+          </p>
+        </details>
         <label className="rule-toggle">
           <input
             type="checkbox"
@@ -474,10 +490,13 @@ export function SetupForm({
 
       <section>
         <h3>Rules preset</h3>
-        <p>
-          The gear this table allows and the rules it plays under, as one named thing: applied here, it writes
-          its bans and options into the setup above, and the battle file carries them.
-        </p>
+        <details className="rule-why">
+          <summary>Why?</summary>
+          <p>
+            The gear this table allows and the rules it plays under, as one named thing: applied here, it
+            writes its bans and options into the setup above, and the battle file carries them.
+          </p>
+        </details>
         <div className="panel-row">
           <select
             aria-label="Rules preset"
@@ -532,7 +551,14 @@ export function SetupForm({
             <span>
               <b>{option.label}</b> <span className="rule-ref">{option.rule}</span>
               <br />
-              <span className="rule-detail">{option.detail}</span>
+              {option.detail.length > 60 ? (
+                <details className="rule-why">
+                  <summary onClick={(event) => event.stopPropagation()}>Why?</summary>
+                  <span className="rule-detail">{option.detail}</span>
+                </details>
+              ) : (
+                <span className="rule-detail">{option.detail}</span>
+              )}
               {option.notYet ? (
                 <>
                   <br />
@@ -568,7 +594,10 @@ export function SetupPanel({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+      {/* Widened only while a custom scenario is being drawn up: that is the
+          one part of this form with a live picture worth sitting beside its
+          fields, and the plain form reads better as the narrower column. */}
+      <div className={`modal${custom ? ' is-wide' : ''}`} onClick={(event) => event.stopPropagation()}>
         <h2>New battle</h2>
 
         <SetupForm draft={draft} setDraft={setDraft} onPrint={onPrint} />

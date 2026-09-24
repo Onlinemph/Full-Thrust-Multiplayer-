@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import type { ShipDesign } from '../engine/types'
 import { scenarioById, type Scenario } from '../data/scenarios'
 import { allDesigns } from '../data/ships'
+import { CounterPreview } from './CounterPreview'
 
 /**
  * The designs this repository ships as a fleet book (18.2).
@@ -364,6 +365,9 @@ export function FleetPicker({
                     }
                     onClick={() => setPicks([...picked, design.id])}
                   >
+                    <span aria-hidden="true">
+                      <CounterPreview design={design} size={24} />
+                    </span>
                     {design.name}
                     <span className="num">{designCost(design, cpv)}</span>
                   </button>

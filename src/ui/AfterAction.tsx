@@ -44,7 +44,9 @@ export function AfterAction({ game, title }: { game: GameState; title: string })
                   <td>
                     {ship.name} <span className="rule-ref">{ship.className}</span>
                   </td>
-                  <td className="report-state">{ship.level}</td>
+                  <td className="report-state">
+                    <span className={`loss is-${ship.level}`}>{ship.level}</span>
+                  </td>
                   <td className="num">{ship.shots}</td>
                   <td className="num" title={describeDealtBy(ship.dealtBy) || undefined}>
                     {ship.dealt}

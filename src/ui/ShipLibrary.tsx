@@ -372,6 +372,9 @@ function ShelfRow({
 }) {
   return (
     <button className={`panel-row${selected ? ' is-selected' : ''}`} onClick={onSelect}>
+      <span aria-hidden="true">
+        <CounterPreview design={design} size={24} />
+      </span>
       <span>
         {design.name}
         {detail ? <span className="library-detail">{detail}</span> : null}

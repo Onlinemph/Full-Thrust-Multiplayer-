@@ -1,1 +1,74 @@
-/* Full Thrust — menus, setup, fleet picker, lobby, scenario builder, house rules, Ship library, Shipyard and the SSD sheet on screen. Loads after modals.css. */
+/* Full Thrust — menus, setup, fleet picker, lobby, scenario builder, house rules, Ship library, Shipyard and the SSD sheet on screen. Loads after modals.css.
+
+   chrome.css's `.menu*` rules and panels.css's `.ssd*` rules belong to other
+   builders, so this file only overrides them — it never edits those files. */
+
+/* ── Main menu: a card grid, not a column of ten identical buttons ───────── */
+
+/* A labelled cluster of the menu's own buttons: Play, Design, Reference. Sits
+   in the same `.menu-actions` column as the one primary action above it. */
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.menu-group h4 {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.menu-group-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+
+/* A hint sits under its label rather than beside it in the narrower grid
+   cell, so a long label and its hint never fight for the same line. */
+.menu-group-grid button {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1em;
+  padding: 0.5rem 0.7rem;
+}
+
+.menu-group-grid .menu-hint {
+  white-space: normal;
+}
+
+@media (max-width: 420px) {
+  .menu-group-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── New battle: rules prose behind a "why?", every control stays visible ── */
+
+.rule-why summary {
+  margin: 0.15rem 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  list-style: none;
+}
+
+.rule-why summary::-webkit-details-marker {
+  display: none;
+}
+
+.rule-why summary::before {
+  content: '? ';
+}
+
+.rule-why[open] summary {
+  color: var(--side-a);
+}
+
+.rule-why p,
+.rule-why .rule-detail {
+  margin: 0.3rem 0 0;
+}

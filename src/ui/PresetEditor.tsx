@@ -259,8 +259,12 @@ export function PresetEditor({ onClose, initial, onApply }: PresetEditorProps) {
             {unknown.length > 0 ? ` Unknown to this catalogue: ${unknown.join(', ')}.` : ''}
           </p>
           <div className="preset-gear">
-            {groups.map((group) => (
-              <div key={group.label} className="preset-group">
+            {groups.map((group, i) => (
+              <div
+                key={group.label}
+                className="preset-group"
+                style={{ ['--fam-dot' as string]: `var(--fam-${(i % 4) + 1})` }}
+              >
                 <h4>
                   {group.label}
                   <span className="campaign-inline">

@@ -93,37 +93,56 @@ export function MainMenu({
           <button className={continueLabel ? undefined : 'primary'} onClick={onNewBattle}>
             New battle
           </button>
-          <button onClick={onRemotePlay}>Remote play</button>
-          {campaignLabel ? (
-            <button onClick={onContinueCampaign}>
-              Continue campaign <span className="menu-hint">{campaignLabel}</span>
-            </button>
-          ) : null}
-          <button onClick={onNewCampaign}>{campaignLabel ? 'New campaign' : 'Campaign'}</button>
-          <button onClick={onDirtside}>
-            {dirtsideLabel ? 'Continue the ground battle' : 'Dirtside table'} <span className="menu-hint">{dirtsideLabel ?? 'Dirtside II skirmish'}</span>
-          </button>
-          <button onClick={onMotorPool}>
-            Motor Pool <span className="menu-hint">Dirtside II vehicle designer</span>
-          </button>
-          <button onClick={onLibrary}>Ship library</button>
-          <button onClick={onShipyard}>Shipyard</button>
-          <button onClick={onHouseRules}>
-            House rules <span className="menu-hint">presets of gear and rules</span>
-          </button>
-          <label className="file-button menu-file">
-            Load a battle file
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={async (event) => {
-                const file = event.target.files?.[0]
-                if (!file) return
-                onLoadFile(await file.text())
-                event.target.value = ''
-              }}
-            />
-          </label>
+
+          <div className="menu-group">
+            <h4>Play</h4>
+            <div className="menu-group-grid">
+              <button onClick={onRemotePlay}>Remote play</button>
+              {campaignLabel ? (
+                <button onClick={onContinueCampaign}>
+                  Continue campaign <span className="menu-hint">{campaignLabel}</span>
+                </button>
+              ) : null}
+              <button onClick={onNewCampaign}>{campaignLabel ? 'New campaign' : 'Campaign'}</button>
+              <button onClick={onDirtside}>
+                {dirtsideLabel ? 'Continue the ground battle' : 'Dirtside table'}{' '}
+                <span className="menu-hint">{dirtsideLabel ?? 'Dirtside II skirmish'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="menu-group">
+            <h4>Design</h4>
+            <div className="menu-group-grid">
+              <button onClick={onMotorPool}>
+                Motor Pool <span className="menu-hint">Dirtside II vehicle designer</span>
+              </button>
+              <button onClick={onLibrary}>Ship library</button>
+              <button onClick={onShipyard}>Shipyard</button>
+            </div>
+          </div>
+
+          <div className="menu-group">
+            <h4>Reference</h4>
+            <div className="menu-group-grid">
+              <button onClick={onHouseRules}>
+                House rules <span className="menu-hint">presets of gear and rules</span>
+              </button>
+              <label className="file-button menu-file">
+                Load a battle file
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    onLoadFile(await file.text())
+                    event.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+          </div>
         </div>
 
         <p className="menu-foot">
