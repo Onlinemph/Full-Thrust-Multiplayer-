@@ -39,6 +39,17 @@
   z-index: 2;
 }
 
+/* Ordnance, fighter, gunboat and blast markers (visual #8): their own SVG
+   layer, above the name chips rather than inside the main one, so a marker
+   that lands where a nearby ship's chip sits still reads — a chip is a label,
+   not a wall, and the thing it would otherwise hide is the one a player most
+   needs to see coming. Takes no pointer events itself; the markers that are
+   clickable (a fighter or gunboat group) opt back in with `.flight-group`. */
+.plot svg.plot-markers {
+  z-index: 5;
+  pointer-events: none;
+}
+
 /* The grid is scale, not decoration: one line every 12 MU, which is the beam
    range band (4.3), so a player can read distance off the table by eye. It is
    drawn inside the table rect rather than across the viewport, because a grid
@@ -715,6 +726,9 @@
 
 .flight-group {
   cursor: pointer;
+  /* The marker layer takes no pointer events by default (visual #8); a group
+     is the one marker on it a click still has to reach. */
+  pointer-events: auto;
 }
 
 /* A gunboat squadron. Square rather than round, and bigger than a wing: 9.1
@@ -854,12 +868,17 @@
    selected ship, port to the left and starboard to the right, the throttle
    under it. Positioned at the counter's screen coordinates by MapView; every
    child is placed about that point. The container itself takes no pointer
-   events, so the table under the ring can still be clicked and dragged. */
+   events, so the table under the ring can still be clicked and dragged.
+
+   z-index above `.counter-labels` (visual #2): this is a live control, not a
+   name tag, and a neighbour's chip must never be able to paint over its
+   buttons — the compass only ever shows one ship at a time, so there is
+   nothing of its own for a chip to be kept clear of instead. */
 .compass {
   position: absolute;
   width: 0;
   height: 0;
-  z-index: 3;
+  z-index: 6;
   pointer-events: none;
   font-family: var(--font-mono);
 }
@@ -887,7 +906,7 @@
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
-  background: rgb(11 16 28 / 0.94);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border: 1px solid var(--line);
   color: var(--ink);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.55);
@@ -968,7 +987,7 @@
 
 .compass-pill {
   padding: 2px 6px;
-  background: rgb(11 16 28 / 0.94);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border: 1px solid var(--line);
   border-radius: 14px;
   font-size: 12px;

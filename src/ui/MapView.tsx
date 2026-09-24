@@ -122,6 +122,102 @@ function clampZoom(zoom: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom))
 }
 
+/**
+ * A ship's name with its class stripped off — "Bystry-class Destroyer 1"
+ * becomes "Destroyer 1" — the fallback a dense cluster's chip drops to
+ * (visual #3). The full name is never lost: it is the chip's own title, a
+ * hover away.
+ */
+function classFreeName(name: string): string {
+  return name.replace(/^.*?-class\s+/i, '')
+}
+
+/**
+ * A name chip's box on screen, sized from ftMap.css's own metrics closely
+ * enough to steer the collision pass below — it only decides where a chip
+ * lands, never what is actually painted, so it does not have to be exact.
+ */
+const CHIP_FONT = 10
+const CHIP_NOTE_FONT = 9
+const CHIP_CHAR = 0.62 /* a monospace glyph, as a fraction of its font size */
+const CHIP_PAD = 12 /* 5px padding either side, 1px border either side */
+const CHIP_NOTE_GAP = 5
+const CHIP_HEIGHT = 18
+const CHIP_CLEAR = 3 /* the least a chip is nudged clear of another by */
+
+function chipWidth(text: string, note: string | null): number {
+  const width = CHIP_PAD + text.length * CHIP_FONT * CHIP_CHAR
+  return note === null ? width : width + CHIP_NOTE_GAP + note.length * CHIP_NOTE_FONT * CHIP_CHAR
+}
+
+interface ChipBox {
+  id: string
+  cx: number
+  top: number
+  width: number
+  text: string
+  full: string
+  note: string | null
+}
+
+function chipsOverlap(a: ChipBox, b: ChipBox, clear: number): boolean {
+  if (a.cx + a.width / 2 + clear <= b.cx - b.width / 2) return false
+  if (b.cx + b.width / 2 + clear <= a.cx - a.width / 2) return false
+  if (a.top + CHIP_HEIGHT + clear <= b.top) return false
+  if (b.top + CHIP_HEIGHT + clear <= a.top) return false
+  return true
+}
+
+/**
+ * Ship name chips read fine apart, but a formation starts close enough that
+ * their labels land on each other (visual #3) — the same problem
+ * `arrangeTouchingShips` already solves for the counters themselves, worked
+ * the same way for the chips instead. Anything that still overlaps another
+ * chip at full length first drops to its class-free name, which is usually
+ * room enough on its own; anything that still overlaps after that is nudged
+ * straight down, clear of whatever it landed on, so no two chips ever share
+ * a spot on screen.
+ */
+function layoutNameChips(
+  chips: ReadonlyArray<{ id: string; cx: number; top: number; full: string; note: string | null }>,
+): Map<string, ChipBox> {
+  const boxes: ChipBox[] = chips.map((chip) => ({
+    ...chip,
+    text: chip.full,
+    width: chipWidth(chip.full, chip.note),
+  }))
+  const crowded = new Set<string>()
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      if (chipsOverlap(boxes[i], boxes[j], CHIP_CLEAR)) {
+        crowded.add(boxes[i].id)
+        crowded.add(boxes[j].id)
+      }
+    }
+  }
+  for (const box of boxes) {
+    if (!crowded.has(box.id)) continue
+    box.text = classFreeName(box.full)
+    box.width = chipWidth(box.text, box.note)
+  }
+  const placed: ChipBox[] = []
+  for (const box of [...boxes].sort((a, b) => a.top - b.top || a.cx - b.cx)) {
+    let clear = false
+    let guard = 0
+    while (!clear && guard++ < 50) {
+      clear = true
+      for (const other of placed) {
+        if (chipsOverlap(box, other, CHIP_CLEAR)) {
+          box.top = other.top + CHIP_HEIGHT + CHIP_CLEAR
+          clear = false
+        }
+      }
+    }
+    placed.push(box)
+  }
+  return new Map(placed.map((box) => [box.id, box]))
+}
+
 export function MapView({
   game,
   table,
@@ -516,6 +612,39 @@ export function MapView({
       return { ship, legs: result.legs, steps: null, hazard }
     })
 
+  // ships-map #3 / visual #3: the name chips drawn above the fire rose, laid
+  // out once here so the collision pass runs only over the ships actually on
+  // screen; the render below just reads the result back by ship id.
+  const chipShips = game.ships.filter((ship) => !ship.destroyed && visible(ship, viewingSide))
+  const chipLayout = layoutNameChips(
+    chipShips.map((ship) => {
+      const at = drawnAt.get(ship.id) ?? riderOffset(game, ship)
+      const clear = counterScreenRadius(ship.design.mass, scale)
+      return {
+        id: ship.id,
+        cx: originX + at.x * scale,
+        top: originY + at.y * scale + clear + 2,
+        full: ship.name,
+        note: viewingSide !== null && ship.side !== viewingSide ? `${ship.velocity} MU` : null,
+      }
+    }),
+  )
+
+  // visual #2: the compass follows the selected ship's live screen position on
+  // every pan and zoom, rather than a position cached at selection time; and
+  // when that position scrolls outside the plot's own visible area, the
+  // compass hides with it instead of floating over empty space with no ship,
+  // no track and nothing to say whose orders it is.
+  const compassPoint = (() => {
+    if (!compassFor(selected)) return null
+    const at = drawnAt.get((selected as ShipState).id)
+    if (!at) return null
+    const x = originX + at.x * scale
+    const y = originY + at.y * scale
+    if (x < 0 || x > size.width || y < 0 || y > size.height) return null
+    return { x, y }
+  })()
+
   return (
     <div
       className="plot"
@@ -529,7 +658,11 @@ export function MapView({
       role="application"
       aria-label="Plotting surface"
     >
-      <svg>
+      {/* Its own zero-size svg, so both the main plot and the marker layer
+          below can reference these defs by id without either owning them —
+          an id is good document-wide, not just within the svg that declares
+          it. */}
+      <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
         <defs>
           <pattern
             id="mu-grid"
@@ -552,6 +685,8 @@ export function MapView({
             <stop offset="1" stopColor="currentColor" stopOpacity="0" />
           </radialGradient>
         </defs>
+      </svg>
+      <svg>
         <Starfield
           seed={game.seed}
           table={table}
@@ -780,10 +915,6 @@ export function MapView({
             />
           ) : null}
 
-          {game.ordnance.map((marker) => (
-            <OrdnanceGlyph key={marker.id} marker={marker} scale={scale} />
-          ))}
-
           {/* 7.23's nova template: the swept band, drawn as a capsule from the
               start of this generation's sweep to its end at the template's own
               radius. It is the one thing on the table a player has to see to
@@ -812,19 +943,6 @@ export function MapView({
               />
             )
           })}
-
-          {/* 5.16's Blast Marker. Drawn at its true 2 MU radius, because the
-              thing a player has to read off the table is which lane is now
-              lethal — and 5.16 does not ask whose fighters fly down it. */}
-          {flakMarkers(game).map((marker) => (
-            <circle
-              key={marker.id}
-              className={`flak-marker side-${marker.side}`}
-              cx={marker.position.x * scale}
-              cy={marker.position.y * scale}
-              r={FLAK_BLAST_RADIUS_MU * scale}
-            />
-          ))}
 
           {effects.map((fx) =>
             fx.from ? (
@@ -963,6 +1081,33 @@ export function MapView({
                 }}
               />
             ))}
+        </g>
+      </svg>
+
+      {/* Ordnance, fighter, gunboat and blast markers: their own svg layer,
+          above the name-chip layer below rather than inside the plot's main
+          one (visual #8) — so a missile or a wing that lands where a nearby
+          ship's chip sits is not painted over by a label. Takes no pointer
+          events of its own; `.flight-group` opts back in so a group is still
+          a click. */}
+      <svg className="plot-markers">
+        <g transform={`translate(${originX} ${originY})`}>
+          {game.ordnance.map((marker) => (
+            <OrdnanceGlyph key={marker.id} marker={marker} scale={scale} />
+          ))}
+
+          {/* 5.16's Blast Marker. Drawn at its true 2 MU radius, because the
+              thing a player has to read off the table is which lane is now
+              lethal — and 5.16 does not ask whose fighters fly down it. */}
+          {flakMarkers(game).map((marker) => (
+            <circle
+              key={marker.id}
+              className={`flak-marker side-${marker.side}`}
+              cx={marker.position.x * scale}
+              cy={marker.position.y * scale}
+              r={FLAK_BLAST_RADIUS_MU * scale}
+            />
+          ))}
 
           {/* Gunboats: bigger counters than a wing, because a gunboat is
               closer to a small ship than to a fighter (9.1) — and the number
@@ -1100,36 +1245,38 @@ export function MapView({
           ordinary formation spacing it paints over a neighbour's own name —
           this repeats every visible ship's chip over the top of it, so a
           covered name still reads. Additive: the counter keeps its own label
-          underneath, for hit-testing and the drives, unchanged. */}
+          underneath, for hit-testing and the drives, unchanged.
+
+          A formation starts close enough that chips placed this way would
+          land on each other (visual #3), so they go through a collision pass
+          first: anything still overlapping at full length drops to its
+          class-free name (the full name a hover away, in its title), and
+          anything still overlapping after that is nudged clear. */}
       <div className="counter-labels" aria-hidden="true">
-        {game.ships
-          .filter((ship) => !ship.destroyed && visible(ship, viewingSide))
-          .map((ship) => {
-            const at = drawnAt.get(ship.id) ?? riderOffset(game, ship)
-            const clear = counterScreenRadius(ship.design.mass, scale)
-            const note =
-              viewingSide !== null && ship.side !== viewingSide
-                ? `${ship.velocity} MU`
-                : null
-            return (
-              <div
-                key={`chip-${ship.id}`}
-                className="counter-chip"
-                style={{ left: originX + at.x * scale, top: originY + at.y * scale + clear + 2 }}
-              >
-                <span>{ship.name}</span>
-                {note ? <span className="counter-chip-note">{note}</span> : null}
-              </div>
-            )
-          })}
+        {chipShips.map((ship) => {
+          const box = chipLayout.get(ship.id)
+          if (!box) return null
+          const shortened = box.text !== box.full
+          return (
+            <div
+              key={`chip-${ship.id}`}
+              className="counter-chip"
+              style={{ left: box.cx, top: box.top }}
+              title={shortened ? box.full : undefined}
+            >
+              <span>{box.text}</span>
+              {box.note ? <span className="counter-chip-note">{box.note}</span> : null}
+            </div>
+          )
+        })}
       </div>
 
-      {compassFor(selected) ? (
+      {compassPoint ? (
         <OrderCompass
           key={selected?.id}
           ship={selected as ShipState}
-          x={originX + (drawnAt.get(selected?.id ?? '')?.x ?? 0) * scale}
-          y={originY + (drawnAt.get(selected?.id ?? '')?.y ?? 0) * scale}
+          x={compassPoint.x}
+          y={compassPoint.y}
           clearance={counterScreenRadius((selected as ShipState).design.mass, scale)}
           onTrack={(selected as ShipState).orbit !== null}
           editable={canCommand?.(selected as ShipState) ?? true}
