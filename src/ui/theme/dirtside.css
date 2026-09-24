@@ -212,10 +212,12 @@
   max-width: 22rem;
 }
 
-/* A gun is one row: what it is, its class and mount, barrels, what it costs in capacity. */
+/* A gun is one row: what it is, its class and mount, barrels, what it costs in capacity.
+   Flex that wraps, so on a narrow pane the capacity note drops to its own line instead of
+   drawing over the barrels, and no select is squeezed below its text. */
 .ds-weapon {
-  display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.5rem;
@@ -224,15 +226,23 @@
   background: var(--panel-2);
 }
 
+.ds-weapon > * {
+  flex: none;
+}
+
 .ds-weapon select[aria-label='Weapon type'] {
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
   width: 100%;
 }
 
+.ds-weapon select[aria-label='Mount'] {
+  min-width: 7.5rem;
+}
+
 .ds-weapon > .campaign-dim {
+  margin-left: auto;
   font-size: var(--text-xs);
   white-space: nowrap;
-  justify-self: end;
 }
 
 .ds-weapon > button {
