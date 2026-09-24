@@ -318,3 +318,22 @@
     opacity: 0.5;
   }
 }
+
+/* On the plot, a ship's name and speed are drawn once, as the chip above the
+   fire rose; the counter's own SVG text stays for hit-testing but is not
+   drawn a second time underneath. */
+.plot g.counter > .counter-label,
+.plot g.counter > .counter-note {
+  visibility: hidden;
+}
+
+/* A clicked counter takes focus, and the browser's square focus outline sat
+   over the round selection ring. Keyboard focus is shown on the hull's own
+   ring instead. */
+.plot g.counter:focus {
+  outline: none;
+}
+.plot g.counter:focus-visible:not(.is-selected) .hull {
+  stroke: var(--ink);
+  stroke-dasharray: 3 2;
+}
