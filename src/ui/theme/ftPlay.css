@@ -19,6 +19,12 @@
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  /* As a flex child of .app-bar, this row's automatic min-width is otherwise
+     the intrinsic (nowrap) width of everything inside it — including
+     .ph-hint's long, dynamic requirement text — which can push the strip,
+     and the .end-phase button riding along in .ph-main, past the viewport
+     with no scrollbar to reach it. Let it shrink like any other flex item. */
+  min-width: 0;
 }
 
 .ph-top {
@@ -155,6 +161,7 @@
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  min-width: 0;
 }
 
 .ph-say {
@@ -237,4 +244,69 @@
    Library already uses) gets the room a dozen-system hull needs. */
 .modal .ssd-plan {
   max-height: 80vh;
+}
+
+/* `.modal` (modals.css) is already `display: flex; flex-direction: column;
+   max-height: 90vh; overflow-y: auto` — a scrolling column with Close as its
+   last item, which is what let the hit/damage grid and Close both land below
+   the fold with no cue that scrolling would reach them (visual #7,
+   playtest #3). The body becomes the one thing that scrolls, sized to
+   whatever `.modal` leaves it (`flex: 1 1 auto; min-height: 0`), so `.modal`
+   itself never needs to and Close, a plain sibling after it, is never part
+   of what scrolls. Scoped to this one expanded view (`.ssd-expanded`, set on
+   App.tsx's modal only) rather than every `.modal.is-wide` — the Ship
+   Library and Shipyard's own wide modals are unaffected. */
+.ssd-expanded-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ssd-expanded-close {
+  flex: none;
+}
+
+/* On a wide screen the plan (the ship) and the tracks (its damage) sit side
+   by side instead of stacking, so opening the sheet "larger" no longer means
+   scrolling past a pristine-looking silhouette to find out what's actually
+   wrong with the ship. Narrower than this, they keep stacking — there is not
+   enough width left for either half to stay legible. */
+@media (min-width: 860px) {
+  .ssd-expanded-body .ssd {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'head head'
+      'stats stats'
+      'plan tracks'
+      'crew crew';
+    align-items: start;
+  }
+
+  .ssd-expanded-body .ssd-head {
+    grid-area: head;
+  }
+
+  .ssd-expanded-body .ssd-stats {
+    grid-area: stats;
+  }
+
+  .ssd-expanded-body .ssd-plan-wrap {
+    grid-area: plan;
+  }
+
+  .ssd-expanded-body .ssd-tracks {
+    grid-area: tracks;
+    align-self: center;
+  }
+
+  .ssd-expanded-body .ssd-crew {
+    grid-area: crew;
+  }
+
+  /* The plan's own 80vh cap (above) is for the stacked case; side by side it
+     only needs to fit half the modal's width, so height stops being the
+     limit and the 44vh a normal sheet already uses is plenty. */
+  .ssd-expanded-body .ssd-plan {
+    max-height: 44vh;
+  }
 }

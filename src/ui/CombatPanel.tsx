@@ -432,7 +432,48 @@ export function CombatPanel({
             reachOf(ship, weapon, range, arc, aftOpen),
           )
           const able = reach.filter((r) => r.blocked === null)
+          const blockedReach = reach.filter((r) => r.blocked !== null)
           const needsNew = !engaged.includes(target.id)
+
+          /** One weapon's declare-to-fire chip, shared between the bearing
+              row and the folded rest below — same button either way, so
+              `.target-block .weapon-fire` and `.is-blocked` still find it. */
+          const weaponFireChip = (weapon: WeaponDef, blocked: string | null, dice: number) => {
+            const here = plan[weapon.id]?.targetId === target.id
+            const elsewhere = plan[weapon.id] !== undefined && !here
+            return (
+              <button
+                key={weapon.id}
+                className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
+                  here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                }${
+                  litArc !== null &&
+                  arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(litArc)
+                    ? ' is-lit'
+                    : ''
+                }`}
+                disabled={!canCommand || blocked !== null}
+                title={
+                  blocked ??
+                  (here
+                    ? 'Declared at this target — click to take it off'
+                    : elsewhere
+                      ? `Declared at ${plan[weapon.id]?.label}; click to move it here`
+                      : `${dice}D6 at ${range.toFixed(1)} MU — click to declare`)
+                }
+                onMouseEnter={() =>
+                  onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
+                }
+                onMouseLeave={() => onHoverWeapon?.(undefined)}
+                onClick={() =>
+                  declare(weapon.id, { targetId: target.id, kind: 'ship', label: target.name })
+                }
+              >
+                {weapon.label}
+                {blocked ? null : <span className="num">{dice}D6</span>}
+              </button>
+            )
+          }
 
           return (
             <div key={target.id} className="target-block">
@@ -594,46 +635,32 @@ export function CombatPanel({
               {able.length === 0 ? (
                 <p className="nothing-bears">Nothing bears on them.</p>
               ) : (
-                <div className="ssd-systems">
-                  {reach.map(({ weapon, blocked, dice }) => {
-                    const here = plan[weapon.id]?.targetId === target.id
-                    const elsewhere = plan[weapon.id] !== undefined && !here
-                    return (
+                <>
+                  {/* Only what actually bears gets a range bar: with every
+                      mount on the hull listed regardless of arc, the one
+                      chip a player can use was easy to lose among five
+                      near-identical dimmed ones, each doubled by its own
+                      copy of the bar (playtest #5). */}
+                  <div className="ssd-systems">
+                    {able.map(({ weapon, blocked, dice }) => (
                       <span className="weapon-reach" key={weapon.id}>
-                        <button
-                          className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
-                            here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
-                          }${
-                            litArc !== null &&
-                            arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(litArc)
-                              ? ' is-lit'
-                              : ''
-                          }`}
-                          disabled={!canCommand || blocked !== null}
-                          title={
-                            blocked ??
-                            (here
-                              ? 'Declared at this target — click to take it off'
-                              : elsewhere
-                                ? `Declared at ${plan[weapon.id]?.label}; click to move it here`
-                                : `${dice}D6 at ${range.toFixed(1)} MU — click to declare`)
-                          }
-                          onMouseEnter={() =>
-                            onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
-                          }
-                          onMouseLeave={() => onHoverWeapon?.(undefined)}
-                          onClick={() =>
-                            declare(weapon.id, { targetId: target.id, kind: 'ship', label: target.name })
-                          }
-                        >
-                          {weapon.label}
-                          {blocked ? null : <span className="num">{dice}D6</span>}
-                        </button>
+                        {weaponFireChip(weapon, blocked, dice)}
                         <RangeBar weapon={weapon} range={range} />
                       </span>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                  {blockedReach.length > 0 ? (
+                    <details className="weapon-fold">
+                      <summary>
+                        {blockedReach.length} more {blockedReach.length === 1 ? "doesn't" : "don't"} bear
+                        <span className="weapon-fold-why"> — {reachFoldSummary(blockedReach)}</span>
+                      </summary>
+                      <div className="ssd-systems">
+                        {blockedReach.map(({ weapon, blocked, dice }) => weaponFireChip(weapon, blocked, dice))}
+                      </div>
+                    </details>
+                  ) : null}
+                </>
               )}
             </div>
           )
@@ -840,6 +867,32 @@ function RangeBar({ weapon, range }: { weapon: WeaponDef; range: number }) {
       {markerX !== null ? <circle cx={markerX} cy="7" r="2.4" className="range-bar-marker" /> : null}
     </svg>
   )
+}
+
+/**
+ * A one-line reason for a `<details>` summary covering every weapon folded
+ * away because it does not bear (playtest #5): grouped by *why* — out of
+ * arc, out of range, already fired, and so on — rather than repeating each
+ * mount's own full sentence, since a player skimming the fold wants the
+ * shape of the problem, not six near-identical tooltips read one at a time.
+ */
+function reachFoldSummary(blocked: Reach[]): string {
+  const bucket = (reason: string): string => {
+    if (reason.startsWith('Cannot bear')) return 'out of arc'
+    if (reason.startsWith('Out of range')) return 'out of range'
+    if (reason.startsWith('Blocked by the drive')) return 'blocked by the drive'
+    if (reason === 'Already fired') return 'already fired'
+    if (reason === 'Knocked out') return 'knocked out'
+    return 'blocked'
+  }
+  const counts = new Map<string, number>()
+  for (const { blocked: reason } of blocked) {
+    const key = bucket(reason ?? 'blocked')
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts]
+    .map(([reason, count]) => (count > 1 ? `${count} ${reason}` : reason))
+    .join(', ')
 }
 
 /** Whether a weapon can engage a target, and what it would roll (4.2 – 4.5). */
