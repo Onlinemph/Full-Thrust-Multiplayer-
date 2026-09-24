@@ -69,9 +69,13 @@ export function BattleResult({
   })
   const winner = score.sides.find((s) => s.side === end.winner)
 
+  // Which side's colour won reads before the sentence does — the same idea
+  // as the Dirtside table's own result strip (dirtsidePlay.css .dst-strip.is-result).
+  const resultColor = winner ? `var(--side-${winner.side})` : 'var(--ink-faint)'
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal" style={{ borderTop: `3px solid ${resultColor}` }} onClick={(event) => event.stopPropagation()}>
         <h2>{winner ? `${winner.name} wins` : 'A draw'}</h2>
         <p>
           {end.reason === 'turn-limit'

@@ -1,1 +1,240 @@
 /* Full Thrust — the battle screen around the map: header, phase track, side column, phase panels, log, result. Loads after panels.css and chrome.css. */
+
+/* ── The phase strip (battle-ui.md #1) ────────────────────────────────────── */
+
+/* `.app-bar` already wraps (chrome.css), so a full-width child simply falls
+   to a second row without touching the layout of the screens that never
+   render one — Dirtside's own `.dst-bar` never contains a `.phase-strip`. */
+.app-bar .phase-strip {
+  flex: 1 1 100%;
+  order: 10;
+}
+
+.phase-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.6rem 0.5rem;
+  margin-top: 0.3rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.ph-top {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+}
+
+.ph-turn {
+  flex: none;
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+/* The turn's four stages (2.6): where we are, and how much of the turn is
+   behind us. Built on the same idiom as Dirtside's `.dst-steps`. */
+.ph-stages {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 8rem;
+}
+
+.ph-stages li {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.ph-stages li + li::before {
+  content: '';
+  order: -2;
+  width: 0.9rem;
+  height: 1px;
+  margin: 0 0.35rem;
+  background: var(--line);
+  flex: none;
+}
+
+.ph-stages li.is-past {
+  color: var(--ink-dim);
+}
+
+.ph-stages li.is-now {
+  color: var(--side-a);
+}
+
+.ph-stages li.is-now::after {
+  content: '';
+  order: -1;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: var(--side-a);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--side-a) 25%, transparent);
+  flex: none;
+}
+
+/* Whose shot it is: the one phase (11) Full Thrust plays strictly one side
+   at a time (2.6). */
+.ph-sidechip {
+  flex: none;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A decision is waiting on this console: the same "Your call" idea as
+   Dirtside's `.dst-decide`, in --thrust because that is what a decision
+   waiting on the player already means everywhere else on this screen. */
+.ph-decide {
+  flex: none;
+  padding: 0 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--thrust) 70%, transparent);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--thrust);
+  white-space: nowrap;
+}
+
+/* Nobody is asking anything of this console because the computer's own
+   ships are what the phase is waiting on — a quiet aside, not a decision, so
+   it gets a spinner and --ink-dim rather than the orange "Your call" chip. */
+.ph-computer {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-dim);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.ph-spinner {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  border: 2px solid color-mix(in srgb, var(--ink-dim) 35%, transparent);
+  border-top-color: var(--ink-dim);
+  border-radius: 50%;
+  animation: ph-spin 0.8s linear infinite;
+}
+
+@keyframes ph-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ph-main {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.ph-say {
+  flex: 1;
+  min-width: 0;
+}
+
+.ph-banner {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ph-hint {
+  margin: 0.1rem 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* battle-ui.md #2: requirements are --thrust, never --damage — red stays
+   reserved for hull damage (tokens.css section 1). --warn is the lighter
+   "may skip" severity, kept apart by hue from the "must" one. */
+.ph-hint.is-required {
+  color: var(--thrust);
+}
+
+.ph-hint.is-optional {
+  color: var(--warn);
+}
+
+.phase-strip button.end-phase {
+  flex: none;
+}
+
+/* ── Phase-family tint (screens.md #10) ───────────────────────────────────── */
+
+/* A hairline left edge in the phase's own family colour, under the cursor
+   already, so "what kind of phase is this" is a glance rather than a read of
+   the small phase name at the top of the screen. Chrome-appropriate opacity:
+   dialled down with color-mix rather than a second, duller set of tokens. */
+.phase-panel > .panel {
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+.phase-panel.is-plan > .panel {
+  border-left-color: color-mix(in srgb, var(--side-a) 55%, var(--line));
+}
+
+.phase-panel.is-move > .panel {
+  border-left-color: color-mix(in srgb, var(--screens) 55%, var(--line));
+}
+
+.phase-panel.is-fire > .panel {
+  border-left-color: color-mix(in srgb, var(--thrust) 55%, var(--line));
+}
+
+.phase-panel.is-damage > .panel {
+  border-left-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+}
+
+/* ── The SSD, expanded (screens.md #6) ────────────────────────────────────── */
+
+.ssd-expand {
+  flex: none;
+  padding: 0.1em 0.5em;
+  font-size: var(--text-md);
+  line-height: 1.2;
+}
+
+/* The always-on-screen sheet keeps panels.css's own 44vh cap; only the copy
+   opened in the wide modal (App.tsx, the same `.modal.is-wide` the Ship
+   Library already uses) gets the room a dozen-system hull needs. */
+.modal .ssd-plan {
+  max-height: 80vh;
+}

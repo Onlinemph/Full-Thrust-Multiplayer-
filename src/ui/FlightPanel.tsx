@@ -4,8 +4,9 @@ import type {
   GunboatSquadronState,
   ShipState,
 } from '../engine/game'
-import { isExhausted, mainMoveAllowance, secondaryMoveAllowance } from '../engine/fighters'
+import { fighterProfile, isExhausted, mainMoveAllowance, secondaryMoveAllowance } from '../engine/fighters'
 import {
+  GUNBOAT_CEF,
   GUNBOAT_MOVE,
   GUNBOAT_SECONDARY_MOVE,
   isSquadronExhausted,
@@ -108,12 +109,17 @@ export function FlightPanel({
             <span className="flight-name">{flight.label}</span>
           </button>
           <span className="spacer" />
-          {/* Endurance is the number a wing is planned around (8.13). */}
-          <span
-            className={`num flight-cef-readout${flight.cef === 0 ? ' is-spent' : ''}`}
-            title="Combat Endurance Factors remaining (8.13)"
-          >
-            CEF {flight.cef}
+          {/* Endurance is the number a wing is planned around (8.13) — one pip
+              a point, the same idiom thrust already gets (OrderPanel's
+              .thrust-pip row), so a glance says spent-versus-starting. */}
+          <span className="flight-cef">
+            <CefPips cef={flight.cef} max={fighterProfile(flight.typeId, flight.modifiers).cef} />
+            <span
+              className={`num flight-cef-readout${flight.cef === 0 ? ' is-spent' : ''}`}
+              title="Combat Endurance Factors remaining (8.13)"
+            >
+              CEF {flight.cef}
+            </span>
           </span>
 
           {flight.status === 'aboard' && phase === 'move-fighters' ? (
@@ -206,11 +212,14 @@ export function FlightPanel({
                 <span className="flight-name">{squadron.label}</span>
               </button>
               <span className="spacer" />
-              <span
-                className={`num flight-cef-readout${squadron.cef === 0 ? ' is-spent' : ''}`}
-                title="Combat endurance remaining (9.1)"
-              >
-                CEF {squadron.cef}
+              <span className="flight-cef">
+                <CefPips cef={squadron.cef} max={GUNBOAT_CEF} />
+                <span
+                  className={`num flight-cef-readout${squadron.cef === 0 ? ' is-spent' : ''}`}
+                  title="Combat endurance remaining (9.1)"
+                >
+                  CEF {squadron.cef}
+                </span>
               </span>
 
               {squadron.status === 'aboard' && phase === 'move-fighters' ? (
@@ -349,4 +358,17 @@ function reachNote(flight: FighterGroupState, game: GameState, secondary: boolea
     return secondary ? 'Lands on its secondary move — 1 CEF (8.1, 8.13)' : 'Lands this turn (8.1)'
   }
   return 'Too far from the carrier to land this turn (8.1)'
+}
+
+/** One pip a starting Combat Endurance Factor (8.13, 9.1): filled for what is
+    left, dimmed for what is spent — the same reading as `.thrust-pip`. */
+function CefPips({ cef, max }: { cef: number; max: number }) {
+  if (max <= 0) return null
+  return (
+    <span className="cef-pips" aria-hidden="true">
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} className={`cef-pip${i < cef ? '' : ' is-spent'}`} />
+      ))}
+    </span>
+  )
 }

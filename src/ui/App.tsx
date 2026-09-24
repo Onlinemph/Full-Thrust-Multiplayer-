@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
 import {
@@ -31,6 +31,7 @@ import { BEAM_RANGE_BAND } from '../engine/geometry'
 import { BATTLE_TYPE_LABELS } from '../engine/battles'
 import { scenarioById } from '../data/scenarios'
 import { AfterAction } from './AfterAction'
+import { PhaseStrip, type PrimaryAction } from './battle/PhaseStrip'
 import { battleEnd, BattleResult } from './BattleResult'
 import { CampaignScreen } from './CampaignScreen'
 import { CampaignSetupPanel } from './CampaignSetupPanel'
@@ -83,6 +84,31 @@ import {
   useLobby,
   isInMatch,
 } from './store'
+
+/**
+ * Which family a phase belongs to, for the side panel's left-edge tint: a
+ * glance at the colour under the cursor says "fire phase" or "move phase"
+ * before the small phase-readout at the top of the screen has to be read.
+ */
+type PhaseFamily = 'plan' | 'move' | 'fire' | 'damage'
+
+const PHASE_CATEGORY: Record<Phase, PhaseFamily> = {
+  orders: 'plan',
+  initiative: 'plan',
+  'move-ships': 'move',
+  'move-fighters': 'move',
+  'secondary-fighter-moves': 'move',
+  'launch-missiles': 'fire',
+  'allocate-attacks': 'fire',
+  'fighter-vs-fighter': 'fire',
+  'point-defence': 'fire',
+  'ordnance-vs-ships': 'fire',
+  'ship-fire': 'fire',
+  boarding: 'fire',
+  threshold: 'damage',
+  'damage-control': 'damage',
+  'reactor-explosions': 'damage',
+}
 
 /**
  * The battle screen: a plotting surface, the selected ship's form, and the
@@ -158,6 +184,12 @@ export function App() {
       pricing: setup.cpv ? 'cpv' : 'points',
     })
   }
+  // The side panel's SSD is cramped by design — a 24rem column is not where
+  // a dozen-system hull is easiest to read. The expand button opens the same
+  // sheet, same data, inside the wide modal the Ship Library already uses.
+  const [expandedSsd, setExpandedSsd] = useState(false)
+  // The header's overflow for the file actions a turn rarely needs.
+  const [showMore, setShowMore] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [showYard, setShowYard] = useState(false)
@@ -228,6 +260,9 @@ export function App() {
   const [placingTerrain, setPlacingTerrain] = useState<TerrainKind | null>(null)
 
   const selected = selectedId ? shipById(game, selectedId) : undefined
+  // A sheet left open big should not silently become some other ship's sheet
+  // the moment a different counter is clicked.
+  useEffect(() => setExpandedSsd(false), [selectedId])
   const table = game.table
   const awaiting = shipsAwaitingDeployment(game)
   const placingSide = deployingSide(game)
@@ -313,6 +348,27 @@ export function App() {
     commands,
     ready,
   )
+  // Whether anyone at the table at all is flown by the computer — the strip's
+  // "computer's turn" tone only means anything when that is true.
+  const vsComputer = (setup.aiSides ?? []).length > 0
+  // Whether this console can do anything right now to move the phase along.
+  // Every phase but the first resolves through the primary button — the one
+  // exception is phase 1 (3.5): what it waits on is each ship's own order,
+  // clicked in the panel below, and its debt message names every fleet's
+  // unordered ships together, not just this console's.
+  const mineCanAct =
+    !primary.disabled ||
+    (game.phase === 'orders' && shipsAwaitingOrders(game).some(canCommand))
+  const hasDebt = debt.required.length > 0 || debt.optional.length > 0
+  const decide = mineCanAct && hasDebt
+  const computerHolds = vsComputer && !mineCanAct && hasDebt
+  // Phase 11 is the one phase Full Thrust plays strictly one side at a time
+  // (2.6); everywhere else both fleets act in the same phase, so there is no
+  // single "whose turn" to show.
+  const fireTurnSide = game.phase === 'ship-fire' ? game.fire.side : null
+  const fireTurn = fireTurnSide
+    ? { side: fireTurnSide, name: game.sides.find((s) => s.id === fireTurnSide)?.name ?? fireTurnSide }
+    : null
 
   /**
    * The next of our ships still without orders, after `fromId` in table order,
@@ -537,15 +593,6 @@ export function App() {
       <RefusalNotice />
       <header className="app-bar">
         <h1>Full Thrust</h1>
-        <span className="turn-readout num">
-          TURN {game.turn}
-          {scenario?.turnLimit ? ` / ${scenario.turnLimit}` : ''}
-        </span>
-        <span className="phase-readout">
-          <b className="num">{phaseNumber(game.phase)}</b> {PHASE_LABELS[game.phase]}
-        </span>
-
-        <span className="spacer" />
 
         {commanded !== null && commanded.length === 1 ? (
           <span className="commanding">
@@ -573,45 +620,87 @@ export function App() {
           </label>
         )}
 
+        <span className="spacer" />
+
+        {/* Grouped rather than one undifferentiated row: fleet reference
+            together, record-keeping together, and the rarely used file
+            actions behind one overflow so the row a player scans every turn
+            is Menu, the two clusters, Remote play and the one button that
+            matters. */}
         <button onClick={() => setScreen('menu')}>Menu</button>
-        <button onClick={() => setShowLibrary(true)}>Ships</button>
-        <button onClick={() => setShowYard(true)}>Shipyard</button>
+        <div className="app-bar-group">
+          <button onClick={() => setShowLibrary(true)}>Ships</button>
+          <button onClick={() => setShowYard(true)}>Shipyard</button>
+        </div>
         <button onClick={() => setShowOnline(true)}>Remote play</button>
-        <button disabled={!canUndo()} onClick={() => undo()}>
-          Undo
-        </button>
-        <button onClick={() => download(exportGame())}>Save file</button>
-        <button
-          title="What each hull has fired, put through, taken and finished (4.12)"
-          onClick={() => setShowReport(true)}
-        >
-          Report
-        </button>
-        <button title="This fleet's sheets and roster, as they stand, on paper" onClick={printFleet}>
-          Print sheets
-        </button>
-        <label className="file-button">
-          Load file
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={async (event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              const error = loadGame(await file.text())
-              if (error) window.alert(error)
-              event.target.value = ''
-            }}
-          />
-        </label>
-        <button
-          className={`primary end-phase${primary.armed ? ' is-armed' : ''}`}
-          disabled={primary.disabled}
-          title={primary.disabled ? debt.required.join('\n') : undefined}
-          onClick={primary.run}
-        >
-          {primary.label}
-        </button>
+        <div className="app-bar-group">
+          <button disabled={!canUndo()} onClick={() => undo()}>
+            Undo
+          </button>
+          <button
+            title="What each hull has fired, put through, taken and finished (4.12)"
+            onClick={() => setShowReport(true)}
+          >
+            Report
+          </button>
+        </div>
+        <div className="app-bar-more">
+          <button
+            className={showMore ? 'is-on' : undefined}
+            aria-expanded={showMore}
+            aria-haspopup="true"
+            onClick={() => setShowMore((v) => !v)}
+          >
+            More ▾
+          </button>
+          {showMore ? (
+            <div className="app-bar-menu" onMouseLeave={() => setShowMore(false)}>
+              <button
+                onClick={() => {
+                  download(exportGame())
+                  setShowMore(false)
+                }}
+              >
+                Save file
+              </button>
+              <button
+                title="This fleet's sheets and roster, as they stand, on paper"
+                onClick={() => {
+                  printFleet()
+                  setShowMore(false)
+                }}
+              >
+                Print sheets
+              </button>
+              <label className="file-button">
+                Load file
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    const error = loadGame(await file.text())
+                    if (error) window.alert(error)
+                    event.target.value = ''
+                    setShowMore(false)
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+
+        <PhaseStrip
+          game={game}
+          turnLimit={scenario?.turnLimit ?? null}
+          debt={debt}
+          armed={armedSkip === phaseKey}
+          primary={primary}
+          decide={decide}
+          computerHolds={computerHolds}
+          fireTurn={fireTurn}
+        />
       </header>
 
       {campaignBattle && campaign ? (
@@ -671,56 +760,60 @@ export function App() {
           <div className="side-scroll">
           <ReplayBar onPreview={setPreviewing} />
 
-          <PhaseDebtNotice debt={debt} armed={armedSkip === phaseKey} />
-
-          {previewing ? (
-            <div className="panel">
-              <h3>Replaying</h3>
-              <p style={{ color: 'var(--ink-dim)' }}>
-                An earlier moment of this battle, rebuilt from the journal — the same seed, so the
-                same dice. Slide back to now to keep playing.
-              </p>
-            </div>
-          ) : game.deployment && awaiting.length > 0 ? (
-            <DeploymentPanel
-              game={game}
-              awaiting={awaiting}
-              placingSide={placingSide}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              facing={deployFacing}
-              onFacing={setDeployFacing}
-              velocity={deployVelocity}
-              onVelocity={setDeployVelocity}
-            />
-          ) : game.phase === 'ship-fire' && selected ? (
-            <CombatPanel
-              key={selected.id}
-              game={game}
-              ship={selected}
-              canCommand={canCommand(selected)}
-              onHoverWeapon={setLitArcs}
-              litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
-              showRose={showRose}
-              onToggleRose={() => setShowRose((on) => !on)}
-              aiming={aiming}
-              onAim={setAiming}
-            />
-          ) : (
-            <PhaseControls
-              phase={game.phase}
-              game={game}
-              viewingSide={viewingSide}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              aiming={aiming}
-              onAim={setAiming}
-              returning={returning}
-              onReturn={setReturning}
-              placingTerrain={placingTerrain}
-              onPlaceTerrain={setPlacingTerrain}
-            />
-          )}
+          {/* The panel a phase renders gets a hairline left edge in that
+              phase's family colour (screens.md #10) — a plan/move/fire/damage
+              cue under the cursor, so "what kind of phase is this" is a
+              glance rather than a read of the small phase readout above. */}
+          <div className={`phase-panel is-${PHASE_CATEGORY[game.phase]}`}>
+            {previewing ? (
+              <div className="panel">
+                <h3>Replaying</h3>
+                <p style={{ color: 'var(--ink-dim)' }}>
+                  An earlier moment of this battle, rebuilt from the journal — the same seed, so the
+                  same dice. Slide back to now to keep playing.
+                </p>
+              </div>
+            ) : game.deployment && awaiting.length > 0 ? (
+              <DeploymentPanel
+                game={game}
+                awaiting={awaiting}
+                placingSide={placingSide}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                facing={deployFacing}
+                onFacing={setDeployFacing}
+                velocity={deployVelocity}
+                onVelocity={setDeployVelocity}
+              />
+            ) : game.phase === 'ship-fire' && selected ? (
+              <CombatPanel
+                key={selected.id}
+                game={game}
+                ship={selected}
+                canCommand={canCommand(selected)}
+                onHoverWeapon={setLitArcs}
+                litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
+                showRose={showRose}
+                onToggleRose={() => setShowRose((on) => !on)}
+                aiming={aiming}
+                onAim={setAiming}
+              />
+            ) : (
+              <PhaseControls
+                phase={game.phase}
+                game={game}
+                viewingSide={viewingSide}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                aiming={aiming}
+                onAim={setAiming}
+                returning={returning}
+                onReturn={setReturning}
+                placingTerrain={placingTerrain}
+                onPlaceTerrain={setPlacingTerrain}
+              />
+            )}
+          </div>
 
           {optional(game).movingTable ? <MovingTablePanel game={game} /> : null}
 
@@ -743,8 +836,8 @@ export function App() {
                 {/* Christening a hull. Cosmetic, but journalled like anything
                     else, so the name survives a save and a replay — which is
                     the only reason it is an action rather than local state. */}
-                {viewingSide === null || selected.side === viewingSide ? (
-                  <div className="panel-row">
+                <div className="panel-row">
+                  {viewingSide === null || selected.side === viewingSide ? (
                     <input
                       aria-label="Ship name"
                       className="ship-name-field"
@@ -758,8 +851,21 @@ export function App() {
                         }
                       }}
                     />
-                  </div>
-                ) : null}
+                  ) : (
+                    <b style={{ color: `var(--side-${selected.side})` }}>{selected.name}</b>
+                  )}
+                  <span className="spacer" />
+                  {/* screens.md #6: the same sheet, full size, the way the
+                      Ship Library already shows it — the 24rem column is a
+                      quick reference, not the only place to read a hull. */}
+                  <button
+                    className="ssd-expand"
+                    title="Open this sheet larger"
+                    onClick={() => setExpandedSsd(true)}
+                  >
+                    ⤢
+                  </button>
+                </div>
                 <Ssd
                   design={selected.design}
                   name={selected.name}
@@ -869,6 +975,27 @@ export function App() {
           </div>
         </div>
       ) : null}
+      {expandedSsd && selected ? (
+        <div className="modal-backdrop" onClick={() => setExpandedSsd(false)}>
+          <div className="modal is-wide" onClick={(event) => event.stopPropagation()}>
+            <h2>{selected.name}</h2>
+            <Ssd
+              design={selected.design}
+              name={selected.name}
+              pricing={setup.cpv ? 'cpv' : 'points'}
+              redacted={
+                viewingSide !== null &&
+                selected.side !== viewingSide &&
+                Boolean(setup.sensorRules)
+              }
+              damage={sheetDamageOf(selected)}
+            />
+            <button className="primary" onClick={() => setExpandedSsd(false)}>
+              Close sheet
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -888,35 +1015,6 @@ function sheetDamageOf(ship: ShipState): SsdDamage {
     thrust: currentThrust(ship),
     magazineLoads: new Map([...ship.magazines].map(([id, loads]) => [id, loads.length])),
   }
-}
-
-/**
- * What the phase still owes, in the rules' own words (2.6).
- *
- * Shown rather than only refused: a disabled End phase button with no
- * explanation is a locked door, and the whole point of gating the sequence is
- * that a player in an online match knows what the other console is waiting
- * on.
- */
-function PhaseDebtNotice({ debt, armed }: { debt: PhaseDebt; armed: boolean }) {
-  if (debt.required.length === 0 && debt.optional.length === 0) return null
-  const required = debt.required.length > 0
-  return (
-    <div className={`phase-debt ${required ? 'is-required' : 'is-optional'}`}>
-      <h4>
-        {required
-          ? 'Before the phase can end'
-          : armed
-            ? 'End phase anyway will skip'
-            : 'Still to do, if you mean to'}
-      </h4>
-      <ul>
-        {(required ? debt.required : debt.optional).map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-    </div>
-  )
 }
 
 /**
@@ -1146,9 +1244,18 @@ function PhaseControls({
                 >
                   {/* Named in the side's colour: on an open table both fleets
                       can have a "Heavy Cruiser 1", and the colour is what
-                      tells a hot-seat player whose it is. */}
-                  <span style={{ color: `var(--side-${ship.side})` }}>{ship.name}</span>
-                  <span className="spacer" />
+                      tells a hot-seat player whose it is. A design's class
+                      name runs long ("Gagarin-class Fleet Carrier"), so the
+                      name truncates rather than wrapping "Hold course" onto
+                      its own line — the full name is still there in the
+                      title. */}
+                  <span
+                    className="panel-row-name"
+                    style={{ color: `var(--side-${ship.side})` }}
+                    title={ship.name}
+                  >
+                    {ship.name}
+                  </span>
                   <span style={{ color: 'var(--ink-faint)' }}>no orders</span>
                   <button
                     onClick={(event) => {
@@ -1548,6 +1655,7 @@ function moveEveryone(): void {
 function LogDock({ log }: { log: GameState['log'] }) {
   const [open, setOpen] = useState(true)
   const [keys, setKeys] = useState(false)
+  const freshSeqs = useFreshEntries(log)
   return (
     <div className={`side-dock${open ? '' : ' is-folded'}`}>
       <div className="side-dock-head">
@@ -1582,7 +1690,11 @@ function LogDock({ log }: { log: GameState['log'] }) {
             .slice()
             .reverse()
             .map((entry) => (
-              <div key={entry.seq} className={`log-entry is-${entry.kind}`}>
+              <div
+                key={entry.seq}
+                className={`log-entry is-${entry.kind}${freshSeqs.has(entry.seq) ? ' is-new' : ''}`}
+                style={entry.side ? { borderLeftColor: `var(--side-${entry.side})` } : undefined}
+              >
                 {entry.text}
                 {entry.dice?.length ? (
                   <span className="log-dice"> [{entry.dice.join(' ')}]</span>
@@ -1595,13 +1707,34 @@ function LogDock({ log }: { log: GameState['log'] }) {
   )
 }
 
-/** What the phase's one button does, and what it says. */
-interface PrimaryAction {
-  label: string
-  run: () => void
-  disabled: boolean
-  /** "End phase anyway": the second click on a phase with optional work left. */
-  armed: boolean
+/**
+ * Which entries arrived since the last time this hook noticed, kept around
+ * for ~900ms so `LogDock` can flash them — a block of lines that just landed
+ * (a whole computer turn, an AI-resolved phase) should read as new, not blend
+ * into history the player already scanned. A ref rather than state for the
+ * "already seen" set: it has to survive without itself causing a re-render.
+ */
+function useFreshEntries(log: GameState['log']): ReadonlySet<number> {
+  const known = useRef<Set<number> | null>(null)
+  if (known.current === null) known.current = new Set(log.map((entry) => entry.seq))
+  const [fresh, setFresh] = useState<ReadonlySet<number>>(new Set())
+  useEffect(() => {
+    const seen = known.current ?? new Set<number>()
+    const arrived = log.filter((entry) => !seen.has(entry.seq)).map((entry) => entry.seq)
+    if (arrived.length === 0) return
+    for (const seq of arrived) seen.add(seq)
+    known.current = seen
+    setFresh((current) => new Set([...current, ...arrived]))
+    const id = window.setTimeout(() => {
+      setFresh((current) => {
+        const next = new Set(current)
+        for (const seq of arrived) next.delete(seq)
+        return next
+      })
+    }, 900)
+    return () => window.clearTimeout(id)
+  }, [log])
+  return fresh
 }
 
 /**
