@@ -65,6 +65,14 @@
   --counter-glow: #cfe6ff;
   --counter-shade: rgba(1, 3, 10, 0.55); /* the unlit side of a hull */
 
+  /* A small round-robin set for grouping chrome that has no rules meaning of
+     its own — the house-rules gear grid's family headers (Beams, Kinetic,
+     Ordnance…), assigned by group index, not by what the family is. */
+  --fam-1: #7aa2ff;
+  --fam-2: #f0a868;
+  --fam-3: #7fd9a0;
+  --fam-4: #d68fe0;
+
   /* ══ 3. LINES AND TYPE ════════════════════════════════════════════════════ */
   --line: #253150; /* panel edges and table rules */
   --line-soft: #18213a; /* grid lines on the plotting surface */

@@ -120,7 +120,7 @@ export function OnlinePanel({ onClose }: { onClose: () => void }) {
                   </div>
                 </>
               ) : (
-                <p>
+                <p className="rule-detail">
                   Not set up for this build. Point it at a Supabase project — run{' '}
                   <code>supabase/schema.sql</code> there and build with <code>VITE_SUPABASE_URL</code>{' '}
                   and <code>VITE_SUPABASE_ANON_KEY</code> — and matches get a six-letter code and a
@@ -131,6 +131,7 @@ export function OnlinePanel({ onClose }: { onClose: () => void }) {
 
             <section>
               <h3>Without a server</h3>
+              <p className="menu-hint">Works everywhere, no setup.</p>
               <button className="primary" onClick={() => void hostInvite()}>
                 Create an invite code
               </button>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { designById } from '../data/ships'
 import { designCost } from '../data/fleetList'
 import { hangUp, useNet } from './link'
+import { CounterPreview } from './CounterPreview'
 import { FleetPicker } from './FleetPicker'
 import { SetupForm } from './SetupPanel'
 import {
@@ -169,6 +170,11 @@ export function LobbyPanel({ onOpenYard, onOpenLibrary }: LobbyPanelProps) {
                       {named.length === 0 ? <span className="rule-detail">No ships picked yet.</span> : null}
                       {named.map(({ id, design }, index) => (
                         <span key={`${id}-${index}`} className="picked">
+                          {design ? (
+                            <span aria-hidden="true">
+                              <CounterPreview design={design} size={20} />
+                            </span>
+                          ) : null}
                           {design?.name ?? id}{' '}
                           <span className="num">{design ? designCost(design, Boolean(setup.cpv)) : '?'}</span>
                         </span>

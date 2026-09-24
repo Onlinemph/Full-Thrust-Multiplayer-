@@ -108,6 +108,15 @@
   align-self: flex-start;
 }
 
+/* A steer towards the path that always works, reusing the menu's own hint
+   style rather than a full paragraph — `.modal p`'s own rule otherwise wins
+   on specificity and flattens it to ordinary prose. */
+.modal p.menu-hint {
+  margin: -0.2rem 0 0;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
 .modal select {
   font: inherit;
   background: var(--panel-2);
@@ -549,18 +558,11 @@
   padding-top: 0;
 }
 
-.report-table .report-state {
-  color: var(--ink-dim);
-  text-transform: capitalize;
-}
-
+/* The state cell reuses the result screen's own `.loss` chip (panels.css), so
+   the mid-battle report and the end-of-battle result describe the same fact
+   the same way — coloured and struck through on a kill, amber on crippled. */
 .report-table tr.is-destroyed td {
   color: var(--ink-faint);
-}
-
-.report-table tr.is-destroyed .report-state,
-.report-table tr.is-crippled .report-state {
-  color: var(--damage);
 }
 
 /* ── Scenario builder ─────────────────────────────────────────────────────── */
@@ -569,10 +571,47 @@
    table units, so a click on it is a point in MU and a feature's radius is a
    radius, at whatever size the modal gives it. */
 .scenario-builder {
+  margin-top: var(--gap);
+}
+
+/* The form on the left, in the order a designer fills it in; the terrain
+   palette and the live plan of the table pinned on the right — the same
+   sticky-side pattern the Shipyard uses for its own sheet (`.yard-side`), so
+   a click on a terrain feature or an edited width is checked against the
+   picture immediately, without scrolling down to find it. */
+.scenario-builder-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  gap: var(--gap-2);
+  align-items: start;
+}
+
+.scenario-builder-form {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  margin-top: var(--gap);
+  min-width: 0;
+}
+
+.scenario-builder-side {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.scenario-terrain-add {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .scenario-builder-body {
+    grid-template-columns: 1fr;
+  }
+  .scenario-builder-side {
+    position: static;
+  }
 }
 
 .scenario-builder textarea {
@@ -1157,6 +1196,18 @@
   font-size: var(--text-sm);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* A family's own anchor colour in the gear grid — chrome only, cycling
+   through a short palette by group index, never a rules colour. */
+.preset-group h4::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fam-dot, var(--ink-faint));
 }
 
 .preset-group h4 button {
