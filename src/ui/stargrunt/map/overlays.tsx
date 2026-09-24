@@ -1,6 +1,6 @@
 import { memo } from 'react'
 
-import type { GameState, MobilityKind, Point } from '../../../stargrunt/types'
+import type { FigureMove, GameState, MobilityKind, Point } from '../../../stargrunt/types'
 import { reachPolygon } from './geometry'
 
 /**
@@ -46,19 +46,38 @@ export const MoveGhost = memo(function MoveGhost({ state, mobility, from, to, or
   )
 })
 
-export interface AssaultGhostProps {
-  from: Point[]
-  targetAt: Point
+export interface AssaultPlanGhostProps {
+  state: GameState
+  /** `planAssault`'s own moves: one path per charging figure, ending at its assigned defender (K1). */
+  moves: readonly FigureMove[]
+  /** `planAssault`'s per-move movement-factor cost, same order as `moves`. */
+  costs: readonly number[]
+  /** `planAssault`'s `maxOneRoll`: inches one combat-move roll gives at most, doubled for the second. */
+  maxOneRoll: number
 }
 
-/** A close assault's combat move: a line from each attacking figure toward the target unit, contact always made. */
-export const AssaultGhost = memo(function AssaultGhost({ from, targetAt }: AssaultGhostProps) {
+/**
+ * A close assault before it is tried (K1, p. 41): each charging figure's default contact path, coloured
+ * by whether its own cost reaches the defender on the first combat-move roll, needs the second, or falls
+ * outside either (the plan is still offered whenever the nearest figure is in reach; the rest "sit this
+ * one out" per the brief's reading of p. 41 if their own path is longer than two rolls can cover).
+ */
+export const AssaultPlanGhost = memo(function AssaultPlanGhost({ state, moves, costs, maxOneRoll }: AssaultPlanGhostProps) {
   return (
-    <g className="sg-assault-ghost" pointerEvents="none">
-      {from.map((p, i) => (
-        <line key={i} x1={p.x} y1={p.y} x2={targetAt.x} y2={targetAt.y} className="sg-assault-line" />
-      ))}
-      <circle cx={targetAt.x} cy={targetAt.y} r={0.5} className="sg-assault-target" />
+    <g className="sg-assault-plan" pointerEvents="none">
+      {moves.map((m, i) => {
+        const from = state.figures[m.figureId]?.position
+        const to = m.path[m.path.length - 1]
+        if (!from || !to) return null
+        const cost = costs[i] ?? Number.POSITIVE_INFINITY
+        const reach = cost <= maxOneRoll + 1e-6 ? 'reach1' : cost <= 2 * maxOneRoll + 1e-6 ? 'reach2' : 'far'
+        return (
+          <g key={m.figureId} className={`sg-assault-path is-${reach}`}>
+            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />
+            <circle cx={to.x} cy={to.y} r={0.16} />
+          </g>
+        )
+      })}
     </g>
   )
 })

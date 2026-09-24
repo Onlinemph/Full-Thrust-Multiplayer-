@@ -83,10 +83,16 @@ export interface SquadPennantProps {
   organised: boolean
   /** 1/pixels-per-inch: the pennant is drawn in a `scale(k)` group so its text stays one screen size at any zoom (Dirtside's own `map/marks.tsx` `Pennant` does the same). */
   k: number
+  /** K3: fly the flag below the figures instead of above, when the view has no room above (near the table's own top edge, or panned/zoomed close to it). */
+  flip?: boolean
+  /** K3: how many other pennants already claim this same spot (squads in base contact after an assault, say): each stacks one staff-length further out so they stay readable instead of overlapping. */
+  stack?: number
 }
 
-const PENNANT_STAFF = 15
-const PENNANT_H = 16
+export const PENNANT_STAFF = 15
+export const PENNANT_H = 16
+/** How far one stacked pennant stands beyond the last, in the same screen pixels as the staff itself. */
+const PENNANT_STACK = 22
 
 /** Least confident first, so a fold to "the worst present" reads the same direction the checks read. */
 const CHIP_LABEL: Record<Confidence, string> = { CO: 'CO', ST: 'ST', SH: 'SH', BR: 'BR', RO: 'RO' }
@@ -99,13 +105,15 @@ const CHIP_LABEL: Record<Confidence, string> = { CO: 'CO', ST: 'ST', SH: 'SH', B
  * it is as legible zoomed out over the whole table as zoomed in on one
  * squad — the same technique as Dirtside's own unit pennant.
  */
-export const SquadPennant = memo(function SquadPennant({ unit, code, at, active, selected, hovered, organised, k }: SquadPennantProps) {
-  const cls = ['sg-pennant', `is-${unit.sideId}`, `conf-${unit.confidence}`, active ? 'is-active' : '', selected ? 'is-selected' : '', hovered ? 'is-hovered' : ''].filter(Boolean).join(' ')
+export const SquadPennant = memo(function SquadPennant({ unit, code, at, active, selected, hovered, organised, k, flip = false, stack = 0 }: SquadPennantProps) {
+  const cls = ['sg-pennant', `is-${unit.sideId}`, `conf-${unit.confidence}`, active ? 'is-active' : '', selected ? 'is-selected' : '', hovered ? 'is-hovered' : '', flip ? 'is-flipped' : ''].filter(Boolean).join(' ')
   const leadText = `D${QUALITY_DIE[unit.quality]}·${unit.leadership}`
   const codeW = textWidth(code, 11) + 9
   const leadW = textWidth(leadText, 9.5) + 8
   const flagW = codeW + leadW
-  const top = -PENNANT_STAFF - PENNANT_H
+  const dir = flip ? 1 : -1
+  const staffLen = PENNANT_STAFF + stack * PENNANT_STACK
+  const top = dir > 0 ? staffLen : -staffLen - PENNANT_H
   const mid = top + PENNANT_H / 2
   const chips: Array<{ text: string; tone: string }> = [{ text: CHIP_LABEL[unit.confidence], tone: unit.confidence }]
   if (unit.suppression > 0) chips.push({ text: '●'.repeat(unit.suppression), tone: 'suppress' })
@@ -138,8 +146,8 @@ export const SquadPennant = memo(function SquadPennant({ unit, code, at, active,
       </title>
       {/* A generous, invisible hit area: the pole and flag are thin, but the whole pennant should be an
           easy click target for picking the squad, the way a real pennant on a table is picked up by hand. */}
-      <rect x={-4} y={top - 4} width={x + 4} height={PENNANT_H + PENNANT_STAFF + 8} fill="transparent" />
-      <line x1={0} y1={0} x2={0} y2={-PENNANT_STAFF} className="sg-pennant-pole" />
+      <rect x={-4} y={top - 4} width={x + 4} height={PENNANT_H + staffLen + 8} fill="transparent" />
+      <line x1={0} y1={0} x2={0} y2={dir * staffLen} className="sg-pennant-pole" />
       <rect x={0} y={top} width={flagW} height={PENNANT_H} rx={2} className="sg-pennant-flag" />
       <rect x={codeW} y={top + 1.5} width={leadW - 1.5} height={PENNANT_H - 3} rx={1.5} className="sg-pennant-lead" />
       <text x={codeW / 2} y={mid + 3.8} className="sg-pennant-code">

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 
 import type { Point } from '../../../dirtside/table/types'
-import { adviceFor } from './words'
+import { adviceFor as defaultAdviceFor } from './words'
 
 /**
  * A refusal as guidance: "Can't do that", the engine's reason word for
@@ -9,8 +9,25 @@ import { adviceFor } from './words'
  * page as a quiet chip. A refused click on the map shows it beside the
  * click; a refused button shows it under the strip. It never takes a click
  * meant for the table, and goes on the next action that works.
+ * `adviceFor` reads the reason for its "what to do instead" line; it
+ * defaults to Dirtside's own vocabulary (K4: a game whose refusals read
+ * differently, e.g. Stargrunt's `stargrunt/play/words.ts`, passes its own).
  */
-export function RefusalToast({ reason, page, at, pane, onClose }: { reason: string; page: string; at: Point | null; pane: RefObject<HTMLDivElement | null>; onClose: () => void }) {
+export function RefusalToast({
+  reason,
+  page,
+  at,
+  pane,
+  onClose,
+  adviceFor = defaultAdviceFor,
+}: {
+  reason: string
+  page: string
+  at: Point | null
+  pane: RefObject<HTMLDivElement | null>
+  onClose: () => void
+  adviceFor?: (reason: string) => string | null
+}) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
     const box = pane.current

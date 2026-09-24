@@ -15,6 +15,35 @@
   color: var(--ink-dim);
 }
 
+/* K2: `.dst-active` (Dirtside's, reused) is `flex:none` in the side column, sized to its content; this
+   panel's own content — a full figure list plus up to six action groups — can run taller than the side
+   column has room for, so the panel bounds its own height and scrolls inside `.sg-active-scroll`
+   instead, keeping the primary End button (below, outside that inner scroll) and the log dock under it
+   always in place. */
+.sg-active {
+  display: flex;
+  flex-direction: column;
+  max-height: 34rem;
+}
+
+.sg-active-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sg-figures-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.sg-figures-toggle {
+  font-size: var(--text-xs);
+  padding: 0.1em 0.3em;
+}
+
 .sg-figures-list {
   list-style: none;
   margin: 0 0 0.7rem;
@@ -135,6 +164,50 @@
   width: 100%;
 }
 
+/* ---- K1: the charge under review ------------------------------------------- */
+
+.sg-assault-preview {
+  margin: -0.2rem 0 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.sg-assault-preview.is-refused {
+  border-color: color-mix(in srgb, var(--damage) 45%, var(--line-soft));
+}
+.sg-assault-preview-head {
+  margin: 0 0 0.25rem;
+  font-size: var(--text-sm);
+}
+.sg-assault-preview p.campaign-dim {
+  margin: 0 0 0.3rem;
+}
+.sg-assault-page {
+  color: var(--ink-faint);
+}
+.sg-assault-ifshort {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+.sg-assault-ifshort button {
+  font-size: var(--text-sm);
+  padding: 0.25em 0.6em;
+}
+.sg-assault-ifshort button.is-on {
+  background: var(--thrust);
+  border-color: var(--thrust);
+  color: #1a0f05;
+}
+.sg-assault-preview-acts {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* ---- Roster ---------------------------------------------------------------- */
 
 .sg-roster-list {
@@ -146,11 +219,19 @@
   gap: 2px;
 }
 
+/* R9: a squad's status chips ("Broken · suppressed x3 · panicked") and its
+   casualty count ("3 fit, 1 wounded, 4 dead") each grow on their own —
+   several chips at once tend to come with a growing casualty count too — so
+   giving them their own row (below code/name/count) is what keeps the
+   status readable instead of a shared `1fr`/`auto` pair squeezing it to a
+   sliver while the count keeps its full width beside it. */
 .sg-roster-row {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'code name count' 'status status status';
   align-items: center;
-  gap: 0.4rem;
+  column-gap: 0.4rem;
+  row-gap: 0.05rem;
   padding: 0.3rem 0.45rem;
   border-radius: var(--radius);
   background: var(--panel-2);
@@ -170,16 +251,40 @@
   opacity: 0.55;
 }
 
+.sg-roster-row .dst-code {
+  grid-area: code;
+}
+
 .sg-roster-name {
+  grid-area: name;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.sg-roster-row .campaign-dim {
+  grid-area: status;
+}
+
 .sg-roster-count {
-  flex: none;
+  grid-area: count;
   font-size: var(--text-xs);
   color: var(--ink-dim);
   text-align: right;
+}
+
+/* ---- K2: the log docks smaller by default here than on Dirtside's own table ------------------------ */
+
+/* Dirtside's `.dst-log-dock`/`.dst-log` (dirtsidePlay.css) default to a taller log because its own
+   `.dst-active` never grows past one element's worth of content. Stargrunt's active squad panel above
+   it (`.sg-active`, `max-height: 34rem`) needs more of the side column's height at 1280×800 and
+   1500×1000 alike, so this screen's log starts smaller — a player can still drag it open wider. */
+.sg-play .dst-log-dock {
+  max-height: 34vh;
+}
+.sg-play .dst-log {
+  height: 15vh;
+  min-height: 4rem;
+  max-height: 30vh;
 }

@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { LogEntry, SideId } from '../../../dirtside/table/types'
-import { LOG_ICON, groupLog, maskObjective } from './journal'
+import { LOG_ICON, groupLog as defaultGroupLog, maskObjective, type LogTurn } from './journal'
 
 /**
  * The battle's log, for reading: by turn, and within a turn by activation,
@@ -26,13 +26,34 @@ function readPages(): boolean {
 /**
  * `hiddenObjectives` names the markers whose value the viewer has not seen,
  * comma-separated (a string, so the memo holds): the log keeps their value back.
+ * `groupLog`/`quiet`/`transform` are read hooks for a game whose own log
+ * sentences do not fit Dirtside's (K4, `stargrunt/play/journal.ts`): they
+ * default to Dirtside's own reading, so this screen is unaffected.
  */
-export const LogDock = memo(function LogDock({ log, northName, southName, hiddenObjectives = '' }: { log: readonly LogEntry[]; northName: string; southName: string; hiddenObjectives?: string }) {
+export const LogDock = memo(function LogDock({
+  log,
+  northName,
+  southName,
+  hiddenObjectives = '',
+  groupLog = defaultGroupLog,
+  quiet = QUIET,
+  transform,
+}: {
+  log: readonly LogEntry[]
+  northName: string
+  southName: string
+  hiddenObjectives?: string
+  groupLog?: (log: readonly LogEntry[]) => LogTurn[]
+  quiet?: RegExp
+  /** Read every line once more before it is shown, after `maskObjective`'s own redaction. */
+  transform?: (text: string) => string
+}) {
   const sideName = (s: SideId) => (s === 'north' ? northName : southName)
   const hidden = useMemo(() => new Set(hiddenObjectives ? hiddenObjectives.split(',') : []), [hiddenObjectives])
+  const read = (text: string) => (transform ? transform(maskObjective(text, hidden)) : maskObjective(text, hidden))
   const [folded, setFolded] = useState(false)
   const [pages, setPages] = useState(readPages)
-  const turns = useMemo(() => groupLog(log), [log])
+  const turns = useMemo(() => groupLog(log), [log, groupLog])
   const scroller = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
 
@@ -63,7 +84,7 @@ export const LogDock = memo(function LogDock({ log, northName, southName, hidden
           {folded ? 'Show ▴' : 'Fold ▾'}
         </button>
       </div>
-      {folded && latest ? <p className={`dst-log-latest${latest.side ? ` is-${latest.side}` : ''}`}>{maskObjective(latest.text, hidden)}</p> : null}
+      {folded && latest ? <p className={`dst-log-latest${latest.side ? ` is-${latest.side}` : ''}`}>{read(latest.text)}</p> : null}
       <div
         ref={scroller}
         className={`dst-log${pages ? ' show-pages' : ''}`}
@@ -85,11 +106,11 @@ export const LogDock = memo(function LogDock({ log, northName, southName, hidden
                   </div>
                 ) : null}
                 {b.entries.map((e) => (
-                  <p key={e.index} className={`is-${e.kind}${e.side ? ` is-${e.side}` : ''}${QUIET.test(e.text) ? ' is-quiet' : ''}`} title={e.page ? `Rulebook ${e.page}` : undefined}>
+                  <p key={e.index} className={`is-${e.kind}${e.side ? ` is-${e.side}` : ''}${quiet.test(e.text) ? ' is-quiet' : ''}`} title={e.page ? `Rulebook ${e.page}` : undefined}>
                     <span className="dst-log-icon" aria-hidden="true">
                       {LOG_ICON[e.kind]}
                     </span>
-                    <span className="dst-log-text">{maskObjective(e.text, hidden)}</span>
+                    <span className="dst-log-text">{read(e.text)}</span>
                     {e.page ? <span className="rule-ref"> {e.page}</span> : null}
                   </p>
                 ))}
