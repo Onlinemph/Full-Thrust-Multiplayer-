@@ -1,9 +1,11 @@
 /**
  * Stargrunt II — the ground, as Chapter 4 reads it (pp. 11–13): what cover a
  * terrain feature gives, a figure's and a unit's cover against a firer
- * (including the majority rule for mixed cover, p. 12, and woods, p. 12),
- * line of sight and line of fire between units (p. 11), range measured the
- * way the book measures it (p. 11–12), and unit integrity (p. 11).
+ * (including the majority rule for mixed cover, p. 12, woods, p. 12, and
+ * directional cover from a wall, a hedge, or a building's own wall, p.
+ * 12–13), line of sight and line of fire between units (p. 11), range
+ * measured the way the book measures it (p. 11–12), and unit integrity
+ * (p. 11).
  *
  * Built on Dirtside's terrain geometry (`../../dirtside/table/terrain`),
  * reused unchanged: features, shapes, `distance`, `insideShape`, `woodAt`
@@ -11,7 +13,28 @@
  * `lineOfSight` is this file's own, not Dirtside's: Stargrunt has no sight
  * distance limit in normal conditions (p. 11), unlike Dirtside's 60"
  * sensor cap, so importing Dirtside's version unchanged would silently
- * import a limit this game does not have [reading, spec 01 §3.2].
+ * import a limit this game does not have [reading, spec 01 §3.2]. It also
+ * drops `'urban'` from what blocks sight and treats a `'building'` the way
+ * Dirtside treats high ground: a figure standing inside one sees out and is
+ * seen through its own walls, at the windows [reading], but a second
+ * building on the line still blocks it — a town's own streets and yards
+ * are open ground, since Stargrunt has no area-urban terrain type of its
+ * own (p. 22) and reads a town as its individual pieces instead
+ * (`featureAt(..., { pieces: true })`, exactly as this file's own
+ * `terrainAt` and `figureCoverGrade` do below).
+ *
+ * Cover from a wall, a hedge, or a building's own wall is directional (p.
+ * 12–13): it protects a figure only from a firer on the far side of the
+ * nearest stretch of it, tested by whether the straight line from firer to
+ * figure crosses that stretch within `WALL_HEDGE_REACH` of the figure —
+ * the book's own worked diagram (Squad A, hard cover from one direction,
+ * open from the other) and its artillery example (p. 47, a shielding
+ * building and a one-sided wall) both turn on exactly this test, so
+ * `figureCoverGrade` takes the firer's position as an optional third
+ * argument; callers with no firer in mind (a unit checking its own
+ * present cover, not cover against anyone in particular) simply omit it,
+ * and get whatever cover the ground itself and any wood give, with no
+ * directional wall/hedge/building-wall bonus layered on.
  */
 
 import type { TerrainType } from '../../dirtside/data/mobility'
@@ -20,15 +43,21 @@ import {
   HIGH_GROUND,
   WOOD_EDGE,
   distance,
+  featureAt,
   insideShape,
   onHighGround,
   samplesAlong,
-  terrainAt,
   woodAt,
 } from '../../dirtside/table/terrain'
+import type { Shape } from '../../dirtside/table/types'
 import type { Point, TerrainFeature } from '../types'
 
-export { distance, terrainAt, woodAt }
+export { distance, woodAt }
+
+/** Stargrunt reads a town as its pieces (buildings, streets, rubble, walls, hedges), not the one enclosing area (p. 22, spec 02 §2.8.1): the terrain a point stands on is whichever piece covers it, or the enclosing feature (a wood, an isolated building, the town's own bare ground) when no piece does. */
+export function terrainAt(point: Point, features: readonly TerrainFeature[]): TerrainType {
+  return featureAt(point, features, { pieces: true })?.terrain ?? 'open'
+}
 
 // ---------------------------------------------------------------------------
 // Cover and concealment (pp. 12–13)
@@ -45,13 +74,20 @@ const PROTECTION_ORDER: readonly CoverGrade[] = ['open', 'soft', 'hard']
 
 /**
  * Which cover grade standing on (in contact with) each terrain type gives
- * (p. 12–13): bushes/scrub/a wood's fringe are SOFT; walls, rocks, a
- * ridgeline or a solid structure are HARD. The book names features, not
- * terrain types, so this is this engine's own reading of which of
- * Stargrunt's eleven terrain types (chapter 9, spec 02 §2.4.1) and which of
- * Dirtside's imported extras (urban, mountains, a ford) stand in for them
- * [reading]. Woods are handled separately below, since edge and within
- * differ (p. 12, spec 01 §3.5).
+ * (p. 12–13): bushes/scrub/a wood's fringe are SOFT; rocks, a ridgeline or a
+ * solid structure are HARD. The book names features, not terrain types, so
+ * this is this engine's own reading of which of Stargrunt's eleven terrain
+ * types (chapter 9, spec 02 §2.4.1) and which of Dirtside's imported extras
+ * (mountains, a ford) stand in for them [reading]. Woods are handled
+ * separately below, since edge and within differ (p. 12, spec 01 §3.5); so
+ * are walls and hedges, since their cover is directional (p. 12–13, see
+ * `figureCoverGrade`) rather than a blob a figure simply stands in.
+ *
+ * `urban` deliberately has no entry: it is the town's own enclosing area,
+ * not a structure (Dirtside p. 46) — Stargrunt reads its pieces instead
+ * (`terrainAt`, above), so a figure standing in a street or a yard between
+ * buildings, on the `urban` ground itself, is in the open, exactly as p. 22's
+ * silence on any town-wide cover bonus implies.
  */
 const TERRAIN_COVER: Partial<Record<TerrainType, CoverGrade>> = {
   road: 'open',
@@ -65,7 +101,8 @@ const TERRAIN_COVER: Partial<Record<TerrainType, CoverGrade>> = {
   rough: 'hard', // "rocks, gullies, thick scrub" (p. 22) reads as the rocks/boulders hard cover of p. 12–13
   hills: 'hard', // stands in for a hill crest or ridgeline (p. 12–13); "slopes" is Stargrunt's own name for this ground (p. 22)
   mountains: 'hard', // not one of Stargrunt's own eleven terrain types (spec 02 §2.4.1); folded into the same hard cover as hills/slopes [reading]
-  urban: 'hard', // a solid structure (p. 12–13); chapter 9 has no urban terrain type of its own (spec 02 §2.8.1)
+  building: 'hard', // "a solid structure" (p. 12–13), unconditional: inside its footprint, not merely behind one of its walls
+  rubble: 'hard', // broken masonry reads as the same rocks/boulders hard cover as `rough` (Stargrunt p. 57, Dirtside p. 46)
 }
 
 /** The cover a terrain type gives a figure standing in contact with it, open ground if the type gives none. */
@@ -80,6 +117,89 @@ export function woodPostureOf(point: Point, features: readonly TerrainFeature[])
   return woodAt(point, features)?.where ?? null
 }
 
+/** How close the point where the firer's line crosses a wall, a hedge, or a building's own wall must land to the figure for that figure to claim cover from it (p. 12–13's diagram and p. 47's artillery example both draw the cover as belonging to whichever side of the obstacle the figure stands hard against, not anywhere along its length). */
+export const WALL_HEDGE_REACH = 1.5
+
+/** A shape's own boundary as a list of edges: a wall/hedge's open polyline, or a closed rect/polygon's ring — a circle has none (it never stands in for a linear obstacle). */
+function edgesOf(shape: Shape): Array<[Point, Point]> {
+  switch (shape.kind) {
+    case 'path': {
+      const out: Array<[Point, Point]> = []
+      for (let i = 1; i < shape.points.length; i++) out.push([shape.points[i - 1]!, shape.points[i]!])
+      return out
+    }
+    case 'polygon': {
+      const out: Array<[Point, Point]> = []
+      for (let i = 0; i < shape.points.length; i++) out.push([shape.points[i]!, shape.points[(i + 1) % shape.points.length]!])
+      return out
+    }
+    case 'rect': {
+      const { x, y, width, height } = shape
+      const pts = [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }]
+      return pts.map((p, i): [Point, Point] => [p, pts[(i + 1) % pts.length]!])
+    }
+    case 'circle':
+      return []
+  }
+}
+
+/** Where two segments cross, or null if they don't (parallel, or crossing outside either segment's own span). */
+function segmentCrossing(a1: Point, a2: Point, b1: Point, b2: Point): Point | null {
+  const d1x = a2.x - a1.x
+  const d1y = a2.y - a1.y
+  const d2x = b2.x - b1.x
+  const d2y = b2.y - b1.y
+  const denom = d1x * d2y - d1y * d2x
+  if (Math.abs(denom) < 1e-9) return null
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / denom
+  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / denom
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null
+  return { x: a1.x + t * d1x, y: a1.y + t * d1y }
+}
+
+/** Whether the line from `firer` to `figure` crosses this shape's own boundary within `WALL_HEDGE_REACH` of the figure (p. 12–13): the directional test behind wall, hedge and building-wall cover alike. */
+function shieldedBy(firer: Point, figure: Point, shape: Shape): boolean {
+  for (const [a, b] of edgesOf(shape)) {
+    const hit = segmentCrossing(firer, figure, a, b)
+    if (hit && distance(hit, figure) <= WALL_HEDGE_REACH) return true
+  }
+  return false
+}
+
+function strongerGrade(a: CoverGrade, b: CoverGrade): CoverGrade {
+  return PROTECTION_ORDER.indexOf(a) >= PROTECTION_ORDER.indexOf(b) ? a : b
+}
+
+/**
+ * A spot in the lee of a wall or a hedge (p. 12–13): on the nearest stretch
+ * of it to `near` (where a unit heading for this cover is coming from),
+ * pushed `WALL_HEDGE_REACH`'s own margin to the side away from `enemy` so
+ * the directional test above actually grants cover once the unit gets
+ * there. Null for a shape with no edges of its own to stand behind (a
+ * circle), or a degenerate single-point path.
+ */
+export function leeOfObstacle(shape: Shape, near: Point, enemy: Point): Point | null {
+  let best: { point: Point; normal: Point; dist: number } | null = null
+  for (const [a, b] of edgesOf(shape)) {
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const lenSq = dx * dx + dy * dy
+    if (lenSq < 1e-9) continue
+    const t = Math.max(0, Math.min(1, ((near.x - a.x) * dx + (near.y - a.y) * dy) / lenSq))
+    const point = { x: a.x + t * dx, y: a.y + t * dy }
+    const dist = distance(near, point)
+    if (!best || dist < best.dist) {
+      const len = Math.sqrt(lenSq)
+      best = { point, normal: { x: -dy / len, y: dx / len }, dist }
+    }
+  }
+  if (!best) return null
+  const towardEnemy = { x: enemy.x - best.point.x, y: enemy.y - best.point.y }
+  const sign = best.normal.x * towardEnemy.x + best.normal.y * towardEnemy.y > 0 ? -1 : 1
+  const margin = WALL_HEDGE_REACH * 0.6
+  return { x: best.point.x + best.normal.x * sign * margin, y: best.point.y + best.normal.y * sign * margin }
+}
+
 /**
  * A figure's cover grade at a point (p. 12–13). A wood's edge is SOFT; a
  * figure WITHIN a wood cannot be fired on by direct fire or small arms at
@@ -87,12 +207,29 @@ export function woodPostureOf(point: Point, features: readonly TerrainFeature[])
  * returns HARD there as the closest ordinary grade — callers that need the
  * wood's actual firing restriction should check `woodPostureOf` directly
  * rather than read it off this grade.
+ *
+ * With `firer` given, a wall gives HARD cover and a hedge SOFT, and a
+ * building's own wall gives the same HARD cover to a figure standing in
+ * contact just outside it (not only to one inside its footprint, which is
+ * already unconditionally HARD via `terrainCoverGrade` above) — but only
+ * against a firer on the far side of the nearest stretch of it (p. 12–13,
+ * `shieldedBy`). Without a firer (a unit checking its own present cover,
+ * not cover against anyone in particular), only the non-directional ground
+ * cover applies.
  */
-export function figureCoverGrade(point: Point, features: readonly TerrainFeature[]): CoverGrade {
+export function figureCoverGrade(point: Point, features: readonly TerrainFeature[], firer?: Point): CoverGrade {
   const wood = woodPostureOf(point, features)
   if (wood === 'edge') return 'soft'
   if (wood === 'within') return 'hard'
-  return terrainCoverGrade(terrainAt(point, features))
+  let grade = terrainCoverGrade(terrainAt(point, features))
+  if (!firer || grade === 'hard') return grade
+  for (const feature of features) {
+    if (feature.terrain === 'wall' && shieldedBy(firer, point, feature.shape)) grade = strongerGrade(grade, 'hard')
+    else if (feature.terrain === 'hedge' && shieldedBy(firer, point, feature.shape)) grade = strongerGrade(grade, 'soft')
+    else if (feature.terrain === 'building' && shieldedBy(firer, point, feature.shape)) grade = strongerGrade(grade, 'hard')
+    if (grade === 'hard') break
+  }
+  return grade
 }
 
 /**
@@ -130,6 +267,9 @@ export interface SightResult {
   range: number
 }
 
+/** What blocks Stargrunt's own line of sight (p. 11): raised ground, woods and buildings, like Dirtside's own list, but never the enclosing `urban` area a town's pieces stand in — Stargrunt has no area-urban terrain type of its own (p. 22), so only the pieces (buildings) can block, not the ground they stand on. */
+const SIGHT_BLOCKERS: readonly TerrainType[] = BLOCKS_SIGHT.filter((t) => t !== 'urban')
+
 /**
  * Line of sight (p. 11): a straight line that touches no raised ground,
  * building or wood between the two points, with NO distance limit in
@@ -149,11 +289,15 @@ export function lineOfSight(from: Point, to: Point, features: readonly TerrainFe
   const toHigh = onHighGround(to, features)
   const samples = samplesAlong(from, to, 0.2)
   for (const feature of features) {
-    if (!BLOCKS_SIGHT.includes(feature.terrain)) continue
+    if (!SIGHT_BLOCKERS.includes(feature.terrain)) continue
     const high = HIGH_GROUND.includes(feature.terrain)
+    // A figure inside a building sees out and is seen through its own walls, at the windows [reading] —
+    // the whole line is that building's own case, exactly like standing on high ground, not merely its
+    // first inch as a wood's edge allows; a *different* building on the line still blocks it below.
+    const solid = feature.terrain === 'building'
     const fromIn = insideShape(from, feature.shape)
     const toIn = insideShape(to, feature.shape)
-    if (high && (fromIn || toIn)) continue
+    if ((high || solid) && (fromIn || toIn)) continue
     if (!high && (fromHigh || toHigh)) continue
     for (const sample of samples) {
       if (!insideShape(sample, feature.shape)) continue

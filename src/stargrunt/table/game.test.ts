@@ -467,6 +467,28 @@ describe('fire (pp. 33–37)', () => {
       expect(plan.expectedCasualties).toBeGreaterThan(0)
     }
   })
+
+  it('reads a wall’s cover directionally against the actual firer (p. 12–13): the firer’s own position is threaded through fire and planFire alike', () => {
+    const wall = [{ id: 'w1', terrain: 'wall', shape: { kind: 'path', points: [{ x: 5, y: 13 }, { x: 15, y: 13 }], width: 0.2 } }] as GameSetup['table']['terrain']
+    const target = { id: 's1', side: 'south' as const, figures: [{ id: 's1-f1', at: { x: 10, y: 14 }, leader: true }] }
+
+    // North of the wall, firing south across it at a target standing in contact just beyond it: hard cover.
+    const sheltered = createGame(setupWith([{ id: 'n1', side: 'north', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] }, target], { terrain: wall }))
+    const behindWall = planFire(sheltered, 'n1', 's1', { kind: 'small-arms' } as FireWith)
+    expect('ok' in behindWall).toBe(false)
+    if (!('ok' in behindWall)) expect(behindWall.targetCover).toBe('hard')
+
+    // The same wall, the same target, but a firer on the target's own side of it: no cover at all.
+    const exposed = createGame(setupWith([{ id: 'n1', side: 'north', figures: [{ id: 'n1-f1', at: { x: 10, y: 20 }, leader: true }] }, target], { terrain: wall }))
+    const sameSide = planFire(exposed, 'n1', 's1', { kind: 'small-arms' } as FireWith)
+    expect('ok' in sameSide).toBe(false)
+    if (!('ok' in sameSide)) expect(sameSide.targetCover).toBe('open')
+
+    // `fire` itself reads the same directional cover, not just the advisory `planFire` (via the shared
+    // `unitCover` helper both call): confirm the actual shot resolves without a refusal either way.
+    let activated = must(applyAction(battle(setupWith([{ id: 'n1', side: 'north', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }] }, target], { terrain: wall }), 'north'), { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect('ok' in applyAction(activated, { kind: 'fire', side: 'north', targetUnitId: 's1', with: { kind: 'small-arms' } })).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------

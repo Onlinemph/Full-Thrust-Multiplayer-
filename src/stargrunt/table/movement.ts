@@ -67,7 +67,17 @@ export function terrainFamilyOf(mobility: MobilityKind): TerrainMobilityFamily {
 /**
  * Normal Infantry (p. 22–23): Open/Light Scrub/Slopes/Roads Clear;
  * Rough/Cultivated/Swamp/all Woods Poor; Rivers/Streams (crossing only)
- * Difficult; Open Water Impassable unless amphibious.
+ * Difficult; Open Water Impassable unless amphibious. `building`, `wall`
+ * and `hedge` are Dirtside's own additions (Dirtside p. 46, Stargrunt pp.
+ * 12–13, 56) with no Chapter 9 row of their own: a building's interior is
+ * Poor going for a trooper on foot picking his way through rooms and
+ * doorways [reading], and clambering over a wall or through a hedge is
+ * Difficult, same as any other linear obstacle this chapter prices by feel
+ * rather than by a printed number [reading] (`movementGoing` folds `rubble`
+ * onto this table's own Rough/Broken going, and `urban` — a town's open
+ * streets and yards, once its buildings are read as their own pieces — onto
+ * Clear, since chapter 9 has no urban terrain type of its own, spec 02
+ * §2.8.1).
  */
 const INFANTRY_GOING: Partial<Record<TerrainType, Going>> = {
   road: 'clear',
@@ -79,8 +89,11 @@ const INFANTRY_GOING: Partial<Record<TerrainType, Going>> = {
   swamp: 'poor',
   'light-woods': 'poor',
   'dense-woods': 'poor',
+  building: 'poor', // picking a way through rooms and doorways [reading]
   river: 'difficult',
   ford: 'difficult',
+  wall: 'difficult', // clambering over [reading]: the digest gives no numeric crossing cost, only for hiding behind one
+  hedge: 'difficult', // pushing through [reading], same as `wall`
   'open-water': 'impassable',
 }
 
@@ -89,7 +102,9 @@ const INFANTRY_GOING: Partial<Record<TerrainType, Going>> = {
  * Slopes/Roads Clear; Swamp/all Woods Poor; Rivers/Streams (crossing only)
  * and Open Water (wading) Difficult; Open Water Impassable unless
  * amphibious, which also removes the Difficult wading case [reading,
- * spec 02 §2.4.3].
+ * spec 02 §2.4.3]. A building's interior is Difficult for the bulkier,
+ * less nimble powered suit [reading]; a wall or a hedge costs it the same
+ * Difficult clamber as an ordinary trooper.
  */
 const POWER_ARMOUR_GOING: Partial<Record<TerrainType, Going>> = {
   road: 'clear',
@@ -101,8 +116,11 @@ const POWER_ARMOUR_GOING: Partial<Record<TerrainType, Going>> = {
   swamp: 'poor',
   'light-woods': 'poor',
   'dense-woods': 'poor',
+  building: 'difficult', // bulkier and less nimble than a trooper on foot [reading]
   river: 'difficult',
   ford: 'difficult',
+  wall: 'difficult',
+  hedge: 'difficult',
   'open-water': 'difficult',
 }
 
@@ -112,19 +130,23 @@ const GOING_BY_FAMILY: Record<TerrainMobilityFamily, Partial<Record<TerrainType,
 }
 
 /**
- * How a mobility family takes a terrain type (p. 22–23). `urban` and
- * `mountains` are Dirtside terrain types with no Chapter 9 entry of their
- * own: `urban` is read as whatever this family's own Rough/Broken going is
- * (spec 02 §2.8.1's placeholder — chapter 9 has no urban terrain type, and
- * fire-vs-buildings is a later chapter), and `mountains` is folded into the
- * same going as `hills`/"slopes" [reading], since neither is one of
- * Stargrunt's own eleven terrain types and a scenario using either is
- * reaching past this game's own vocabulary into Dirtside's.
+ * How a mobility family takes a terrain type (p. 22–23). `urban`, `rubble`
+ * and `mountains` are Dirtside terrain types with no Chapter 9 entry of
+ * their own: `urban` is a town's own bare ground — its streets and yards,
+ * once its buildings are read as their own pieces rather than one blob —
+ * so it goes as Clear, same as any other open ground the town sits on
+ * [reading]; `rubble` is read as whatever this family's own Rough/Broken
+ * going is (a wrecked building is rocks and broken masonry, Stargrunt p.
+ * 57); and `mountains` is folded into the same going as `hills`/"slopes"
+ * [reading], since neither `rubble` nor `mountains` is one of Stargrunt's
+ * own eleven terrain types and a scenario using either is reaching past
+ * this game's own vocabulary into Dirtside's.
  */
 export function movementGoing(family: TerrainMobilityFamily, terrain: TerrainType, amphibious = false): Going {
   const table = GOING_BY_FAMILY[family]
   if (terrain === 'open-water' && amphibious) return 'poor'
-  if (terrain === 'urban') return table.rough ?? 'clear'
+  if (terrain === 'urban') return 'clear'
+  if (terrain === 'rubble') return table.rough ?? 'clear'
   if (terrain === 'mountains') return table.hills ?? 'clear'
   return table[terrain] ?? 'clear'
 }
@@ -153,7 +175,7 @@ export function pathCost(path: readonly Point[], mobility: MobilityKind, feature
       const from = samples[s - 1]!
       const to = samples[s]!
       const step = distance(from, to)
-      const feature = featureAt(to, features)
+      const feature = featureAt(to, features, { pieces: true })
       const terrain = feature?.terrain ?? 'open'
       const going = movementGoing(family, terrain, opts.amphibious)
       if (going === 'impassable') {
@@ -210,7 +232,7 @@ export function advanceAlongPath(path: readonly Point[], allowanceFactors: numbe
       const from = samples[s - 1]!
       const to = samples[s]!
       const step = distance(from, to)
-      const feature = featureAt(to, features)
+      const feature = featureAt(to, features, { pieces: true })
       const terrain = feature?.terrain ?? 'open'
       const going = movementGoing(family, terrain, opts.amphibious)
       if (going === 'impassable') {
