@@ -11,7 +11,7 @@ import { skirmishSetup } from '../../../dirtside/table/skirmish'
 import type { Action, GameState } from '../../../dirtside/table/types'
 import { canTakeBackDirtside, currentDirtsideBattle, dirtsideDispatch, dirtsideTransitions, newDirtsideBattle, takeBackDirtside } from '../dirtsideStore'
 import { unitCodes } from '../unitCodes'
-import { describeAction, groupLog, logKind, marksOf, parseChits, parseDice, recapGroups } from './journal'
+import { describeAction, groupLog, logKind, marksOf, maskObjective, parseChits, parseDice, recapGroups, type PlayEvent } from './journal'
 import { shortReason } from './words'
 
 const step = (state: GameState, action: Action): GameState => {
@@ -58,6 +58,36 @@ describe('what just happened', () => {
     const groups = recapGroups(events)
     expect(groups).toHaveLength(1)
     expect(groups[0]!.headline).toMatch(/held its ground/)
+  })
+
+  it('tells an objective marker\'s value only to a side that drew or holds it (p. 17)', () => {
+    let s = toFirstPick()
+    const side = s.toAct!
+    const other = side === 'north' ? 'south' : 'north'
+    const unit = Object.values(s.units).find((u) => u.sideId === side)!
+    s = step(s, { kind: 'activate', side, unitId: unit.id })
+    const el = s.elements[unit.leaderElementId!]!
+    const to = { x: el.position.x, y: el.position.y + (side === 'north' ? 3 : -3) }
+    // The mover's own marker, face down to the enemy, where it drives.
+    s = structuredClone(s)
+    s.setup.table.objectives = [{ id: 'X', position: to, value: 3, drawnBy: side }]
+    s.objectives = { X: { heldBy: null } }
+    const action: Action = { kind: 'move', side, elementId: el.id, path: [to] }
+    const after = step(s, action)
+    const said = (viewer: typeof side | null) => describeAction(s, action, after, unitCodes(s), viewer).lines.find((l) => l.tone === 'objective')?.text
+    expect(said(side)).toMatch(/takes an objective worth 3$/)
+    expect(said(other)).toMatch(/takes an objective \(its value is hidden from you\)$/)
+    expect(said(null)).not.toMatch(/3/)
+    const logged = after.log.find((l) => /takes objective X/.test(l.text))!.text
+    expect(maskObjective(logged, new Set(['X']))).toMatch(/takes objective X \(value hidden\)/)
+    expect(maskObjective(logged, new Set())).toBe(logged)
+  })
+
+  it('counts the elements that moved, not the moves, when a go is summed up', () => {
+    const move = (seq: number, subject: string): PlayEvent => ({ seq, kind: 'move', side: 'north', opens: false, title: 'N1 Tanks', lines: [{ text: `${subject} moved 3.0″.`, tone: 'move', subject }], turn: 1 })
+    const events: PlayEvent[] = [{ seq: 0, kind: 'activate', side: 'north', opens: true, title: 'N1 Tanks', lines: [], turn: 1 }, move(1, 'a'), move(2, 'b'), move(3, 'c'), move(4, 'a')]
+    expect(recapGroups(events)[0]!.lines.map((l) => l.text)).toEqual(['3 elements made 4 moves.'])
+    expect(recapGroups(events.slice(0, 5).concat(move(5, 'd')).filter((e) => e.seq !== 4))[0]!.lines.map((l) => l.text)).toEqual(['4 elements moved.'])
   })
 
   it('parses the chits and the dice the log prints', () => {

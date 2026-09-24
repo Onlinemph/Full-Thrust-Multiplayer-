@@ -15,7 +15,10 @@ import { CONFIDENCE_LABELS, CONFIDENCE_TONE, restrictionWords } from './words'
 export function HowToPlay({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // The table's keys stand down while the guide is open; these two close it. The keypress that opened
+      // it (already taken, so marked handled) reaches here too, and must not close it again.
+      if (e.defaultPrevented) return
+      if (e.key === 'Escape' || e.key === '?') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -74,7 +77,7 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <p>Woods, hills and buildings block sight; an element deep inside a wood neither sees nor is seen, one on its edge is in cover. Nothing sees farther than 60″.</p>
           <p>
             A shot is the firer's die against the target's: bigger vehicles and closer ranges favour the firer, cover and hull-down favour the target. A hit draws chits: red, yellow and green count against the target's armour, and
-            enough of them knock it out. The odds you see on each target are worked out from exactly this.
+            enough of them knock it out. The odds you see when you point at a target, and in the volley, are worked out from exactly this.
           </p>
           <p className="dst-foot">pp. 4, 20, 28–33</p>
         </section>
@@ -102,12 +105,17 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <h3>On the map</h3>
           <ul className="dst-guide-marks">
             <li>
-              <i className="dst-swatch is-north" /> North's units, <i className="dst-swatch is-south" /> South's. The tag shows the unit's code (N1, S2…), also in the list.
+              <i className="dst-guide-swatch is-north" /> North's units, <i className="dst-guide-swatch is-south" /> South's. The tag shows the unit's code (N1, S2…), also in the list.
             </li>
+            <li>Cyan is North and amber is South, nothing else.</li>
             <li>A tick on a tag, or a dimmed counter: that unit has acted this turn.</li>
-            <li>Dashed cyan rings: reach, ranges and previews. A green path is a move you can afford; amber is too far or blocked.</li>
-            <li>Red is damage and nothing else: a wreck is knocked out.</li>
-            <li>Orange is the one button to press next.</li>
+            <li>Dashed rings round the selected element: how far it can still move, and its weapon's ranges. The chip on a plotted path says how far it goes and what is left, or why it cannot go.</li>
+            <li>
+              With a weapon picked, a bright ring marks every enemy it can shoot; a faint dashed ring on a dimmed counter means it can't. Point at a target for the odds, or for why not; a shot in the volley gets an orange reticle.
+              Terrain that blocks the shot is outlined in dashes.
+            </li>
+            <li>Red is damage and nothing else: a red mark is a hit, a wreck is knocked out.</li>
+            <li>Orange is the one button to press next, and movement being spent. When the table waits on your decision, the strip says so in orange.</li>
           </ul>
         </section>
         <section>

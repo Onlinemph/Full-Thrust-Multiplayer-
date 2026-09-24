@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import type { LogEntry, SideId } from '../../../dirtside/table/types'
-import { LOG_ICON, groupLog } from './journal'
+import { LOG_ICON, groupLog, maskObjective } from './journal'
 
 /**
  * The battle's log, for reading: by turn, and within a turn by activation,
@@ -23,8 +23,13 @@ function readPages(): boolean {
   }
 }
 
-export const LogDock = memo(function LogDock({ log, northName, southName }: { log: readonly LogEntry[]; northName: string; southName: string }) {
+/**
+ * `hiddenObjectives` names the markers whose value the viewer has not seen,
+ * comma-separated (a string, so the memo holds): the log keeps their value back.
+ */
+export const LogDock = memo(function LogDock({ log, northName, southName, hiddenObjectives = '' }: { log: readonly LogEntry[]; northName: string; southName: string; hiddenObjectives?: string }) {
   const sideName = (s: SideId) => (s === 'north' ? northName : southName)
+  const hidden = useMemo(() => new Set(hiddenObjectives ? hiddenObjectives.split(',') : []), [hiddenObjectives])
   const [folded, setFolded] = useState(false)
   const [pages, setPages] = useState(readPages)
   const turns = useMemo(() => groupLog(log), [log])
@@ -58,7 +63,7 @@ export const LogDock = memo(function LogDock({ log, northName, southName }: { lo
           {folded ? 'Show ▴' : 'Fold ▾'}
         </button>
       </div>
-      {folded && latest ? <p className={`dst-log-latest${latest.side ? ` is-${latest.side}` : ''}`}>{latest.text}</p> : null}
+      {folded && latest ? <p className={`dst-log-latest${latest.side ? ` is-${latest.side}` : ''}`}>{maskObjective(latest.text, hidden)}</p> : null}
       <div
         ref={scroller}
         className={`dst-log${pages ? ' show-pages' : ''}`}
@@ -84,7 +89,7 @@ export const LogDock = memo(function LogDock({ log, northName, southName }: { lo
                     <span className="dst-log-icon" aria-hidden="true">
                       {LOG_ICON[e.kind]}
                     </span>
-                    <span className="dst-log-text">{e.text}</span>
+                    <span className="dst-log-text">{maskObjective(e.text, hidden)}</span>
                     {e.page ? <span className="rule-ref"> {e.page}</span> : null}
                   </p>
                 ))}
