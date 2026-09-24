@@ -55,7 +55,8 @@ export function vehiclePosture(state: GameState, target: ElementState, unit: Uni
   if (target.posture === 'hull-down') return 'hull-down'
   if (target.dugIn) return 'dug-in'
   if (unit.evasive) return 'evading'
-  if (woodAt(target.position, state.setup.table.terrain)?.where === 'edge') return 'soft-cover'
+  const terrain = state.setup.table.terrain
+  if (woodAt(target.position, terrain)?.where === 'edge' || onContactCover(terrainAt(target.position, terrain))) return 'soft-cover'
   return 'none'
 }
 
@@ -67,15 +68,34 @@ export function vehiclePosture(state: GameState, target: ElementState, unit: Uni
 export function infantryPosition(state: GameState, target: ElementState): InfantryPosition {
   if (target.dugIn) return 'dug-in'
   const terrain = state.setup.table.terrain
-  if (terrainAt(target.position, terrain) === 'urban') return 'urban'
-  if (woodAt(target.position, terrain)?.where === 'edge' || onHighGround(target.position, terrain)) return 'soft-cover'
+  const here = terrainAt(target.position, terrain)
+  if (here === 'urban') return 'urban'
+  if (woodAt(target.position, terrain)?.where === 'edge' || onHighGround(target.position, terrain) || onContactCover(here)) return 'soft-cover'
   return 'open'
 }
 
-/** Terrain an element can claim cover from by contact (p. 20): high ground, a wood edge, an urban area. */
+/**
+ * Terrain an element can claim cover from by contact (p. 20): high ground,
+ * a wood edge, an urban area, a lone building or its ruin (p. 46). A
+ * building that stands `partOf` a town is not read here — `terrainAt`
+ * already skips it to find the enclosing urban area, which Dirtside plays
+ * as one piece of ground (p. 46).
+ */
 export function touchesCover(state: GameState, at: ElementState['position']): boolean {
   const terrain = state.setup.table.terrain
-  return onHighGround(at, terrain) || woodAt(at, terrain)?.where === 'edge' || terrainAt(at, terrain) === 'urban'
+  const here = terrainAt(at, terrain)
+  return onHighGround(at, terrain) || woodAt(at, terrain)?.where === 'edge' || here === 'urban' || onContactCover(here)
+}
+
+/**
+ * Ground that gives soft cover by touch alone, the same way a wood edge or
+ * a hilltop does: a lone building (p. 46, "Elements that are in direct
+ * contact with the building model are deemed to be in SOFT COVER") and its
+ * ruin once destroyed ("Elements in direct contact with the ruins may
+ * still claim Cover in them").
+ */
+function onContactCover(terrain: ReturnType<typeof terrainAt>): boolean {
+  return terrain === 'building' || terrain === 'rubble'
 }
 
 export interface TablePlanBase {

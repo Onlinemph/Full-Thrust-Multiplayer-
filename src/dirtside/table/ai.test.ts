@@ -4,10 +4,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { aiPlay } from './ai'
-import { replay } from './game'
+import { newVehicleDesign } from '../design'
+import { newStream } from '../dice'
+import { aiAction, aiPlay } from './ai'
+import { applyAction, createGame, replay } from './game'
 import { skirmishSetup } from './skirmish'
-import type { GameSetup } from './types'
+import { touchesCover } from './tableFire'
+import type { GameSetup, TerrainFeature } from './types'
 
 describe('the computer at the table', () => {
   it('plays skirmishes to a result, and every journal replays exactly', () => {
@@ -44,5 +47,48 @@ describe('the computer at the table', () => {
     }
     expect(called).toBeGreaterThan(0)
     expect(taken).toBeGreaterThan(0)
+  })
+
+  it('prefers a fallback move that ends touching cover once the straight line to its goal is blocked', () => {
+    // Open water is impassable to a tracked vehicle (p. 26): the straight line south to the objective is blocked
+    // at every reach `moveFor` tries, so it must fall back to an angled move — several of which land inside a
+    // lone building well off to the side, wide enough that at least one is picked up regardless of exact rounding.
+    const water: TerrainFeature = { id: 'w', terrain: 'open-water', shape: { kind: 'rect', x: 22, y: 13, width: 4, height: 4 } }
+    const building: TerrainFeature = { id: 'b', terrain: 'building', shape: { kind: 'rect', x: 12, y: 13, width: 10, height: 5 } }
+    const setup: GameSetup = {
+      name: 'cover-seeking',
+      seed: 1,
+      battle: 'encounter',
+      table: {
+        width: 48,
+        depth: 36,
+        terrain: [water, building],
+        objectives: [{ id: 'O1', position: { x: 24, y: 34 }, value: 1, drawnBy: 'south' }],
+      },
+      sides: [
+        {
+          id: 'north',
+          name: 'North',
+          units: [{ id: 'u1', name: 'Scouts', quality: 'regular', leadership: 2, commandUnit: true, elements: [{ id: 'e1', name: 'e1', vehicle: newVehicleDesign('tank'), position: { x: 24, y: 10 }, facing: 180, leader: true }] }],
+        },
+        { id: 'south', name: 'South', units: [{ id: 'u2', name: 'Garrison', quality: 'regular', leadership: 2, commandUnit: true, elements: [{ id: 'e2', name: 'e2', infantry: { troops: 'line', team: 'rifle' }, position: { x: 24, y: 34 }, facing: 0, leader: true }] }] },
+      ],
+      turnLimit: 8,
+    }
+    let state = createGame(setup)
+    const stream = newStream(1)
+    for (let i = 0; i < 60; i++) {
+      const side = state.phase === 'deployment' ? (!state.sides.north.ready ? 'north' : 'south') : state.toAct
+      if (!side) break
+      const action = aiAction(state, side, stream)
+      if (!action) break
+      if (action.kind === 'move' && action.elementId === 'e1') {
+        expect(touchesCover(state, action.path[action.path.length - 1]!)).toBe(true)
+        return
+      }
+      const next = applyAction(state, action)
+      if (!('ok' in next)) state = next
+    }
+    throw new Error('the scout never tried to move')
   })
 })

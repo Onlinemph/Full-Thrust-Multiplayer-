@@ -112,35 +112,46 @@ export function mobilityFamily(type: MobilityType): MobilityFamily {
   }
 }
 
-/** Terrain effects on mobility, family by family, as printed on p. 26 (walkers p. 27). */
+/**
+ * Terrain effects on mobility, family by family, as printed on p. 26
+ * (walkers p. 27). `rubble` has no printed going of its own — p. 46's "the
+ * immediate area has been rubbled to impede movement" gives no number, so
+ * it is read onto whatever the family already does with `rough` ground,
+ * the least invented answer and the same technique `urban`/`mountains`
+ * already stand in for on rows that have no entry of their own. `building`
+ * and `wall`/`hedge` have no entry anywhere in this table on purpose: an
+ * isolated building "does NOT impede movement" (p. 46), and Dirtside's own
+ * text (p. 25) keeps hedges and walls folded into `cultivated` rather than
+ * modelled as their own obstacle — both default to `'normal'` going.
+ */
 const TERRAIN: Record<MobilityFamily, Partial<Record<TerrainType, Going>>> = {
   infantry: {
-    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', urban: 'normal', hills: 'normal', 'light-woods': 'normal',
+    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'normal', rubble: 'normal', cultivated: 'normal', urban: 'normal', hills: 'normal', 'light-woods': 'normal',
     mountains: 'poor', swamp: 'poor', 'dense-woods': 'poor', river: 'difficult', ford: 'difficult', 'open-water': 'impassable',
   },
   'low-wheeled': {
     // Rivers "crossing only at designated Ford — otherwise impassable" (p. 26).
     road: 'easy', open: 'poor', urban: 'poor', hills: 'poor', 'light-scrub': 'difficult', cultivated: 'difficult', ford: 'difficult', river: 'impassable',
-    rough: 'impassable', mountains: 'impassable', swamp: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
+    rough: 'impassable', rubble: 'impassable', mountains: 'impassable', swamp: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   'high-wheeled': {
-    road: 'easy', open: 'normal', 'light-scrub': 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', rough: 'difficult', swamp: 'difficult', river: 'difficult', ford: 'difficult',
+    road: 'easy', open: 'normal', 'light-scrub': 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', rough: 'difficult', rubble: 'difficult', swamp: 'difficult', river: 'difficult', ford: 'difficult',
     mountains: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   tracked: {
-    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', mountains: 'difficult', 'light-woods': 'difficult', river: 'difficult', ford: 'difficult',
+    road: 'easy', open: 'normal', 'light-scrub': 'normal', rough: 'poor', rubble: 'poor', cultivated: 'poor', urban: 'poor', hills: 'poor', mountains: 'difficult', 'light-woods': 'difficult', river: 'difficult', ford: 'difficult',
     swamp: 'impassable', 'dense-woods': 'impassable', 'open-water': 'impassable',
   },
   gev: {
-    road: 'easy', open: 'easy', 'open-water': 'easy', swamp: 'normal', 'light-scrub': 'poor', hills: 'poor', urban: 'difficult', cultivated: 'difficult', rough: 'difficult', river: 'difficult', ford: 'difficult',
+    road: 'easy', open: 'easy', 'open-water': 'easy', swamp: 'normal', 'light-scrub': 'poor', hills: 'poor', urban: 'difficult', cultivated: 'difficult', rough: 'difficult', rubble: 'difficult', river: 'difficult', ford: 'difficult',
     mountains: 'impassable', 'light-woods': 'impassable', 'dense-woods': 'impassable',
   },
   grav: {
-    road: 'easy', open: 'easy', 'open-water': 'easy', river: 'easy', ford: 'easy', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', swamp: 'normal', urban: 'poor', hills: 'poor', mountains: 'difficult',
+    road: 'easy', open: 'easy', 'open-water': 'easy', river: 'easy', ford: 'easy', 'light-scrub': 'normal', rough: 'normal', rubble: 'normal', cultivated: 'normal', swamp: 'normal', urban: 'poor', hills: 'poor', mountains: 'difficult',
     'light-woods': 'impassable', 'dense-woods': 'impassable',
   },
   walker: {
-    road: 'normal', open: 'normal', 'light-scrub': 'normal', rough: 'normal', cultivated: 'normal', hills: 'normal', river: 'normal', ford: 'normal', 'open-water': 'poor',
+    road: 'normal', open: 'normal', 'light-scrub': 'normal', rough: 'normal', rubble: 'normal', cultivated: 'normal', hills: 'normal', river: 'normal', ford: 'normal', 'open-water': 'poor',
     mountains: 'poor', swamp: 'poor', 'light-woods': 'poor', 'dense-woods': 'poor', urban: 'difficult',
   },
 }

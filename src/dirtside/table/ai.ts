@@ -17,7 +17,7 @@ import { type DiceStream, draw, newStream } from '../dice'
 import { LANDING_CLEARANCE, applyAction, canPass, commandUnitOf, craftToLand, createGame, dropshipsToUnload, elementsOf, functional, inRearArea, mobile, objectiveValues, strikesDue, unactivatedUnits } from './game'
 import { restrictionsOf } from './confidence'
 import { NUKE_EXCLUSION, STRIKE_RADIUS, attacksLeft, orbitalShips, overhead, protectedFromFallout } from './orbital'
-import { baseMovement, planTableShot, teamFiresRanged, unitKind } from './tableFire'
+import { baseMovement, planTableShot, teamFiresRanged, touchesCover, unitKind } from './tableFire'
 import { distance, lineOfSight, onTable, pathCost, terrainAt } from './terrain'
 import type { Action, ElementState, GameSetup, GameState, OrbitalAttack, Point, ShotOrder, SideId, UnitState, WeaponChoice } from './types'
 import { otherSide } from './types'
@@ -90,7 +90,19 @@ function goalFor(state: GameState, side: SideId, el: ElementState, unit: UnitSta
   return enemy?.position ?? null
 }
 
-/** A move towards the goal the element can afford, tried at full length and shorter, straight and angled. */
+/**
+ * A move towards the goal the element can afford, tried at full length and
+ * shorter, straight and angled. The direct line at full reach is taken the
+ * moment it is legal, exactly as before; only when that is blocked or
+ * refused (an obstacle, a table edge, the fallout ring) does the search
+ * widen — and among those fallback moves, one that ends touching cover
+ * (a wood edge, high ground, urban ground, a lone building or its ruin,
+ * p. 20) is preferred over one that leaves the element in the open, since
+ * every one of these moves is already a deviation from the straight line.
+ * This is the one place buildings' new footprints matter to the computer's
+ * own play, not just to the rules that read them: it costs nothing extra
+ * to prefer a building over open ground when a detour is needed anyway.
+ */
 function moveFor(state: GameState, side: SideId, el: ElementState, goal: Point): Action | null {
   const record = state.activation!.elements[el.id]!
   const bmf = baseMovement(el)
@@ -103,6 +115,7 @@ function moveFor(state: GameState, side: SideId, el: ElementState, goal: Point):
   const family = el.vehicle ? mobilityFamily(el.vehicle.mobility) : 'infantry'
   const wades = !!el.vehicle?.amphibious || el.infantry?.troops === 'powered'
   const base = Math.atan2(goal.y - el.position.y, goal.x - el.position.x)
+  const fallbacks: { action: Action; to: Point }[] = []
   for (const turn of [0, 0.5, -0.5, 1, -1]) {
     for (const share of [1, 0.75, 0.5, 0.3]) {
       const reach = Math.min(gap, cap) * share
@@ -113,10 +126,13 @@ function moveFor(state: GameState, side: SideId, el: ElementState, goal: Point):
       if (cost.blockedAt || cost.factors > cap + 1e-9) continue
       if (!protectedFromFallout(el) && (state.orbit?.nukes ?? []).some((n) => near(n, to) < NUKE_EXCLUSION + 0.2)) continue
       const action: Action = { kind: 'move', side, elementId: el.id, path: [to] }
-      if (!('ok' in applyAction(state, action))) return action
+      if ('ok' in applyAction(state, action)) continue
+      if (turn === 0 && share === 1) return action
+      fallbacks.push({ action, to })
     }
   }
-  return null
+  if (fallbacks.length === 0) return null
+  return (fallbacks.find((f) => touchesCover(state, f.to)) ?? fallbacks[0]!).action
 }
 
 /** The thickest enemy ground the side can see and aim at safely: no friend within the zone and the worst deviation (7"). */

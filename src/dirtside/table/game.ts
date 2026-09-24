@@ -277,10 +277,18 @@ export function commandUnitOf(state: GameState, side: SideId): UnitState | null 
   return unitsOf(state, side).find((u) => u.commandUnit && elementsOf(state, u).some(functional)) ?? null
 }
 
-/** In cover for the shaken-infantry test (p. 22): dug in, in a wood, or in urban terrain. */
+/**
+ * In cover for the shaken-infantry test (p. 22): dug in, in a wood, in
+ * urban terrain, against a lone building, or against its ruin (p. 46 gives
+ * both the same soft-cover-by-contact rule `tableFire.ts`'s `touchesCover`
+ * reads for fire; leaving cover is the same act whether it is being fired
+ * on or not).
+ */
 function inCover(state: GameState, e: ElementState, at: Point = e.position): boolean {
   if (e.dugIn && at === e.position) return true
-  return woodAt(at, state.setup.table.terrain) !== null || terrainAt(at, state.setup.table.terrain) === 'urban'
+  const terrain = state.setup.table.terrain
+  const here = terrainAt(at, terrain)
+  return woodAt(at, terrain) !== null || here === 'urban' || here === 'building' || here === 'rubble'
 }
 
 export function canPass(state: GameState, side: SideId): boolean {
