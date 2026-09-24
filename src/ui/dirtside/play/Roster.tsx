@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import { CONFIDENCE_LEVELS_INDEX } from '../../../dirtside/table/confidence'
-import { elementsOf, functional, unactivatedUnits } from '../../../dirtside/table/game'
+import { INTEGRITY, elementsOf, functional, isOrganised, unactivatedUnits } from '../../../dirtside/table/game'
 import { unitKind } from '../../../dirtside/table/tableFire'
 import type { GameState, SideId, UnitState } from '../../../dirtside/table/types'
 import { CONFIDENCE_LABELS, CONFIDENCE_TONE, commandWords, restrictionWords } from './words'
@@ -150,6 +150,7 @@ function UnitRow(props: ForceProps & { unit: UnitState }) {
   if (u.underFire) flags.push({ label: 'under fire', title: 'Must pass a test to move this activation; infantry shoot with a smaller die (p. 24).', tone: 'warn' })
   if (u.panic) flags.push({ label: 'panic', title: 'Frozen by first contact: its next activation only recovers (p. 23).', tone: 'bad' })
   if (u.evasive) flags.push({ label: 'evading', title: 'Harder to hit until its next activation; may not fire (p. 27).', tone: 'info' })
+  if (!gone && alive > 1 && !isOrganised(state, u)) flags.push({ label: 'scattered', title: `Disorganised: an element stands more than ${INTEGRITY[kind]}″ from every unit-mate, so its moves must bring it back (p. 23).`, tone: 'warn' })
   if (aboard) flags.push({ label: 'aboard a craft', title: 'Off the table until its craft lands and unloads (p. 43).', tone: 'info' })
   return (
     <li

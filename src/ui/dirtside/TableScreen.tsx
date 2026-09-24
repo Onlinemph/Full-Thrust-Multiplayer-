@@ -903,7 +903,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   const targetIds = useMemo(() => (volley.length > 0 ? volley.map((s) => s.targetId) : NO_IDS), [volley])
   const pendingLandings = useMemo(() => landings.map((l) => ({ at: l.at, label: state.setup.craft?.find((c) => c.id === l.craftId)?.name ?? '' })), [landings, state.setup.craft])
   const budgetOn = (moving || ghostReady) && !!selected
-  const moveBudget = useMemo(() => (budgetOn && selected ? { family, amphibious: wades(selected), travel: travelling, left } : null), [budgetOn, selected, family, travelling, left])
+  const moveBudget = useMemo(() => (budgetOn && selected ? { family, amphibious: wades(selected), travel: travelling, left, evasive } : null), [budgetOn, selected, family, travelling, left, evasive])
   const aimPreview = useMemo(() => (mode === 'orbital' && orbitalChoice ? { radius: STRIKE_RADIUS[orbitalChoice.attack] } : null), [mode, orbitalChoice])
   const landingPreview = useMemo(() => (mode === 'land' && placing ? { label: state.setup.craft?.find((c) => c.id === placing)?.name ?? '' } : null), [mode, placing, state.setup.craft])
 

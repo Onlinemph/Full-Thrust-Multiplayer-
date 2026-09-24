@@ -499,6 +499,26 @@ re-occupied, cover claimed by contact, one reaction test per move at the highest
 catching elements within 1" or 2" of its target, the fire-effectiveness cap counted over the whole platoon,
 no new offensive in the turn a command unit is lost, fixed mounts' 30° arc).
 
+**The table's look and guidance.** The screen was rebuilt to read like a miniatures board and to teach
+the game as it goes. The map (`src/ui/dirtside/TableMap.tsx` and `map/`) draws every terrain type with its
+own texture, edge and label; counters are models on bases, a silhouette per mobility and role, with a
+pennant carrying the unit's code (N1, S2…), its quality and leadership, and a tick once it has acted;
+status shows as table markers (berms for hull down, sandbags for dug in, damage and systems-down marks).
+Picking a weapon lights every enemy it can shoot and dims the rest; pointing at one draws the sight line
+with the odds, or outlines what blocks it. Plotting a move shows a ghost path coloured by the going, the
+cost at the pointer, and the engine's own answer when a move would be refused. The play screen
+(`TableScreen.tsx` and `play/`) puts a strip above the map that says whose turn it is, what to do now and
+which one orange button does it; the side column shows the acting unit, the selected element as a card
+(armour, dice, a movement bar, weapons with their range bands), both rosters in plain words, what the
+last action did (the computer's included), and a log grouped by turn. How to play explains the turn, an
+activation, shooting and morale. Keys: Enter presses the orange button, A activates, M plots a move, E
+ends the activation, 1–4 arm a weapon, F fires, U, H and T set the stance, Tab or N moves to the next element, Backspace removes a
+waypoint, Esc cancels, Ctrl+Z takes back a move that rolled no dice, ? opens the guide; none of them act
+while a window or a text field has the keyboard. The skirmish setup builds forces as unit cards with
+their points, offers a first game against the computer, and previews the table. Sides are cyan (north)
+and amber (south) as in the fleet game; red marks damage and nothing else. A review played whole games
+through the screen as a newcomer and checked every screen at four sizes; its 33 findings are fixed.
+
 Readings to know about. The book's own Light MICV (p. 53) puts an MDC/2 on a class 2 hull with an HMT, which
 p. 10 forbids; it is kept as printed and the Motor Pool shows the fault. Vehicle guns firing on infantry have
 two printed validity rules — a colour per weapon on p. 29 and the record card, and "as for infantry

@@ -67,10 +67,11 @@ export function HowToPlay({ onClose }: { onClose: () => void }) {
           <ul>
             <li>Firing first limits the element to half its move afterwards.</li>
             <li>Moving more than half its move makes its shots harder.</li>
+            <li>Keep a unit together: each element within 3″ of a unit-mate (2″ for infantry). A unit that ends up scattered may only move to close up again; the roster marks it <i>scattered</i>.</li>
             <li>Woods, hills and rough ground cost more to cross; roads cost less in travel mode (but then it cannot fire).</li>
             <li>When you move in sight of an enemy unit that has not acted yet, it may fire at you as you arrive (opportunity fire). That spends its activation.</li>
           </ul>
-          <p className="dst-foot">pp. 18–20, 25–28</p>
+          <p className="dst-foot">pp. 18–20, 23, 25–28</p>
         </section>
         <section>
           <h3>Seeing and shooting</h3>
