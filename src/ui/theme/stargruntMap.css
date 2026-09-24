@@ -1,0 +1,281 @@
+/* Stargrunt II — figures, pennants and the move/fire overlays on the table.
+   ────────────────────────────────────────────────────────────────────────────
+   The board itself (ground, grid, rulers, baselines, terrain, deployment
+   bands, the legend's chrome, the objective marker) is Dirtside's own
+   `.dst-*` classes from dirtsideMap.css, reused unchanged because this file
+   draws on the very same table (`05-reuse-map.md` §3, §6): nothing here
+   restyles them. What is new is the figure — a squad drawn as several small
+   bases, not one counter — and the marks that go with it. */
+
+/* ---- Figures ------------------------------------------------------------ */
+
+.sg-figure {
+  cursor: pointer;
+}
+.sg-figure.is-dim {
+  opacity: 0.55;
+}
+.sg-figure-base {
+  fill: var(--sg-north);
+  stroke: var(--dst-outline);
+  stroke-width: 0.045;
+}
+.sg-figure.is-south .sg-figure-base {
+  fill: var(--sg-south);
+}
+.sg-figure-glyph {
+  fill: var(--dst-ink);
+  color: var(--dst-ink);
+}
+.sg-glyph-medic {
+  fill: none;
+}
+.sg-halo {
+  fill: none;
+  stroke: var(--thrust);
+  stroke-width: 0.045;
+  stroke-dasharray: 0.05 0.06;
+  animation: sg-halo-spin 6s linear infinite;
+}
+@keyframes sg-halo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sg-select-ring {
+  fill: none;
+  stroke: var(--dst-paper);
+  stroke-width: 0.04;
+  stroke-dasharray: 0.03 0.05;
+}
+.sg-target-ring {
+  fill: none;
+  stroke: var(--thrust);
+  stroke-width: 0.05;
+}
+.sg-wound-ring {
+  fill: none;
+  stroke: var(--sg-wound);
+  stroke-width: 0.045;
+}
+.sg-figure.is-wounded .sg-figure-base {
+  opacity: 0.75;
+}
+.sg-figure.is-stabilised .sg-figure-base {
+  opacity: 0.55;
+}
+.sg-stab-mark {
+  stroke: var(--sg-wound);
+  stroke-width: 0.035;
+  fill: none;
+}
+.sg-dead-x {
+  stroke: var(--dst-outline);
+  stroke-width: 0.045;
+  opacity: 0.65;
+}
+
+/* ---- Pennant -------------------------------------------------------------
+   One flag per squad: code, quality die, leadership, confidence colour,
+   suppression pips (up to three, p. 18), the in-position and disorganised
+   flags. Drawn in a `scale(k)` group in on-screen pixels (the same trick as
+   Dirtside's own `map/marks.tsx` `Pennant`), so the text is one legible size
+   whether the table is zoomed to fit or zoomed onto one squad. */
+
+.sg-pennant {
+  cursor: pointer;
+}
+.sg-pennant-pole {
+  stroke: var(--dst-outline);
+  stroke-width: 1.4;
+}
+.sg-pennant-flag {
+  fill: var(--sg-north);
+  stroke: var(--dst-outline);
+  stroke-width: 1.2;
+}
+.sg-pennant.is-south .sg-pennant-flag {
+  fill: var(--sg-south);
+}
+.sg-pennant.is-active .sg-pennant-flag {
+  fill: var(--thrust);
+}
+.sg-pennant.is-selected .sg-pennant-flag,
+.sg-pennant.is-hovered .sg-pennant-flag {
+  stroke: var(--dst-paper);
+  stroke-width: 2;
+}
+.sg-pennant-lead {
+  fill: rgba(0, 0, 0, 0.22);
+}
+.sg-pennant-code,
+.sg-pennant-q {
+  font: 700 11px var(--font-display, sans-serif);
+  fill: var(--dst-outline);
+  text-anchor: middle;
+}
+.sg-pennant-q {
+  font-size: 9.5px;
+  fill: rgba(13, 17, 9, 0.85);
+}
+.sg-pennant-chip rect {
+  fill: var(--panel-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.sg-pennant-chip text {
+  font: 700 9px var(--font-display, sans-serif);
+  text-anchor: middle;
+  fill: var(--ink-dim);
+}
+.sg-pennant-chip.is-CO text {
+  fill: var(--sg-co);
+}
+.sg-pennant-chip.is-ST text {
+  fill: var(--sg-st);
+}
+.sg-pennant-chip.is-SH text {
+  fill: var(--sg-sh);
+}
+.sg-pennant-chip.is-BR text {
+  fill: var(--sg-br);
+}
+.sg-pennant-chip.is-RO text,
+.sg-pennant-chip.is-ro text {
+  fill: var(--sg-ro);
+}
+.sg-pennant-chip.is-suppress rect {
+  stroke: var(--sg-suppress);
+}
+.sg-pennant-chip.is-suppress text {
+  fill: var(--sg-suppress);
+  letter-spacing: -1px;
+}
+.sg-pennant-chip.is-ip rect {
+  stroke: var(--sg-ip);
+}
+.sg-pennant-chip.is-ip text {
+  fill: var(--sg-ip);
+}
+.sg-pennant-chip.is-dis rect {
+  stroke: var(--sg-dis);
+}
+.sg-pennant-chip.is-dis text {
+  fill: var(--sg-dis);
+}
+
+/* ---- Integrity (p. 11) --------------------------------------------------- */
+
+.sg-integrity {
+  pointer-events: none;
+  fill: none;
+  stroke-width: 0.04;
+  stroke-dasharray: 0.1 0.08;
+}
+.sg-integrity.is-ok {
+  stroke: var(--screens);
+}
+.sg-integrity.is-broken {
+  stroke: var(--damage);
+}
+
+/* ---- Move and assault ghosts --------------------------------------------- */
+
+.sg-reach-ring {
+  fill: rgba(255, 122, 61, 0.06);
+  stroke: var(--thrust);
+  stroke-width: 0.03;
+  stroke-dasharray: 0.08 0.06;
+}
+.sg-move-ghost.is-over .sg-reach-ring {
+  stroke: var(--damage);
+}
+.sg-move-line {
+  stroke: var(--thrust);
+  stroke-width: 0.03;
+  stroke-dasharray: 0.05 0.06;
+}
+.sg-move-ghost-base {
+  fill: none;
+  stroke: var(--thrust);
+  stroke-width: 0.03;
+  stroke-dasharray: 0.03 0.04;
+}
+.sg-move-label {
+  font: 700 0.24px var(--font-display, sans-serif);
+  fill: var(--dst-paper);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--dst-label-halo);
+  stroke-width: 0.06;
+}
+.sg-assault-line {
+  stroke: var(--damage);
+  stroke-width: 0.04;
+  stroke-dasharray: 0.05 0.05;
+}
+.sg-assault-target {
+  fill: none;
+  stroke: var(--damage);
+  stroke-width: 0.05;
+}
+
+/* ---- Fire preview --------------------------------------------------------- */
+
+.sg-fireline line {
+  stroke-width: 0.03;
+}
+.sg-fireline.is-ok line {
+  stroke: var(--thrust);
+}
+.sg-fireline.is-refused line {
+  stroke: var(--ink-faint);
+  stroke-dasharray: 0.05 0.06;
+}
+.sg-fireline text {
+  font: 700 0.26px var(--font-display, sans-serif);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--dst-label-halo);
+  stroke-width: 0.07;
+}
+.sg-fireline.is-ok text {
+  fill: var(--dst-paper);
+}
+.sg-fireline.is-refused text {
+  fill: var(--ink-faint);
+}
+
+/* ---- Legend's figures row -------------------------------------------------- */
+
+.sg-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  vertical-align: -2px;
+}
+.sg-key-pip {
+  background: var(--sg-suppress);
+}
+.sg-key-ip,
+.sg-key-dis {
+  border-radius: 3px;
+  font: 700 8px var(--font-display, sans-serif);
+  text-align: center;
+  line-height: 12px;
+  width: auto;
+  padding: 0 3px;
+}
+.sg-key-ip {
+  color: var(--sg-ip);
+  border: 1px solid var(--sg-ip);
+}
+.sg-key-dis {
+  color: var(--sg-dis);
+  border: 1px solid var(--sg-dis);
+}
+.sg-key-ring {
+  border: 1px dashed var(--screens);
+  background: none;
+}

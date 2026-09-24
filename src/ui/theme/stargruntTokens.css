@@ -1,0 +1,35 @@
+/* Stargrunt II — the squad game's own colours, on top of tokens.css and
+   Dirtside's map ground (dirtsideTokens.css supplies the terrain palette
+   this table stands on, reused unchanged since it is the same ground).
+   ────────────────────────────────────────────────────────────────────────────
+   North/south stay --dst-north/--dst-south (the same two colours the fleet
+   and Dirtside use for a side): the three games are never on screen
+   together, so there is no reason for a third pair. Confidence and quality
+   are new ladders with no Dirtside analogue, so they get their own tokens
+   here rather than borrowing (or clashing with) the frozen fleet colours. */
+
+:root {
+  --sg-north: var(--dst-north);
+  --sg-south: var(--dst-south);
+
+  /* Confidence (pp. 20–21): a ladder from good to worst, read at a glance. */
+  --sg-co: var(--screens);
+  --sg-st: var(--ink-dim);
+  --sg-sh: var(--warn);
+  --sg-br: var(--thrust);
+  --sg-ro: var(--damage);
+
+  /* Quality (p. 9): dimmest for Untrained, brightest for Elite — a ladder,
+     not a hue, so it never competes with side or confidence colour. */
+  --sg-q-untrained: #7a8494;
+  --sg-q-green: #9fb3d9;
+  --sg-q-regular: var(--dst-paper, #efe6c8);
+  --sg-q-veteran: #d9c98f;
+  --sg-q-elite: #ffcf6b;
+
+  --sg-suppress: var(--warn);
+  --sg-wound: var(--damage);
+  --sg-dead: rgba(230, 236, 247, 0.4);
+  --sg-ip: var(--screens);
+  --sg-dis: var(--damage);
+}

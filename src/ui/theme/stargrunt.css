@@ -1,0 +1,16 @@
+/* Stargrunt II — general chrome.
+   ────────────────────────────────────────────────────────────────────────────
+   The app bar, the guide drawer, the "no battle" placeholder and modal
+   dialogs are all Dirtside's own generic classes (`.app`, `.app-bar`,
+   `.dst-bar`, `.dst-guide`, `.modal`), reused unchanged since a table
+   screen's chrome carries no rule of its own. This file holds only what is
+   truly new: the result dialog's own layout. */
+
+.sg-result h2 {
+  margin-top: 0;
+}
+.sg-result-acts {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

@@ -11,8 +11,21 @@ import { type Box, clearestSpot, deploymentBand, fitLabel, textWidth } from './g
  * named in the margin, and where each side may deploy while it does.
  */
 
+/**
+ * `Board` and `BoardMarks` read only a table's width, depth and battle kind
+ * — nothing about elements or a design. Typed to that narrow shape rather
+ * than Dirtside's own `GameSetup` (which also carries `sides`, `craft`…),
+ * so a second game's setup satisfies it too without a cast; Dirtside's own
+ * `GameSetup` still has this shape and more, so every existing call is
+ * unaffected (`05-reuse-map.md` §3: "Import unchanged").
+ */
+export interface TableDims {
+  table: { width: number; depth: number }
+  battle?: 'encounter' | 'attack-defence'
+}
+
 export interface BoardProps {
-  setup: GameSetup
+  setup: TableDims
   pid: string
   /** The side to act, for the frame's colour; null leaves it neutral. */
   toAct: SideId | null
@@ -53,7 +66,7 @@ export const Board = memo(function Board({ setup, pid, toAct, computer, sideName
 const MARGIN_TYPE = { size: 8.5, spacing: 0.1 }
 
 /** Baselines, thirds and their names: drawn over the terrain, under the counters. Each name fits its third of the edge, cut short or left out when it cannot. */
-export const BoardMarks = memo(function BoardMarks({ setup, sideNames, k }: { setup: GameSetup; sideNames: Record<SideId, string>; k: number }) {
+export const BoardMarks = memo(function BoardMarks({ setup, sideNames, k }: { setup: TableDims; sideNames: Record<SideId, string>; k: number }) {
   const { width: W, depth: D } = setup.table
   const encounter = setup.battle === 'encounter'
   const rearTitle = encounter ? 'In an encounter, declaring game end needs an objective held in the enemy rear area (p. 17)' : 'The thirds of the table (p. 17)'
