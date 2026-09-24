@@ -71,19 +71,64 @@ export function inDeploymentZone(setup: GameSetup, side: SideId, point: Point): 
   return side === 'north' ? point.y <= DEPLOY_DEPTH : point.y >= depth - DEPLOY_DEPTH
 }
 
+/**
+ * The automatic baseline layout, for elements the setup gives no position:
+ * each side's elements stand 1.5″ apart and 2″ between units, 3″ in from the
+ * baseline, starting 2″ from the left edge. A force too long for one line
+ * stands in rows inside the 6″ deployment zone instead, so it stays on the
+ * table: 1.5″ and 4.5″ in, with room for the tags between, then 3″ and 6″.
+ * A force that fits in one line stands exactly where it always has.
+ */
+const AUTO_LINE = [3]
+const AUTO_ROWS = [1.5, 4.5, 3, 6]
+/** Where each row starts, in from the left edge. */
+const AUTO_START = 2
+/** Half an element's base across (the map draws bases 0.9″ wide). */
+const AUTO_HALF_BASE = 0.45
+
+export function autoLayout(setup: GameSetup, side: GameSetup['sides'][number]): Record<string, Point> {
+  const inRows = (rows: number[]) => {
+    const out: Record<string, Point> = {}
+    const fits = (x: number) => x + AUTO_HALF_BASE <= setup.table.width
+    let row = 0
+    let x = AUTO_START
+    let overflow = false
+    // Out of rows, the rest run on along the last one and the setup check says so.
+    const nextRow = () => {
+      if (row >= rows.length - 1) overflow = true
+      else {
+        row += 1
+        x = AUTO_START
+      }
+    }
+    for (const unit of side.units) {
+      if (x > AUTO_START && !fits(x + 1.5 * Math.max(0, unit.elements.length - 1))) nextRow()
+      for (const el of unit.elements) {
+        // A unit longer than a whole row breaks where it must.
+        if (x > AUTO_START && !fits(x)) nextRow()
+        const back = rows[row]!
+        out[el.id] = side.id === 'north' ? { x, y: back } : { x, y: setup.table.depth - back }
+        x += 1.5
+      }
+      x += 2
+    }
+    return { out, overflow }
+  }
+  const line = inRows(AUTO_LINE)
+  return line.overflow ? inRows(AUTO_ROWS).out : line.out
+}
+
 export function createGame(setup: GameSetup): GameState {
   const elements: Record<string, ElementState> = {}
   const units: Record<string, UnitState> = {}
   // Prepared positions are the defender's, in an attack/defence battle (p. 20).
   const defends = (side: SideId) => setup.battle === 'attack-defence' && side !== (setup.attacker ?? 'north')
   for (const side of setup.sides) {
-    let x = 2
+    const auto = autoLayout(setup, side)
     for (const unit of side.units) {
       const ids: string[] = []
       let leader: string | null = null
       for (const el of unit.elements) {
-        const auto: Point = side.id === 'north' ? { x, y: 3 } : { x, y: setup.table.depth - 3 }
-        x += 1.5
         elements[el.id] = {
           id: el.id,
           unitId: unit.id,
@@ -91,7 +136,7 @@ export function createGame(setup: GameSetup): GameState {
           name: el.name ?? el.vehicle?.name ?? `${unit.name} ${el.infantry?.team ?? ''} team`,
           vehicle: el.vehicle,
           infantry: el.infantry,
-          position: el.position ?? auto,
+          position: el.position ?? auto[el.id]!,
           facing: el.facing ?? (side.id === 'north' ? 180 : 0),
           destroyed: false,
           damaged: false,
@@ -107,7 +152,6 @@ export function createGame(setup: GameSetup): GameState {
         ids.push(el.id)
         if (el.leader && !leader) leader = el.id
       }
-      x += 2
       units[unit.id] = {
         id: unit.id,
         sideId: side.id,

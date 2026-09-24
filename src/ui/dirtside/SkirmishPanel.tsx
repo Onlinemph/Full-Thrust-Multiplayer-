@@ -4,7 +4,7 @@ import { motorPoolDesigns } from '../../dirtside/library'
 import { priceDesign, priceInfantry } from '../../dirtside/pricing'
 import { recordCardOf } from '../../dirtside/recordCard'
 import { QUALITY_DIE } from '../../dirtside/table/confidence'
-import { createGame } from '../../dirtside/table/game'
+import { createGame, inDeploymentZone } from '../../dirtside/table/game'
 import { validateSetup } from '../../dirtside/table/setupCheck'
 import { defaultForces, skirmishSetup, type UnitSpec } from '../../dirtside/table/skirmish'
 import type { GameSetup, GameState, Leadership, Quality, SideId } from '../../dirtside/table/types'
@@ -197,8 +197,9 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
   const preview = useMemo((): { state: GameState | null; faults: string[] } => {
     try {
       const setup = buildSetup()
-      const faults = validateSetup(setup).map((f) => `${f.detail} (${f.page})`)
-      return { state: createGame(setup), faults }
+      const state = createGame(setup)
+      const faults = [...validateSetup(setup).map((f) => `${f.detail} (${f.page})`), ...crowded(state)]
+      return { state, faults }
     } catch {
       return { state: null, faults: [] }
     }
@@ -217,9 +218,9 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
       return
     }
     const setup = buildSetup()
-    const faults = validateSetup(setup)
+    const faults = [...validateSetup(setup).map((f) => `${f.detail} (${f.page})`), ...crowded(createGame(setup))]
     if (faults.length > 0) {
-      setError(faults.map((f) => `${f.detail} (${f.page})`).join(' '))
+      setError(faults.join(' '))
       return
     }
     newDirtsideBattle(setup)
@@ -537,3 +538,14 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
 }
 
 const noop = () => {}
+
+/** A fault for each side with more vehicles and teams than its deployment zone holds (p. 17). */
+function crowded(state: GameState): string[] {
+  const out: string[] = []
+  for (const side of state.setup.sides) {
+    const els = Object.values(state.elements).filter((e) => e.sideId === side.id)
+    const outside = els.filter((e) => !inDeploymentZone(state.setup, side.id, e.position)).length
+    if (outside > 0) out.push(`${side.name}'s ${els.length} vehicles and teams don't fit in its deployment zone: ${outside} would stand off the table. Take out a unit or widen the table (p. 17).`)
+  }
+  return out
+}
