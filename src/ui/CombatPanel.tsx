@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { canShipFire, canWeaponFire, enemiesOf, engagedTargets, availableFireCons, type GameState, type ShipState } from '../engine/game'
-import { arcTo, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
+import { arcTo, BEAM_RANGE_BAND, distance, isRearArcAttack, rangeBand } from '../engine/geometry'
 import { maxRangeOf, needsFireCon } from '../engine/weapons'
 import { arcsWhenInverted } from '../engine/specialmoves'
 import {
@@ -599,36 +599,38 @@ export function CombatPanel({
                     const here = plan[weapon.id]?.targetId === target.id
                     const elsewhere = plan[weapon.id] !== undefined && !here
                     return (
-                      <button
-                        key={weapon.id}
-                        className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
-                          here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
-                        }${
-                          litArc !== null &&
-                          arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(litArc)
-                            ? ' is-lit'
-                            : ''
-                        }`}
-                        disabled={!canCommand || blocked !== null}
-                        title={
-                          blocked ??
-                          (here
-                            ? 'Declared at this target — click to take it off'
-                            : elsewhere
-                              ? `Declared at ${plan[weapon.id]?.label}; click to move it here`
-                              : `${dice}D6 at ${range.toFixed(1)} MU — click to declare`)
-                        }
-                        onMouseEnter={() =>
-                          onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
-                        }
-                        onMouseLeave={() => onHoverWeapon?.(undefined)}
-                        onClick={() =>
-                          declare(weapon.id, { targetId: target.id, kind: 'ship', label: target.name })
-                        }
-                      >
-                        {weapon.label}
-                        {blocked ? null : <span className="num">{dice}D6</span>}
-                      </button>
+                      <span className="weapon-reach" key={weapon.id}>
+                        <button
+                          className={`system-chip weapon-fire${blocked ? ' is-blocked' : ''}${
+                            here ? ' is-planned' : elsewhere ? ' is-elsewhere' : ''
+                          }${
+                            litArc !== null &&
+                            arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted).includes(litArc)
+                              ? ' is-lit'
+                              : ''
+                          }`}
+                          disabled={!canCommand || blocked !== null}
+                          title={
+                            blocked ??
+                            (here
+                              ? 'Declared at this target — click to take it off'
+                              : elsewhere
+                                ? `Declared at ${plan[weapon.id]?.label}; click to move it here`
+                                : `${dice}D6 at ${range.toFixed(1)} MU — click to declare`)
+                          }
+                          onMouseEnter={() =>
+                            onHoverWeapon?.(arcsWhenInverted(weapon.arcs, ship.rollStatus.inverted))
+                          }
+                          onMouseLeave={() => onHoverWeapon?.(undefined)}
+                          onClick={() =>
+                            declare(weapon.id, { targetId: target.id, kind: 'ship', label: target.name })
+                          }
+                        >
+                          {weapon.label}
+                          {blocked ? null : <span className="num">{dice}D6</span>}
+                        </button>
+                        <RangeBar weapon={weapon} range={range} />
+                      </span>
                     )
                   })}
                 </div>
@@ -787,6 +789,56 @@ export function CombatPanel({
       })}
 
     </div>
+  )
+}
+
+/**
+ * The dice-at-range strip beside a weapon chip (battle-ui.md #4): three ticks
+ * at the beam pattern's own bands (4.5), a marker at the target's actual
+ * range, and the die count each band would roll. Pure decoration over numbers
+ * `reachOf` already has the authority on — the chip's own die count is what
+ * actually fires — so a band beyond the weapon's reach is shown hollow rather
+ * than left off, which keeps every weapon's bar the same width to scan down.
+ */
+function RangeBar({ weapon, range }: { weapon: WeaponDef; range: number }) {
+  const reach = maxRangeOf(weapon)
+  const full = BEAM_RANGE_BAND * 3
+  const x0 = 2
+  const x1 = 56
+  const scale = (mu: number) => x0 + (Math.min(mu, full) / full) * (x1 - x0)
+  const inRange = range <= reach
+  const markerX = inRange ? scale(range) : null
+  const bands = [1, 2, 3].map((n) => ({
+    mu: BEAM_RANGE_BAND * n,
+    dice: Math.max(1, weapon.rating - (n - 1)),
+  }))
+  const title = bands
+    .map((b) => `${b.mu} MU: ${b.mu <= reach ? `${b.dice}D6` : 'out of reach'}`)
+    .join(' · ')
+  return (
+    <svg
+      className="range-bar"
+      width="58"
+      height="16"
+      viewBox="0 0 58 16"
+      aria-hidden="true"
+    >
+      <title>{title}</title>
+      <line x1={x0} y1="7" x2={x1} y2="7" className="range-bar-rail" />
+      {bands.map((b) => {
+        const inReach = b.mu <= reach
+        const x = scale(b.mu)
+        return (
+          <g key={b.mu} className={inReach ? 'is-in-reach' : 'is-out'}>
+            <line x1={x} y1="3" x2={x} y2="10" className="range-bar-tick" />
+            <text x={x} y="16" className="range-bar-die" textAnchor="middle">
+              {inReach ? b.dice : '–'}
+            </text>
+          </g>
+        )
+      })}
+      {markerX !== null ? <circle cx={markerX} cy="7" r="2.4" className="range-bar-marker" /> : null}
+    </svg>
   )
 }
 

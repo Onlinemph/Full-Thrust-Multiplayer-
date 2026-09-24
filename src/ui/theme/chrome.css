@@ -12,6 +12,7 @@
 }
 
 .app-bar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--gap);
@@ -373,47 +374,49 @@
   font-size: var(--text-xs);
 }
 
-/* ── What the phase still owes ────────────────────────────────────────────── */
+/* ── The app-bar's button clusters (screens.md #9) ────────────────────────── */
 
-/* The list of things that stop the phase ending, or that a player probably
-   did not mean to leave. Red is the rule refusing; amber is the console asking. */
-.phase-debt {
-  margin: 0;
-  padding: var(--gap);
-  border: 1px solid var(--line);
-  border-left-width: 3px;
-  border-radius: var(--radius);
-  background: var(--panel);
-  font-size: var(--text-sm);
+/* Nine buttons in a flat row have no hierarchy; a hairline divider turns them
+   into recognisable clusters (fleet reference, record-keeping) at zero cost
+   to any button's identity, label or position. */
+.app-bar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding-left: var(--gap);
+  border-left: 1px solid var(--line);
+}
+
+/* The rarely used file actions, behind one button rather than three more
+   labels in the row a player scans every phase (battle-ui.md #1). The menu is
+   positioned off `.app-bar` itself (not off this button) so it drops below
+   the whole header — phase strip included — rather than over the top of it. */
+.app-bar-more {
+  display: contents;
+}
+
+.app-bar-menu {
+  position: absolute;
+  top: 100%;
+  right: var(--gap-2);
+  z-index: 15;
+  margin-top: 0.3rem;
+  padding: 0.3rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.2rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.5);
+  min-width: 9rem;
 }
 
-.phase-debt.is-required {
-  border-left-color: var(--damage);
-}
-
-.phase-debt.is-optional {
-  border-left-color: var(--warn);
-}
-
-.phase-debt h4 {
-  margin: 0;
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.phase-debt ul {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--ink);
-}
-
-.phase-debt.is-required ul {
-  color: var(--damage);
+.app-bar-menu button,
+.app-bar-menu .file-button {
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
 }
 
 /* Ending a phase with something optional left undone takes two clicks, and

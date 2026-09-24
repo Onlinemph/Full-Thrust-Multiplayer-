@@ -43,10 +43,23 @@
 /* A row that stands for a ship on the table: clicking it selects the ship. */
 .panel-row.is-pickable {
   cursor: pointer;
+  flex-wrap: nowrap;
 }
 
 .panel-row.is-pickable.is-selected {
   box-shadow: inset 2px 0 0 var(--side-a);
+}
+
+/* A ship's name inside a row that also carries other things (a status word,
+   a button): a design's class name runs long ("Gagarin-class Fleet Carrier"),
+   so it truncates rather than wrapping the row's trailing controls onto a
+   second line. The full name is still in the element's `title`. */
+.panel-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── The SSD ──────────────────────────────────────────────────────────────── */
@@ -583,11 +596,105 @@
   margin-top: 0.35rem;
 }
 
+/* battle-ui.md #6: every kind of line coloured, not just phase/damage/
+   threshold — so an order, a launch and a shot read apart from each other at
+   a glance, and the computer's turn (a run of fire/move lines with nobody
+   clicking anything) is legible as it goes by. The mapping follows the one
+   Dirtside's own log already shipped (dirtsidePlay.css .dst-log p.is-*). */
+.log-entry.is-fire {
+  color: var(--thrust);
+}
+.log-entry.is-move {
+  color: var(--ink);
+}
+.log-entry.is-orders {
+  color: var(--ink-dim);
+}
+.log-entry.is-launch {
+  color: var(--ordnance);
+}
+.log-entry.is-initiative {
+  color: var(--side-a);
+}
+.log-entry.is-point-defence {
+  color: var(--screens);
+}
+.log-entry.is-damage-control {
+  color: var(--screens);
+}
+.log-entry.is-boarding {
+  color: var(--warn);
+}
+.log-entry.is-destroyed {
+  color: var(--damage);
+  font-weight: 700;
+}
 .log-entry.is-damage {
   color: var(--damage);
 }
 .log-entry.is-threshold {
   color: var(--warn);
+}
+
+/* A small glyph ahead of the text says what kind of line it is before the
+   words do; set in the body face, not the mono one `.log` uses, since the
+   mono face's symbol coverage is thin. */
+.log-entry::before {
+  display: inline-block;
+  width: 1em;
+  margin-right: 0.3em;
+  font-family: var(--font-body);
+  text-align: center;
+}
+.log-entry.is-initiative::before {
+  content: '★';
+}
+.log-entry.is-orders::before {
+  content: '✎';
+}
+.log-entry.is-launch::before {
+  content: '↗';
+}
+.log-entry.is-move::before {
+  content: '→';
+}
+.log-entry.is-fire::before {
+  content: '✦';
+}
+.log-entry.is-point-defence::before {
+  content: '◇';
+}
+.log-entry.is-damage-control::before {
+  content: '⚙';
+}
+.log-entry.is-boarding::before {
+  content: '⚔';
+}
+.log-entry.is-threshold::before {
+  content: '⚠';
+}
+.log-entry.is-damage::before {
+  content: '✱';
+}
+.log-entry.is-destroyed::before {
+  content: '☠';
+}
+
+/* A block of lines that just arrived (a whole computer turn resolved between
+   one click and the next) fades in from the side colour, so it reads as new
+   rather than blending straight into history already read. Reduced-motion
+   viewers get tokens.css's own override, which zeroes the duration. */
+.log-entry.is-new {
+  animation: log-flash 900ms ease-out;
+}
+
+@keyframes log-flash {
+  from {
+    background: color-mix(in srgb, var(--side-a) 14%, transparent);
+  }
+  to {
+    background: transparent;
+  }
 }
 
 /* The dice a roll actually produced, so a player can audit a volley (4.5). */
@@ -712,6 +819,52 @@ dl.keys > div {
   margin: 0.2rem 0;
 }
 
+/* ── Dice at range (battle-ui.md #4) ──────────────────────────────────────── */
+
+/* A weapon chip and its range bar travel together: the bar is a sibling, not
+   a replacement, so `.target-block .weapon-fire` still finds the button. */
+.weapon-reach {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.range-bar {
+  flex: none;
+  overflow: visible;
+}
+
+.range-bar-rail {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.range-bar-tick {
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+}
+
+.is-out .range-bar-tick {
+  stroke: var(--ink-faint);
+  opacity: 0.5;
+}
+
+.range-bar-die {
+  fill: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 5.5px;
+}
+
+.is-out .range-bar-die {
+  fill: var(--ink-faint);
+}
+
+/* Ranges read cyan everywhere else on the plot (tokens.css), so the target's
+   actual range keeps that colour here too. */
+.range-bar-marker {
+  fill: var(--side-a);
+}
+
 /* ── Flight operations ────────────────────────────────────────────────────── */
 
 /* Two lines: the group on the first, what can be done with it on the second.
@@ -733,8 +886,11 @@ dl.keys > div {
   grid-area: name;
 }
 
-.flight-row .flight-cef-readout {
+.flight-row .flight-cef {
   grid-area: cef;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .flight-row button:not(.flight-pick) {
@@ -799,14 +955,48 @@ dl.keys > div {
   color: var(--damage);
 }
 
+/* One pip a starting CEF point (8.13, 9.1) — the same idiom as
+   `.thrust-pip`, so the one resource a fleet's air group spends reads the
+   same way the one resource every ship's own drive spends already does. */
+.cef-pips {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.cef-pip {
+  width: 5px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--fighters);
+}
+
+.cef-pip.is-spent {
+  background: none;
+  border: 1px solid var(--ink-faint);
+}
+
+/* A column of status words reads as a column of chips, the same bordered
+   look `.loss` and `.system-chip.is-destroyed` already use elsewhere. */
 .flight-status {
   font-size: var(--text-xs);
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
   color: var(--ink-faint);
   white-space: nowrap;
 }
 
 .flight-status.is-in-flight {
   color: var(--fighters);
+  border-color: var(--fighters);
+}
+
+.flight-status.is-destroyed {
+  color: var(--damage);
+  border-color: var(--damage);
+  text-decoration: line-through;
+  opacity: 0.75;
 }
 
 /* Picking a group in the panel is the same act as picking it on the table, so
