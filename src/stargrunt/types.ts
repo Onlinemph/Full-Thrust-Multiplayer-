@@ -211,6 +211,8 @@ export interface UnitState {
   firedThisTurn: string[]
   /** Transfers this unit, as a commander, has attempted this turn (p. 16: two a turn). */
   transfersThisTurn: number
+  /** Enemy units that have fired on this one, each with the last turn it did (p. 21: a broken unit fires only if fired upon). */
+  firedOnBy: Record<string, number>
 }
 
 export type Phase = 'deployment' | 'turn-start' | 'activation' | 'ended'
@@ -291,8 +293,12 @@ export type Action =
   /** Normal (up to base mobility), combat (the rolled distance toward each destination) or travel (twice normal, in column) (p. 22). */
   | { kind: 'move'; side: SideId; mode: 'normal' | 'combat' | 'travel'; moves: FigureMove[] }
   | { kind: 'fire'; side: SideId; targetUnitId: string; with: FireWith }
-  /** Close assault (p. 41): both actions; the figures' combat moves into contact. */
-  | { kind: 'close-assault'; side: SideId; targetUnitId: string; moves: FigureMove[] }
+  /**
+   * Close assault (p. 41): both actions; each named figure's combat move ends in base contact with a
+   * defender. `ifShort` is the player's choice when the second roll still falls short (p. 43): stay
+   * where the dash ended (the default) or give up and go back.
+   */
+  | { kind: 'close-assault'; side: SideId; targetUnitId: string; moves: FigureMove[]; ifShort?: 'stay' | 'withdraw' }
   /** Reposition figures, restore integrity, treat the wounded (p. 17). */
   | { kind: 'reorganise'; side: SideId; moves?: FigureMove[] }
   | { kind: 'remove-suppression'; side: SideId }

@@ -88,6 +88,7 @@ import {
   type Action,
   type ActivationState,
   type Confidence,
+  type FigureMove,
   type FigureState,
   type FigureStatus,
   type FireWith,
@@ -214,6 +215,7 @@ export function createGame(setup: GameSetup): GameState {
         panicTested: false,
         firedThisTurn: [],
         transfersThisTurn: 0,
+        firedOnBy: {},
       }
     }
   }
@@ -1485,4 +1487,108 @@ export function planFire(state: GameState, unitId: string, targetUnitId: string,
   const expectedCasualties = expectedPotentialHits * pPenetrate
 
   return { range, rangeBandInches: band, rangeDie: rd, firerDice, impact: assembly.impact, targetCover: cover, targetInPosition: target.inPosition, pMinor, pMajor, expectedCasualties }
+}
+
+// ---------------------------------------------------------------------------
+// Close assault planning (pp. 41, 43)
+// ---------------------------------------------------------------------------
+
+/** Figure bases touch when their centres are this close (25mm bases on an inch scale). */
+export const CONTACT_GAP = 1
+/** A combat move ending this close to a defender counts as base contact. */
+export const CONTACT_REACH = 1.25
+
+/**
+ * Where each fit figure of an attacking unit would charge to (p. 41): one attacker to each defender
+ * first, nearest first, the rest spread round the defenders already taken, each ending in base
+ * contact on its own side of its opponent. The screen and the computer start from this; a player may
+ * change any path as long as it still ends in contact.
+ */
+export function assaultMoves(state: GameState, unitId: string, targetUnitId: string): FigureMove[] {
+  const unit = state.units[unitId]
+  const target = state.units[targetUnitId]
+  if (!unit || !target) return []
+  const attackers = figuresOf(state, unit).filter(fit)
+  const defenders = figuresOf(state, target).filter(fit)
+  if (attackers.length === 0 || defenders.length === 0) return []
+  const centre = unitCentre(defenders.map((d) => d.position))
+  const order = [...attackers].sort((a, b) => distance(a.position, centre) - distance(b.position, centre))
+  const taken = new Map<string, number>()
+  const moves: FigureMove[] = []
+  order.forEach((a, i) => {
+    const free = defenders.filter((d) => !taken.has(d.id))
+    const pool = i < defenders.length && free.length > 0 ? free : defenders
+    const d = pool.reduce((best, x) => (distance(a.position, x.position) < distance(a.position, best.position) ? x : best))
+    const k = taken.get(d.id) ?? 0
+    taken.set(d.id, k + 1)
+    const away = Math.atan2(a.position.y - d.position.y, a.position.x - d.position.x) + (k === 0 ? 0 : (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 4))
+    const end = { x: d.position.x + Math.cos(away) * CONTACT_GAP, y: d.position.y + Math.sin(away) * CONTACT_GAP }
+    const clamped = { x: Math.max(0.25, Math.min(state.setup.table.width - 0.25, end.x)), y: Math.max(0.25, Math.min(state.setup.table.depth - 0.25, end.y)) }
+    moves.push({ figureId: a.id, path: [clamped] })
+  })
+  return moves
+}
+
+export interface AssaultPlan {
+  moves: FigureMove[]
+  /** Movement-factor cost of each figure's path, in the order of `moves`; Infinity where terrain blocks it. */
+  costs: number[]
+  /** The combat-move die the unit rolls each action (p. 22). */
+  die: DieType
+  /** Inches of movement factor one roll gives at most (the die's top score, doubled). */
+  maxOneRoll: number
+  /** The chance the first roll brings at least one figure into contact (p. 41). */
+  pContactFirst: number
+  /** The chance of contact by the second roll, if final defensive fire does not turn the charge back (p. 43). */
+  pContactSecond: number
+  /** Attacker to defender odds, power armour counting double (p. 41). */
+  odds: number
+  /** The threat level the defender's stand test will be taken at (p. 41). */
+  standThreat: number
+}
+
+/**
+ * A close assault before it is tried: the paths (the default contact paths unless given), what they
+ * cost, the chance of reaching the defenders on the first roll and by the second, and the odds. A
+ * refusal when the target cannot be charged at all: not an enemy, nobody to fight, a path that does
+ * not end in contact, or defenders beyond the reach of two combat moves.
+ */
+export function planAssault(state: GameState, unitId: string, targetUnitId: string, moves?: readonly FigureMove[]): AssaultPlan | Refusal {
+  const unit = state.units[unitId]
+  const target = state.units[targetUnitId]
+  if (!unit || !target) return refuse('Unknown unit.', 'p. 41')
+  if (target.sideId === unit.sideId) return refuse('Close assault an enemy unit.', 'p. 41')
+  const defenders = figuresOf(state, target).filter(fit)
+  if (defenders.length === 0) return refuse(`${target.name} has no one left to fight.`, 'p. 41')
+  const plan = moves ? [...moves] : assaultMoves(state, unitId, targetUnitId)
+  if (plan.length === 0) return refuse(`${unit.name} has no one able to charge.`, 'p. 41')
+  const costs: number[] = []
+  for (const m of plan) {
+    const f = state.figures[m.figureId]
+    if (!f || f.unitId !== unit.id || !fit(f)) return refuse('Every charging figure must be a fit member of the unit.', 'p. 41')
+    if (m.path.length === 0) return refuse('Give each charging figure a path.', 'p. 41')
+    const end = m.path[m.path.length - 1]!
+    if (!defenders.some((d) => distance(end, d.position) <= CONTACT_REACH + 1e-9)) return refuse(`${f.name}'s charge must end in base contact with ${target.name}.`, 'p. 41')
+    const cost = pathCost([f.position, ...m.path], unit.mobility, state.setup.table.terrain)
+    costs.push(cost.blockedAt ? Number.POSITIVE_INFINITY : cost.factors)
+  }
+  const die = combatMoveDie(unit.mobility)
+  const maxOneRoll = combatMoveInches(die)
+  const nearest = Math.min(...costs)
+  if (!(nearest <= 2 * maxOneRoll + 1e-9)) return refuse(`${target.name} is beyond the reach of two combat moves (${2 * maxOneRoll}" at most).`, 'p. 41')
+  let first = 0
+  let second = 0
+  for (let r1 = 1; r1 <= die; r1++) {
+    if (combatMoveInches(r1) >= nearest - 1e-9) {
+      first += 1 / die
+      second += 1 / die
+      continue
+    }
+    for (let r2 = 1; r2 <= die; r2++) if (combatMoveInches(r1 + r2) >= nearest - 1e-9) second += 1 / die / die
+  }
+  const paCount = (ids: readonly string[]) => ids.filter((id) => isPowerArmoured(state.figures[id]!)).length
+  const attackerIds = plan.map((m) => m.figureId)
+  const defenderIds = defenders.map((d) => d.id)
+  const odds = assaultOdds(attackerIds.length, paCount(attackerIds), defenderIds.length, paCount(defenderIds))
+  return { moves: plan, costs, die, maxOneRoll, pContactFirst: first, pContactSecond: second, odds, standThreat: defenderStandThreatLevel(odds, false) }
 }
