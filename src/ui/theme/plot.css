@@ -156,17 +156,21 @@
 }
 
 .counter .hull {
-  stroke-width: 1.5;
-  stroke: var(--on-bright);
+  stroke-width: 1.6;
+  /* The rim in the side's own colour (ships-map #1), which only reads
+     correctly once `color` is set per side below — the same fix that gives
+     the selection ring and the cloak outline their right colour too. */
+  stroke: currentColor;
   vector-effect: non-scaling-stroke;
 }
 
 /* The forward part of the hull, filled in. Which way the bow points is the one
    thing that must survive being shrunk to forty pixels (3.1, 4.2, 4.10), and a
-   rounded prow on its own does not say it. */
+   rounded prow on its own does not say it. Brightened a little over a shaded
+   hull, so it still reads as the brightest point on the counter (ships-map #1). */
 .counter-bow {
   fill: var(--on-bright);
-  opacity: 0.5;
+  opacity: 0.62;
   pointer-events: none;
 }
 
@@ -209,26 +213,20 @@
   pointer-events: none;
 }
 
-.counter.side-a .hull {
-  fill: var(--side-a);
+/* `currentColor` is what the rim, the selection ring and the cloak outline
+   all paint with — setting it once here, per side, is the fix for all three
+   at once (screens #1, battle-ui #3): before this, none of them had a `color`
+   to resolve against and every one fell back to the inherited body ink. The
+   hull's own fill is a per-instance gradient set inline by Counter.tsx, not
+   here, so it can fade bow-to-stern without a fixed colour per side. */
+.counter.side-a {
+  color: var(--side-a);
 }
-.counter.side-b .hull {
-  fill: var(--side-b);
+.counter.side-b {
+  color: var(--side-b);
 }
-.counter.side-c .hull {
-  fill: var(--side-c);
-}
-
-.counter.is-selected {
-  filter: drop-shadow(0 0 6px currentColor);
-}
-
-.counter.is-destroyed {
-  opacity: 0.25;
-}
-
-.counter.is-destroyed .hull {
-  fill: var(--ink-faint);
+.counter.side-c {
+  color: var(--side-c);
 }
 
 /* A ship the enemy cannot see: drawn as an outline on your own console so you
@@ -361,10 +359,28 @@
   color: var(--side-c);
 }
 
-.track-end {
+/* The soft duplicate under the crisp track, and the arrowhead that replaced
+   the bare end-circle (ships-map #10): a bright core over a glow, without a
+   blur filter re-rasterising on every pan. */
+.track-glow {
   fill: none;
   stroke: var(--thrust);
-  stroke-width: 1.5;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.16;
+}
+
+.track-glow.is-hazard {
+  stroke: var(--damage);
+}
+
+.track-arrow {
+  fill: var(--thrust);
+  opacity: 0.9;
+}
+
+.track-arrow.is-hazard {
+  fill: var(--damage);
 }
 
 /* Last turn's movement, kept on screen one turn so the eye can read the flow

@@ -30,18 +30,30 @@ export interface FireRoseProps {
   y: number
   /** The counter's radius in pixels: the rose is drawn clear of the hull. */
   clearance: number
+  /** Pixels per MU, from the map's zoom (ships-map #13: the rose shrinks a
+   *  little at low zoom, so it reaches fewer neighbours it doesn't need to). */
+  scale: number
   /** The arc the pointer is on, lit on the rose too. */
   litArc: Arc | null
 }
 
+/** Roughly the app's own default fit-to-table zoom (the mock's own measurement). */
+const ROSE_ZOOM_REFERENCE = 10
+
 /**
  * The ring the wedges occupy, in pixels from the counter's centre: clear of
- * the hull and of the name written under it, and 58 deep. The map uses the
- * same ring to tell which wedge the pointer is on.
+ * the hull and of the name written under it, and up to 58 deep. The map uses
+ * the same ring to tell which wedge the pointer is on.
+ *
+ * The floor shrinks a little as the player zooms out (ships-map #13) — never
+ * below three quarters of its full size, which is as far as the wedge text
+ * stays legible — so the rose reaches fewer of an ordinary formation's
+ * neighbours at the zoom a battle actually opens at.
  */
-export function roseRing(clearance: number): { inner: number; outer: number } {
-  const inner = Math.max(44, clearance + 28)
-  return { inner, outer: inner + 58 }
+export function roseRing(clearance: number, scale: number): { inner: number; outer: number } {
+  const zoom = Math.max(0.75, Math.min(1, scale / ROSE_ZOOM_REFERENCE))
+  const inner = Math.max(44 * zoom, clearance + 28 * zoom)
+  return { inner, outer: inner + 58 * zoom }
 }
 
 /** Where a wedge's label goes: the wedge's middle, so far out. */
@@ -61,9 +73,9 @@ function wedgePath(startDegrees: number, inner: number, outer: number): string {
   )
 }
 
-export function FireRose({ game, ship, x, y, clearance, litArc }: FireRoseProps) {
+export function FireRose({ game, ship, x, y, clearance, scale, litArc }: FireRoseProps) {
   const summaries = fireArcs(game, ship)
-  const { inner, outer } = roseRing(clearance)
+  const { inner, outer } = roseRing(clearance, scale)
   const base = courseToDegrees(ship.placement.facing) - DEGREES_PER_ARC / 2
   const size = outer * 2 + 4
 

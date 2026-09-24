@@ -18,7 +18,7 @@ const TOUCHING_SEPARATION = 1.6
 import { stationaryCollisionRisk } from '../engine/terrain'
 import { engagedTargets, shipsAwaitingDeployment, vectorStateOf } from '../engine/game'
 import { moveVector } from '../engine/vectormovement'
-import { flakMarkers, novaBursts, optional, shipsAwaitingOrders } from '../engine/actions'
+import { effectiveScreenLevel, flakMarkers, novaBursts, optional, shipsAwaitingOrders } from '../engine/actions'
 import { canManoeuvre } from '../engine/specialmoves'
 import { isGateActive } from '../engine/ftl'
 import { FLAK_BLAST_RADIUS_MU } from '../engine/weapons/kinetics'
@@ -29,7 +29,7 @@ import type { Arc, Course, MovementOrder, Point } from '../engine/types'
 import type { TerrainKind } from '../engine/game'
 import { ArcRose } from './ArcRose'
 import { useFx } from './useFx'
-import { Counter, counterRadius } from './Counter'
+import { Counter, counterRadius, counterScreenRadius } from './Counter'
 import { OrderCompass } from './OrderCompass'
 import { OrdnanceGlyph } from './OrdnanceGlyph'
 import { FireRose, roseRing } from './FireRose'
@@ -113,6 +113,15 @@ const SIDE_CLASS: Record<string, 'a' | 'b' | 'c'> = { a: 'a', b: 'b', c: 'c' }
 /** 17.8: the track is "marked with 12 clock face points". */
 const CLOCK_POINTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
+/** Zoom bounds and the wheel's own step, shared with the on-screen +/− (ships-map #9). */
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 6
+const ZOOM_STEP = 1.12
+
+function clampZoom(zoom: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom))
+}
+
 export function MapView({
   game,
   table,
@@ -172,7 +181,7 @@ export function MapView({
     if (!element) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      setZoom((z) => Math.min(6, Math.max(0.5, z * (event.deltaY < 0 ? 1.12 : 1 / 1.12))))
+      setZoom((z) => clampZoom(z * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP)))
     }
     element.addEventListener('wheel', onWheel, { passive: false })
     return () => element.removeEventListener('wheel', onWheel)
@@ -213,7 +222,7 @@ export function MapView({
         y: (event.clientY - box.top - originY) / scale,
       }
       const centre = drawnAt.get(selected.id) ?? selected.placement.position
-      const ring = roseRing(counterRadius(selected.design.mass) * scale)
+      const ring = roseRing(counterScreenRadius(selected.design.mass, scale), scale)
       const px = distance(centre, at) * scale
       if (px >= ring.inner && px <= ring.outer) {
         arc = arcTo(centre, selected.placement.facing, at)
@@ -534,6 +543,14 @@ export function MapView({
               fill="none"
             />
           </pattern>
+          {/* Shared by every fighter and gunboat marker (screens #3): a soft
+              halo instead of a drop-shadow filter, coloured by whichever
+              marker paints it — `currentColor` resolves against the group's
+              own `color`, set per side in ftMap.css, not against this def. */}
+          <radialGradient id="marker-glow">
+            <stop offset="0" stopColor="currentColor" stopOpacity="0.6" />
+            <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+          </radialGradient>
         </defs>
         <Starfield
           seed={game.seed}
@@ -660,18 +677,44 @@ export function MapView({
             )}
 
           {/* Range rings on the selected ship, at the beam band boundaries
-              (4.3). Drawn under the counters so they never obscure a hull. */}
+              (4.3). Drawn under the counters so they never obscure a hull.
+              Labelled where each ring crosses the bow (ships-map #8): today a
+              player has to count grid squares to know what a ring means. */}
           {selected
-            ? [1, 2, 3].map((band) => (
-                <circle
-                  key={band}
-                  className="range-ring"
-                  cx={selected.placement.position.x * scale}
-                  cy={selected.placement.position.y * scale}
-                  r={BEAM_RANGE_BAND * band * scale}
-                />
-              ))
+            ? [1, 2, 3].map((band) => {
+                const radius = BEAM_RANGE_BAND * band
+                const at = advance(selected.placement.position, selected.placement.facing, radius)
+                return (
+                  <g key={band}>
+                    <circle
+                      className="range-ring"
+                      cx={selected.placement.position.x * scale}
+                      cy={selected.placement.position.y * scale}
+                      r={radius * scale}
+                    />
+                    <text className="range-ring-label" x={at.x * scale} y={at.y * scale}>
+                      {radius} MU
+                    </text>
+                  </g>
+                )
+              })
             : null}
+
+          {/* A ruler down the table's left edge, ticked at the same 12 MU
+              band the grid already uses (ships-map #8): the plot.css grid's
+              own goal — "a player can read distance off the table by eye" —
+              stated directly, instead of by counting squares. */}
+          {Array.from(
+            { length: Math.floor(table.height / BEAM_RANGE_BAND) + 1 },
+            (_, i) => i * BEAM_RANGE_BAND,
+          ).map((mu) => (
+            <g key={`ruler-${mu}`} className="table-ruler">
+              <line className="table-ruler-tick" x1={0} y1={mu * scale} x2={7} y2={mu * scale} />
+              <text className="table-ruler-label" x={10} y={mu * scale + 3}>
+                {mu}
+              </text>
+            </g>
+          ))}
 
           {reach !== null ? <ReachOverlay reach={reach} scale={scale} table={table} /> : null}
 
@@ -691,34 +734,41 @@ export function MapView({
             </g>
           ) : null}
 
-          {tracks.map(({ ship, legs, steps, hazard }) => (
-            <g key={`track-${ship.id}`}>
-              {steps ? (
-                <polyline
-                  className="track-sequence"
-                  points={[
-                    `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
-                    ...steps.map((p) => `${p.x * scale},${p.y * scale}`),
-                  ].join(' ')}
-                />
-              ) : null}
-              <polyline
-                className={hazard ? 'track is-hazard' : 'track'}
-                points={[
-                  `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
-                  ...legs.map((leg) => `${leg.to.x * scale},${leg.to.y * scale}`),
-                ].join(' ')}
-              />
-              {legs.length > 0 ? (
-                <circle
-                  className="track-end"
-                  cx={legs[legs.length - 1].to.x * scale}
-                  cy={legs[legs.length - 1].to.y * scale}
-                  r={3}
-                />
-              ) : null}
-            </g>
-          ))}
+          {tracks.map(({ ship, legs, steps, hazard }) => {
+            const trackPoints = [
+              `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
+              ...legs.map((leg) => `${leg.to.x * scale},${leg.to.y * scale}`),
+            ].join(' ')
+            const end = legs.length > 0 ? legs[legs.length - 1].to : null
+            const prev = legs.length > 1 ? legs[legs.length - 2].to : ship.placement.position
+            const heading = end ? headingDegrees(prev, end) : 0
+            return (
+              <g key={`track-${ship.id}`}>
+                {steps ? (
+                  <polyline
+                    className="track-sequence"
+                    points={[
+                      `${ship.placement.position.x * scale},${ship.placement.position.y * scale}`,
+                      ...steps.map((p) => `${p.x * scale},${p.y * scale}`),
+                    ].join(' ')}
+                  />
+                ) : null}
+                {/* A soft, wide duplicate underneath the crisp line (ships-map
+                    #10) — a bright core over a glow, the same technique the
+                    beam shots below use, and no filter either place. */}
+                <polyline className={hazard ? 'track-glow is-hazard' : 'track-glow'} points={trackPoints} />
+                <polyline className={hazard ? 'track is-hazard' : 'track'} points={trackPoints} />
+                {end ? (
+                  <g transform={`translate(${end.x * scale} ${end.y * scale}) rotate(${heading.toFixed(1)})`}>
+                    <path
+                      className={hazard ? 'track-arrow is-hazard' : 'track-arrow'}
+                      d="M 0 -7 L 4.5 4 L -4.5 4 Z"
+                    />
+                  </g>
+                ) : null}
+              </g>
+            )
+          })}
 
           {previewLegs !== null && selected !== undefined ? (
             <polyline
@@ -778,24 +828,48 @@ export function MapView({
 
           {effects.map((fx) =>
             fx.from ? (
-              <line
-                key={fx.id}
-                className={`shot is-${fx.kind}`}
-                x1={fx.from.x * scale}
-                y1={fx.from.y * scale}
-                x2={fx.to.x * scale}
-                y2={fx.to.y * scale}
-                style={{ animationDelay: `${fx.delay}ms` }}
-              />
+              <g key={fx.id}>
+                <line
+                  className={`shot is-${fx.kind}`}
+                  x1={fx.from.x * scale}
+                  y1={fx.from.y * scale}
+                  x2={fx.to.x * scale}
+                  y2={fx.to.y * scale}
+                  style={{ animationDelay: `${fx.delay}ms` }}
+                />
+                {/* A bright core over the coloured glow (ships-map #11), the
+                    same idea as the track's own soft duplicate — beams only,
+                    since a kinetic round or a missile is not a beam of light. */}
+                {fx.kind === 'beam' ? (
+                  <line
+                    className="shot-core"
+                    x1={fx.from.x * scale}
+                    y1={fx.from.y * scale}
+                    x2={fx.to.x * scale}
+                    y2={fx.to.y * scale}
+                    style={{ animationDelay: `${fx.delay}ms` }}
+                  />
+                ) : null}
+              </g>
             ) : (
-              <circle
-                key={fx.id}
-                className="hit-burst"
-                cx={fx.to.x * scale}
-                cy={fx.to.y * scale}
-                r={(fx.kind === 'destroyed' ? 8 : 4) * Math.max(1, scale / 8)}
-                style={{ animationDelay: `${fx.delay}ms`, transformOrigin: `${fx.to.x * scale}px ${fx.to.y * scale}px` }}
-              />
+              <g key={fx.id}>
+                <circle
+                  className="hit-burst"
+                  cx={fx.to.x * scale}
+                  cy={fx.to.y * scale}
+                  r={(fx.kind === 'destroyed' ? 8 : 4) * Math.max(1, scale / 8)}
+                  style={{ animationDelay: `${fx.delay}ms`, transformOrigin: `${fx.to.x * scale}px ${fx.to.y * scale}px` }}
+                />
+                {/* A stroke-only ring expanding a little faster underneath, so
+                    the burst reads as an impact rather than a coloured dot. */}
+                <circle
+                  className="hit-shock"
+                  cx={fx.to.x * scale}
+                  cy={fx.to.y * scale}
+                  r={(fx.kind === 'destroyed' ? 8 : 4) * Math.max(1, scale / 8)}
+                  style={{ animationDelay: `${fx.delay}ms`, transformOrigin: `${fx.to.x * scale}px ${fx.to.y * scale}px` }}
+                />
+              </g>
             ),
           )}
 
@@ -826,6 +900,36 @@ export function MapView({
                 })
             : null}
 
+          {/* battle-ui #9: a short thrust-glow trail behind a ship that is
+              spending — only our own, and only while it is plotting or has
+              just spent it, so it reads as "this one is under power" rather
+              than a permanent decoration. Drawn behind the counters. */}
+          {game.ships
+            .filter(
+              (ship) =>
+                !ship.destroyed &&
+                !ship.offTable &&
+                visible(ship, viewingSide) &&
+                (viewingSide === null || ship.side === viewingSide) &&
+                ((game.phase === 'orders' && ship.order !== null && ship.order.accel !== 0) ||
+                  ship.thrustUsed > 0),
+            )
+            .map((ship) => {
+              const at = drawnAt.get(ship.id) ?? riderOffset(game, ship)
+              const trailLength = Math.min(2.2, 0.8 + counterRadius(ship.design.mass)) * scale
+              return (
+                <g
+                  key={`thrust-${ship.id}`}
+                  className="thrust-trail"
+                  transform={`translate(${at.x * scale} ${at.y * scale}) rotate(${
+                    courseToDegrees(ship.placement.facing) + 180
+                  })`}
+                >
+                  <rect x={0} y={-1.6} width={trailLength} height={3.2} />
+                </g>
+              )
+            })}
+
           {game.ships
             .filter((ship) => visible(ship, viewingSide))
             .map((ship) => (
@@ -850,6 +954,8 @@ export function MapView({
                 inverted={ship.rollStatus.inverted}
                 scale={scale}
                 art={ship.design.art}
+                damageFraction={ship.design.hullBoxes > 0 ? ship.hullMarked / ship.design.hullBoxes : 0}
+                screenLevel={effectiveScreenLevel(ship)}
                 onClick={() => {
                   if (declareAgainstShip(ship.id)) return
                   if (engageFromSelected(ship)) return
@@ -875,14 +981,29 @@ export function MapView({
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => onSelectFlight?.(group.id === selectedFlightId ? null : group.id)}
             >
+              {/* A soft halo, not a filter, so a squadron reads against the
+                  starfield (screens #3) — the same technique as the ordnance
+                  darts', a gradient-filled circle reused across every marker. */}
+              <circle className="marker-halo" r={15} fill="url(#marker-glow)" />
               <rect
                 className={`gunboat-marker${group.cef === 0 ? ' is-spent' : ''}${
                   group.id === selectedFlightId ? ' is-selected' : ''
                 }`}
-                x={-8}
-                y={-8}
-                width={16}
-                height={16}
+                x={-10}
+                y={-10}
+                width={20}
+                height={20}
+              />
+              {/* A notch cut into the marker, oriented to the group's facing
+                  (ships-map #12) — a void-coloured bite at the leading edge,
+                  so a flying group with a heading stops reading as a plain
+                  waypoint dot. */}
+              <circle
+                className="flight-notch"
+                cx={0}
+                cy={-10}
+                r={3.4}
+                transform={`rotate(${courseToDegrees(group.facing)})`}
               />
               <text className="flight-cef" y={4}>
                 {group.boats.length}
@@ -922,11 +1043,20 @@ export function MapView({
                     many are left" and "how much they can still do" (8.9, 8.13).
                     Drawn after the ships, because a wing that has just left the
                     tube is on top of its carrier and would be painted over. */}
+                <circle className="marker-halo" r={13} fill="url(#marker-glow)" />
                 <circle
                   className={`flight-marker${group.cef === 0 ? ' is-spent' : ''}${
                     group.id === selectedFlightId ? ' is-selected' : ''
                   }`}
-                  r={7}
+                  r={9}
+                />
+                {/* The same heading notch as a gunboat's (ships-map #12). */}
+                <circle
+                  className="flight-notch"
+                  cx={0}
+                  cy={-9}
+                  r={3}
+                  transform={`rotate(${courseToDegrees(group.facing)})`}
                 />
                 <text className="flight-cef" y={3}>
                   {group.strength}
@@ -959,10 +1089,40 @@ export function MapView({
           ship={selected}
           x={originX + (drawnAt.get(selected.id)?.x ?? 0) * scale}
           y={originY + (drawnAt.get(selected.id)?.y ?? 0) * scale}
-          clearance={counterRadius(selected.design.mass) * scale}
+          clearance={counterScreenRadius(selected.design.mass, scale)}
+          scale={scale}
           litArc={litArcs?.length === 1 ? (litArcs[0] ?? null) : null}
         />
       ) : null}
+
+      {/* ships-map #3: a ship's name, drawn a second time above the fire rose.
+          The rose is a separate, higher-z layer over the whole plot, so at
+          ordinary formation spacing it paints over a neighbour's own name —
+          this repeats every visible ship's chip over the top of it, so a
+          covered name still reads. Additive: the counter keeps its own label
+          underneath, for hit-testing and the drives, unchanged. */}
+      <div className="counter-labels" aria-hidden="true">
+        {game.ships
+          .filter((ship) => !ship.destroyed && visible(ship, viewingSide))
+          .map((ship) => {
+            const at = drawnAt.get(ship.id) ?? riderOffset(game, ship)
+            const clear = counterScreenRadius(ship.design.mass, scale)
+            const note =
+              viewingSide !== null && ship.side !== viewingSide
+                ? `${ship.velocity} MU`
+                : null
+            return (
+              <div
+                key={`chip-${ship.id}`}
+                className="counter-chip"
+                style={{ left: originX + at.x * scale, top: originY + at.y * scale + clear + 2 }}
+              >
+                <span>{ship.name}</span>
+                {note ? <span className="counter-chip-note">{note}</span> : null}
+              </div>
+            )
+          })}
+      </div>
 
       {compassFor(selected) ? (
         <OrderCompass
@@ -970,7 +1130,7 @@ export function MapView({
           ship={selected as ShipState}
           x={originX + (drawnAt.get(selected?.id ?? '')?.x ?? 0) * scale}
           y={originY + (drawnAt.get(selected?.id ?? '')?.y ?? 0) * scale}
-          clearance={counterRadius((selected as ShipState).design.mass) * scale}
+          clearance={counterScreenRadius((selected as ShipState).design.mass, scale)}
           onTrack={(selected as ShipState).orbit !== null}
           editable={canCommand?.(selected as ShipState) ?? true}
           onHold={() => onHoldCourse?.(selected as ShipState)}
@@ -981,6 +1141,21 @@ export function MapView({
           onPreview={setPreview}
         />
       ) : null}
+
+      {/* ships-map #9: zoom was wheel/pinch only, with no on-screen sign it
+          was even possible. Styled like the compass's own buttons, so it
+          reads as part of the same instrument family. */}
+      <div className="zoom-controls" role="group" aria-label="Zoom" onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" className="zoom-btn" title="Zoom in" onClick={() => setZoom((z) => clampZoom(z * ZOOM_STEP))}>
+          +
+        </button>
+        <button type="button" className="zoom-btn is-fit" title="Fit to table" onClick={() => setZoom(1)}>
+          Fit
+        </button>
+        <button type="button" className="zoom-btn" title="Zoom out" onClick={() => setZoom((z) => clampZoom(z / ZOOM_STEP))}>
+          −
+        </button>
+      </div>
     </div>
   )
 
@@ -1040,6 +1215,11 @@ function riderOffset(game: GameState, ship: ShipState): Point {
     x: carrier.placement.position.x + beam * Math.cos(heading),
     y: carrier.placement.position.y + beam * Math.sin(heading),
   }
+}
+
+/** Screen-space heading, in degrees clockwise from up, from one point to another. */
+function headingDegrees(from: Point, to: Point): number {
+  return (Math.atan2(to.x - from.x, -(to.y - from.y)) * 180) / Math.PI
 }
 
 function stackFlights<T extends { id: string; position: Point }>(

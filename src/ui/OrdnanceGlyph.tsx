@@ -1,3 +1,5 @@
+import { useId } from 'react'
+
 import type { OrdnanceMarkerState } from '../engine/game'
 import { courseToDegrees } from '../engine/geometry'
 
@@ -34,6 +36,7 @@ function cluster(count: number): Array<{ x: number; y: number }> {
 }
 
 export function OrdnanceGlyph({ marker, scale }: { marker: OrdnanceMarkerState; scale: number }) {
+  const uid = useId()
   const x = marker.position.x * scale
   const y = marker.position.y * scale
   const className = `missile-marker is-${marker.kind} side-${marker.side}`
@@ -47,10 +50,32 @@ export function OrdnanceGlyph({ marker, scale }: { marker: OrdnanceMarkerState; 
       : marker.kind === 'rocket'
         ? cluster(Math.min(2, marker.missiles))
         : [{ x: 0, y: 0 }]
+  // Pixel-sized, not MU: a marker this small is otherwise a handful of pixels
+  // lost against the starfield at any zoom (screens #3), which is a real
+  // gameplay problem — point defence and dogfights both depend on spotting it.
   const size =
-    marker.kind === 'salvo' ? 0.75 : marker.kind === 'rocket' ? 0.8 : marker.kind === 'heavy' ? 1.4 : 1.25
+    marker.kind === 'salvo' ? 1.1 : marker.kind === 'rocket' ? 1.25 : marker.kind === 'heavy' ? 2.1 : 1.7
+  const haloId = `ordnance-halo-${uid}`
   return (
     <g className={className} transform={`translate(${x} ${y}) rotate(${heading})`}>
+      <defs>
+        <radialGradient id={haloId}>
+          <stop offset="0" stopColor="var(--ordnance)" stopOpacity="0.55" />
+          <stop offset="1" stopColor="var(--ordnance)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* A soft halo behind the dart rather than a drop-shadow filter — cheap
+          to redraw every time the plot pans, unlike a blurred filter would be. */}
+      {darts.map((dart, index) => (
+        <circle
+          key={`halo-${index}`}
+          className="missile-halo"
+          cx={dart.x}
+          cy={dart.y + 2}
+          r={7 * size}
+          fill={`url(#${haloId})`}
+        />
+      ))}
       {marker.kind === 'antimatter' ? <circle className="missile-warhead" r={10} /> : null}
       {darts.map((dart, index) => (
         <g key={index} transform={`translate(${dart.x} ${dart.y}) scale(${size})`}>
