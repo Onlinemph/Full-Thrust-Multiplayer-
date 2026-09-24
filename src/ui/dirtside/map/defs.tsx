@@ -133,6 +133,9 @@ export const MapDefs = memo(function MapDefs({ pid }: { pid: string }) {
       <pattern id={id('hatch-fallout')} width={0.5} height={0.5} patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
         <rect width={0.05} height={0.5} style={{ fill: 'var(--dst-fallout)', opacity: 0.35 }} />
       </pattern>
+      <pattern id={id('hatch-sight')} width={0.4} height={0.4} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width={0.05} height={0.4} fill="rgba(230,236,247,.35)" />
+      </pattern>
       <pattern id={id('hatch-down')} width={0.18} height={0.18} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width={0.05} height={0.18} fill="rgba(147,160,189,.9)" />
       </pattern>

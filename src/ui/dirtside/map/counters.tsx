@@ -270,7 +270,7 @@ export const Counter = memo(function Counter({ element: e, unit, code, pid, sele
         {e.damaged ? <polygon points={e.vehicle ? '-0.45,0.3 -0.45,0.65 -0.1,0.65' : '-0.45,0.02 -0.45,0.3 -0.17,0.3'} className="dst-damage-mark" /> : null}
         {selected ? <Brackets vehicle={!!e.vehicle} /> : null}
       </g>
-      {highlight ? <circle r={1.3} className="dst-window" /> : null}
+      {highlight ? <circle r={1.3} className="dst-window-ring" /> : null}
       {target ? (
         <g className="dst-reticle">
           <circle r={0.95} />

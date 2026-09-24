@@ -22,7 +22,8 @@ import { pts, textWidth } from './geometry'
 // Chips: fixed-size labels on the table
 // ---------------------------------------------------------------------------
 
-export type Tone = 'plain' | 'ok' | 'warn' | 'damage' | 'north' | 'south' | 'ordnance' | 'dim'
+/** A chip's colour: plain; ok (affordable); warn (refused, poor going); ink (a shot that can be made); refused (one that cannot); thrust (a decision waiting); damage; a side's; ordnance; dim. */
+export type Tone = 'plain' | 'ok' | 'warn' | 'ink' | 'refused' | 'thrust' | 'damage' | 'north' | 'south' | 'ordnance' | 'dim'
 
 /** A label in a dark box at a fixed pixel size, centred on (x, y) unless anchored to a side. */
 export function Chip({ x, y, k, text, tone = 'plain', anchor = 'middle', size = 10.5, dy = 0 }: { x: number; y: number; k: number; text: string; tone?: Tone; anchor?: 'start' | 'middle' | 'end'; size?: number; dy?: number }) {
@@ -30,7 +31,7 @@ export function Chip({ x, y, k, text, tone = 'plain', anchor = 'middle', size = 
   const h = size + 7
   const left = anchor === 'middle' ? -w / 2 : anchor === 'end' ? -w : 0
   return (
-    <g className={`dst-chip is-${tone}`} transform={`translate(${x} ${y}) scale(${k})`}>
+    <g className={`dst-map-chip is-${tone}`} transform={`translate(${x} ${y}) scale(${k})`}>
       <rect x={left} y={-h / 2 + dy} width={w} height={h} rx={3} />
       <text x={left + w / 2} y={dy + size * 0.36} style={{ fontSize: `${size}px` }}>
         {text}
@@ -78,7 +79,8 @@ export const Earthworks = memo(function Earthworks({ elements, units, prepared, 
 // Pennants, element tags and pips, above the counters
 // ---------------------------------------------------------------------------
 
-const QUALITY_FILL = { green: '#6fbf5f', regular: '#6fa0ff', veteran: '#ff9f3f' } as const
+/** Quality as a letter beside the leadership number, on a neutral chit: colour is kept for the sides (p. 18, p. 21). */
+const QUALITY_LETTER = { green: 'G', regular: 'R', veteran: 'V' } as const
 const CONFIDENCE_WORD = { CO: null, ST: null, SH: 'SHAKEN', BR: 'BROKEN', RO: 'ROUTED' } as const
 
 export interface TagsProps {
@@ -88,6 +90,8 @@ export interface TagsProps {
   k: number
   /** Close enough to name every element and letter every pip. */
   near: boolean
+  /** So far off that pennants shrink to the unit's code. */
+  far: boolean
   activeUnitId: string | null
   selectedId: string | null
   selectedUnitId: string | null
@@ -97,17 +101,26 @@ export interface TagsProps {
 
 interface PennantLayout {
   label: string
+  /** Quality and leadership, "R2"; empty on a compact pennant. */
+  lead: string
+  leadW: number
   lw: number
   flagW: number
+  flagH: number
+  size: number
   extras: Array<{ text: string; tone: string; w: number }>
   /** The whole pennant's width in pixels, chips included. */
   width: number
 }
 
-function pennantLayout(unit: UnitState, code: string, active: boolean): PennantLayout {
+function pennantLayout(unit: UnitState, code: string, active: boolean, compact: boolean): PennantLayout {
   const label = `${code}${unit.commandUnit ? '★' : ''}${unit.activated && !active ? ' ✓' : ''}`
-  const lw = textWidth(label, 11) + 10
-  const flagW = 17 + lw
+  const size = compact ? 9.5 : 11
+  const flagH = compact ? 13 : FLAG_H
+  const lead = compact ? '' : `${QUALITY_LETTER[unit.quality]}${unit.leadership}`
+  const leadW = lead ? textWidth(lead, 10) + 6 : 0
+  const lw = textWidth(label, size) + (compact ? 7 : 10)
+  const flagW = (lead ? leadW + 2 : 0) + lw
   const extras: PennantLayout['extras'] = []
   const conf = CONFIDENCE_WORD[unit.confidence]
   if (conf) extras.push({ text: conf, tone: unit.confidence, w: 0 })
@@ -115,7 +128,7 @@ function pennantLayout(unit: UnitState, code: string, active: boolean): PennantL
   if (unit.evasive) extras.push({ text: 'EVADING', tone: 'info', w: 0 })
   for (const c of extras) c.w = textWidth(c.text, 9, { spacing: 0.04 }) + 8
   const width = flagW + (unit.underFire ? 20 : 0) + extras.reduce((sum, c) => sum + c.w + 3, 0)
-  return { label, lw, flagW, extras, width }
+  return { label, lead, leadW, lw, flagW, flagH, size, extras, width }
 }
 
 /** How far a pennant stands off its leader, in pixels: on a tall staff, or close in when the row above would be covered. */
@@ -127,21 +140,26 @@ const pennantOffset = (at: ElementState) => (at.vehicle ? { x: 0.36, y: -0.5 } :
 
 /** A unit's command pennant beside its leader: quality and leadership, the unit's code, and its state (p. 18, p. 21). */
 function Pennant({ unit, at, layout, staff, k, active, hovered }: { unit: UnitState; at: ElementState; layout: PennantLayout; staff: number; k: number; active: boolean; hovered: boolean }) {
-  const { label, lw, flagW, extras } = layout
+  const { label, lead, leadW, lw, flagW, flagH, size, extras } = layout
   const state = active ? 'is-active' : unit.activated ? 'is-spent' : ''
-  const top = -staff - FLAG_H
-  const mid = top + FLAG_H / 2
+  const top = -staff - flagH
+  const mid = top + flagH / 2
   let x = flagW + 3 + (unit.underFire ? 20 : 0)
   const off = pennantOffset(at)
+  const codeX = (lead ? leadW + 2 : 0) + lw / 2
   return (
-    <g className={`dst-pennant is-${unit.sideId} ${state}${hovered ? ' is-hovered' : ''}`} transform={`translate(${at.position.x + off.x} ${at.position.y + off.y}) scale(${k})`}>
+    <g className={`dst-pennant is-${unit.sideId} ${state}${hovered ? ' is-hovered' : ''}${lead ? '' : ' is-compact'}`} transform={`translate(${at.position.x + off.x} ${at.position.y + off.y}) scale(${k})`}>
       {staff > 4 ? <line x1={0} y1={0} x2={0} y2={-staff} className="dst-pennant-staff" /> : null}
-      <rect x={0} y={top} width={flagW} height={FLAG_H} className="dst-pennant-flag" />
-      <rect x={1} y={top + 1} width={15} height={15} style={{ fill: QUALITY_FILL[unit.quality] }} className="dst-pennant-lead" />
-      <text x={8.5} y={mid + 4} className="dst-pennant-lead-text">
-        {unit.leadership}
-      </text>
-      <text x={17 + lw / 2} y={mid + 4} className="dst-pennant-code">
+      <rect x={0} y={top} width={flagW} height={flagH} className="dst-pennant-flag" />
+      {lead ? (
+        <>
+          <rect x={1.5} y={top + 1.5} width={leadW} height={flagH - 3} rx={1.5} className="dst-pennant-lead" />
+          <text x={1.5 + leadW / 2} y={mid + 3.6} className="dst-pennant-lead-text">
+            {lead}
+          </text>
+        </>
+      ) : null}
+      <text x={codeX} y={mid + size * 0.36} className="dst-pennant-code" style={{ fontSize: `${size}px` }}>
         {label}
       </text>
       {unit.underFire ? <path d={`M${flagW + 12},${mid - 8} l2.2,4.6 5,-1.6 -2.6,4.4 4.2,3 -5,0.8 0.4,5 -4.2,-2.8 -4.2,2.8 0.4,-5 -5,-0.8 4.2,-3 -2.6,-4.4 5,1.6 z`} className="dst-under-fire" /> : null}
@@ -197,7 +215,7 @@ function Pips({ e, k, near, record }: { e: ElementState; k: number; near: boolea
   )
 }
 
-export const Tags = memo(function Tags({ elements, units, codes, k, near, activeUnitId, selectedId, selectedUnitId, hoverUnitId, activation }: TagsProps) {
+export const Tags = memo(function Tags({ elements, units, codes, k, near, far, activeUnitId, selectedId, selectedUnitId, hoverUnitId, activation }: TagsProps) {
   const leaders: Array<{ unit: UnitState; at: ElementState }> = []
   const byUnit = new Map<string, ElementState[]>()
   for (const e of elements) {
@@ -233,14 +251,14 @@ export const Tags = memo(function Tags({ elements, units, codes, k, near, active
       })}
       {leaders.map(({ unit, at }) => {
         const active = unit.id === activeUnitId
-        const layout = pennantLayout(unit, codes[unit.id] ?? '', active)
-        // A tall staff unless it would plant the flag on the counters above.
+        const layout = pennantLayout(unit, codes[unit.id] ?? '', active, far)
+        // A tall staff unless it would plant the flag on the counters above; seen from far off, always a short one.
         const off = pennantOffset(at)
         const x0 = at.position.x + off.x - 0.5
         const x1 = at.position.x + off.x + layout.width * k + 0.5
         const y1 = at.position.y + off.y
-        const y0 = y1 - (STAFF.tall + FLAG_H) * k - 0.35
-        const crowded = y0 < -0.2 || elements.some((e) => e !== at && e.position.x >= x0 && e.position.x <= x1 && e.position.y >= y0 && e.position.y <= y1)
+        const y0 = y1 - (STAFF.tall + layout.flagH) * k - 0.35
+        const crowded = far || y0 < -0.2 || elements.some((e) => e !== at && e.position.x >= x0 && e.position.x <= x1 && e.position.y >= y0 && e.position.y <= y1)
         return <Pennant key={unit.id} unit={unit} at={at} layout={layout} staff={crowded ? STAFF.short : STAFF.tall} k={k} active={active} hovered={unit.id === hoverUnitId} />
       })}
     </g>
