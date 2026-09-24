@@ -40,6 +40,9 @@ import { MotorPool } from './dirtside/MotorPool'
 import { SkirmishPanel } from './dirtside/SkirmishPanel'
 import { TableScreen } from './dirtside/TableScreen'
 import { dirtsideBattleText, loadDirtsideBattle, newDirtsideBattle, useDirtsideBattle } from './dirtside/dirtsideStore'
+import { SkirmishPanel as StargruntSkirmishPanel } from './stargrunt/SkirmishPanel'
+import { TableScreen as StargruntTableScreen } from './stargrunt/TableScreen'
+import { useStargruntBattle } from './stargrunt/stargruntStore'
 import { PresetEditor } from './PresetEditor'
 import { presetFromHash, type RulesPreset } from '../data/rulesPreset'
 import { battleOnTable, campaignDispatch, landingOnTable, setBattleOnTable, setLandingOnTable, useCampaign } from './campaignStore'
@@ -244,7 +247,7 @@ export function App() {
   /* The front of the house. The app opens on it rather than on whatever
      battle was last on the table; a connected remote match goes straight to
      the table, since the other console is waiting. */
-  const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign' | 'dirtside'>('menu')
+  const [screen, setScreen] = useState<'menu' | 'battle' | 'campaign' | 'dirtside' | 'stargrunt'>('menu')
   // Safety net: the More menu is only ever meaningful on the battle screen,
   // and App() itself never unmounts across a screen change, so without this
   // a menu left open could otherwise ride along onto a fresh battle.
@@ -253,6 +256,8 @@ export function App() {
   }, [screen])
   const [showSkirmish, setShowSkirmish] = useState(false)
   const dirtside = useDirtsideBattle()
+  const [showStargruntSetup, setShowStargruntSetup] = useState(false)
+  const stargrunt = useStargruntBattle()
   const [showCampaignSetup, setShowCampaignSetup] = useState(false)
   const [showMotorPool, setShowMotorPool] = useState(false)
   /* House rules: the preset editor, opened from the menu or by a link that
@@ -494,6 +499,7 @@ export function App() {
       {showOnline ? <OnlinePanel onClose={() => setShowOnline(false)} /> : null}
       {showMotorPool ? <MotorPool onClose={() => setShowMotorPool(false)} /> : null}
       {showSkirmish ? <SkirmishPanel onClose={() => setShowSkirmish(false)} onStart={() => { setShowSkirmish(false); setLandingOnTable(null); setScreen('dirtside') }} /> : null}
+      {showStargruntSetup ? <StargruntSkirmishPanel onClose={() => setShowStargruntSetup(false)} onStart={() => { setShowStargruntSetup(false); setScreen('stargrunt') }} /> : null}
       {presetEditor ? <PresetEditor initial={presetEditor.initial} onClose={() => setPresetEditor(null)} /> : null}
       {showCampaignSetup ? (
         <CampaignSetupPanel
@@ -567,6 +573,15 @@ export function App() {
     )
   }
 
+  if (screen === 'stargrunt') {
+    return (
+      <>
+        <StargruntTableScreen onMenu={() => setScreen('menu')} onNewSkirmish={() => setShowStargruntSetup(true)} />
+        {modals}
+      </>
+    )
+  }
+
   if (screen === 'campaign' && campaign) {
     return (
       <>
@@ -626,6 +641,8 @@ export function App() {
           onMotorPool={() => setShowMotorPool(true)}
           dirtsideLabel={dirtside ? (dirtside.result ? 'battle over' : dirtside.phase === 'deployment' ? 'deploying' : `turn ${dirtside.turn}`) : null}
           onDirtside={() => (dirtside ? setScreen('dirtside') : setShowSkirmish(true))}
+          stargruntLabel={stargrunt ? (stargrunt.result ? 'battle over' : stargrunt.phase === 'deployment' ? 'deploying' : `turn ${stargrunt.turn}`) : null}
+          onStargrunt={() => (stargrunt ? setScreen('stargrunt') : setShowStargruntSetup(true))}
           onHouseRules={() => setPresetEditor({})}
           continueLabel={
             underway

@@ -1,0 +1,71 @@
+import { inDeploymentZone } from '../../../stargrunt/table/game'
+import { pathCost } from '../../../stargrunt/table/movement'
+import type { GameSetup, MobilityKind, Point, SideId, TerrainFeature } from '../../../stargrunt/types'
+
+/**
+ * The two Dirtside map-geometry helpers that read a game-specific type
+ * (`05-reuse-map.md` §3): `reachPolygon` needs Stargrunt's own `pathCost`
+ * (a squad's terrain table is not a vehicle's), and `deploymentBand` needs
+ * Stargrunt's own `inDeploymentZone`. Everything else — `pts`, `round`,
+ * `hash`, `decorRandom`, `insetShape`, `centreOf`, `pointAlong`, `textWidth`,
+ * `fitLabel`, `Box`/`overlaps`/`clearestSpot` — reads no rule and is
+ * imported unchanged from `src/ui/dirtside/map/geometry`.
+ */
+export {
+  centreOf,
+  clearestSpot,
+  decorRandom,
+  fitLabel,
+  hash,
+  insetShape,
+  overlaps,
+  pointAlong,
+  pts,
+  round,
+  textWidth,
+} from '../../dirtside/map/geometry'
+export type { Box } from '../../dirtside/map/geometry'
+
+/**
+ * How far a squad could get from `from` along each of `rays` straight lines
+ * for `budget` inches: the reach ring the move ghost draws. Each ray is
+ * found by halving on the real path cost, so poor and difficult going bend
+ * it exactly as a move would be charged (movement.ts's `pathCost`, p. 22).
+ */
+export function reachPolygon(from: Point, budget: number, mobility: MobilityKind, features: readonly TerrainFeature[], rays = 48): Point[] {
+  if (budget <= 0.01) return []
+  const out: Point[] = []
+  for (let r = 0; r < rays; r++) {
+    const angle = (r / rays) * Math.PI * 2
+    const dir = { x: Math.sin(angle), y: -Math.cos(angle) }
+    const end = (len: number) => ({ x: from.x + dir.x * len, y: from.y + dir.y * len })
+    const fits = (len: number) => {
+      const cost = pathCost([from, end(len)], mobility, features)
+      return !cost.blockedAt && cost.factors <= budget + 1e-6
+    }
+    let lo = 0
+    let hi = budget
+    if (fits(hi)) lo = hi
+    else
+      for (let i = 0; i < 9; i++) {
+        const mid = (lo + hi) / 2
+        if (fits(mid)) lo = mid
+        else hi = mid
+      }
+    out.push(end(lo))
+  }
+  return out
+}
+
+/** Where a side may set up, as a band of the table's depth, read off `inDeploymentZone` itself (p. 14). */
+export function deploymentBand(setup: GameSetup, side: SideId): { y0: number; y1: number } | null {
+  const x = setup.table.width / 2
+  let y0: number | null = null
+  let y1: number | null = null
+  for (let y = 0; y <= setup.table.depth + 1e-9; y += 0.25) {
+    if (!inDeploymentZone(setup, side, { x, y })) continue
+    if (y0 === null) y0 = y
+    y1 = y
+  }
+  return y0 === null || y1 === null ? null : { y0, y1 }
+}

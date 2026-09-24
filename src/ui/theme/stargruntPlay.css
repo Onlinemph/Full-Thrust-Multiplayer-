@@ -1,0 +1,185 @@
+/* Stargrunt II — the play screen's side column.
+   ────────────────────────────────────────────────────────────────────────────
+   The status strip, the app shell, the log dock, `.panel`, `.panel-row`,
+   `.dst-active`/`.dst-active-head`/`.dst-code`/`.dst-tip`/`.dst-quiet` are
+   all Dirtside's own (dirtsidePlay.css, panels.css, chrome.css), reused
+   unchanged (`05-reuse-map.md` §3). What is new is the active squad's own
+   panel of twelve actions and the figure list, and the roster's own rows —
+   Stargrunt fields figures, not elements, and every squad's row reads its
+   suppression, in-position and panic flags, none of which Dirtside's own
+   roster has a word for. */
+
+.sg-threat {
+  margin: 0 0 0.6rem;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+}
+
+.sg-figures-list {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.sg-figure-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: var(--text-sm);
+}
+
+.sg-figure-row.is-wounded {
+  background: color-mix(in srgb, var(--damage) 12%, var(--panel-2));
+}
+.sg-figure-row.is-stabilised {
+  opacity: 0.75;
+}
+.sg-figure-row.is-dead {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.sg-figure-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sg-figure-status {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.sg-figure-status.is-wounded {
+  color: var(--sg-wound);
+}
+.sg-figure-status.is-dead {
+  color: var(--ink-faint);
+}
+
+.sg-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sg-action-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sg-action-group:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.sg-action-label {
+  flex: none;
+  width: 5.2rem;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.sg-action-group button {
+  font-size: var(--text-sm);
+  padding: 0.25em 0.6em;
+}
+
+.sg-action-group button.is-on {
+  background: var(--thrust);
+  border-color: var(--thrust);
+  color: #1a0f05;
+}
+
+.sg-refused {
+  display: inline-flex;
+}
+.sg-refused button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sg-join {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+  flex-wrap: wrap;
+}
+.sg-join label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.sg-end {
+  margin-top: 0.2rem;
+  width: 100%;
+}
+
+/* ---- Roster ---------------------------------------------------------------- */
+
+.sg-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sg-roster-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.sg-roster-row:hover {
+  background: var(--panel-3);
+}
+.sg-roster-row.is-selected {
+  box-shadow: inset 0 0 0 1px var(--ink-dim);
+}
+.sg-roster-row.is-active {
+  box-shadow: inset 0 0 0 1px var(--thrust);
+}
+.sg-roster-row.is-spent {
+  opacity: 0.55;
+}
+
+.sg-roster-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sg-roster-count {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+  text-align: right;
+}

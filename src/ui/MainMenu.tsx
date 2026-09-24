@@ -31,6 +31,10 @@ export interface MainMenuProps {
   dirtsideLabel: string | null
   /** The Dirtside table: continue the battle, or set up a skirmish. */
   onDirtside: () => void
+  /** A Stargrunt battle under way, or null. */
+  stargruntLabel: string | null
+  /** The Stargrunt table: continue the battle, or set up a skirmish. */
+  onStargrunt: () => void
   /** Rules presets: what a table allows and plays under. */
   onHouseRules: () => void
 }
@@ -51,6 +55,8 @@ export function MainMenu({
   onMotorPool,
   dirtsideLabel,
   onDirtside,
+  stargruntLabel,
+  onStargrunt,
   onHouseRules,
 }: MainMenuProps) {
   const [size, setSize] = useState({ width: 1280, height: 800 })
@@ -107,6 +113,10 @@ export function MainMenu({
               <button onClick={onDirtside}>
                 {dirtsideLabel ? 'Continue the ground battle' : 'Dirtside table'}{' '}
                 <span className="menu-hint">{dirtsideLabel ?? 'Dirtside II skirmish'}</span>
+              </button>
+              <button onClick={onStargrunt}>
+                {stargruntLabel ? 'Continue the squad battle' : 'Stargrunt table'}{' '}
+                <span className="menu-hint">{stargruntLabel ?? 'Stargrunt II skirmish'}</span>
               </button>
             </div>
           </div>

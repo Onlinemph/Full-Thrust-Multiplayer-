@@ -1,0 +1,21 @@
+/* Stargrunt II — the skirmish panel.
+   ────────────────────────────────────────────────────────────────────────────
+   The whole shell — `.dst-setup`, `.dss-head`, `.dss-body`, `.dss-main`,
+   `.dss-forces`, `.dss-force`, `.dss-preset`, `.dss-aside`, `.dss-field`,
+   `.dss-seg`, `.dss-stepper` — is Dirtside's own setup-panel vocabulary
+   (dirtsideSetup.css), reused unchanged: a roster of squads with a name, a
+   quality/leadership pick and a played-by toggle is the same shape of
+   screen whichever game it is fielding for. This file adds only the few
+   things Dirtside's shop-and-points screen has no equivalent of. */
+
+.sg-force-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
