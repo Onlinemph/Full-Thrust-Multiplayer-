@@ -106,6 +106,8 @@ export interface CraftPanelProps {
   onUnplace: (craftId: string) => void
   onBringDown: () => void
   onUnload: (craftId: string) => void
+  /** Bringing the craft down is the one thing to press next (and Enter's): no unit is picked to activate instead. */
+  lead: boolean
 }
 
 export function CraftPanel(props: CraftPanelProps) {
@@ -153,8 +155,13 @@ export function CraftPanel(props: CraftPanelProps) {
         })}
       </ul>
       {n > 0 ? (
-        <button className="primary dst-wide" onClick={props.onBringDown}>
+        <button className={`${props.lead ? 'primary ' : ''}dst-wide`} onClick={props.onBringDown} aria-keyshortcuts={props.lead ? 'Enter' : undefined}>
           Bring {n === 1 ? 'it' : n === 2 ? 'both' : `all ${n}`} down (uses this activation)
+          {props.lead ? (
+            <kbd className="dst-kbd" aria-hidden="true">
+              Enter
+            </kbd>
+          ) : null}
         </button>
       ) : null}
     </div>

@@ -37,8 +37,8 @@ export interface TableKeys {
 
 /** The keys as the guide lists them. */
 export const KEY_LIST: ReadonlyArray<readonly [string, string]> = [
-  ['Tab', 'next element still to act (Shift+Tab back); between activations, the next unit'],
-  ['Enter', 'the orange button: confirm a move, fire, end, ready'],
+  ['Tab  N', 'next element still to act (with Shift, back); between activations, the next unit'],
+  ['Enter', 'the orange button, whatever it says: activate, move, fire, end, ready'],
   ['M', 'plot a move for the selected element'],
   ['Backspace', 'take off the last waypoint'],
   ['Esc', 'cancel what you are doing, or let go of the selection'],
@@ -51,15 +51,39 @@ export const KEY_LIST: ReadonlyArray<readonly [string, string]> = [
   ['?', 'this guide'],
 ]
 
+/** Somewhere the keys belong to something else: a text field, a select, a window open over the screen, the guide. */
+function elsewhere(target: HTMLElement | null): boolean {
+  if (document.querySelector('.modal-backdrop')) return true
+  if (!target || target === document.body) return false
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable) return true
+  return !!target.closest('.modal, .dst-guide')
+}
+
+/**
+ * The table's keys. `suspended` stands them all down (the guide is open, the
+ * computer is playing). Enter and Space press the one orange button whatever
+ * was clicked last; only a control reached from the keyboard keeps them. Tab
+ * walks the elements wherever the table has the keyboard.
+ */
 export function useTableKeys(keys: TableKeys, suspended: boolean): void {
   // The handlers change every render; the listener reads the latest through a ref and is added once.
   const ref = useRef(keys)
   ref.current = keys
+  // The control the pointer last pressed: focused by a click, not reached from the keyboard.
+  const clickedRef = useRef<Element | null>(null)
+  useEffect(() => {
+    const onPointer = (event: PointerEvent) => {
+      clickedRef.current = event.target instanceof Element ? event.target.closest('button, summary, a') : null
+    }
+    document.addEventListener('pointerdown', onPointer, true)
+    return () => document.removeEventListener('pointerdown', onPointer, true)
+  }, [])
   useEffect(() => {
     if (suspended) return
     const onKey = (event: KeyboardEvent) => {
+      const clicked = clickedRef.current
       const target = event.target as HTMLElement | null
-      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return
+      if (event.defaultPrevented || elsewhere(target)) return
       const k = ref.current
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'z') {
         if (k.takeBack) {
@@ -74,15 +98,17 @@ export function useTableKeys(keys: TableKeys, suspended: boolean): void {
         event.preventDefault()
         f()
       }
-      // A focused button answers Enter and Space itself; the table's primary is only for when nothing is focused.
-      const onButton = target?.tagName === 'BUTTON' || target?.tagName === 'SUMMARY'
+      // A control the player reached from the keyboard answers Enter and Space itself; one that was only
+      // clicked (a roster row, an element chip, a map toolbar button) does not, so Enter stays the orange button.
+      const keyboardFocus = !!target && target !== document.body && /^(BUTTON|SUMMARY|A)$/.test(target.tagName) && target !== clicked
       switch (event.key) {
         case 'Tab':
-          // Tab still walks the controls once one has focus; from the table it walks the elements.
-          if (k.next && !target?.closest('button, a, summary, [tabindex]')) run(() => k.next!(event.shiftKey))
+          // Wherever the table has the keyboard, the map and its buttons included, Tab walks the elements.
+          if (k.next) run(() => k.next!(event.shiftKey))
           break
         case 'n':
-          if (k.next) run(() => k.next!(false))
+        case 'N':
+          if (k.next) run(() => k.next!(event.shiftKey))
           break
         case 'Escape':
           run(k.cancel)
@@ -96,7 +122,7 @@ export function useTableKeys(keys: TableKeys, suspended: boolean): void {
           break
         case 'Enter':
         case ' ':
-          if (!onButton) run(k.primary)
+          if (!keyboardFocus) run(k.primary)
           break
         case '1':
         case '2':
@@ -133,7 +159,8 @@ export function useTableKeys(keys: TableKeys, suspended: boolean): void {
           break
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // Capture, so Tab and Enter are the table's before a focused button or the browser acts on them.
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [suspended])
 }

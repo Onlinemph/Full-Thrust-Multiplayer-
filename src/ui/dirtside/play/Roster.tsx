@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import { CONFIDENCE_LEVELS_INDEX } from '../../../dirtside/table/confidence'
 import { elementsOf, functional, unactivatedUnits } from '../../../dirtside/table/game'
 import { unitKind } from '../../../dirtside/table/tableFire'
@@ -35,8 +37,10 @@ export interface ForceProps {
   onPick: (unit: UnitState) => void
   onDoublePick: (unit: UnitState) => void
   actionsFor: (unit: UnitState) => RosterAction[]
-  /** Objective value the side holds. */
-  holds: number
+  /** Objective value the side holds, as far as the viewer may know it: "3", "1+?", "?". */
+  holds: string
+  /** What the holds figure means, for its tooltip. */
+  holdsTitle: string
 }
 
 const MANY = 8
@@ -49,15 +53,16 @@ export function ForcePanel(props: ForceProps) {
   const over = !!state.result
   const flags = [state.sides[side].done && !over ? 'done for this turn' : '', state.sides[side].commandLost ? 'command lost' : ''].filter(Boolean)
   const lost = Object.values(state.elements).filter((e) => e.sideId === side && e.destroyed).length
-  const summary = `${units.length} unit${units.length === 1 ? '' : 's'} · ${over ? `${lost} element${lost === 1 ? '' : 's'} lost` : `${toAct} still to act`}${flags.length ? ` · ${flags.join(' · ')}` : ''}`
+  const summary = `${units.length} unit${units.length === 1 ? '' : 's'} · ${over ? `${lost} lost` : `${toAct} to act`}${flags.length ? ` · ${flags.join(' · ')}` : ''}`
+  const summaryTitle = `${units.length} unit${units.length === 1 ? '' : 's'}; ${over ? `${lost} element${lost === 1 ? '' : 's'} knocked out` : `${toAct} still to act this turn`}${flags.length ? `; ${flags.join('; ')}` : ''}`
 
   if (collapsed) {
     return (
       <div className={`panel dst-force is-${side} is-collapsed`}>
         <button className="dst-force-fold" onClick={props.onToggle} aria-expanded={false}>
           <span className="dst-force-name">{name}</span>
-          <span className="dst-force-sum" title={summary}>{summary}</span>
-          <span className="dst-force-holds" title="Objective value held">
+          <span className="dst-force-sum" title={summaryTitle}>{summary}</span>
+          <span className="dst-force-holds" title={props.holdsTitle}>
             ◆ <b className="num">{props.holds}</b>
           </span>
           <span className="dst-fold-mark" aria-hidden="true">▸</span>
@@ -76,8 +81,8 @@ export function ForcePanel(props: ForceProps) {
     <div className={`panel dst-force is-${side}`}>
       <button className="dst-force-fold" onClick={props.onToggle} aria-expanded={true}>
         <span className="dst-force-name">{name}</span>
-        <span className="dst-force-sum" title={summary}>{summary}</span>
-        <span className="dst-force-holds" title="Objective value held">
+        <span className="dst-force-sum" title={summaryTitle}>{summary}</span>
+        <span className="dst-force-holds" title={props.holdsTitle}>
           ◆ <b className="num">{props.holds}</b>
         </span>
         <span className="dst-fold-mark" aria-hidden="true">▾</span>
@@ -131,13 +136,33 @@ function UnitRow(props: ForceProps & { unit: UnitState }) {
     .filter(Boolean)
     .join(' ')
   const actions = props.actionsFor(u)
+  // A row that folds or unmounts under the pointer never sees mouseleave: let go of the hover it set.
+  const hovering = useRef(false)
+  const onHoverUnit = useRef(props.onHoverUnit)
+  onHoverUnit.current = props.onHoverUnit
+  useEffect(
+    () => () => {
+      if (hovering.current) onHoverUnit.current(null)
+    },
+    [],
+  )
   const flags: Array<{ label: string; title: string; tone: string }> = []
   if (u.underFire) flags.push({ label: 'under fire', title: 'Must pass a test to move this activation; infantry shoot with a smaller die (p. 24).', tone: 'warn' })
   if (u.panic) flags.push({ label: 'panic', title: 'Frozen by first contact: its next activation only recovers (p. 23).', tone: 'bad' })
   if (u.evasive) flags.push({ label: 'evading', title: 'Harder to hit until its next activation; may not fire (p. 27).', tone: 'info' })
   if (aboard) flags.push({ label: 'aboard a craft', title: 'Off the table until its craft lands and unloads (p. 43).', tone: 'info' })
   return (
-    <li className={cls} onMouseEnter={() => props.onHoverUnit(u.id)} onMouseLeave={() => props.onHoverUnit(null)}>
+    <li
+      className={cls}
+      onMouseEnter={() => {
+        hovering.current = true
+        props.onHoverUnit(u.id)
+      }}
+      onMouseLeave={() => {
+        hovering.current = false
+        props.onHoverUnit(null)
+      }}
+    >
       <button className="dst-unit-name" onClick={() => props.onPick(u)} onDoubleClick={() => props.onDoublePick(u)} title={`${statusTitle}. ${command.title}`}>
         <span className={`dst-unit-glyph is-${status}`} aria-hidden="true">
           {glyph}

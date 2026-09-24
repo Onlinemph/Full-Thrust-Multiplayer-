@@ -24,6 +24,8 @@ export interface PlayLine {
   chits?: Chit[]
   /** The verdict stamp: "KNOCKED OUT", "MISS". */
   stamp?: string
+  /** The element a move line is about, so a recap counts movers rather than moves. */
+  subject?: string
 }
 
 export interface PlayEvent {
@@ -62,7 +64,12 @@ export function parseDice(text: string): string | null {
   return m ? `rolled ${m[1]!.trim()} against ${m[2]!.trim()}: ${m[3]}` : null
 }
 
-export function describeAction(before: GameState, action: Action, after: GameState, codes: Record<string, string>): PlayEvent {
+/**
+ * One action in plain lines. `viewer` is the side looking at the screen: an
+ * objective's value is told only to a side that drew or holds it (p. 17), or
+ * to everyone once the battle is over; null means nobody may see it yet.
+ */
+export function describeAction(before: GameState, action: Action, after: GameState, codes: Record<string, string>, viewer: SideId | null = null): PlayEvent {
   const logged = after.log.slice(before.log.length)
   const lines: PlayLine[] = []
   const side = 'side' in action ? action.side : null
@@ -84,7 +91,7 @@ export function describeAction(before: GameState, action: Action, after: GameSta
       if (test) lines.push({ text: test.text.replace(/^[^,]+, /, 'Test to move: '), tone: /stay put/.test(test.text) ? 'miss' : 'info' })
       if (moved) {
         const inches = moved.text.match(/moves ([\d.]+)"/)?.[1]
-        lines.push({ text: `${el.name} moved ${inches ?? ''}″${action.travel ? ' in travel mode' : ''}${action.evasive ? ', evading' : ''}.`, tone: 'move' })
+        lines.push({ text: `${el.name} moved ${inches ?? ''}″${action.travel ? ' in travel mode' : ''}${action.evasive ? ', evading' : ''}.`, tone: 'move', subject: el.id })
       }
       if (after.activation?.window && !before.activation?.window) lines.push({ text: `${after.sides[after.activation.window.sideId].name} may fire at it as it arrives.`, tone: 'info' })
       break
@@ -198,7 +205,8 @@ export function describeAction(before: GameState, action: Action, after: GameSta
   for (const o of after.setup.table.objectives) {
     const was = before.objectives[o.id]?.heldBy ?? null
     const now = after.objectives[o.id]?.heldBy ?? null
-    if (now && was !== now) lines.push({ text: `${after.sides[now].name} takes an objective worth ${o.value}`, tone: 'objective' })
+    const known = !!after.result || (viewer !== null && (o.drawnBy === viewer || now === viewer))
+    if (now && was !== now) lines.push({ text: `${after.sides[now].name} takes an objective${known ? ` worth ${o.value}` : ' (its value is hidden from you)'}`, tone: 'objective' })
   }
   if (after.result && !before.result) lines.push({ text: after.result.winner === 'draw' ? `A draw: ${after.result.reason}.` : `${after.sides[after.result.winner].name} wins: ${after.result.reason}.`, tone: 'objective' })
 
@@ -240,6 +248,12 @@ export function logKind(text: string): LogKind {
   if (/tests |confidence|panic|rallies|under fire\.|takes command|command unit is lost/.test(text)) return 'morale'
   if (/ moves [\d.]+"/.test(text)) return 'move'
   return 'info'
+}
+
+/** The engine's "takes objective S1 (value 2)." with the value hidden when the viewer has not seen that marker (p. 17). */
+export function maskObjective(text: string, hidden: ReadonlySet<string>): string {
+  if (hidden.size === 0) return text
+  return text.replace(/takes objective (\S+) \(value \d+\)/, (whole, id: string) => (hidden.has(id) ? `takes objective ${id} (value hidden)` : whole))
 }
 
 export const LOG_ICON: Record<LogKind, string> = { move: '➜', fire: '✦', damage: '✖', morale: '⚑', objective: '◆', orbital: '☄', turn: '◷', info: '·' }
@@ -309,8 +323,10 @@ export function recapGroups(events: readonly PlayEvent[]): RecapGroup[] {
     const moves = lines.filter((l) => l.tone === 'move')
     if (moves.length > 3) {
       const at = lines.indexOf(moves[0]!)
+      // One element may move twice in a go (before and after firing): count the elements, not the moves.
+      const movers = new Set(moves.map((l, i) => l.subject ?? `#${i}`)).size
       lines = lines.filter((l) => l.tone !== 'move')
-      lines.splice(at, 0, { text: `${moves.length} elements moved.`, tone: 'move' })
+      lines.splice(at, 0, { text: movers === moves.length ? `${movers} elements moved.` : `${movers} element${movers === 1 ? '' : 's'} made ${moves.length} moves.`, tone: 'move' })
     }
     return { key: first.seq, side: first.side, title: first.title, headline: headlineOf(g.events), lines, turn: first.turn }
   })

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { newStream } from '../../dirtside/dice'
 import { aiAction } from '../../dirtside/table/ai'
 import { QUALITY_DIE, restrictionsOf } from '../../dirtside/table/confidence'
-import { INTEGRITY, applyAction, canPass, commandUnitOf, craftToLand, elementsOf, functional, mobile, objectiveValues, strikesDue, unactivatedUnits } from '../../dirtside/table/game'
+import { INTEGRITY, applyAction, canPass, commandUnitOf, craftToLand, elementsOf, functional, mobile, strikesDue, unactivatedUnits } from '../../dirtside/table/game'
 import { STRIKE_RADIUS, orbitalShips, overhead } from '../../dirtside/table/orbital'
 import { baseMovement, planTableShot, unitKind, type TableShotPlan } from '../../dirtside/table/tableFire'
 import { distance, lineOfSight, pathCost } from '../../dirtside/table/terrain'
@@ -47,6 +47,17 @@ const AI_DELAY_MS = 380
 const AI_PACE: Partial<Record<Action['kind'], number>> = { activate: 520, move: 600, fire: 1100, 'opportunity-fire': 1100, 'call-orbital': 800, 'orbital-strike': 1100, 'land-craft': 900, unload: 700 }
 
 const SIDES: SideId[] = ['north', 'south']
+
+/** The empty plot and target lists, one of each, so the map's memos hold while nothing is plotted or aimed. */
+const NO_POINTS: Point[] = []
+const NO_IDS: string[] = []
+
+/** A handler that is always the latest closure but keeps one identity, so a memoised child does not redraw for it. */
+function useLatest<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const ref = useRef(fn)
+  ref.current = fn
+  return useCallback((...args: A) => ref.current(...args), [])
+}
 
 export function TableScreen(props: TableScreenProps) {
   const state = useDirtsideBattle()
@@ -143,7 +154,10 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   const cap = record?.firedBeforeMoving ? Math.min(allowance, baseMovement(selected!) / 2) : allowance
   const left = record ? Math.max(0, cap - record.factorsUsed) : 0
   const family = selected ? familyOf(selected) : 'infantry'
-  const plotted = useMemo(() => (selected && plot.length > 0 ? pathCost([selected.position, ...plot], family, state.setup.table.terrain, { amphibious: wades(selected), travel }) : null), [selected, plot, family, state.setup.table.terrain, travel])
+  // Travel mode the rules would refuse is never offered, never drawn as reach and never asked for (p. 25).
+  const travelBlocked = !record ? null : record.fired ? 'It has fired this activation: deployed for action, no travel mode (p. 25)' : selectedUnit?.underFire ? 'Its unit is under fire: no travel mode (p. 25)' : null
+  const travelling = travel && !travelBlocked
+  const plotted = useMemo(() => (selected && plot.length > 0 ? pathCost([selected.position, ...plot], family, state.setup.table.terrain, { amphibious: wades(selected), travel: travelling }) : null), [selected, plot, family, state.setup.table.terrain, travelling])
   const picking = state.phase === 'activation' && !activation && !!toAct && human(toAct) && !due && !state.result
   const moveBlocked = !record || !selected ? 'Not in this activation' : !mobile(selected) ? `${selected.name} cannot move` : activation?.moveTest === 'failed' ? `${activeUnit?.name} failed its test to move under fire` : left <= 0.05 ? 'No movement left' : null
   const ghostReady = mode === 'idle' && !moveBlocked && !!record
@@ -221,17 +235,44 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     [state, opportunity, activation],
   )
 
+  // ---- Who is looking: the one human side, or hot seat the side to act. Hidden values are hidden from them.
+  const viewer: SideId | null = humans.length === 1 ? humans[0]! : (toAct ?? (state.phase === 'deployment' ? null : 'north'))
+  /** Each side's objective total as the viewer may know it (p. 17): values of markers it drew or holds, "?" for the rest. */
+  const shownValues = useMemo(() => {
+    const out: Record<SideId, { known: number; hidden: number }> = { north: { known: 0, hidden: 0 }, south: { known: 0, hidden: 0 } }
+    const hiddenIds: string[] = []
+    for (const o of state.setup.table.objectives) {
+      const held = state.objectives[o.id]?.heldBy ?? null
+      const known = !!state.result || (viewer !== null && (o.drawnBy === viewer || held === viewer))
+      if (!known) hiddenIds.push(o.id)
+      if (!held) continue
+      if (known) out[held].known += o.value
+      else out[held].hidden += 1
+    }
+    return { ...out, hiddenIds: hiddenIds.join(',') }
+  }, [state.setup.table.objectives, state.objectives, state.result, viewer])
+  const holdsText = (s: SideId) => {
+    const v = shownValues[s]
+    return v.hidden === 0 ? String(v.known) : v.known > 0 ? `${v.known}+?` : '?'
+  }
+  const holdsTitle = (s: SideId) => {
+    const v = shownValues[s]
+    return `Objective value ${sideName(s)} holds${v.hidden ? `: ${v.known ? `${v.known} you know of, and ` : ''}${v.hidden} marker${v.hidden === 1 ? '' : 's'} whose value is hidden from you` : ''}`
+  }
+
   // ---- What just happened, from the store's recent transitions.
   const transitions = dirtsideTransitions()
-  const described = useRef(new WeakMap<DirtsideTransition, { event: PlayEvent; marks: RecentMark[] }>())
+  // Described once per transition, again when the viewer changes (hot seat): what may be told depends on who looks.
+  const described = useRef({ viewer, map: new WeakMap<DirtsideTransition, { event: PlayEvent; marks: RecentMark[] }>() })
+  if (described.current.viewer !== viewer) described.current = { viewer, map: new WeakMap() }
   const { events, recent, lastId } = useMemo(() => {
     const events: PlayEvent[] = []
     let marks: Array<RecentMark & { by: SideId }> = []
     for (const t of transitions.list) {
-      let d = described.current.get(t)
+      let d = described.current.map.get(t)
       if (!d) {
-        d = { event: describeAction(t.before, t.action, t.after, codes), marks: marksOf(t.before, t.action, t.after) }
-        described.current.set(t, d)
+        d = { event: describeAction(t.before, t.action, t.after, codes, viewer), marks: marksOf(t.before, t.action, t.after) }
+        described.current.map.set(t, d)
       }
       events.push(d.event)
       const k = t.action.kind
@@ -243,10 +284,16 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
       for (const m of d.marks) marks.push({ ...m, by: 'side' in t.action ? t.action.side : m.side })
     }
     return { events, recent: marks.slice(-30).map(({ by: _by, ...m }) => m as RecentMark), lastId: transitions.list[transitions.list.length - 1]?.id ?? 0 }
-  }, [transitions.list, codes])
+  }, [transitions.list, codes, viewer])
   // A go still under way with nothing done yet has nothing to tell; once over, it "held its ground".
   const lastTransition = transitions.list[transitions.list.length - 1]
   const outcomeRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  // A newly selected element of the acting (or answering) unit: its weapons are what comes next, so keep them in view.
+  const firesNow = !!record || (opportunity && !!firingUnitId)
+  useEffect(() => {
+    if (firesNow) cardRef.current?.querySelector('.dst-fire')?.scrollIntoView({ block: 'nearest' })
+  }, [selectedId, activation?.unitId, firingUnitId, firesNow])
   // Anything that happens on the table, the computer's go included, answers an old refusal.
   useEffect(() => setRefusal(null), [lastId])
   useEffect(() => {
@@ -257,8 +304,10 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   const takeBackOk = !!lastTransition && 'side' in lastTransition.action && human(lastTransition.action.side) && canTakeBackDirtside() && !computerToAct
 
   // ---- Fire: every enemy's verdict for the armed weapon, for the map to light.
+  // Only an element of the unit whose shots are being built aims; any other selection lights nothing.
+  const aiming = mode === 'fire' && !!selected && !!weapon && !!firingUnit && selected.unitId === firingUnit.id
   const targeting = useMemo<TargetingOverlay | null>(() => {
-    if (mode !== 'fire' || !selected || !weapon) return null
+    if (!aiming || !selected || !weapon) return null
     const verdicts: TargetingOverlay['verdicts'] = {}
     for (const e of Object.values(state.elements)) {
       if (e.sideId === selected.sideId || e.destroyed || e.aboard) continue
@@ -267,7 +316,28 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     }
     const row = weaponsOf(selected).find((w) => sameWeapon(w.choice, weapon))
     return { firerId: selected.id, verdicts, bands: row?.bands.map((b) => b.upTo) }
-  }, [mode, selected, weapon, state.elements, planFor])
+  }, [aiming, selected, weapon, state.elements, planFor])
+
+  /**
+   * Which elements of the activated unit have nothing left to do: no move left (it moved, cannot move, or
+   * failed its test) and no attack left (it fired, or no weapon has a target it may shoot). An element that
+   * fired first may still move half, so it is not done.
+   */
+  const leftToDo = useMemo(() => {
+    if (!activation || !activeUnit || offer || !human(activation.sideId)) return null
+    const enemies = Object.values(state.elements).filter((e) => e.sideId !== activeUnit.sideId && functional(e) && !e.aboard)
+    const done = new Set<string>()
+    for (const e of elementsOf(state, activeUnit).filter(functional)) {
+      const r = activation.elements[e.id]
+      if (!r) continue
+      const base = baseMovement(e)
+      const most = r.firedBeforeMoving ? Math.min(e.damaged ? base / 2 : base, base / 2) : e.damaged ? base / 2 : base
+      const moveLeft = !r.moved && mobile(e) && activation.moveTest !== 'failed' && most - r.factorsUsed > 0.05
+      const fireLeft = !r.fired && weaponsOf(e).some((w) => enemies.some((t) => planFor({ elementId: e.id, weapon: w.choice, targetId: t.id }).ok))
+      if (!moveLeft && !fireLeft) done.add(e.id)
+    }
+    return { done }
+  }, [activation, activeUnit, offer, human, state, planFor])
 
   /** The next element of the firing unit that can still take a shot, with its first weapon that has a target. */
   const nextShooter = (queued: ShotOrder[], after: string): { id: string; weapon: WeaponChoice } | null => {
@@ -292,7 +362,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
       if (act({ kind: 'call-orbital', side: selected.sideId, elementId: selected.id, shipId: orbitalChoice.shipId, attack: orbitalChoice.attack, aim: { ...el.position } }, el.position)) reset()
       return
     }
-    if (mode === 'fire' && selected && weapon && el.sideId !== selected.sideId) {
+    if (aiming && selected && weapon && el.sideId !== selected.sideId) {
       const order: ShotOrder = { elementId: selected.id, weapon, targetId: id }
       const plan = planFor(order)
       if (!plan.ok) {
@@ -363,7 +433,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   const confirmMove = () => {
     if (!selected || plot.length === 0) return
     const mover = selected.id
-    const ok = act({ kind: 'move', side: selected.sideId, elementId: selected.id, path: plot, evasive: evasive || undefined, travel: travel || undefined }, plot[plot.length - 1] ?? null)
+    const ok = act({ kind: 'move', side: selected.sideId, elementId: selected.id, path: plot, evasive: evasive || undefined, travel: travelling || undefined }, plot[plot.length - 1] ?? null)
     if (!ok) return
     setPlot([])
     setMode('idle')
@@ -471,6 +541,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     for (const p of ['none', 'hull-down', 'turret-down'] as Posture[]) out[p] = p === selected.posture ? null : probe({ kind: 'posture', side: selected.sideId, elementId: selected.id, posture: p })
     return out
   }, [record, selected, probe])
+  const repairRefused = useMemo(() => (record && selected?.systemsDown ? probe({ kind: 'repair', side: selected.sideId, elementId: selected.id }) : null), [record, selected, probe])
 
   // ---- An opportunity window offered to a human: who can answer, and their best shot.
   const answers = useMemo(() => {
@@ -504,12 +575,11 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   }
 
   // ---- The strip: what the table is waiting for, and the one button.
-  const values = objectiveValues(state)
   const strip = ((): StripModel => {
     const base = {
       turn: state.turn,
       turnLimit: state.setup.turnLimit,
-      objectives: { north: values.north, south: values.south, names: { north: sideName('north'), south: sideName('south') }, markers: state.setup.table.objectives.length },
+      objectives: { north: holdsText('north'), south: holdsText('south'), names: { north: sideName('north'), south: sideName('south') }, markers: state.setup.table.objectives.length, hidden: shownValues.north.hidden + shownValues.south.hidden > 0 },
     }
     const secondary: StripAction[] = []
     const takeBack: StripAction | null = takeBackOk ? { key: 'take-back', label: 'Take back', onClick: () => doTakeBack(), title: 'Undo the last move or stance: it rolled no dice, so nothing is lost', kbd: 'Ctrl+Z' } : null
@@ -523,7 +593,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         banner: r.winner === 'draw' ? `A draw: ${r.reason}.` : `${sideName(r.winner)} wins: ${r.reason}.`,
         hint: `Objectives: ${sideName('north')} ${r.values.north}, ${sideName('south')} ${r.values.south}. The table stays as it ended; the log tells the whole story.`,
         tone: 'result',
-        primary: resultHidden ? { key: 'result', label: 'Show the result', onClick: () => setResultHidden(false) } : null,
+        primary: resultHidden ? { key: 'result', label: 'Show the result', onClick: () => setResultHidden(false), kbd: 'Enter' } : null,
         secondary,
       }
     }
@@ -547,8 +617,8 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         step: 2,
         side: toAct,
         sideText: `${sideName(toAct!)} to act`,
-        banner: `${sideName(toAct!)}: the fire called down from orbit arrives. Bring it down before anything else.`,
-        hint: 'It lands where the impact marker is, give or take a stray of up to 7″, and hits everything in the zone, friend or foe.',
+        banner: `${sideName(toAct!)}: the fire called down from orbit arrives.`,
+        hint: 'Bring it down before anything else. It lands where the impact marker is, give or take a stray of up to 7″, and hits everything in the zone, friend or foe.',
         tone: 'warn',
         primary: { key: 'strike', label: 'Bring down the orbital fire', onClick: () => act({ kind: 'orbital-strike', side: toAct! }), kbd: 'Enter' },
         secondary,
@@ -563,7 +633,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         step: 0,
         side: waiting.length === 1 ? waiting[0]! : null,
         sideText: waiting.length === 1 ? `${sideName(waiting[0]!)} deploys` : waiting.length === 0 ? 'Waiting' : 'Both sides deploy',
-        banner: 'Deployment: pick an element, click where it stands, then Ready.',
+        banner: 'Deployment: place your elements, then press Ready.',
         hint:
           selected && human(selected.sideId) && !state.sides[selected.sideId].ready
             ? `${selected.name} is picked: click inside ${sideName(selected.sideId)}'s shaded strip to put it there, or pick another.`
@@ -597,41 +667,42 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         step: 3,
         side: offer.sideId,
         sideText: `${sideName(offer.sideId)} may fire`,
-        banner: `${sideName(offer.sideId)}: opportunity fire on ${moved.name}? Pick one of your unactivated units below.`,
+        banner: `${sideName(offer.sideId)}: opportunity fire on ${moved.name}?`,
         hint: firingUnit
           ? volley.length > 0
-            ? `${volley.length} shot${volley.length === 1 ? '' : 's'} ready: press Fire! in the side column. Firing uses up ${firingUnit.name}'s activation for this turn.`
+            ? `${volley.length} shot${volley.length === 1 ? '' : 's'} ready: press Fire! (F) in the side column. Firing uses up ${firingUnit.name}'s activation for this turn.`
             : `Pick a weapon on one of ${firingUnit.name}'s elements and click ${moved.name}. Firing uses up its activation for this turn.`
-          : `The enemy's ${moved.name} moved into view. ${n > 0 ? `${n} of your unit${n === 1 ? '' : 's'} can see it` : 'Your units that have not acted can shoot'}: firing now uses up that unit's activation for this turn. Or let it go.`,
+          : `The enemy's ${moved.name} moved into view. ${n > 0 ? `${n} of your unit${n === 1 ? '' : 's'} can see it: press Fire with beside one of them in the side column` : 'None of your units that have yet to act can see it'}. Firing uses up that unit's activation for this turn. Or Decline.`,
         tone: 'warn',
         primary: null,
         secondary: [
           { key: 'decline', label: 'Decline', title: 'Let this move go', onClick: () => { act({ kind: 'decline-opportunity', side: offer.sideId }); reset(); setFiringUnitId(null) } },
-          { key: 'decline-all', label: 'Decline for this activation', title: `Don't ask again until ${activeUnit?.name}'s activation ends`, onClick: () => { act({ kind: 'decline-opportunity', side: offer.sideId, forActivation: true }); reset(); setFiringUnitId(null) } },
+          { key: 'decline-all', label: 'Decline for this activation', short: 'Decline all', title: `Don't ask again until ${activeUnit?.name}'s activation ends`, onClick: () => { act({ kind: 'decline-opportunity', side: offer.sideId, forActivation: true }); reset(); setFiringUnitId(null) } },
         ],
       }
     }
     if (activation && activeUnit) {
       const els = elementsOf(state, activeUnit).filter(functional)
-      const doneEls = els.filter((e) => activation.elements[e.id]?.moved || activation.elements[e.id]?.fired || !mobile(e))
-      // Every element has moved or fired, or has nothing left it could do: the activation is finished.
-      const finished = doneEls.length === els.length && mode === 'idle' && volley.length === 0
-      const end: StripAction = { key: 'end', label: `End ${activeUnit.name}'s activation`, onClick: endActivation, kbd: 'E' }
+      const doneCount = els.filter((e) => leftToDo?.done.has(e.id)).length
+      // Every element has nothing left it could do (no move left, no attack left or no target): the activation is finished.
+      const finished = !!leftToDo && doneCount === els.length && mode === 'idle' && volley.length === 0
+      const end: StripAction = { key: 'end', label: `End ${activeUnit.name}'s activation`, short: 'End activation', onClick: endActivation, kbd: 'E' }
       let hint: string
       if (mode === 'move' && selected) hint = plot.length === 0 ? `Click the table for ${selected.name}'s waypoints (${left.toFixed(1)} factors left). Enter moves, Backspace takes off the last point, Esc cancels.` : `${plotted?.blockedAt ? `Blocked by ${plotted.blockedBy?.replace('-', ' ')}: take off the last point.` : `${plotted?.length.toFixed(1)}″ for ${plotted?.factors.toFixed(1)} factors.`} Press Move (Enter) to go there, or click to add waypoints.`
       else if (mode === 'fire' && volley.length > 0 && !weapon) hint = `${volley.length} shot${volley.length === 1 ? '' : 's'} queued. Press Fire the volley (F), or pick another element's weapon to add more.`
-      else if (mode === 'fire' && selected && weapon) hint = `Click a lit enemy to add ${selected.name}'s shot to the volley; the odds show on each target.${volley.length ? ` ${volley.length} queued.` : ''}`
+      else if (aiming && selected) hint = `Click a lit enemy to add ${selected.name}'s shot to the volley; point at a target to see the odds.${volley.length ? ` ${volley.length} queued.` : ''}`
       else if (mode === 'orbital') hint = 'Click the aim point: the caller must see it. The fire lands after the enemy\'s next activation and may stray up to 7″.'
-      else if (finished) hint = `Every element of ${activeUnit.name} has acted. End the activation (E).`
-      else if (selected && record) hint = `${selected.name}: click the ground to move it, or pick a weapon and click an enemy.${!record.moved && !record.fired ? ' Firing first limits it to half its move.' : ''} ${doneEls.length} of ${els.length} elements have acted.`
-      else hint = `Pick one of ${activeUnit.name}'s ${els.length} elements (Tab), then move and fire. ${doneEls.length} of ${els.length} have acted.`
+      else if (finished) hint = `Every element of ${activeUnit.name} has done what it can. End the activation (E).`
+      else if (selected && record && record.fired && !record.moved && !moveBlocked) hint = `${selected.name} fired first: it may still move half its move (${left.toFixed(1)}″ left). Click the ground to move it, or pick another element. ${doneCount} of ${els.length} elements are done.`
+      else if (selected && record) hint = `${selected.name}: click the ground to move it, or pick a weapon and click an enemy.${!record.moved && !record.fired ? ' Firing first limits it to half its move.' : ''} ${doneCount} of ${els.length} elements are done.`
+      else hint = `Pick one of ${activeUnit.name}'s ${els.length} elements (Tab), then move and fire. ${doneCount} of ${els.length} are done.`
       if (takeBack) secondary.push(takeBack)
       return {
         ...base,
         step: 3,
         side: activation.sideId,
         sideText: `${sideName(activation.sideId)} acting`,
-        banner: `${sideName(activeUnit.sideId)}: ${activeUnit.name} is activated. Move and fire its elements, then end the activation.`,
+        banner: `${sideName(activeUnit.sideId)}: ${activeUnit.name} is activated.`,
         hint,
         tone: 'normal',
         primary: finished ? end : null,
@@ -643,13 +714,16 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
       const theirs = unactivatedUnits(state, toAct === 'north' ? 'south' : 'north')
       const pick = selectedUnit && selectedUnit.sideId === toAct && !selectedUnit.activated && elementsOf(state, selectedUnit).some(functional) ? selectedUnit : null
       const craft = craftToLand(state, toAct).length
+      const n = landings.length
       const hint = pick
-        ? `${pick.name} is picked. Activate it to move and fire its elements, or pick another unit.`
-        : `Click one of your units on the map or in the list, then Activate. ${sideName(toAct)} has ${mine.length} still to act; ${sideName(toAct === 'north' ? 'south' : 'north')} has ${theirs.length}.${craft ? ` Or bring craft down from orbit: Place each on the map.` : ''}`
+        ? `${pick.name} is picked. Activate it to move and fire its elements, or pick another unit.${n ? ' Or let go of it (Esc) to bring the placed craft down instead.' : ''}`
+        : n
+          ? `Craft placed: bring ${n === 1 ? 'it' : n === 2 ? 'both' : `all ${n}`} down (Enter) in the side column, which uses this activation, or pick a unit to activate instead.`
+          : `Click one of your units on the map or in the list, then Activate. ${sideName(toAct)} has ${mine.length} still to act; ${sideName(toAct === 'north' ? 'south' : 'north')} has ${theirs.length}.${craft ? ` Or bring craft down from orbit: Place each on the map.` : ''}`
       if (probes) {
         secondary.push({ key: 'pass', label: 'Pass', onClick: () => { if (act({ kind: 'pass', side: toAct })) reset() }, refused: probes.pass, title: 'The enemy then activates two units in a row' })
-        secondary.push({ key: 'done', label: `${sideName(toAct)}: no more activations${mine.length ? ` (skips ${mine.length} unit${mine.length === 1 ? '' : 's'})` : ''}`, onClick: () => { if (act({ kind: 'done', side: toAct })) reset() }, refused: probes.done, title: `Ends ${sideName(toAct)}'s turn: its units not yet activated sit it out (p. 18)` })
-        secondary.push({ key: 'declare', label: 'Declare game end', onClick: () => { if (act({ kind: 'declare-end', side: toAct })) reset() }, refused: probes.declare, title: 'Ends the battle now, holding more than half the objectives (p. 17)' })
+        secondary.push({ key: 'done', label: `${sideName(toAct)}: no more activations${mine.length ? ` (skips ${mine.length})` : ''}`, short: `No more activations${mine.length ? ` (skips ${mine.length})` : ''}`, onClick: () => { if (act({ kind: 'done', side: toAct })) reset() }, refused: probes.done, title: `Ends ${sideName(toAct)}'s turn: its ${mine.length} unit${mine.length === 1 ? '' : 's'} not yet activated sit it out (p. 18)` })
+        secondary.push({ key: 'declare', label: 'Declare game end', short: 'Declare end', onClick: () => { if (act({ kind: 'declare-end', side: toAct })) reset() }, refused: probes.declare, title: 'Ends the battle now, holding more than half the objectives (p. 17)' })
       }
       return {
         ...base,
@@ -659,7 +733,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         banner: `Turn ${state.turn}: ${sideName(toAct)} to activate a unit${state.owed > 1 ? ` (${state.owed} in succession)` : ''}.`,
         hint,
         tone: 'normal',
-        primary: pick ? { key: 'activate', label: `Activate ${codes[pick.id] ?? ''} ${pick.name}`.replace('  ', ' '), onClick: () => activateUnit(pick), kbd: 'Enter' } : null,
+        primary: pick ? { key: 'activate', label: `Activate ${codes[pick.id] ?? ''} ${pick.name}`.replace('  ', ' '), short: `Activate ${codes[pick.id] ?? pick.name}`, onClick: () => activateUnit(pick), kbd: 'Enter' } : null,
         secondary,
       }
     }
@@ -667,10 +741,13 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   })()
 
   function doTakeBack() {
+    // The element whose move (or stance, or deployment) is taken back is the one to pick up again.
+    const undone = lastTransition?.action
     if (takeBackDirtside()) {
       setRefusal(null)
       setPlot([])
       setMode('idle')
+      if (undone && 'elementId' in undone && currentDirtsideBattle()?.elements[undone.elementId]) setSelectedId(undone.elementId)
     }
   }
 
@@ -679,8 +756,8 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     let pool: ElementState[] = []
     if (activation && activeUnit && canControl(activeUnit)) {
       const els = elementsOf(state, activeUnit).filter(functional)
-      const fresh = els.filter((e) => !activation.elements[e.id]?.moved && !activation.elements[e.id]?.fired)
-      pool = fresh.length > 0 ? fresh : els
+      const open = els.filter((e) => !leftToDo?.done.has(e.id))
+      pool = open.length > 0 ? open : els
     } else if (offer && firingUnit) pool = elementsOf(state, firingUnit).filter(functional)
     else if (picking && toAct) pool = unactivatedUnits(state, toAct).map(leaderOf).filter((e): e is ElementState => !!e)
     if (pool.length === 0) return
@@ -692,38 +769,45 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
       setPlot([])
     } else setWeapon(null)
   }
+  const craftActing = toAct && human(toAct) && state.phase === 'activation' && !activation && !due && !state.result ? toAct : null
+  // Craft placed and no unit picked: bringing them down is the one orange button, in the craft panel.
+  const craftLead = landings.length > 0 && !!craftActing && !strip.primary
+  /** Enter: exactly the orange button on the screen, wherever it is (the plotted Move, Fire the volley, the strip's, the craft's). */
   const primaryNow = () => {
     if (mode === 'move' && plot.length > 0) return confirmMove()
     if (volley.length > 0) return fireVolley()
-    if (landings.length > 0 && toAct) return act({ kind: 'land-craft', side: toAct, landings }) && reset()
-    strip.primary?.onClick()
+    if (strip.primary) return strip.primary.onClick()
+    if (craftLead && toAct && act({ kind: 'land-craft', side: toAct, landings })) reset()
   }
   const controlling = !!record && !state.result
   useTableKeys(
-    {
-      next: activation || picking || offer ? cycle : undefined,
-      cancel: () => {
-        if (guide) return setGuide(false)
-        if (mode !== 'idle') {
-          reset()
-          setPlacing(null)
-          return
-        }
-        if (refusal) return setRefusal(null)
-        setSelectedId(null)
+    computerToAct || state.result
+      ? { guide: () => setGuide((g) => !g), primary: strip.primary ? primaryNow : undefined }
+      : {
+        next: activation || picking || offer ? cycle : undefined,
+        cancel: () => {
+          if (guide) return setGuide(false)
+          if (mode !== 'idle') {
+            reset()
+            setPlacing(null)
+            return
+          }
+          if (refusal) return setRefusal(null)
+          setSelectedId(null)
+        },
+        plot: controlling && !moveBlocked ? startPlot : undefined,
+        undoPoint: mode === 'move' ? () => setPlot((p) => p.slice(0, -1)) : undefined,
+        primary: primaryNow,
+        arm: selected && firingUnit && selected.unitId === firingUnit.id && (controlling || opportunity) ? (i) => { const w = weaponsOf(selected)[i]; if (w) armWeapon(w.choice) } : undefined,
+        fire: volley.length > 0 ? fireVolley : undefined,
+        stance: controlling && selected?.vehicle ? (p) => act({ kind: 'posture', side: selected.sideId, elementId: selected.id, posture: p }) : undefined,
+        end: activation && canControl(activeUnit) ? endActivation : undefined,
+        activate: picking && selectedUnit && selectedUnit.sideId === toAct && !selectedUnit.activated ? () => activateUnit(selectedUnit) : undefined,
+        guide: () => setGuide((g) => !g),
+        takeBack: takeBackOk ? doTakeBack : undefined,
       },
-      plot: controlling && !moveBlocked ? startPlot : undefined,
-      undoPoint: mode === 'move' ? () => setPlot((p) => p.slice(0, -1)) : undefined,
-      primary: computerToAct ? undefined : primaryNow,
-      arm: selected && firingUnit && selected.unitId === firingUnit.id && (controlling || opportunity) ? (i) => { const w = weaponsOf(selected)[i]; if (w) armWeapon(w.choice) } : undefined,
-      fire: volley.length > 0 ? fireVolley : undefined,
-      stance: controlling && selected?.vehicle ? (p) => act({ kind: 'posture', side: selected.sideId, elementId: selected.id, posture: p }) : undefined,
-      end: activation && canControl(activeUnit) ? endActivation : undefined,
-      activate: picking && selectedUnit && selectedUnit.sideId === toAct && !selectedUnit.activated ? () => activateUnit(selectedUnit) : undefined,
-      guide: () => setGuide((g) => !g),
-      takeBack: takeBackOk ? doTakeBack : undefined,
-    },
-    false,
+    // The computer's go and the battle's end leave only the guide (and Show the result). The guide has the keyboard while it is open (Esc or ? closes it); a window over the screen stands them down too.
+    guide,
   )
 
   // ---- The side column's pieces.
@@ -737,7 +821,6 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
     : picking && toAct && orbitalShips(state, toAct).length > 0 && overhead(state, toAct)
       ? 'Activate a unit first: its leader calls the fire, as its attack.'
       : null
-  const craftActing = toAct && human(toAct) && state.phase === 'activation' && !activation && !due && !state.result ? toAct : null
 
   const rosterActions = (u: UnitState): RosterAction[] => {
     const out: RosterAction[] = []
@@ -787,10 +870,11 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
                 setPlot([])
               },
               cannotMove: moveBlocked,
+              travelBlocked,
             }
           : null
       }
-      stance={record && stanceRefusals ? { refusals: stanceRefusals, onStance: (p) => act({ kind: 'posture', side: selected.sideId, elementId: selected.id, posture: p }), onRepair: selected.systemsDown ? () => act({ kind: 'repair', side: selected.sideId, elementId: selected.id }) : null } : null}
+      stance={record && stanceRefusals ? { refusals: stanceRefusals, onStance: (p) => act({ kind: 'posture', side: selected.sideId, elementId: selected.id, posture: p }), onRepair: selected.systemsDown ? () => act({ kind: 'repair', side: selected.sideId, elementId: selected.id }) : null, repairRefused } : null}
       fire={
         firingUnit && selected.unitId === firingUnit.id && !selected.destroyed && (canControl(selectedUnit) || opportunity)
           ? {
@@ -813,12 +897,64 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
 
   const resultOpen = !!state.result && !resultHidden
   const mapCursor = (mode === 'fire' && weapon) || mode === 'orbital' ? 'crosshair' : (mode === 'land' && placing) || (state.phase === 'deployment' && selected && human(selected.sideId) && !state.sides[selected.sideId].ready) ? 'place' : moving || ghostReady ? 'move' : 'default'
-  const viewer: SideId | null = humans.length === 1 ? humans[0]! : (toAct ?? (state.phase === 'deployment' ? null : 'north'))
+  // What the map is given keeps its identity while nothing it shows has changed, so a hover redraws only the hover.
+  const selectOnMap = useLatest(onSelectElement)
+  const clickOnMap = useLatest(onClickTable)
+  const targetIds = useMemo(() => (volley.length > 0 ? volley.map((s) => s.targetId) : NO_IDS), [volley])
+  const pendingLandings = useMemo(() => landings.map((l) => ({ at: l.at, label: state.setup.craft?.find((c) => c.id === l.craftId)?.name ?? '' })), [landings, state.setup.craft])
+  const budgetOn = (moving || ghostReady) && !!selected
+  const moveBudget = useMemo(() => (budgetOn && selected ? { family, amphibious: wades(selected), travel: travelling, left } : null), [budgetOn, selected, family, travelling, left])
+  const aimPreview = useMemo(() => (mode === 'orbital' && orbitalChoice ? { radius: STRIKE_RADIUS[orbitalChoice.attack] } : null), [mode, orbitalChoice])
+  const landingPreview = useMemo(() => (mode === 'land' && placing ? { label: state.setup.craft?.find((c) => c.id === placing)?.name ?? '' } : null), [mode, placing, state.setup.craft])
+
+  const volleyPanel =
+    firingUnit && (volley.length > 0 || (mode === 'fire' && weapon)) ? (
+      <VolleyPanel
+        state={state}
+        unit={firingUnit}
+        code={codes[firingUnit.id] ?? ''}
+        opportunity={opportunity}
+        volley={volley}
+        planFor={planFor}
+        pending={pendingShots}
+        onRemove={(id) => setVolley((v) => v.filter((x) => x.elementId !== id))}
+        onFire={fireVolley}
+        onClear={() => {
+          setVolley([])
+          setMode('idle')
+          setWeapon(null)
+        }}
+      />
+    ) : null
+
+  // While a unit is acting or answering a window, its cards come first and the tip and the last go's recap follow,
+  // so the weapons are in view without a scroll.
+  const busy = !!(activation && activeUnit && canControl(activeUnit)) || !!(answers && offer)
+  const notes = (
+    <>
+      <FirstGameTip onGuide={() => setGuide(true)} />
+      <div ref={outcomeRef} className="dst-outcome-slot">
+        {showOutcome ? <OutcomeCard groups={groups} sideName={sideName} onDismiss={() => setOutcomeHiddenAt(lastId)} /> : null}
+      </div>
+    </>
+  )
+
+  // A campaign landing's name ends with its campaign turn: that part never gives way to the place name.
+  const titleParts = state.setup.name.match(/^(.*?)(, turn \d+)$/i)
 
   return (
     <div className="app dirtside-screen">
       <header className="app-bar dst-bar">
-        <h1>{state.setup.name}</h1>
+        <h1 title={state.setup.name}>
+          {titleParts ? (
+            <>
+              <span className="dst-title-place">{titleParts[1]}</span>
+              <span className="dst-title-turn">{titleParts[2]}</span>
+            </>
+          ) : (
+            <span className="dst-title-place">{state.setup.name}</span>
+          )}
+        </h1>
         <span className="campaign-kicker">Dirtside II</span>
         {campaign ? <span className="campaign-kicker">{campaign.label}</span> : null}
         <span className="spacer" />
@@ -856,23 +992,23 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
             <TableMap
               state={state}
               selectedId={selectedId}
-              onSelectElement={onSelectElement}
-              onClickTable={onClickTable}
-              plot={moving ? plot : []}
+              onSelectElement={selectOnMap}
+              onClickTable={clickOnMap}
+              plot={moving ? plot : NO_POINTS}
               plotFrom={(moving || ghostReady) && selected ? selected.position : null}
               reach={moving || ghostReady ? left - (moving ? (plotted?.factors ?? 0) : 0) : null}
-              targets={volley.map((s) => s.targetId)}
+              targets={targetIds}
               highlight={offer?.movedElementId ?? null}
-              pendingLandings={landings.map((l) => ({ at: l.at, label: state.setup.craft?.find((c) => c.id === l.craftId)?.name ?? '' }))}
+              pendingLandings={pendingLandings}
               viewer={viewer}
               toAct={toAct}
               hoverUnitId={hoverUnitId}
               onHoverUnit={setHoverUnitId}
               targeting={targeting}
-              moveBudget={(moving || ghostReady) && selected ? { family, amphibious: wades(selected), travel, left } : null}
+              moveBudget={moveBudget}
               recent={recent}
-              aimPreview={mode === 'orbital' && orbitalChoice ? { radius: STRIKE_RADIUS[orbitalChoice.attack] } : null}
-              landingPreview={mode === 'land' && placing ? { label: state.setup.craft?.find((c) => c.id === placing)?.name ?? '' } : null}
+              aimPreview={aimPreview}
+              landingPreview={landingPreview}
               cursor={mapCursor}
             />
             {refusal ? <RefusalToast reason={refusal.reason} page={refusal.page} at={refusal.at} pane={pane} onClose={() => setRefusal(null)} /> : null}
@@ -888,8 +1024,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
 
         <aside className="app-side dst-side">
           <div className="side-scroll dst-scroll">
-            <FirstGameTip onGuide={() => setGuide(true)} />
-            <div ref={outcomeRef} className="dst-outcome-slot">{showOutcome ? <OutcomeCard groups={groups} sideName={sideName} onDismiss={() => setOutcomeHiddenAt(lastId)} /> : null}</div>
+            {busy ? null : notes}
 
             {activation && activeUnit && canControl(activeUnit) ? (
               <div className={`panel dst-active is-${activeUnit.sideId}`}>
@@ -916,7 +1051,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
             ) : null}
 
             {answers && offer ? (
-              <div className="panel dst-window">
+              <div className="panel dst-window-card">
                 <h3 className="dst-card-title">Fire back?</h3>
                 <p>
                   The enemy's <b>{state.elements[offer.movedElementId]?.name}</b> moved into view. A unit that shoots now uses up its activation for this turn.
@@ -939,27 +1074,16 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
               </div>
             ) : null}
 
-            {firingUnit && (volley.length > 0 || (mode === 'fire' && weapon)) ? (
-              <VolleyPanel
-                state={state}
-                unit={firingUnit}
-                code={codes[firingUnit.id] ?? ''}
-                opportunity={opportunity}
-                volley={volley}
-                planFor={planFor}
-                pending={pendingShots}
-                onRemove={(id) => setVolley((v) => v.filter((x) => x.elementId !== id))}
-                onFire={fireVolley}
-                onClear={() => {
-                  setVolley([])
-                  setMode('idle')
-                  setWeapon(null)
-                }}
-              />
-            ) : null}
+            {volley.length > 0 ? volleyPanel : null}
 
-            {card}
+            <div ref={cardRef} className="dst-card-slot">
+              {card}
+            </div>
 
+            {/* An empty volley is only guidance: it waits under the card, so the weapons stay in view. */}
+            {volley.length === 0 ? volleyPanel : null}
+
+            {busy ? notes : null}
 
             {state.setup.craft && state.setup.craft.length > 0 ? (
               <CraftPanel
@@ -980,6 +1104,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
                 onBringDown={() => {
                   if (toAct && act({ kind: 'land-craft', side: toAct, landings })) reset()
                 }}
+                lead={craftLead}
                 onUnload={(id) => {
                   const c = state.setup.craft?.find((k) => k.id === id)
                   if (c && act({ kind: 'unload', side: c.side, craftId: c.id })) reset()
@@ -1027,10 +1152,15 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
                   const leader = leaderOf(u)
                   if (!leader) return
                   // Aiming, a row names its unit's leader as the target; otherwise a row picks its unit.
-                  if (mode === 'fire' && weapon && selected && leader.sideId !== selected.sideId) return onSelectElement(leader.id)
+                  if (aiming && selected && leader.sideId !== selected.sideId) return onSelectElement(leader.id)
                   if (mode === 'move' || mode === 'land') return
                   setSelectedId(leader.id)
                   setRefusal(null)
+                  // Picking another unit lets go of the armed weapon; off the firing unit with nothing queued, aiming stops.
+                  if (mode === 'fire') {
+                    setWeapon(null)
+                    if (leader.unitId !== firingUnit?.id && volley.length === 0) setMode('idle')
+                  }
                   if (mode === 'orbital') {
                     setMode('idle')
                     setOrbitalChoice(null)
@@ -1040,11 +1170,12 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
                   if (picking && u.sideId === toAct && !u.activated) activateUnit(u)
                 }}
                 actionsFor={rosterActions}
-                holds={values[s]}
+                holds={holdsText(s)}
+                holdsTitle={holdsTitle(s)}
               />
             ))}
           </div>
-          <LogDock log={state.log} northName={state.sides.north.name} southName={state.sides.south.name} />
+          <LogDock log={state.log} northName={state.sides.north.name} southName={state.sides.south.name} hiddenObjectives={shownValues.hiddenIds} />
         </aside>
         {guide ? <HowToPlay onClose={() => setGuide(false)} /> : null}
       </main>

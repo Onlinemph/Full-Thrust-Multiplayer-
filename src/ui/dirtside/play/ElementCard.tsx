@@ -27,12 +27,17 @@ export interface MoveControls {
   onCancel: () => void
   /** Why the element cannot plot a move now, if it cannot. */
   cannotMove: string | null
+  /** Why the rules bar travel mode for it now (it fired, its unit is under fire), if they do. */
+  travelBlocked: string | null
 }
 
 export interface StanceControls {
   refusals: Record<Posture, string | null>
   onStance: (p: Posture) => void
+  /** Systems down: try to bring them back. Offered only when it has systems down. */
   onRepair: (() => void) | null
+  /** Why a repair would be refused now (tried once this activation, damaged this activation), if it would. */
+  repairRefused: string | null
 }
 
 export interface FireControls {
@@ -114,7 +119,7 @@ export function ElementCard(props: ElementCardProps) {
       {chips.length > 0 ? (
         <div className="dst-chips">
           {chips.map((c) => (
-            <span key={c.label} className={`dst-chip is-${c.tone}`} title={c.title}>
+            <span key={c.label} className={`dst-status-chip is-${c.tone}`} title={c.title}>
               {c.label}
             </span>
           ))}
@@ -162,8 +167,8 @@ export function ElementCard(props: ElementCardProps) {
             <label className={`dst-toggle${move.canEvade ? '' : ' is-off'}`} title={move.canEvade ? 'Harder to hit until its next activation; needs easy or normal going all the way, and the unit may not fire (p. 27)' : 'Only fast hovercraft and grav vehicles move evasively (p. 26)'}>
               <input type="checkbox" checked={move.evasive} disabled={!move.canEvade} onChange={(e) => move.onEvasive(e.target.checked)} /> Evasive
             </label>
-            <label className="dst-toggle" title="Double speed on roads; the element may not fire this activation (p. 25)">
-              <input type="checkbox" checked={move.travel} onChange={(e) => move.onTravel(e.target.checked)} /> Travel mode
+            <label className={`dst-toggle${move.travelBlocked ? ' is-off' : ''}`} title={move.travelBlocked ?? 'Double speed on roads; the element may not fire this activation (p. 25)'}>
+              <input type="checkbox" checked={move.travel && !move.travelBlocked} disabled={!!move.travelBlocked} onChange={(e) => move.onTravel(e.target.checked)} /> Travel mode
             </label>
           </div>
         ) : (
@@ -189,7 +194,11 @@ export function ElementCard(props: ElementCardProps) {
               )
             })}
           </span>
-          {stance.onRepair ? <button onClick={stance.onRepair}>Try a repair</button> : null}
+          {stance.onRepair ? (
+            <button onClick={stance.onRepair} disabled={!!stance.repairRefused} title={stance.repairRefused ?? 'Roll to bring its systems back: a 6 on a D6, or 3 and up with backup systems (p. 32)'}>
+              Try a repair
+            </button>
+          ) : null}
         </div>
       ) : null}
       {stance && el.vehicle && !el.destroyed && Object.entries(stance.refusals).some(([p, r]) => r && p !== el.posture) && el.posture === 'none' ? (
@@ -210,7 +219,7 @@ export function ElementCard(props: ElementCardProps) {
                 <button className={on ? 'is-on' : undefined} onClick={() => fire.onArm(w.choice)} disabled={!!fire.locked} title={w.title} aria-keyshortcuts={String(i + 1)}>
                   {w.label}
                 </button>
-                <span className="dst-ruler" title={w.bands.map((b, j) => `${['close', 'medium', 'long'][j]} to ${b.upTo}″${b.die ? `, D${b.die}` : ''}`).join('; ')}>
+                <span className="dst-band-ruler" title={w.bands.map((b, j) => `${['close', 'medium', 'long'][j]} to ${b.upTo}″${b.die ? `, D${b.die}` : ''}`).join('; ')}>
                   {w.bands.map((b, j) => {
                     const from = j === 0 ? 0 : w.bands[j - 1]!.upTo
                     return (
