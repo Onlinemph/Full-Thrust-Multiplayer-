@@ -46,7 +46,8 @@ export function settlementFeatures(id: string, label: string, st: Settlement, ne
   for (const piece of st.pieces) {
     if (piece.kind === 'street') out.push({ id: nextId('street'), terrain: 'road', shape: { kind: 'path', points: piece.points, width: piece.width! }, partOf: id })
     else if (piece.kind === 'building') out.push({ id: nextId('building'), terrain: 'building', shape: { kind: 'polygon', points: piece.points }, partOf: id })
-    else out.push({ id: nextId('rubble'), terrain: 'rubble', shape: { kind: 'polygon', points: piece.points }, partOf: id })
+    else if (piece.kind === 'rubble') out.push({ id: nextId('rubble'), terrain: 'rubble', shape: { kind: 'polygon', points: piece.points }, partOf: id })
+    else out.push({ id: nextId(piece.kind), terrain: piece.kind, shape: { kind: 'path', points: piece.points, width: piece.width! }, partOf: id })
   }
   if (st.squareBlock) {
     const b = st.squareBlock
@@ -194,19 +195,22 @@ export function generateGroundTerrain(stream: DiceStream, width: number, depth: 
     scatterPieces(rangeInt(rnd, 5, 7), RURAL_KINDS)
     const { feature: road, points: roadPoints } = roadFeature({ x: range(rnd, width * 0.35, width * 0.65) })
     const roadLen = roadPoints.reduce((s, p, i) => (i ? s + distance(p, roadPoints[i - 1]!) : 0), 0)
-    features.push(...loneBuildings(roadPoints, rangeInt(rnd, 4, 8), roadLen))
+    features.push(...loneBuildings(roadPoints, rangeInt(rnd, scale.villageBuildings[0], scale.villageBuildings[1]), roadLen))
     features.push(road)
     scatterPieces(rangeInt(rnd, 1, 2), ['cultivated'])
   } else {
-    // town or city: one settlement, its bounds chosen to keep clear of both deployment strips (p. 17's 6").
-    // Matches `buildSettlement`'s own `urbanOutline` call: pad plus its outward-only jitter (0.8 × pad), with a
-    // small safety margin so a Catmull-Rom sample along the avenue can never overshoot into the strip either.
+    // town or city: one settlement, its own placement envelope kept clear of both deployment strips (p. 17's
+    // 6"). Matches `buildSettlement`'s own `urbanOutline` call: pad plus its outward-only jitter (0.8 × pad),
+    // with a small safety margin so a Catmull-Rom sample along the avenue can never overshoot into the strip.
     const padMax = scale.outlinePad * 1.85
     const edgeMargin = 1.5
     let bounds: { x: number; y: number; w: number; h: number }
-    if (style === 'city') {
+    if (style === 'city' || scale.sizeByCount) {
       // "Across most of the main battle area but not the deployment strips": the full width, and the whole
       // strip-to-strip band less the safety margin above — never widened past that even for a very deep table.
+      // Squad sizes both its town and city down to their own target building count inside `buildSettlement`
+      // (`ScaleParams.sizeByCount`), landing somewhere in this envelope rather than always its own corner; a
+      // platoon town alone keeps the older, smaller `scale.settlement`-driven envelope below.
       const w = Math.max(0, width - edgeMargin * 2)
       const h = Math.max(0, depth - DEPLOYMENT_STRIP * 2 - padMax * 2)
       bounds = { x: edgeMargin, y: DEPLOYMENT_STRIP + padMax, w, h }
@@ -225,7 +229,7 @@ export function generateGroundTerrain(stream: DiceStream, width: number, depth: 
     const id = nextId(style)
     const st = buildSettlement(rnd, bounds, style, scale)
     pushSettlement(id, style, st)
-    reserve(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, Math.hypot(bounds.w, bounds.h) / 2 + padMax)
+    reserve(st.bounds.x + st.bounds.w / 2, st.bounds.y + st.bounds.h / 2, Math.hypot(st.bounds.w, st.bounds.h) / 2 + padMax)
     if (style === 'town') scatterPieces(rangeInt(rnd, 2, 4), ['light-woods', 'hills', 'rough', 'cultivated'])
     else if (chance(rnd, 0.6)) features.push(...riverFeatures().features)
   }

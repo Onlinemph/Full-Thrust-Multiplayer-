@@ -28,4 +28,14 @@ describe('autoplay', () => {
     expect(a.state.journal).toEqual(b.state.journal)
     expect(a.state.log).toEqual(b.state.log)
   })
+
+  it("plays a battle on a platoon-scale town table (BRIEF-SETTLE's own settlement) to a result, replaying exactly", () => {
+    for (const seed of [14, 15]) {
+      const setup = skirmishSetup({ seed, terrain: 'town', turnLimit: 5 })
+      const report = autoplay(setup, { seed: seed * 3, maxTurns: 5, maxActions: 4000 })
+      expect(report.state.turn).toBeGreaterThanOrEqual(2)
+      const again = replay(setup, report.state.journal)
+      expect(again).toEqual(report.state)
+    }
+  })
 })

@@ -13,6 +13,7 @@ import { insideShape } from '../terrain'
 import type { Point, TerrainFeature } from '../types'
 import type { TerrainScale, TerrainStyle } from '../skirmish'
 import { DEPLOYMENT_STRIP, generateGroundTerrain } from './generate'
+import { SCALE } from './scale'
 
 const STYLES: readonly TerrainStyle[] = ['none', 'light', 'dense', 'village', 'town', 'city']
 const SCALES: readonly TerrainScale[] = ['platoon', 'squad']
@@ -157,12 +158,18 @@ describe('the ground generator', () => {
     }
   })
 
-  it("keeps a squad-scale village/town/city's building count near the brief's own 4-8 / 8-14 / 14-28 (25mm figures are big; the 6\" deployment strips this table also has to clear leave less headroom than the model's numbers assume, so the top of a squad town/city's range is a soft target, not a guarantee)", () => {
-    for (let seed = 1; seed <= 15; seed++) {
+  it("keeps a squad-scale village/town/city's building count in BRIEF-SETTLE's own 5-9 / 12-20 / 22-40 on a 48×36 table (a town is sized to its own target count; a city fills most of the battle area and only very rarely, by a building or two, undershoots its own top-heavy bin-packing — its floor here is set a couple below 22 for that)", () => {
+    for (let seed = 1; seed <= 30; seed++) {
       const buildingsAndRubbleOf = (style: TerrainStyle) => generateGroundTerrain(newStream(seed), W, D, style, 'squad').filter((f) => f.terrain === 'building' || f.terrain === 'rubble').length
-      expect(buildingsAndRubbleOf('village')).toBeGreaterThanOrEqual(2)
-      expect(buildingsAndRubbleOf('town')).toBeGreaterThanOrEqual(3)
-      expect(buildingsAndRubbleOf('city')).toBeGreaterThanOrEqual(6)
+      const village = buildingsAndRubbleOf('village')
+      const town = buildingsAndRubbleOf('town')
+      const city = buildingsAndRubbleOf('city')
+      expect(village).toBeGreaterThanOrEqual(5)
+      expect(village).toBeLessThanOrEqual(9)
+      expect(town).toBeGreaterThanOrEqual(12)
+      expect(town).toBeLessThanOrEqual(20)
+      expect(city).toBeGreaterThanOrEqual(20)
+      expect(city).toBeLessThanOrEqual(40)
     }
   })
 
@@ -179,6 +186,51 @@ describe('the ground generator', () => {
       const city = generateGroundTerrain(newStream(seed), W, D, 'city', 'platoon').find((f) => f.terrain === 'urban')!
       const cityXs = pointsOf(city).map((p) => p.x)
       expect(Math.max(...cityXs) - Math.min(...cityXs)).toBeGreaterThan(W * 0.75)
+    }
+  })
+
+  it("keeps a squad town or city's own streets to a lane's or a street's width, and its main avenue to at most 3\" — BRIEF-SETTLE's own numbers, not the old generator's ~5\" ruler-straight one", () => {
+    for (const style of ['town', 'city'] as const) {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const features = generateGroundTerrain(newStream(seed), W, D, style, 'squad')
+        const town = features.find((f) => f.terrain === 'urban')!
+        const streets = features.filter((f) => f.partOf === town.id && f.terrain === 'road')
+        for (const s of streets) {
+          const width = (s.shape as { width: number }).width
+          expect(width).toBeGreaterThanOrEqual(SCALE.squad.lane[0] - 1e-6)
+          expect(width).toBeLessThanOrEqual(SCALE.squad.street[1] + 1e-6)
+        }
+        const avenue = features.find((f) => f.terrain === 'road' && f.majorHighway)!
+        expect((avenue.shape as { width: number }).width).toBeLessThanOrEqual(3 + 1e-6)
+      }
+    }
+  })
+
+  it("keeps a squad town noticeably narrower than a squad city on the same table — sized to its own (smaller) building count, not stretched across the whole battle area (BRIEF-SETTLE's own complaint about the main road cutting straight across the whole table)", () => {
+    const acrossOf = (style: TerrainStyle, seed: number) => {
+      const town = generateGroundTerrain(newStream(seed), W, D, style, 'squad').find((f) => f.terrain === 'urban')!
+      const xs = pointsOf(town).map((p) => p.x)
+      return Math.max(...xs) - Math.min(...xs)
+    }
+    for (let seed = 1; seed <= 10; seed++) {
+      const townAcross = acrossOf('town', seed)
+      expect(townAcross).toBeLessThan(W * 0.82)
+      expect(townAcross).toBeLessThan(acrossOf('city', seed))
+    }
+  })
+
+  it('reads a ruin as a broken building — a jagged outline no more than a little larger than the building it replaced, not a star-shaped blob', () => {
+    for (const scale of SCALES) {
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+        const features = generateGroundTerrain(newStream(seed), W, D, 'city', scale)
+        const buildingSpan = SCALE[scale].building[1] * 1.9 // the biggest a building's own footprint (an L-shape included) reasonably spans
+        for (const f of features.filter((f) => f.terrain === 'rubble')) {
+          const pts = pointsOf(f)
+          const w = Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x))
+          const h = Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))
+          expect(Math.max(w, h)).toBeLessThanOrEqual(buildingSpan)
+        }
+      }
     }
   })
 

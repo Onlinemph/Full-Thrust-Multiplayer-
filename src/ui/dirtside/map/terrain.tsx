@@ -176,13 +176,23 @@ function Building({ f }: { f: TerrainFeature }) {
   )
 }
 
-/** What a destroyed building leaves (Dirtside p. 46, Stargrunt p. 57): a jagged outline, scattered debris, a stub or two of standing wall. */
+/**
+ * What a destroyed building leaves (Dirtside p. 46, Stargrunt p. 57): the
+ * jagged footprint itself (`ruinOutline`'s own bites), a low halo of
+ * spilled rubble a little past it (drawn here, not in the game-logic
+ * shape, which a building next door only ever clears by a thin safety
+ * margin — see `settlement.ts`'s own note on this), scattered debris, and a
+ * broken stub of standing wall along part of the outline rather than
+ * floating free inside it.
+ */
 function Ruin({ f }: { f: TerrainFeature }) {
   const s = f.shape
   if (s.kind !== 'polygon') return <ShapeEl shape={s} style={fill('rubble')} />
   const box = bboxOf(s.points)
   const size = Math.max(0.3, Math.min(box.w, box.h))
   const rnd = decorRandom(hash(f.id))
+  const centre = centreOf(s)
+  const spillPts = s.points.map((p) => ({ x: centre.x + (p.x - centre.x) * 1.12, y: centre.y + (p.y - centre.y) * 1.12 }))
   const shadowPts = s.points.map((p) => ({ x: p.x + size * 0.05, y: p.y + size * 0.08 }))
   const debrisCount = Math.max(3, Math.round((box.w * box.h) / (size * 0.9)))
   const debris: ReactNode[] = []
@@ -194,18 +204,21 @@ function Ruin({ f }: { f: TerrainFeature }) {
     const r = size * (0.06 + rnd() * 0.08)
     debris.push(<rect key={debris.length} x={round(x - r)} y={round(y - r * 0.7)} width={round(r * 2)} height={round(r * 1.4)} fill="var(--dst-rubble-dark)" opacity={0.85} transform={`rotate(${round(rnd() * 360)} ${round(x)} ${round(y)})`} />)
   }
+  // A stub or two of standing wall along the outline itself: a short run of one or two of the ruin's own
+  // jagged edges, not a line floating free inside it.
+  const n = s.points.length
+  const stubEdges = Math.max(1, Math.round(size / 2.2))
   const stubs: ReactNode[] = []
-  const stubCount = Math.max(1, Math.round(size / 1.6))
-  for (let i = 0; i < stubCount; i++) {
-    const x = box.x0 + rnd() * box.w
-    const y = box.y0 + rnd() * box.h
-    if (!insideShape({ x, y }, s)) continue
-    const angle = rnd() * Math.PI * 2
-    const len = size * (0.2 + rnd() * 0.18)
-    stubs.push(<line key={i} x1={round(x - Math.cos(angle) * (len / 2))} y1={round(y - Math.sin(angle) * (len / 2))} x2={round(x + Math.cos(angle) * (len / 2))} y2={round(y + Math.sin(angle) * (len / 2))} stroke="var(--dst-rubble-stub)" strokeWidth={size * 0.14} strokeLinecap="round" />)
+  for (let i = 0; i < stubEdges; i++) {
+    const e = Math.floor(rnd() * n)
+    const a = s.points[e]!
+    const b = s.points[(e + 1) % n]!
+    const t = rnd() * 0.3
+    stubs.push(<line key={i} x1={round(a.x + (b.x - a.x) * t)} y1={round(a.y + (b.y - a.y) * t)} x2={round(a.x + (b.x - a.x) * (1 - t))} y2={round(a.y + (b.y - a.y) * (1 - t))} stroke="var(--dst-rubble-stub)" strokeWidth={size * 0.1} strokeLinecap="round" />)
   }
   return (
     <>
+      <polygon points={pts(spillPts)} fill="var(--dst-rubble-dark)" opacity={0.35} />
       <polygon points={pts(shadowPts)} style={SHADOW} />
       <polygon points={pts(s.points)} style={{ fill: 'var(--dst-rubble)', stroke: 'var(--dst-rubble-dark)', strokeWidth: size * 0.04 }} />
       {stubs}

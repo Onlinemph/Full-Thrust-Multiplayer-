@@ -48,6 +48,18 @@ describe('autoplay', () => {
     void sawBrokenOrRoutedEnd
   }, 120_000)
 
+  it("plays seeded battles on squad-scale town and city tables (BRIEF-SETTLE's own settlements) to a result, replaying exactly", () => {
+    for (const terrain of ['town', 'city'] as const) {
+      for (const seed of [11, 12, 13]) {
+        const setup = defaultSkirmish({ seed, terrain, turnLimit: 8 })
+        const report = autoplay(setup, { seed: seed * 5 + 1, maxTurns: 8, maxActions: 6000 })
+        expect(report.state.result ?? report.state.turn > 1).toBeTruthy()
+        const again = replay(setup, report.state.journal)
+        expect(again).toEqual(report.state)
+      }
+    }
+  })
+
   it('a longer battle shows casualties, confidence movement, leader loss and suppression removal', () => {
     const setup = defaultSkirmish({ seed: 3, turnLimit: 20, terrain: 'light' })
     const report = autoplay(setup, { seed: 21, maxTurns: 20, maxActions: 20000 })
