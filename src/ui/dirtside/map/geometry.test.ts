@@ -4,7 +4,7 @@ import { bookExample } from '../../../dirtside/data/examples'
 import { skirmishSetup } from '../../../dirtside/table/skirmish'
 import { distance, pathCost } from '../../../dirtside/table/terrain'
 import type { TerrainFeature } from '../../../dirtside/table/types'
-import { blocksIn, clearestSpot, deploymentBand, fitLabel, insetShape, pointAlong, reachPolygon, silhouetteOf, splitByLegs, textWidth } from './geometry'
+import { centreOf, clearestSpot, deploymentBand, fitLabel, insetShape, nearbyFeatures, pointAlong, reachPolygon, silhouetteOf, splitByLegs, textWidth } from './geometry'
 import { fitFrame, keepInSight } from './useTableView'
 
 describe('the map geometry', () => {
@@ -45,6 +45,16 @@ describe('the map geometry', () => {
     expect(cost.factors).toBeLessThanOrEqual(10 + 1e-6)
   })
 
+  it('keeps only the features a reach ring could actually touch, by their own bounding box', () => {
+    const near: TerrainFeature = { id: 'n', terrain: 'rough', shape: { kind: 'circle', centre: { x: 5, y: 0 }, radius: 1 } }
+    const far: TerrainFeature = { id: 'f', terrain: 'rough', shape: { kind: 'circle', centre: { x: 50, y: 0 }, radius: 1 } }
+    // A polygon's own bounding box, not its centre, decides it — a big shape reaching toward the origin
+    // counts even though most of it (and its mean-of-vertices centre) sits well past the range.
+    const reaching: TerrainFeature = { id: 'r', terrain: 'rough', shape: { kind: 'polygon', points: [{ x: 9, y: -20 }, { x: 40, y: -20 }, { x: 40, y: 20 }, { x: 9, y: 20 }] } }
+    const kept = nearbyFeatures({ x: 0, y: 0 }, 10, [near, far, reaching])
+    expect(kept.map((f) => f.id).sort()).toEqual(['n', 'r'])
+  })
+
   it('draws each side’s deployment zone from the rule', () => {
     const setup = skirmishSetup({ seed: 1 })
     expect(deploymentBand(setup, 'north')).toEqual({ y0: 0, y1: 6 })
@@ -61,21 +71,28 @@ describe('the map geometry', () => {
     expect(silhouetteOf(bookExample('book-wheeled-apc')!).gear).toBe('wheels')
   })
 
-  it('lays out buildings inside a town and keeps them put', () => {
-    const shape = { kind: 'rect' as const, x: 10, y: 10, width: 8, height: 6 }
-    const a = blocksIn(shape, 'village-3')
-    expect(a.length).toBeGreaterThan(4)
-    expect(blocksIn(shape, 'village-3')).toEqual(a)
-    for (const b of a) {
-      expect(b.x).toBeGreaterThanOrEqual(10)
-      expect(b.y + b.h).toBeLessThanOrEqual(16)
-    }
+  it('finds a polygon its own centroid, not a path-style midpoint', () => {
+    // A square: the mean of its own corners is exactly its middle.
+    const square = { kind: 'polygon' as const, points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }] }
+    expect(centreOf(square)).toEqual({ x: 2, y: 2 })
   })
 
   it('insets shapes until nothing is left', () => {
     expect(insetShape({ kind: 'circle', centre: { x: 0, y: 0 }, radius: 3 }, 1)).toMatchObject({ radius: 2 })
     expect(insetShape({ kind: 'circle', centre: { x: 0, y: 0 }, radius: 1 }, 1)).toBeNull()
     expect(insetShape({ kind: 'rect', x: 0, y: 0, width: 4, height: 2 }, 1)).toBeNull()
+    // A polygon insets by scaling toward its own centroid: a 4"-radius-ish square shrunk by 1" stays centred and simple.
+    const square = { kind: 'polygon' as const, points: [{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 8 }, { x: 0, y: 8 }] }
+    const inner = insetShape(square, 1)
+    expect(inner?.kind).toBe('polygon')
+    if (inner?.kind === 'polygon') {
+      const c = centreOf(inner)
+      expect(c.x).toBeCloseTo(4)
+      expect(c.y).toBeCloseTo(4)
+      for (const p of inner.points) expect(Math.max(Math.abs(p.x - 4), Math.abs(p.y - 4))).toBeLessThan(4)
+    }
+    // Shrunk past its own radius: nothing left.
+    expect(insetShape(square, 10)).toBeNull()
   })
 
   it('estimates lettering width without a page to measure in', () => {

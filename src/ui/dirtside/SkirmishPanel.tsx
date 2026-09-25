@@ -6,7 +6,7 @@ import { recordCardOf } from '../../dirtside/recordCard'
 import { QUALITY_DIE } from '../../dirtside/table/confidence'
 import { createGame, inDeploymentZone } from '../../dirtside/table/game'
 import { validateSetup } from '../../dirtside/table/setupCheck'
-import { defaultForces, skirmishSetup, type UnitSpec } from '../../dirtside/table/skirmish'
+import { defaultForces, skirmishSetup, TERRAIN_STYLES, type TerrainStyle, type UnitSpec } from '../../dirtside/table/skirmish'
 import type { GameSetup, GameState, Leadership, Quality, SideId } from '../../dirtside/table/types'
 import type { InfantryTeam, InfantryTroops, VehicleDesign } from '../../dirtside/types'
 import { loadDirtsideBattle, newDirtsideBattle } from './dirtsideStore'
@@ -42,7 +42,6 @@ interface Row {
 }
 
 type Shelf = readonly VehicleDesign[]
-type Terrain = 'none' | 'light' | 'dense'
 type PresetId = 'first' | 'book' | 'custom'
 
 let rowKey = 0
@@ -65,7 +64,17 @@ const TEAM_HINTS: Record<InfantryTeam, string> = {
 const TROOP_NAMES: Record<InfantryTroops, string> = { militia: 'Militia', line: 'Line', powered: 'Powered' }
 const QUALITY_NAMES: Record<Quality, string> = { green: 'Green', regular: 'Regular', veteran: 'Veteran' }
 const LEADER_NAMES: Record<Leadership, string> = { 1: '1 · best', 2: '2', 3: '3 · poor' }
-const TERRAIN_NAMES: Record<Terrain, string> = { none: 'open plain', light: 'light terrain', dense: 'dense terrain' }
+/** The six styles in plain words, exactly as BRIEF-TERRAIN gives them, for the select and the aside's summary line. */
+const TERRAIN_OPTIONS: Record<TerrainStyle, string> = { none: 'Open', light: 'Rural, light', dense: 'Rural, dense', village: 'Village', town: 'Town', city: 'City' }
+const TERRAIN_NAMES: Record<TerrainStyle, string> = { none: 'open', light: 'rural, light', dense: 'rural, dense', village: 'village', town: 'town', city: 'city' }
+const TERRAIN_HINTS: Record<TerrainStyle, string> = {
+  none: 'An open plain, nothing on it',
+  light: 'Woods, hills, rough ground and a road',
+  dense: 'More of everything, often a river, sometimes a hamlet',
+  village: 'Buildings strung along a road, with gardens and a few fields',
+  town: 'Streets and blocks of buildings round a square, rural ground around it',
+  city: 'Built up across most of the table but the deployment strips',
+}
 
 const noTeams = (): TeamCounts => ({ rifle: 0, apsw: 0, assault: 0, observer: 0, 'anti-armour': 0, 'air-defence': 0, engineer: 0 })
 
@@ -132,7 +141,7 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100000))
   const [width, setWidth] = useState(48)
   const [depth, setDepth] = useState(36)
-  const [terrain, setTerrain] = useState<Terrain>('light')
+  const [terrain, setTerrain] = useState<TerrainStyle>('light')
   const [objectives, setObjectives] = useState(3)
   const [turnLimit, setTurnLimit] = useState(8)
   const [northName, setNorthName] = useState('Northern force')
@@ -481,10 +490,12 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
                 </label>
                 <label className="dss-field is-wide">
                   <span>Terrain</span>
-                  <select value={terrain} onChange={(e) => touched(setTerrain)(e.target.value as Terrain)} aria-label="Terrain">
-                    <option value="none">Open plain</option>
-                    <option value="light">Light: woods, hills, rough, a road</option>
-                    <option value="dense">Dense: more of everything and a village</option>
+                  <select value={terrain} onChange={(e) => touched(setTerrain)(e.target.value as TerrainStyle)} aria-label="Terrain" title={TERRAIN_HINTS[terrain]}>
+                    {TERRAIN_STYLES.map((t) => (
+                      <option key={t} value={t} title={TERRAIN_HINTS[t]}>
+                        {TERRAIN_OPTIONS[t]}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="dss-field">

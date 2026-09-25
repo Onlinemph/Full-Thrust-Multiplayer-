@@ -62,9 +62,26 @@
   --dst-urban: #77736a;
   --dst-urban-roof: #a39c8e;
   --dst-urban-edge: #34322d;
+  --dst-urban-lot: #857f70;
+  --dst-paving: #a89d84;
   --dst-swamp: #4d6650;
   --dst-swamp-water: #8fb0a6;
   --dst-swamp-reed: #2f4331;
+
+  /* Buildings, rubble, walls and hedges (Dirtside p. 46, Stargrunt pp. 12–13, 56–57). */
+  --dst-building-wall: #5c5748;
+  --dst-roof-warm-1: #8a5a3e;
+  --dst-roof-warm-2: #976a45;
+  --dst-roof-warm-3: #7c6a4c;
+  --dst-roof-ridge-warm: #4a3222;
+  --dst-roof-cool-1: var(--dst-urban-roof);
+  --dst-roof-cool-2: #7c7768;
+  --dst-roof-cool-3: #8f8a7c;
+  --dst-roof-ridge-cool: #454136;
+  --dst-rubble: #6a6656;
+  --dst-rubble-dark: #332f24;
+  --dst-rubble-stub: #948d78;
+  --dst-wall-stone: #726c5c;
 
   /* Markers. */
   --dst-hull: #c9ced6; /* interface craft */
