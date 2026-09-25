@@ -161,7 +161,12 @@ function segmentCrossing(a1: Point, a2: Point, b1: Point, b2: Point): Point | nu
 function shieldedBy(firer: Point, figure: Point, shape: Shape): boolean {
   for (const [a, b] of edgesOf(shape)) {
     const hit = segmentCrossing(firer, figure, a, b)
-    if (hit && distance(hit, figure) <= WALL_HEDGE_REACH) return true
+    if (!hit || distance(hit, figure) > WALL_HEDGE_REACH) continue
+    // Strictly on opposite sides: a figure standing on the wall's own line is behind it from neither side.
+    const side = (p: Point) => Math.sign((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x))
+    const figureSide = side(figure)
+    const firerSide = side(firer)
+    if (figureSide !== 0 && firerSide !== 0 && figureSide !== firerSide) return true
   }
   return false
 }

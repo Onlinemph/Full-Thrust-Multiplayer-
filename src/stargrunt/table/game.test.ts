@@ -39,6 +39,7 @@ import type {
   SideId,
   SmallArmKind,
   SupportWeaponKind,
+  TerrainFeature,
   UnitSetup,
 } from '../types'
 
@@ -518,6 +519,21 @@ describe('suppression (p. 18)', () => {
     state.units['n1']!.suppression = 1
     state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
     expect(refused(applyAction(state, { kind: 'reorganise', side: 'north' })).page).toBe('p. 18')
+  })
+
+  it('a suppressed unit behind a wall facing the enemy counts as in cover and may reorganise', () => {
+    const wall: TerrainFeature = { id: 'wall', terrain: 'wall', shape: { kind: 'path', points: [{ x: 0, y: 10.5 }, { x: 40, y: 10.5 }], width: 0.2 } }
+    const setup = setupWith(
+      [
+        { id: 'n1', side: 'north', figures: [{ id: 'n1-f1', at: { x: 10, y: 10 }, leader: true }, { id: 'n1-f2', at: { x: 11, y: 10 } }] },
+        { id: 's1', side: 'south', figures: [{ id: 's1-f1', at: { x: 10, y: 30 }, leader: true }] },
+      ],
+      { terrain: [wall] },
+    )
+    let state = battle(setup, 'north')
+    state.units['n1']!.suppression = 1
+    state = must(applyAction(state, { kind: 'activate', side: 'north', unitId: 'n1' }))
+    expect('ok' in applyAction(state, { kind: 'reorganise', side: 'north' })).toBe(false)
   })
 
   it('removing one marker takes its own action and roll, up to twice a turn', () => {

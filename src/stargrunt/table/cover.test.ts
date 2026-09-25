@@ -91,6 +91,12 @@ describe('directional cover from a wall, a hedge, and a building’s own wall (p
     expect(figureCoverGrade(behind, [gardenWall])).toBe('open') // no firer in mind: no directional bonus
   })
 
+  it('gives a figure standing on the wall’s own line no cover from either side', () => {
+    const onTheWall = { x: 20, y: 15 }
+    expect(figureCoverGrade(onTheWall, [gardenWall], { x: 20, y: 30 })).toBe('open')
+    expect(figureCoverGrade(onTheWall, [gardenWall], { x: 20, y: 0 })).toBe('open')
+  })
+
   it('gives a hedge soft cover, the same way, never hard', () => {
     const behind = { x: 20, y: 24 } // just north of the hedge (y = 25)
     expect(figureCoverGrade(behind, [gardenHedge], { x: 20, y: 40 })).toBe('soft')

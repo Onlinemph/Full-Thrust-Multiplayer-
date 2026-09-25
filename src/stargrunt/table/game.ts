@@ -308,6 +308,25 @@ function unitPosition(state: GameState, unit: UnitState): Point {
   return unitCentre(figuresOf(state, unit).filter(alive).map((f) => f.position))
 }
 
+/**
+ * Where the threat a unit shelters from stands, for the cover checks that name no firer (moving to cover,
+ * reorganising under suppression, going in position): the centre of the nearest enemy unit with anyone
+ * alive, so a wall or a hedge between them counts as it would against fire (pp. 12–13). [reading]
+ */
+function threatPoint(state: GameState, unit: UnitState): Point | undefined {
+  const from = unitPosition(state, unit)
+  let best: { point: Point; dist: number } | null = null
+  for (const other of Object.values(state.units)) {
+    if (other.sideId === unit.sideId) continue
+    const living = figuresOf(state, other).filter(alive)
+    if (living.length === 0) continue
+    const point = unitCentre(living.map((f) => f.position))
+    const dist = distance(from, point)
+    if (!best || dist < best.dist) best = { point, dist }
+  }
+  return best?.point
+}
+
 /** The unit's cover grade, against `firer` when given (p. 12–13's directional wall/hedge/building-wall cover — see `figureCoverGrade`), or its own present cover in the ground alone when not. */
 function unitCover(state: GameState, unit: UnitState, firer?: Point): CoverGrade {
   const figs = figuresOf(state, unit).filter(alive)
@@ -633,7 +652,7 @@ function restrictionRefusal(state: GameState, unit: UnitState, kind: Action['kin
   if (unit.suppression > 0) {
     const allowed: Action['kind'][] = ['reorganise', 'remove-suppression', 'transfer', 'rally']
     if (!allowed.includes(kind)) return refuse(`${unit.name} is suppressed: only reorganise in cover, remove suppression, or a leader action.`, 'p. 18')
-    if (kind === 'reorganise' && unitCover(state, unit) === 'open') return refuse(`${unit.name} is suppressed in the open and cannot reorganise.`, 'p. 18')
+    if (kind === 'reorganise' && unitCover(state, unit, threatPoint(state, unit)) === 'open') return refuse(`${unit.name} is suppressed in the open and cannot reorganise.`, 'p. 18')
   }
   if (kind === 'fire') {
     if (unit.confidence === 'RO') return refuse(`${unit.name} is routed and will not fire.`, 'p. 21')
@@ -687,8 +706,9 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
     if (Math.abs(declaredEnd.y - base) >= Math.abs(startCentre.y - base) - 1e-9) return refuse(`${unit.name} is routed and must withdraw towards its baseline.`, 'p. 21')
   }
   if (unit.confidence === 'BR') {
-    const inCoverNow = unitCover(state, unit) !== 'open'
-    const endGrades = action.moves.map((m) => figureCoverGrade(m.path[m.path.length - 1]!, state.setup.table.terrain))
+    const threat = threatPoint(state, unit)
+    const inCoverNow = unitCover(state, unit, threat) !== 'open'
+    const endGrades = action.moves.map((m) => figureCoverGrade(m.path[m.path.length - 1]!, state.setup.table.terrain, threat))
     const endsInOpen = unitCoverGrade(endGrades) === 'open'
     if (!inCoverNow && endsInOpen) return refuse(`${unit.name} is broken and must move to the nearest cover.`, 'p. 21')
     if (inCoverNow && enemyAfter <= enemyBefore + 1e-9) return refuse(`${unit.name} is broken and may leave cover only to withdraw from the enemy.`, 'p. 21')
@@ -706,8 +726,9 @@ function move(state: GameState, action: Extract<Action, { kind: 'move' }>): Refu
   }
 
   if (unit.confidence === 'SH') {
-    const inCoverNow = unitCover(state, unit) !== 'open'
-    const endGrades = action.moves.map((m) => figureCoverGrade(m.path[m.path.length - 1]!, state.setup.table.terrain))
+    const threat = threatPoint(state, unit)
+    const inCoverNow = unitCover(state, unit, threat) !== 'open'
+    const endGrades = action.moves.map((m) => figureCoverGrade(m.path[m.path.length - 1]!, state.setup.table.terrain, threat))
     const leavesCover = inCoverNow && unitCoverGrade(endGrades) === 'open'
     if (advancing || leavesCover) {
       const t = reactionTest(unit.quality, unit.leadership, reactionThreatLevel('shaken-leaves-cover'), state.rng)
@@ -807,7 +828,7 @@ function reorganise(state: GameState, action: Extract<Action, { kind: 'reorganis
   }
 
   if (unit.inPosition) {
-    const inCover = unitCover(state, unit) !== 'open'
+    const inCover = unitCover(state, unit, threatPoint(state, unit)) !== 'open'
     const t = attemptGoInPosition(unit.quality, unit.leadership, inCover, state.rng)
     log(state, action.side, `${unit.name} tries to stay in position while it reorganises: D${QUALITY_DIE[unit.quality]} rolls ${t.roll} against ${t.target} — ${t.passed ? 'still in position' : 'the marker is lost'}.`, 'p. 13', [t.roll])
     if (!t.passed) unit.inPosition = false
@@ -858,7 +879,7 @@ function goInPosition(state: GameState, side: SideId): Refusal | null {
   const restriction = restrictionRefusal(state, unit, 'go-in-position')
   if (restriction) return restriction
   if (unit.inPosition) return refuse(`${unit.name} is already in position.`, 'p. 13')
-  const inCover = unitCover(state, unit) !== 'open'
+  const inCover = unitCover(state, unit, threatPoint(state, unit)) !== 'open'
   const t = attemptGoInPosition(unit.quality, unit.leadership, inCover, state.rng)
   log(state, side, `${unit.name} goes in position${inCover ? ' in cover' : ' in the open'}: D${QUALITY_DIE[unit.quality]} rolls ${t.roll} against ${t.target} — ${t.passed ? 'in position' : 'stays exposed'}.`, 'p. 13', [t.roll])
   if (t.passed) unit.inPosition = true

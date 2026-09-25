@@ -50,7 +50,11 @@ export function distanceToSegment(point: Point, a: Point, b: Point): number {
   return distance(point, { x: a.x + t * dx, y: a.y + t * dy })
 }
 
-/** A shape's bounding box, cached per shape object, so a query can pass over a far-off feature cheaply. */
+/**
+ * A shape's bounding box, cached per shape object, so a query can pass over a far-off feature cheaply.
+ * The cache is keyed by the object, so a shape is never edited in place: a changed feature (a building
+ * reduced to rubble, say) gets a new shape object.
+ */
 const BOUNDS = new WeakMap<Shape, { minX: number; minY: number; maxX: number; maxY: number }>()
 
 export function shapeBounds(shape: Shape): { minX: number; minY: number; maxX: number; maxY: number } {
@@ -79,6 +83,26 @@ export function shapeBounds(shape: Shape): { minX: number; minY: number; maxX: n
   }
   BOUNDS.set(shape, out)
   return out
+}
+
+/**
+ * A point well inside a shape, for heading into it: its centre when that is inside, otherwise (an L-shaped
+ * building, a crescent of woods) the deepest of a grid of points across its bounding box.
+ */
+export function interiorPoint(shape: Shape): Point {
+  const centre = shapeCentre(shape)
+  if (shape.kind !== 'polygon' || insideShape(centre, shape)) return centre
+  const box = shapeBounds(shape)
+  let best: { point: Point; depth: number } | null = null
+  const n = 9
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const point = { x: box.minX + ((i + 0.5) / n) * (box.maxX - box.minX), y: box.minY + ((j + 0.5) / n) * (box.maxY - box.minY) }
+      const depth = depthInside(point, shape)
+      if (depth > 0 && (!best || depth > best.depth)) best = { point, depth }
+    }
+  }
+  return best?.point ?? shape.points[0] ?? centre
 }
 
 /** Roughly the middle of a shape: a circle's centre, a rectangle's, the mean of a path's or polygon's points. */
@@ -225,9 +249,11 @@ export function lineOfSight(from: Point, to: Point, features: readonly TerrainFe
     if (!high && (fromHigh || toHigh)) continue
     for (const sample of samples) {
       if (!insideShape(sample, feature.shape)) continue
-      // The ends stand in their own cover: an edge is the first inch in.
-      if (fromIn && distance(sample, from) <= WOOD_EDGE) continue
-      if (toIn && distance(sample, to) <= WOOD_EDGE) continue
+      // The ends stand in their own cover: an edge is the first inch in — a wood's (p. 20) and a town's,
+      // which is treated like a wood (p. 46). A lone building has no edge to see out of: it screens (p. 46).
+      const edged = WOODS.includes(feature.terrain) || feature.terrain === 'urban'
+      if (edged && fromIn && distance(sample, from) <= WOOD_EDGE) continue
+      if (edged && toIn && distance(sample, to) <= WOOD_EDGE) continue
       return { clear: false, blockedBy: feature, reason: `${feature.label ?? feature.terrain} in the way`, range }
     }
   }

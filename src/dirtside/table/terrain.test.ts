@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { depthInside, featureAt, insideShape, lineOfSight, pathCost, terrainAt, woodAt } from './terrain'
+import { depthInside, featureAt, insideShape, interiorPoint, lineOfSight, pathCost, shapeCentre, terrainAt, woodAt } from './terrain'
 import type { Shape, TerrainFeature } from './types'
 
 const wood: TerrainFeature = { id: 'w', terrain: 'light-woods', shape: { kind: 'circle', centre: { x: 20, y: 10 }, radius: 4 }, label: 'a wood' }
@@ -121,5 +121,18 @@ describe('irregular polygons and town pieces', () => {
     // A lone building screens; a town's own buildings leave Dirtside's sight to the town area.
     expect(lineOfSight({ x: 30.5, y: 27 }, { x: 30.5, y: 34 }, features).clear).toBe(false)
     expect(lineOfSight({ x: 5, y: 13 }, { x: 25, y: 13 }, features).blockedBy?.id).toBe('town')
+  })
+
+  it('lets nobody see through a lone building, even an element standing in it (p. 46: no edge to see out of)', () => {
+    const barn: TerrainFeature = { id: 'barn', terrain: 'building', shape: { kind: 'rect', x: 10, y: 10, width: 1, height: 1 } }
+    expect(lineOfSight({ x: 10.5, y: 10.5 }, { x: 10.5, y: 30 }, [barn]).clear).toBe(false)
+    expect(lineOfSight({ x: 10.5, y: 5 }, { x: 10.5, y: 30 }, [barn]).clear).toBe(false)
+  })
+
+  it('finds a point inside a concave outline whose middle falls in its notch', () => {
+    // An L whose vertex mean lies in the cut-away corner.
+    const ell: Shape = { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 2 }, { x: 2, y: 2 }, { x: 2, y: 10 }, { x: 0, y: 10 }] }
+    expect(insideShape(shapeCentre(ell), ell)).toBe(false)
+    expect(insideShape(interiorPoint(ell), ell)).toBe(true)
   })
 })

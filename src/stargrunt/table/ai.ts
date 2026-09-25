@@ -44,7 +44,7 @@ import {
   type AssaultPlan,
 } from './game'
 import { otherSide, type Action, type FigureMove, type FireWith, type GameSetup, type GameState, type Point, type SideId, type TerrainFeature, type UnitState } from '../types'
-import { WOODS } from '../../dirtside/table/terrain'
+import { WOODS, interiorPoint } from '../../dirtside/table/terrain'
 import type { Shape } from '../../dirtside/table/types'
 import type { TerrainType } from '../../dirtside/data/mobility'
 
@@ -72,16 +72,9 @@ function clampToTable(state: GameState, p: Point): Point {
   return { x: Math.max(0, Math.min(width, p.x)), y: Math.max(0, Math.min(depth, p.y)) }
 }
 
+/** Where to head to get into a piece of terrain: inside it even when its outline is concave (an L-shaped building). */
 function shapeCentre(shape: Shape): Point {
-  if (shape.kind === 'circle') return shape.centre
-  if (shape.kind === 'rect') return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 }
-  let x = 0
-  let y = 0
-  for (const p of shape.points) {
-    x += p.x
-    y += p.y
-  }
-  return { x: x / shape.points.length, y: y / shape.points.length }
+  return interiorPoint(shape)
 }
 
 /**
