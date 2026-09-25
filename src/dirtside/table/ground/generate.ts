@@ -230,8 +230,10 @@ export function generateGroundTerrain(stream: DiceStream, width: number, depth: 
     const st = buildSettlement(rnd, bounds, style, scale)
     pushSettlement(id, style, st)
     reserve(st.bounds.x + st.bounds.w / 2, st.bounds.y + st.bounds.h / 2, Math.hypot(st.bounds.w, st.bounds.h) / 2 + padMax)
+    // A river laid across the whole table would run through the city's buildings; a city gets a few rural
+    // pieces round its edges instead.
     if (style === 'town') scatterPieces(rangeInt(rnd, 2, 4), ['light-woods', 'hills', 'rough', 'cultivated'])
-    else if (chance(rnd, 0.6)) features.push(...riverFeatures().features)
+    else scatterPieces(rangeInt(rnd, 1, 3), ['light-woods', 'rough', 'cultivated'])
   }
 
   return features

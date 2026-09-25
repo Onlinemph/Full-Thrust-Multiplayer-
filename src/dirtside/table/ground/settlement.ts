@@ -365,10 +365,9 @@ function terraceBlock(rnd: () => number, block: Block, scale: ScaleParams, taken
 /**
  * A jagged, broken outline in place of a standing building: what an
  * artillery mission or a fight leaves (Dirtside p. 46, Stargrunt p. 57).
- * BRIEF-SETTLE: "cut notches, not lobes" — the building's own corners stay
- * put (the ruin still reads as that footprint), each edge between them bitten
- * into once or twice, a hand-broken outline rather than the smooth,
- * star-shaped blob a radial-noise wobble gives. Every bite is inward only —
+ * One corner fallen in and one or two walls bitten, the rest of the footprint
+ * standing, so the ruin still reads as the building it was; a bite taken from
+ * every wall would read as a star. Every bite is inward only —
  * a building is placed with only a thin safety margin off its street or its
  * neighbour, so a ruin standing in its place must never reach out past that
  * footprint; the renderer draws the "rubble spilling past it" BRIEF-SETTLE
@@ -380,26 +379,53 @@ function ruinOutline(footprint: readonly Point[], rnd: () => number, size: numbe
   // One bound for every bite, from the TIGHTEST part of the whole footprint (an L-shape's own notch corner
   // is close quarters even when the building's overall size is not) — so a bite anywhere can never reach far
   // enough to cross a nearby edge, wherever the nearest one happens to be.
-  const cap = Math.min(size, ...edges) * 0.17
+  const cap = Math.min(size, ...edges) * 0.24
+  const area = footprint.reduce((acc, a, i) => acc + a.x * footprint[(i + 1) % n]!.y - footprint[(i + 1) % n]!.x * a.y, 0)
+  const wind = Math.sign(area) || 1
+  const lerp = (a: Point, b: Point, t: number): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })
+  const convex = (i: number) => {
+    const prev = footprint[(i - 1 + n) % n]!
+    const a = footprint[i]!
+    const b = footprint[(i + 1) % n]!
+    return Math.sign((a.x - prev.x) * (b.y - a.y) - (a.y - prev.y) * (b.x - a.x)) === wind
+  }
+  const long = (i: number) => edges[i]! >= size * 0.28
+  // A building half knocked down, not a star: one corner fallen in, one or two walls bitten, the rest standing.
+  const corners = footprint.map((_, i) => i).filter((i) => convex(i) && long(i) && long((i - 1 + n) % n))
+  const collapsed = corners.length > 0 ? corners[rangeInt(rnd, 0, corners.length - 1)]! : -1
+  const bitten = new Set<number>()
+  const bites = rangeInt(rnd, 1, 2)
+  for (let tries = 0; tries < 8 && bitten.size < bites; tries++) {
+    const i = rangeInt(rnd, 0, n - 1)
+    if (long(i)) bitten.add(i)
+  }
   const out: Point[] = []
   for (let i = 0; i < n; i++) {
     const a = footprint[i]!
     const b = footprint[(i + 1) % n]!
-    out.push(a)
+    if (i === collapsed) {
+      // The corner falls in: the walls stop short of it and the rubble line cuts across, bowed a little inward.
+      const prev = footprint[(i - 1 + n) % n]!
+      const p1 = lerp(a, prev, range(rnd, 0.18, 0.3))
+      const p2 = lerp(a, b, range(rnd, 0.18, 0.3))
+      const mid = lerp(p1, p2, range(rnd, 0.4, 0.6))
+      out.push(p1, lerp(mid, a, -range(rnd, 0.05, 0.2)), p2)
+    } else out.push(a)
+    if (!bitten.has(i)) continue
+    // A jagged bite out of this wall, clear of a fallen corner at either end.
+    const lo = i === collapsed ? 0.36 : 0.15
+    const hi = (i + 1) % n === collapsed ? 0.64 : 0.85
+    if (hi - lo < 0.2) continue
+    const t0 = range(rnd, lo, lo + (hi - lo) * 0.4)
+    const t1 = Math.min(hi, t0 + range(rnd, 0.2, 0.35))
     const len = edges[i]!
-    if (len < size * 0.28) continue
-    const ex = b.x - a.x
-    const ey = b.y - a.y
-    // Outward unit normal for this (consistently wound) footprint: rotate the edge vector -90°.
-    const nx = ey / len
-    const ny = -ex / len
-    const cuts = rangeInt(rnd, 1, len > size * 0.75 ? 2 : 1)
-    for (let s = 1; s <= cuts; s++) {
-      const t = s / (cuts + 1)
-      const base = { x: a.x + ex * t, y: a.y + ey * t }
-      const mag = -range(rnd, cap * 0.35, cap * 0.8)
-      out.push({ x: base.x + nx * mag, y: base.y + ny * mag })
+    const nx = ((b.y - a.y) / len) * wind
+    const ny = (-(b.x - a.x) / len) * wind
+    const inward = (t: number, depth: number): Point => {
+      const base = lerp(a, b, t)
+      return { x: base.x - nx * depth, y: base.y - ny * depth }
     }
+    out.push(lerp(a, b, t0), inward(t0 + (t1 - t0) * 0.3, range(rnd, cap * 0.5, cap)), inward(t0 + (t1 - t0) * 0.7, range(rnd, cap * 0.25, cap * 0.7)), lerp(a, b, t1))
   }
   return out
 }
