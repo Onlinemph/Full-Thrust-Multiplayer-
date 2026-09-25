@@ -63,13 +63,29 @@ describe('terrain effects on mobility (pp. 22–23)', () => {
     expect(movementGoing('power-armour', 'open-water', true)).toBe('poor')
   })
 
-  it('reads urban ground as this family’s own Rough/Broken going, since chapter 9 has no urban terrain type (spec 02 §2.8.1)', () => {
-    expect(movementGoing('infantry', 'urban')).toBe('poor')
+  it('reads a town’s own streets and yards as Clear, once its buildings are read as their own pieces (spec 02 §2.8.1)', () => {
+    expect(movementGoing('infantry', 'urban')).toBe('clear')
     expect(movementGoing('power-armour', 'urban')).toBe('clear')
   })
 
   it('folds mountains into the same going as hills/slopes [reading]: not one of Stargrunt’s own terrain types', () => {
     expect(movementGoing('infantry', 'mountains')).toBe('clear')
+  })
+
+  it('gives a building interior Poor for a trooper on foot and Difficult for power armour [reading]', () => {
+    expect(movementGoing('infantry', 'building')).toBe('poor')
+    expect(movementGoing('power-armour', 'building')).toBe('difficult')
+  })
+
+  it('reads rubble as this family’s own Rough/Broken going (a wrecked building is rocks and broken masonry, Stargrunt p. 57)', () => {
+    expect(movementGoing('infantry', 'rubble')).toBe('poor')
+    expect(movementGoing('power-armour', 'rubble')).toBe('clear')
+  })
+
+  it('charges Difficult to clamber over a wall or push through a hedge [reading]: the digest gives no numeric crossing cost, only for hiding behind one', () => {
+    expect(movementGoing('infantry', 'wall')).toBe('difficult')
+    expect(movementGoing('infantry', 'hedge')).toBe('difficult')
+    expect(movementGoing('power-armour', 'wall')).toBe('difficult')
   })
 })
 
@@ -95,6 +111,22 @@ describe('the cost of a path (p. 22)', () => {
     // what treating the whole 20" as Difficult (x3, i.e. 60) would cost.
     expect(crossing).toBeGreaterThan(clear)
     expect(crossing).toBeLessThan(clear + 5)
+  })
+
+  it('charges Poor infantry going through a building’s interior, and Difficult for power armour', () => {
+    const house: TerrainFeature = { id: 'h', terrain: 'building', shape: { kind: 'rect', x: 0, y: 0, width: 4, height: 20 } }
+    expect(pathCost([{ x: 2, y: 0 }, { x: 2, y: 4 }], 'foot', [house]).factors).toBeCloseTo(8, 1) // 4" at Poor (x2)
+    expect(pathCost([{ x: 2, y: 0 }, { x: 2, y: 4 }], 'fast-power', [house]).factors).toBeCloseTo(12, 1) // 4" at Difficult (x3)
+  })
+
+  it('reads a town’s pieces, not its own bare ground: a building inside costs Poor, a street between buildings Clear (p. 22, spec 02 §2.8.1)', () => {
+    // A town's own enclosing area is an irregular polygon (as `randomTerrain` lays one out), not a rectangle.
+    const town: TerrainFeature = { id: 'town', terrain: 'urban', shape: { kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 40, y: 1 }, { x: 39, y: 40 }, { x: 1, y: 39 }] } }
+    const house: TerrainFeature = { id: 'house-1', terrain: 'building', shape: { kind: 'rect', x: 10, y: 0, width: 4, height: 20 }, partOf: 'town' }
+    const throughHouse = pathCost([{ x: 12, y: 0 }, { x: 12, y: 4 }], 'foot', [town, house]).factors
+    const alongStreet = pathCost([{ x: 25, y: 0 }, { x: 25, y: 4 }], 'foot', [town, house]).factors
+    expect(throughHouse).toBeCloseTo(8, 1) // 4" at Poor (x2), the building piece, not the town’s own Clear ground
+    expect(alongStreet).toBeCloseTo(4, 1) // 4" at Clear (x1): a street, outside every building
   })
 })
 

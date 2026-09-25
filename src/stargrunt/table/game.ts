@@ -308,9 +308,10 @@ function unitPosition(state: GameState, unit: UnitState): Point {
   return unitCentre(figuresOf(state, unit).filter(alive).map((f) => f.position))
 }
 
-function unitCover(state: GameState, unit: UnitState): CoverGrade {
+/** The unit's cover grade, against `firer` when given (p. 12–13's directional wall/hedge/building-wall cover — see `figureCoverGrade`), or its own present cover in the ground alone when not. */
+function unitCover(state: GameState, unit: UnitState, firer?: Point): CoverGrade {
   const figs = figuresOf(state, unit).filter(alive)
-  return unitCoverGrade(figs.map((f) => figureCoverGrade(f.position, state.setup.table.terrain)))
+  return unitCoverGrade(figs.map((f) => figureCoverGrade(f.position, state.setup.table.terrain, firer)))
 }
 
 function figureVisibility(state: GameState, from: Point, target: UnitState): boolean[] {
@@ -1079,7 +1080,7 @@ function fire(state: GameState, action: Extract<Action, { kind: 'fire' }>): Refu
 
   const range = rangeBetweenUnits(firerCentre, targetCentre)
   const band = rangeBandInches(unit.quality)
-  const cover = unitCover(state, target)
+  const cover = unitCover(state, target, firerCentre)
   const shapeFigures = targetFigs.map((f) => ({ armourDie: armourDie(f.armour) }))
   const fireTarget = { cover: cover as FireCoverGrade, inPosition: target.inPosition, figures: shapeFigures }
 
@@ -1177,8 +1178,11 @@ function autoExtraAssignments(count: number, fewLen: number, rng: DiceStream): n
 
 function runCloseCombat(state: GameState, attacker: UnitState, defender: UnitState, attackerFigureIds: readonly string[]): CloseCombatOutcome {
   // First-round cover bonus (p. 42) only when the defenders are actually in cover, in position, or
-  // occupying field defences (no field-defence model yet) — never in the open.
-  const defenderInCover = unitCover(state, defender) !== 'open' || defender.inPosition
+  // occupying field defences (no field-defence model yet) — never in the open. Cover is read against
+  // the attackers' own contact positions (`writePositions` has already landed them there), so a wall or
+  // a hedge only counts when the attackers charged up to it from its far side (p. 12–13, directional).
+  const attackerCentre = unitCentre(attackerFigureIds.map((id) => state.figures[id]!.position))
+  const defenderInCover = unitCover(state, defender, attackerCentre) !== 'open' || defender.inPosition
   let attackerStanding = [...attackerFigureIds]
   let defenderStanding = figuresOf(state, defender)
     .filter(fit)
@@ -1401,7 +1405,7 @@ function closeAssault(state: GameState, action: Extract<Action, { kind: 'close-a
       const defenderCentre = unitPosition(state, target)
       const range = rangeBetweenUnits(defenderCentre, attackerCentreNow)
       const band = rangeBandInches(target.quality)
-      const attackerCover = unitCoverGrade(attackerFigureIds.map((id) => figureCoverGrade(positions[id]!, state.setup.table.terrain)))
+      const attackerCover = unitCoverGrade(attackerFigureIds.map((id) => figureCoverGrade(positions[id]!, state.setup.table.terrain, defenderCentre)))
       const fdfTargetFigures = attackerFigureIds.map((id) => ({ armourDie: armourDie(state.figures[id]!.armour) }))
       const fdfTarget = { cover: attackerCover as FireCoverGrade, inPosition: false, figures: fdfTargetFigures }
       const fdfResult = fireSquadSmallArms(target.quality, fdf.profiles, range, band, fdfTarget, fdf.supportDice, state.rng)
@@ -1658,7 +1662,7 @@ export function planFire(state: GameState, unitId: string, targetUnitId: string,
   const targetCentre = unitPosition(state, target)
   const range = rangeBetweenUnits(firerCentre, targetCentre)
   const band = rangeBandInches(unit.quality)
-  const cover = unitCover(state, target)
+  const cover = unitCover(state, target, firerCentre)
   const rd = rangeDie(range, band, cover, target.inPosition, assembly.closeOnly)
   const firerDice: DieType[] = [QUALITY_DIE[unit.quality], ...(assembly.profiles.length > 0 ? [fireValueToDie(fireValueOf(assembly.profiles))] : []), ...assembly.supportDice]
 

@@ -17,6 +17,7 @@ import {
   distance,
   figureCoverGrade,
   isInIntegrity,
+  leeOfObstacle,
   lineOfFire,
   terrainCoverGrade,
   unitCentre,
@@ -42,8 +43,10 @@ import {
   unitsOf,
   type AssaultPlan,
 } from './game'
-import { otherSide, type Action, type FigureMove, type FireWith, type GameSetup, type GameState, type Point, type SideId, type UnitState } from '../types'
+import { otherSide, type Action, type FigureMove, type FireWith, type GameSetup, type GameState, type Point, type SideId, type TerrainFeature, type UnitState } from '../types'
+import { WOODS } from '../../dirtside/table/terrain'
 import type { Shape } from '../../dirtside/table/types'
+import type { TerrainType } from '../../dirtside/data/mobility'
 
 // ---------------------------------------------------------------------------
 // A unit's place, cover and cohesion — small readers built on cover.ts/game.ts
@@ -53,9 +56,10 @@ function centreOf(state: GameState, unit: UnitState): Point {
   return unitCentre(figuresOf(state, unit).filter(alive).map((f) => f.position))
 }
 
-function coverOf(state: GameState, unit: UnitState): CoverGrade {
+/** The unit's cover grade, against `firer` (a wall or a hedge only counts when it stands between the unit and that point, p. 12–13) when the computer has a particular threat in mind, or its own present cover in the ground alone when it doesn't. */
+function coverOf(state: GameState, unit: UnitState, firer?: Point): CoverGrade {
   const figs = figuresOf(state, unit).filter(alive)
-  return unitCoverGrade(figs.map((f) => figureCoverGrade(f.position, state.setup.table.terrain)))
+  return unitCoverGrade(figs.map((f) => figureCoverGrade(f.position, state.setup.table.terrain, firer)))
 }
 
 /** In integrity (p. 11): the AI's own reading of `isInIntegrity`, since the engine keeps this check private. */
@@ -80,16 +84,54 @@ function shapeCentre(shape: Shape): Point {
   return { x: x / shape.points.length, y: y / shape.points.length }
 }
 
-/** The nearest terrain feature that grants any cover (p. 12–13), by its shape's centre — a cheap stand-in for a full search of every point in the feature. */
-function nearestCoverPoint(state: GameState, from: Point): Point | null {
+/**
+ * Whether a terrain type is worth heading for as cover (p. 12–13): anything
+ * `terrainCoverGrade` already grades SOFT or HARD by contact, plus a wood
+ * (graded separately by edge/within, not by `terrainCoverGrade`'s blob
+ * table) and a wall or a hedge (graded only directionally, by
+ * `figureCoverGrade`'s firer test, so they carry no blob grade of their
+ * own here either) — the three cases `terrainCoverGrade` alone would miss.
+ */
+function isCoverFeature(terrain: TerrainType): boolean {
+  return terrainCoverGrade(terrain) !== 'open' || WOODS.includes(terrain) || terrain === 'wall' || terrain === 'hedge'
+}
+
+/**
+ * Where to head for a given piece of cover (p. 12–13): a building, a wood or
+ * a patch of rough ground is cover anywhere inside it, so its own shape
+ * centre is as good a destination as any; a wall or a hedge is cover only
+ * on the far side from the enemy (directional), so the computer instead
+ * aims for a spot in its lee, facing the nearest enemy, that `leeOfObstacle`
+ * works out from the same geometry `figureCoverGrade`'s firer test uses —
+ * without that, a unit could dutifully march up to a wall's *near* side and
+ * get no benefit from it at all.
+ */
+function coverPointFor(feature: TerrainFeature, from: Point, enemy: Point | null): Point {
+  if (enemy && (feature.terrain === 'wall' || feature.terrain === 'hedge')) {
+    const lee = leeOfObstacle(feature.shape, from, enemy)
+    if (lee) return lee
+  }
+  return shapeCentre(feature.shape)
+}
+
+/** The nearest terrain feature that grants any cover (p. 12–13), by `coverPointFor`'s own destination for it — a cheap stand-in for a full search of every point in the feature. */
+function nearestCoverPoint(state: GameState, from: Point, enemy: Point | null): Point | null {
   let best: { point: Point; dist: number } | null = null
   for (const feature of state.setup.table.terrain) {
-    if (terrainCoverGrade(feature.terrain) === 'open') continue
-    const point = shapeCentre(feature.shape)
+    if (!isCoverFeature(feature.terrain)) continue
+    const point = coverPointFor(feature, from, enemy)
     const dist = distance(from, point)
     if (!best || dist < best.dist) best = { point, dist }
   }
   return best?.point ?? null
+}
+
+/** The nearest living enemy unit's own centre, or null with none left (p. 11–12's group centre, not any one figure). */
+function nearestEnemyPoint(state: GameState, unit: UnitState): Point | null {
+  const enemies = unitsOf(state, otherSide(unit.sideId)).filter((u) => figuresOf(state, u).some(alive))
+  if (enemies.length === 0) return null
+  const pos = centreOf(state, unit)
+  return enemies.map((e) => centreOf(state, e)).sort((a, b) => distance(a, pos) - distance(b, pos))[0]!
 }
 
 /** A clear line of fire to the target's centre, or (p. 11–12) at least half its figures in view. */
@@ -124,7 +166,11 @@ function goalFor(state: GameState, unit: UnitState): Point | null {
 
   if (unit.confidence === 'RO') return clampToTable(state, { x: pos.x, y: side === 'north' ? 0 : state.setup.table.depth })
 
-  const nearCover = coverOf(state, unit) === 'open' ? nearestCoverPoint(state, pos) : null
+  // The nearest enemy, known up front: `nearestCoverPoint` needs it to pick the sheltered side of a
+  // wall or a hedge (p. 12–13, directional), and the fallback "nowhere left but the enemy" destination
+  // below needs the very same point, so it is found once rather than twice.
+  const nearestEnemy = nearestEnemyPoint(state, unit)
+  const nearCover = coverOf(state, unit, nearestEnemy ?? undefined) === 'open' ? nearestCoverPoint(state, pos, nearestEnemy) : null
   if (unit.confidence === 'BR' && nearCover) return clampToTable(state, nearCover)
 
   const preferCover = (destination: Point) => (nearCover && distance(pos, nearCover) < distance(pos, destination) - 1e-9 ? nearCover : destination)
@@ -138,9 +184,7 @@ function goalFor(state: GameState, unit: UnitState): Point | null {
 
   if (nearCover) return clampToTable(state, nearCover)
 
-  const enemies = unitsOf(state, otherSide(side)).filter((u) => figuresOf(state, u).some(alive))
-  if (enemies.length === 0) return null
-  const nearestEnemy = enemies.map((e) => centreOf(state, e)).sort((a, b) => distance(a, pos) - distance(b, pos))[0]!
+  if (!nearestEnemy) return null
   return clampToTable(state, preferCover(nearestEnemy))
 }
 
@@ -249,12 +293,16 @@ function closeAssaultCandidate(state: GameState, unit: UnitState): Action | null
   const figs = figuresOf(state, unit).filter(fit)
   if (figs.length === 0) return null
   const enemies = unitsOf(state, otherSide(unit.sideId)).filter((u) => figuresOf(state, u).some(fit))
+  const from = centreOf(state, unit)
   let best: { target: UnitState; plan: AssaultPlan; score: number } | null = null
   for (const target of enemies) {
     const plan = planAssault(state, unit.id, target.id)
     if ('ok' in plan) continue // planAssault refuses this one: out of reach, or no path reaches contact
     if (plan.odds < 2) continue // only when the numbers are good
-    const coverPenalty = coverOf(state, target) === 'open' ? 0 : coverOf(state, target) === 'soft' ? 1 : 2
+    // Cover against this charge specifically (p. 12–13): a wall or a hedge only makes a target worth
+    // avoiding when it actually stands between the target and this unit's own approach.
+    const cover = coverOf(state, target, from)
+    const coverPenalty = cover === 'open' ? 0 : cover === 'soft' ? 1 : 2
     const score = plan.pContactFirst * 3 + plan.odds - coverPenalty
     if (!best || score > best.score) best = { target, plan, score }
   }

@@ -13,6 +13,48 @@ import { defaultSkirmish } from './skirmish'
 import { newStream } from '../dice'
 import { otherSide, type Action, type GameSetup, type GameState, type SideId, type SideSetup } from '../types'
 
+/** One figure a side, on a wide table, with the given terrain and positions — just enough of a `GameSetup` to put a single unit within reach of a single piece of cover and nothing else worth doing (the enemy stands far enough off that no shot or charge is ever in range, so seeking cover is the only thing `planActivation` has to offer). */
+function coverSeekingSetup(terrain: GameSetup['table']['terrain'], northAt: { x: number; y: number }, southAt: { x: number; y: number }): GameSetup {
+  return {
+    name: 'test',
+    seed: 1,
+    battle: 'encounter',
+    table: { width: 60, depth: 40, terrain, objectives: [] },
+    sides: [
+      {
+        id: 'north',
+        name: 'North',
+        motivation: 'medium',
+        units: [{ id: 'n1', name: 'n1', quality: 'regular', leadership: 2, armour: 'partial-light', mobility: 'foot', commandLevel: 'squad', figures: [{ id: 'n1-f1', smallArm: 'advanced-rifle', leader: true, position: northAt }] }],
+      },
+      {
+        id: 'south',
+        name: 'South',
+        motivation: 'medium',
+        units: [{ id: 's1', name: 's1', quality: 'regular', leadership: 2, armour: 'partial-light', mobility: 'foot', commandLevel: 'squad', figures: [{ id: 's1-f1', smallArm: 'advanced-rifle', leader: true, position: southAt }] }],
+      },
+    ],
+    turnLimit: 10,
+  }
+}
+
+/** Drives a battle with the computer on both sides, one activation at a time, and returns the first `move` action `side` itself issues — the point at which it declared where it wants to go. */
+function firstMoveBy(setup: GameSetup, side: SideId, seed: number, cap = 60): Extract<Action, { kind: 'move' }> {
+  let state = createGame(setup)
+  const stream = newStream(seed)
+  for (let n = 0; n < cap && !state.result; n++) {
+    const toAct: SideId | null = state.phase === 'deployment' ? (!state.sides.north.ready ? 'north' : 'south') : state.toAct
+    if (!toAct) break
+    const action = aiAction(state, toAct, stream)
+    if (!action) break
+    if (action.kind === 'move' && action.side === side) return action
+    const next = applyAction(state, action)
+    if ('ok' in next) throw new Error(`refused: ${next.reason} (${next.page})`)
+    state = next
+  }
+  throw new Error(`${side} never issued a move`)
+}
+
 /** A trimmed skirmish (HQ plus one squad a side, instead of HQ plus three) so many seeds run quickly while still exercising every part of the engine. */
 function smallSetup(seed: number, turnLimit = 6): GameSetup {
   const base = defaultSkirmish({ seed, turnLimit })
@@ -104,5 +146,32 @@ describe('the computer at the table', () => {
     const b = aiPlay(setup, { seed: 555 })
     expect(a.journal).toEqual(b.journal)
     expect(a.result).toEqual(b.result)
+  })
+
+  describe('seeking hard cover in buildings and behind walls (p. 12–13)', () => {
+    it('heads for a building when standing in the open with nothing more pressing to do', () => {
+      const house = { id: 'house', terrain: 'building' as const, shape: { kind: 'rect' as const, x: 14, y: 8, width: 4, height: 4 } }
+      const setup = coverSeekingSetup([house], { x: 10, y: 10 }, { x: 58, y: 10 })
+      const move = firstMoveBy(setup, 'north', 42)
+      const dest = move.moves[0]!.path[move.moves[0]!.path.length - 1]!
+      // The building's own centre (16, 10): the computer heads straight into it, not merely nearby.
+      expect(dest.x).toBeCloseTo(16, 0)
+      expect(dest.y).toBeCloseTo(10, 0)
+    })
+
+    it('heads for the sheltered side of a wall, facing the nearest enemy, not merely the wall itself', () => {
+      const wall = { id: 'wall', terrain: 'wall' as const, shape: { kind: 'path' as const, points: [{ x: 20, y: 10 }, { x: 20, y: 30 }], width: 0.2 } }
+      // The enemy stands east of the wall; the computer starts west of it too, so the correct side to
+      // shelter on (away from the enemy) is the same side it is already on.
+      const setup = coverSeekingSetup([wall], { x: 10, y: 20 }, { x: 58, y: 20 })
+      const move = firstMoveBy(setup, 'north', 7)
+      const dest = move.moves[0]!.path[move.moves[0]!.path.length - 1]!
+      // West of the wall (x < 20, the side away from the enemy), and close enough to it (within
+      // WALL_HEDGE_REACH) that the directional cover test in `cover.ts` actually grants cover there —
+      // not the wall's own line (x = 20) or, worse, its exposed east side.
+      expect(dest.x).toBeLessThan(20)
+      expect(dest.x).toBeGreaterThan(18)
+      expect(dest.y).toBeCloseTo(20, 0)
+    })
   })
 })
