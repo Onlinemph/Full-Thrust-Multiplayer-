@@ -154,7 +154,24 @@ async function runDrive(width, height) {
     const side = battle.toAct
     const enemySide = side === 'north' ? 'south' : 'north'
     const fit = (u) => u.figureIds.some((id) => battle.figures[id].status === 'ok')
-    const mover = Object.values(battle.units).find((u) => u.sideId === side && !u.activated && fit(u) && u.suppression === 0 && !u.panic && u.confidence !== 'BR' && u.confidence !== 'RO')
+    // In formation (p. 11): every living figure within 2" of the chain, so the charge is not refused as disorganised.
+    const together = (u) => {
+      const ps = u.figureIds.filter((id) => battle.figures[id].status !== 'dead').map((id) => battle.figures[id].position)
+      const reached = new Set([0])
+      let grew = true
+      while (grew) {
+        grew = false
+        ps.forEach((p, i) => {
+          if (reached.has(i)) return
+          if ([...reached].some((j) => Math.hypot(p.x - ps[j].x, p.y - ps[j].y) <= 2)) {
+            reached.add(i)
+            grew = true
+          }
+        })
+      }
+      return reached.size === ps.length
+    }
+    const mover = Object.values(battle.units).find((u) => u.sideId === side && !u.activated && fit(u) && together(u) && u.suppression === 0 && !u.panic && u.confidence !== 'BR' && u.confidence !== 'RO')
     const enemies = Object.values(battle.units).filter((u) => u.sideId === enemySide && fit(u))
     const target = enemies[0]
     const far = enemies.find((u) => u.id !== target?.id) ?? null
