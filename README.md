@@ -501,7 +501,7 @@ over a seeded spread of terrain, with objectives placed as p. 17 says.
   under-fire markers, the panic of green troops, casualty tests at the p. 23 threat levels, a fallen leader
   replaced on a D6, the loss of the command unit; rallying through the command unit and repairs on a 6
   (pp. 22–24, p. 32); objectives taken by moving over them, a declared game end or a turn limit.
-- `terrain.ts`: the ground as circles, rectangles and wide paths; a wood's edge is its first inch (p. 20);
+- `terrain.ts`: the ground as irregular outlines, circles, rectangles and wide paths (see the ground section below); a wood's edge is its first inch (p. 20);
   line of sight to 60" blocked by woods, buildings and high ground unless one end stands on the high
   ground (p. 4); a path costed by the going each quarter inch of it meets, easy only in travel mode (p. 25).
 - `confidence.ts`: the quality dice, the confidence, reaction and rally tests, what each level forbids as
@@ -755,6 +755,37 @@ at terror, which is not in yet). Objectives are taken by moving within 1" with n
 rule, since Stargrunt's scenarios each set their own. Not yet on the table: vehicles, heavy weapons and
 guided missiles, artillery and air support, observation and hidden units, snipers, detached elements,
 field defences, encumbrance, prisoners (a captured trooper counts as dead), and the campaign.
+
+## The ground: irregular terrain, buildings and towns
+
+Both ground games lay out their tables with one generator, `src/dirtside/table/ground/`, at two scales: Dirtside's
+platoons, where a building is under an inch across and a town is a few inches of urban ground, and Stargrunt's
+squads, where a building is several inches across and walls and hedges matter. The setups offer six styles: open,
+rural light, rural dense, a village strung along a road, a town of blocks and streets round a square, and a city
+across most of the table with parks, plazas and ruined blocks. At Stargrunt's scale a town is twelve to twenty
+buildings in terraced rows along lanes, with yards walled or hedged behind them, and a city twenty-two to forty. The deployment strips stay clear of buildings, and
+the same seed always lays out the same table.
+
+- Woods, hills, rough ground, scrub and swamp are irregular outlines (a closed curve of smoothed noise), hills
+  drawn with terraced contours, fields as skewed quadrilaterals with furrows and hedgerows, rivers meandering to
+  a ford, roads curving. Circles and rectangles still work, so a saved battle or a typed-in scenario plays as
+  before.
+- A town is one urban area with its streets, buildings, ruins and garden walls laid out inside it, each marked
+  as part of it. Dirtside plays the town as the book does, as urban ground treated like a wood (p. 46), and
+  passes over the pieces; a building standing on its own is the book's isolated building (it blocks sight, gives
+  soft cover to an element in contact, and does not slow movement) and rubble is cover but no screen. Stargrunt
+  plays the pieces: inside a building or in rubble is hard cover, a wall hard and a hedge soft cover but only
+  against fire from beyond them (pp. 12–13), the streets open ground; buildings block sight, though a trooper
+  inside one sees out of it.
+- Campaign landings build the colony's settlement at platoon scale, a village, a town or a city by its population
+  and industry, and post the defenders along its front and through it.
+- Every shape carries a cached bounding box, so a city of several hundred features stays quick to query for sight
+  and movement, and the move reach ring is computed against only the features near the unit.
+
+A review read the new rules against both books, every finding put to a skeptic; the five that survived are fixed
+(a lone building an element standing in it could see through, a figure on a wall's own line covered from both
+sides, the cover checks that name no firer ignoring walls, the computer heading for the notch of an L-shaped
+building, and a cache warning).
 
 ## Architecture
 
