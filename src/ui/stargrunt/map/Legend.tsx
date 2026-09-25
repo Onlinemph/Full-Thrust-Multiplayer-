@@ -12,7 +12,22 @@ import { TERRAIN_NAMES, TERRAIN_NOTES } from '../../dirtside/map/terrain'
  * own figures row — the marks `map/figures.tsx` and `map/overlays.tsx` draw.
  */
 
-const ORDER: TerrainType[] = ['open', 'road', 'light-scrub', 'cultivated', 'rough', 'hills', 'mountains', 'light-woods', 'dense-woods', 'urban', 'swamp', 'river', 'ford', 'open-water']
+const ORDER: TerrainType[] = ['open', 'road', 'light-scrub', 'cultivated', 'rough', 'hills', 'mountains', 'light-woods', 'dense-woods', 'urban', 'building', 'rubble', 'wall', 'hedge', 'swamp', 'river', 'ford', 'open-water']
+
+/**
+ * Where Stargrunt's own reading of a type differs from Dirtside's (p. 12–13,
+ * p. 56–57, and BRIEF-TERRAIN's model): a building is hard cover here, not
+ * Dirtside's soft-by-contact; the streets and yards of a town are open
+ * ground, not Dirtside's own urban-area rule; walls and hedges only exist at
+ * this scale at all. Overrides the shared notes for exactly these rows.
+ */
+const SG_NOTES: Partial<Record<TerrainType, string>> = {
+  urban: 'the streets and yards: open ground — the buildings give the real cover',
+  building: 'hard cover; blocks sight',
+  rubble: 'hard cover; no longer blocks sight',
+  wall: 'hard cover against fire from beyond it',
+  hedge: 'soft cover against fire from beyond it',
+}
 
 function Swatch({ type, pid }: { type: TerrainType; pid: string }) {
   const fillOf: Partial<Record<TerrainType, string>> = {
@@ -37,6 +52,24 @@ function Swatch({ type, pid }: { type: TerrainType; pid: string }) {
         <rect x={0} y={0.52} width={2.8} height={0.76} style={{ fill: type === 'ford' ? '#9fb8c8' : 'var(--dst-water)' }} />
       ) : type === 'urban' ? (
         <rect x={0.3} y={0.3} width={2.2} height={1.2} style={{ fill: 'var(--dst-urban)' }} />
+      ) : type === 'building' ? (
+        <>
+          <rect x={0.55} y={0.4} width={1.7} height={1.15} style={{ fill: 'var(--dst-building-wall)' }} />
+          <rect x={0.7} y={0.5} width={1.4} height={0.95} style={{ fill: 'var(--dst-roof-cool-1)', stroke: 'var(--dst-roof-ridge-cool)', strokeWidth: 0.04 }} />
+          <line x1={0.7} x2={2.1} y1={0.98} y2={0.98} stroke="var(--dst-roof-ridge-cool)" strokeWidth={0.06} opacity={0.8} />
+        </>
+      ) : type === 'rubble' ? (
+        <>
+          <polygon points="0.5,1.5 0.6,0.6 1.1,0.35 1.7,0.5 2.2,0.4 2.3,1.5" style={{ fill: 'var(--dst-rubble)', stroke: 'var(--dst-rubble-dark)', strokeWidth: 0.05 }} />
+          <line x1={1.5} y1={1.3} x2={1.5} y2={0.7} stroke="var(--dst-rubble-stub)" strokeWidth={0.14} strokeLinecap="round" />
+        </>
+      ) : type === 'wall' ? (
+        <>
+          <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-rubble-dark)" strokeWidth={0.32} />
+          <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-wall-stone)" strokeWidth={0.22} />
+        </>
+      ) : type === 'hedge' ? (
+        <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-hedge)" strokeWidth={0.34} strokeLinecap="round" strokeDasharray="0.02 0.3" />
       ) : (
         <>
           {under[type] ? <rect width={2.8} height={1.8} style={{ fill: under[type] }} /> : null}
@@ -62,7 +95,7 @@ export const Legend = memo(function Legend({ features, pid, showSymbols, onToggl
     <div className="dst-legend sg-legend" aria-label="Map key">
       <div className="dst-legend-row">
         {types.map((t) => {
-          const note = TERRAIN_NOTES[t]
+          const note = SG_NOTES[t] ?? TERRAIN_NOTES[t]
           return (
             <span key={t} className="dst-legend-item" onPointerEnter={() => onHoverType(t === 'open' ? null : t)} onPointerLeave={() => onHoverType(null)} title={`${TERRAIN_NAMES[t]}${note ? `: ${note}` : ''}`}>
               <Swatch type={t} pid={pid} />

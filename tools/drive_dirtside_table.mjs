@@ -32,6 +32,16 @@ const rows = await page.locator('.dst-unit-row').count()
 console.log('skirmish rows:', rows)
 if (rows !== 8) fail(`expected 8 unit rows, got ${rows}`)
 await shot('dirtside-skirmish')
+
+// Every style offers a preview, including a built-up one: a city table's own square footage keeps the
+// deployment strips clear (BRIEF-TERRAIN), which the two grey wash bands top and bottom should still show.
+await page.locator('.dst-setup select[aria-label="Terrain"]').selectOption('city')
+await page.waitForTimeout(150)
+const cityFeatures = await page.locator('.dss-preview .dst-feature').count()
+console.log('city preview features:', cityFeatures)
+if (cityFeatures < 50) fail(`expected a built-up preview with many features, got ${cityFeatures}`)
+await shot('dirtside-skirmish-city')
+await page.locator('.dst-setup select[aria-label="Terrain"]').selectOption('light')
 await page.getByRole('button', { name: 'To the table' }).click()
 await page.waitForSelector('.dst-map')
 console.log('banner:', await banner())

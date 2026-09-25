@@ -1,10 +1,10 @@
-import { type CSSProperties, Fragment, memo, type ReactNode, useMemo } from 'react'
+import { type CSSProperties, memo, type ReactNode, useMemo } from 'react'
 
 import type { TerrainType } from '../../../dirtside/data/mobility'
 import { WOOD_EDGE, insideShape } from '../../../dirtside/table/terrain'
 import type { Point, Shape, TerrainFeature } from '../../../dirtside/table/types'
 import { FURROWS, patternUrl } from './defs'
-import { blocksIn, centreOf, hash, insetShape, pts, textWidth } from './geometry'
+import { centreOf, decorRandom, hash, insetShape, interiorLabelPoint, pts, round, textWidth } from './geometry'
 
 /**
  * The ground as a printed wargame map: every terrain type the engine knows
@@ -46,6 +46,10 @@ export const TERRAIN_NOTES: Partial<Record<TerrainType, string>> = {
   river: 'slow to cross except at a ford',
   ford: 'the crossing point of a river',
   'open-water': 'impassable to most, easy for hover and grav',
+  building: 'blocks sight; cover by contact',
+  rubble: 'no longer blocks sight; still cover by contact',
+  wall: 'cover from the side it faces the shot',
+  hedge: 'cover from the side it faces the shot',
 }
 
 const fill = (name: string): CSSProperties => ({ fill: `var(--dst-${name})` })
@@ -76,6 +80,158 @@ function Contours({ shape, step, colours, lineColour }: { shape: Shape; step: nu
     out.push(<ShapeEl key={i} shape={inner} dx={-nudge * 0.8} dy={-nudge} rx={inner.kind === 'rect' ? Math.min(0.2 * i, 1.2) : undefined} style={{ fill: colours[Math.min(i - 1, colours.length - 1)], stroke: lineColour, strokeWidth: 0.05 }} />)
   }
   return <>{out}</>
+}
+
+// ---------------------------------------------------------------------------
+// Buildings, rubble, and the park/plaza a settlement's own square becomes.
+// A building or a ruin is drawn to its own scale (a fraction of its own
+// footprint, not a fixed inch measure), so the same look reads right at a
+// Dirtside platoon's half-inch cottage and a Stargrunt squad's seven-inch
+// block alike (BRIEF-TERRAIN's two scales).
+// ---------------------------------------------------------------------------
+
+function bboxOf(points: readonly Point[]) {
+  let x0 = Number.POSITIVE_INFINITY
+  let x1 = Number.NEGATIVE_INFINITY
+  let y0 = Number.POSITIVE_INFINITY
+  let y1 = Number.NEGATIVE_INFINITY
+  for (const p of points) {
+    x0 = Math.min(x0, p.x)
+    x1 = Math.max(x1, p.x)
+    y0 = Math.min(y0, p.y)
+    y1 = Math.max(y1, p.y)
+  }
+  return { x0, x1, y0, y1, w: x1 - x0, h: y1 - y0 }
+}
+
+/**
+ * A rectangular footprint's ridge: the line joining the midpoints of its two
+ * short sides (so it runs the long way, as a real roof ridge does) and the
+ * quad of one long half, for a shaded side. Null for anything but a plain
+ * four-point rectangle — an L-shaped footprint (`lShapeLocal`'s six points)
+ * reads as a flat roof instead, no ridge to find.
+ */
+function ridgeSplit(points: readonly Point[]): { line: [Point, Point]; shade: Point[] } | null {
+  if (points.length !== 4) return null
+  const [p0, p1, p2, p3] = points as [Point, Point, Point, Point]
+  const mid = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+  const len = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
+  if (len(p0, p1) >= len(p1, p2)) {
+    const m12 = mid(p1, p2)
+    const m30 = mid(p3, p0)
+    return { line: [m30, m12], shade: [p0, p1, m12, m30] }
+  }
+  const m01 = mid(p0, p1)
+  const m23 = mid(p2, p3)
+  return { line: [m01, m23], shade: [m01, p1, p2, m23] }
+}
+
+/**
+ * A building from above (Dirtside p. 46, Stargrunt p. 56): a drop shadow, a
+ * sliver of wall under the eaves, a roof inset toward its own centre. A
+ * plain rectangle gets a ridge line along its long axis and a shaded half;
+ * an L-shaped footprint gets a flat roof with one rooftop detail instead.
+ * Warm roofs for a building standing on its own or strung along a village
+ * road (no `partOf`); cooler ones for a block inside a town or city — the
+ * one distinction the data actually carries (BRIEF-TERRAIN's own model).
+ */
+function Building({ f }: { f: TerrainFeature }) {
+  const s = f.shape
+  if (s.kind !== 'polygon' || s.points.length < 4) return <ShapeEl shape={s} style={fill('building-wall')} />
+  const box = bboxOf(s.points)
+  const size = Math.max(0.15, Math.min(box.w, box.h))
+  const rnd = decorRandom(hash(f.id))
+  const cool = !!f.partOf
+  const roofVars = cool ? ['roof-cool-1', 'roof-cool-2', 'roof-cool-3'] : ['roof-warm-1', 'roof-warm-2', 'roof-warm-3']
+  const ridgeVar = cool ? 'roof-ridge-cool' : 'roof-ridge-warm'
+  const roofVar = roofVars[Math.floor(rnd() * roofVars.length) % roofVars.length]!
+  const centre = centreOf(s)
+  const shrink = (frac: number, points: readonly Point[]) => points.map((p) => ({ x: centre.x + (p.x - centre.x) * (1 - frac), y: centre.y + (p.y - centre.y) * (1 - frac) }))
+  const shadowPts = s.points.map((p) => ({ x: p.x + size * 0.1, y: p.y + size * 0.14 }))
+  const roofPts = shrink(0.1, s.points)
+  const ridge = ridgeSplit(s.points)
+  return (
+    <>
+      <polygon points={pts(shadowPts)} style={SHADOW} />
+      <polygon points={pts(s.points)} style={fill('building-wall')} />
+      <polygon points={pts(roofPts)} style={{ ...fill(roofVar), stroke: `var(--dst-${ridgeVar})`, strokeWidth: size * 0.035 }} />
+      {ridge ? (
+        <>
+          <polygon points={pts(shrink(0.1, ridge.shade))} fill="rgba(10,10,8,.18)" />
+          <line
+            x1={round(ridge.line[0]!.x + (centre.x - ridge.line[0]!.x) * 0.1)}
+            y1={round(ridge.line[0]!.y + (centre.y - ridge.line[0]!.y) * 0.1)}
+            x2={round(ridge.line[1]!.x + (centre.x - ridge.line[1]!.x) * 0.1)}
+            y2={round(ridge.line[1]!.y + (centre.y - ridge.line[1]!.y) * 0.1)}
+            stroke={`var(--dst-${ridgeVar})`}
+            strokeWidth={size * 0.05}
+            strokeLinecap="round"
+            opacity={0.8}
+          />
+        </>
+      ) : (
+        <rect x={round(centre.x + (s.points[0]!.x - centre.x) * 0.35 - size * 0.06)} y={round(centre.y + (s.points[0]!.y - centre.y) * 0.35 - size * 0.06)} width={round(size * 0.12)} height={round(size * 0.12)} fill={`var(--dst-${ridgeVar})`} opacity={0.6} />
+      )}
+    </>
+  )
+}
+
+/** What a destroyed building leaves (Dirtside p. 46, Stargrunt p. 57): a jagged outline, scattered debris, a stub or two of standing wall. */
+function Ruin({ f }: { f: TerrainFeature }) {
+  const s = f.shape
+  if (s.kind !== 'polygon') return <ShapeEl shape={s} style={fill('rubble')} />
+  const box = bboxOf(s.points)
+  const size = Math.max(0.3, Math.min(box.w, box.h))
+  const rnd = decorRandom(hash(f.id))
+  const shadowPts = s.points.map((p) => ({ x: p.x + size * 0.05, y: p.y + size * 0.08 }))
+  const debrisCount = Math.max(3, Math.round((box.w * box.h) / (size * 0.9)))
+  const debris: ReactNode[] = []
+  let guard = 0
+  while (debris.length < debrisCount && guard++ < debrisCount * 8) {
+    const x = box.x0 + rnd() * box.w
+    const y = box.y0 + rnd() * box.h
+    if (!insideShape({ x, y }, s)) continue
+    const r = size * (0.06 + rnd() * 0.08)
+    debris.push(<rect key={debris.length} x={round(x - r)} y={round(y - r * 0.7)} width={round(r * 2)} height={round(r * 1.4)} fill="var(--dst-rubble-dark)" opacity={0.85} transform={`rotate(${round(rnd() * 360)} ${round(x)} ${round(y)})`} />)
+  }
+  const stubs: ReactNode[] = []
+  const stubCount = Math.max(1, Math.round(size / 1.6))
+  for (let i = 0; i < stubCount; i++) {
+    const x = box.x0 + rnd() * box.w
+    const y = box.y0 + rnd() * box.h
+    if (!insideShape({ x, y }, s)) continue
+    const angle = rnd() * Math.PI * 2
+    const len = size * (0.2 + rnd() * 0.18)
+    stubs.push(<line key={i} x1={round(x - Math.cos(angle) * (len / 2))} y1={round(y - Math.sin(angle) * (len / 2))} x2={round(x + Math.cos(angle) * (len / 2))} y2={round(y + Math.sin(angle) * (len / 2))} stroke="var(--dst-rubble-stub)" strokeWidth={size * 0.14} strokeLinecap="round" />)
+  }
+  return (
+    <>
+      <polygon points={pts(shadowPts)} style={SHADOW} />
+      <polygon points={pts(s.points)} style={{ fill: 'var(--dst-rubble)', stroke: 'var(--dst-rubble-dark)', strokeWidth: size * 0.04 }} />
+      {stubs}
+      {debris}
+    </>
+  )
+}
+
+/** A settlement's open square: paved (a town's square, a city's plaza) with a scatter of park trees — the same feature either way (`generate.ts`'s `squareBlock`, label `'park'`). */
+function ParkSquare({ shape, id, pid }: { shape: Shape; id: string; pid: string }) {
+  if (shape.kind !== 'rect') return <ShapeEl shape={shape} style={fill('paving')} />
+  const rnd = decorRandom(hash(id) ^ 0x5061726b)
+  const count = Math.max(3, Math.round((shape.width * shape.height) / 3))
+  const trees: ReactNode[] = []
+  for (let i = 0; i < count; i++) {
+    const x = shape.x + 0.3 + rnd() * Math.max(0.1, shape.width - 0.6)
+    const y = shape.y + 0.3 + rnd() * Math.max(0.1, shape.height - 0.6)
+    const r = 0.16 + rnd() * 0.15
+    trees.push(<circle key={i} cx={round(x)} cy={round(y)} r={round(r)} fill="var(--dst-woods-l-tree)" stroke="var(--dst-woods-l-rim)" strokeWidth={0.03} opacity={0.92} />)
+  }
+  return (
+    <>
+      <ShapeEl shape={shape} style={{ fill: patternUrl(pid, 'paving'), stroke: '#8a7f68', strokeWidth: 0.08 }} />
+      {trees}
+    </>
+  )
 }
 
 function Feature({ f, pid }: { f: TerrainFeature; pid: string }) {
@@ -113,6 +269,8 @@ function Feature({ f, pid }: { f: TerrainFeature; pid: string }) {
         </>
       )
     case 'rough':
+      // A settlement's own open square, paved rather than rubble-and-scree (generate.ts's `squareBlock`, §7 of impact.md).
+      if (f.label === 'park') return <ParkSquare shape={s} id={f.id} pid={pid} />
       return (
         <>
           <ShapeEl shape={s} style={fill('rough')} />
@@ -136,19 +294,37 @@ function Feature({ f, pid }: { f: TerrainFeature; pid: string }) {
       )
     }
     case 'urban':
+      // The area's own ground: paving and yards. Its buildings, streets and rubble are real `partOf` features
+      // drawn in their own turn below, not decoration invented here (BRIEF-TERRAIN's model; impact.md §7).
       return (
         <>
           <Shadow shape={s} />
           <ShapeEl shape={s} style={{ ...fill('urban'), stroke: 'var(--dst-urban-edge)', strokeWidth: 0.1 }} />
-          <g>
-            {blocksIn(s, f.id).map((b, i) => (
-              <Fragment key={i}>
-                <rect x={b.x + 0.08} y={b.y + 0.1} width={b.w} height={b.h} style={SHADOW} />
-                <rect x={b.x} y={b.y} width={b.w} height={b.h} style={{ ...fill('urban-roof'), stroke: '#3b3934', strokeWidth: 0.04 }} />
-                <line x1={b.x + 0.06} x2={b.x + b.w - 0.06} y1={b.y + b.h / 2} y2={b.y + b.h / 2} stroke="rgba(59,57,52,.45)" strokeWidth={0.03} />
-              </Fragment>
-            ))}
-          </g>
+          <ShapeEl shape={s} style={{ fill: patternUrl(pid, 'lot') }} />
+        </>
+      )
+    case 'building':
+      return <Building f={f} />
+    case 'rubble':
+      return <Ruin f={f} />
+    case 'wall':
+      if (s.kind !== 'path') return <ShapeEl shape={s} style={fill('wall-stone')} />
+      return (
+        <>
+          <ShapeEl shape={s} style={{ stroke: 'var(--dst-rubble-dark)', strokeWidth: s.width + 0.05 }} />
+          <ShapeEl shape={s} style={{ stroke: 'var(--dst-wall-stone)' }} />
+          <polyline points={pts(s.points)} style={{ fill: 'none', stroke: 'rgba(255,255,255,.14)', strokeWidth: s.width * 0.3, strokeDasharray: `${round(s.width * 0.55)} ${round(s.width * 0.6)}`, strokeLinecap: 'round' }} />
+        </>
+      )
+    case 'hedge':
+      // Thicker and two-toned on purpose: a field's own edge already carries a thin decorative hedge line
+      // (the 'cultivated' case above), so a real hedge — one Stargrunt actually reads for directional cover —
+      // needs to stand out from that as a distinctly bushier line, not blend into the same thin dashes.
+      if (s.kind !== 'path') return <ShapeEl shape={s} style={fill('hedge')} />
+      return (
+        <>
+          <ShapeEl shape={s} style={{ stroke: 'var(--dst-hedge)', strokeWidth: s.width + 0.3, strokeLinecap: 'round', strokeLinejoin: 'round' }} />
+          <polyline points={pts(s.points)} style={{ fill: 'none', stroke: 'var(--dst-woods-l-tree)', strokeWidth: s.width + 0.06, strokeDasharray: `${round(s.width * 0.55)} ${round(s.width * 0.4)}`, strokeLinecap: 'round' }} />
         </>
       )
     case 'swamp':
@@ -242,6 +418,16 @@ function spots(shape: Shape): Point[] {
     for (const fx of [0.25, 0.5, 0.75]) for (const fy of [0.25, 0.5, 0.75]) out.push({ x: shape.x + shape.width * fx, y: shape.y + shape.height * fy })
     return out
   }
+  if (shape.kind === 'polygon') {
+    // The centroid alone can land outside a lobed blob or between an L-shape's arms; the interior point
+    // furthest from the boundary goes first, the centroid next, then a few points pulled in from its own
+    // corners, so a label that collides with something else still has somewhere else to try (impact.md §7).
+    const interior = interiorLabelPoint(shape)
+    const out = [interior]
+    if (Math.hypot(interior.x - c.x, interior.y - c.y) > 0.05) out.push(c)
+    for (const p of shape.points) out.push({ x: c.x + (p.x - c.x) * 0.55, y: c.y + (p.y - c.y) * 0.55 })
+    return out
+  }
   return [c]
 }
 
@@ -259,6 +445,10 @@ function placeLabels(features: readonly TerrainFeature[], k: number, avoid: read
   const out: PlacedLabel[] = []
   for (const f of features) {
     if (f.shape.kind === 'path') continue
+    // A town or city is named once, for its own enclosing area; its buildings and ruins carry no name of
+    // their own — the icon reads as what it is, and a block of them would otherwise repeat "BUILDING" over
+    // and over (BRIEF-TERRAIN: "Label the town once, not each building").
+    if (f.terrain === 'building' || f.terrain === 'rubble') continue
     const big = f.terrain === 'urban'
     const text = (f.label ?? TERRAIN_NAMES[f.terrain]).toUpperCase()
     const size = big ? 12 : 10.5

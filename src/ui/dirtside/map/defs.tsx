@@ -109,6 +109,14 @@ export const MapDefs = memo(function MapDefs({ pid }: { pid: string }) {
           <rect width={0.07} height={1} style={v('field-furrow')} />
         </pattern>
       ))}
+      <pattern id={id('lot')} width={1.7} height={1.3} patternUnits="userSpaceOnUse">
+        <rect width={1.7} height={1.3} style={v('urban-lot')} opacity={0.55} />
+        <path d="M0.2,0.9 h0.6 M1.0,0.3 h0.55 M0.5,0.15 v0.4 M1.35,0.75 v0.45" fill="none" stroke="#514c40" strokeWidth={0.03} opacity={0.4} />
+      </pattern>
+      <pattern id={id('paving')} width={1.1} height={1.1} patternUnits="userSpaceOnUse">
+        <rect width={1.1} height={1.1} style={v('paving')} />
+        <path d="M0,1.1 V0 H1.1" fill="none" stroke="rgba(70,62,45,.28)" strokeWidth={0.04} />
+      </pattern>
       <pattern id={id('swamp')} width={1.6} height={1.2} patternUnits="userSpaceOnUse">
         <g strokeLinecap="round" style={s('swamp-water', 0.05)}>
           <path d="M.1,.3 h.45 M.8,.85 h.5" />

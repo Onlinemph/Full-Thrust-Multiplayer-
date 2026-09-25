@@ -17,10 +17,14 @@
 
 import { bookExample } from '../dirtside/data/examples'
 import { type DiceStream, draw, newStream } from '../dirtside/dice'
+import { range } from '../dirtside/table/ground/math'
+import { SCALE } from '../dirtside/table/ground/scale'
+import { buildSettlement } from '../dirtside/table/ground/settlement'
+import { settlementFeatures } from '../dirtside/table/ground/generate'
 import { replay } from '../dirtside/table/game'
 import { objectiveDrawer, randomTerrain } from '../dirtside/table/skirmish'
 import { depthInside, insideShape } from '../dirtside/table/terrain'
-import type { Action, ElementSetup, GameSetup, GameState, InterfaceCraft, Objective, OrbitalShip, Point, SideId, TerrainFeature, UnitSetup } from '../dirtside/table/types'
+import type { Action, ElementSetup, GameSetup, GameState, InterfaceCraft, Objective, OrbitalShip, Point, SideId, UnitSetup } from '../dirtside/table/types'
 import type { InfantryElement } from '../dirtside/types'
 import { classifyByMass, type FleetClass } from '../engine/battles'
 import type { ShipDesign } from '../engine/types'
@@ -216,27 +220,58 @@ export function garrisonOf(colony: Colony): { units: UnitSetup[]; roles: Record<
 // ---------------------------------------------------------------------------
 
 /**
- * The ground: the colony's town in the defender's rear area with an
- * objective at its heart, two more in the main battle area (the p. 17
- * quotas for an attack/defence battle), light terrain from the landing's
- * seed kept off the positions; the Marines down on the north baseline.
+ * The colony's settlement style (a reading: the campaign rules print no
+ * such scale): a thin frontier outpost with nothing built up stays a
+ * village-sized huddle of streets, a settled world grows a proper town, and
+ * a heavily industrialised or populous one sprawls into a city. Population
+ * is loyal and subject together — a captured world's people still build
+ * the place up, whoever it now flies for.
+ */
+export function settlementStyleFor(colony: Colony): 'village' | 'town' | 'city' {
+  const population = colony.population.loyal + colony.population.subject
+  if (colony.factories >= 6 || population >= 40) return 'city'
+  if (colony.factories >= 1 || population >= 8) return 'town'
+  return 'village'
+}
+
+/**
+ * The ground: the colony's town — a generated settlement at Dirtside's
+ * platoon scale (`src/dirtside/table/ground/settlement.ts`), styled from
+ * the colony itself — in the defender's rear area with an objective at its
+ * heart, two more in the main battle area (the p. 17 quotas for an
+ * attack/defence battle), light terrain from the landing's seed kept off
+ * the positions; the Marines down on the north baseline.
  *
  * The defenders take posts in order: the town's front edge first (inside
  * its first inch, where cover still sees out, p. 20), then the two flank
  * objectives, then further back on the flanks. PDUs take the first posts,
  * tanks the first on the flanks, militia what is left.
  */
-export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSetup[], roles: Record<string, string>, colonyName: string): GameSetup['table'] {
+export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSetup[], roles: Record<string, string>, colony: Colony): GameSetup['table'] {
   const { width, depth } = LANDING_TABLE
   const stream = newStream(seed ^ 0x1a4d)
+  const rnd = () => draw(stream)
+  const scale = SCALE.platoon
+  const style = settlementStyleFor(colony)
+  // Sized within the platoon scale's own "town area 12–20\" across" (a city-styled colony town takes the top of
+  // that, a village-styled one the bottom), centred where the old single rect used to sit.
+  const townW = range(rnd, scale.settlement[0], scale.settlement[1]) * (style === 'city' ? 1 : style === 'village' ? 0.75 : 0.88)
+  const townH = townW * range(rnd, 0.55, 0.72)
   const town: Point = { x: width / 2, y: depth * 0.72 }
+  const bounds = { x: town.x - townW / 2, y: town.y - townH / 2, w: townW, h: townH }
+  const settlement = buildSettlement(rnd, bounds, style, scale)
   const west: Point = { x: width * 0.25, y: depth * 0.45 }
   const east: Point = { x: width * 0.75, y: depth * 0.45 }
   const anchors: Point[] = [town, west, east]
   const value = objectiveDrawer(stream)
   const objectives: Objective[] = anchors.map((p, i) => ({ id: `O${i + 1}`, position: { ...p }, value: value(), drawnBy: 'south' }))
-  const townFeature: TerrainFeature = { id: 'town', terrain: 'urban', shape: { kind: 'rect', x: town.x - 6, y: town.y - 3, width: 12, height: 6 }, label: colonyName }
-  const front = town.y - 3 + 0.6
+  let idCounter = 0
+  const townFeatures = settlementFeatures('town', colony.name, settlement, (stem) => `town-${stem}-${(idCounter += 1)}`)
+  const townFeature = townFeatures[0]!
+  // The settlement's own outline is irregular, so its "front" (the edge nearest the attacker, coming from the
+  // north) is read off the shape itself, not off `bounds`: `urbanOutline`'s own second point is always the
+  // middle of its top edge (`settlement.ts`), which is where these two posts sit, near the middle of the town.
+  const front = settlement.outline[1]!.y + 0.6
 
   const clamp = (p: Point): Point => ({ x: Math.max(0.8, Math.min(width - 0.8, p.x)), y: Math.max(0.8, Math.min(depth - 0.8, p.y)) })
   const row = (unit: UnitSetup, centre: Point, spacing = 1.4) => unit.elements.forEach((el, j) => (el.position = clamp({ x: centre.x + (j - (unit.elements.length - 1) / 2) * spacing, y: centre.y })))
@@ -258,8 +293,8 @@ export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSet
   // an objective first. Should even the grid run out, a unit stands beside
   // the post it shares.
   const posts: { at: Point; flank: boolean; taken: number }[] = [
-    { at: { x: town.x - 3.2, y: front }, flank: false, taken: 0 },
-    { at: { x: town.x + 3.2, y: front }, flank: false, taken: 0 },
+    { at: { x: town.x - townW * 0.27, y: front }, flank: false, taken: 0 },
+    { at: { x: town.x + townW * 0.27, y: front }, flank: false, taken: 0 },
   ]
   for (let r = 0; west.y + 1.2 + r * 2.5 < depth - 1; r++) {
     posts.push({ at: { x: west.x, y: west.y + 1.2 + r * 2.5 }, flank: true, taken: 0 }, { at: { x: east.x, y: east.y + 1.2 + r * 2.5 }, flank: true, taken: 0 })
@@ -286,10 +321,10 @@ export function landingTable(seed: number, force: UnitSetup[], garrison: UnitSet
   for (const unit of [...garrison].sort((a, b) => order(roles[a.id]) - order(roles[b.id]))) take(unit, armoured(unit))
 
   const placed = [...force, ...garrison].flatMap((u) => u.elements.map((e) => e.position!)).concat(anchors)
-  const random = randomTerrain(stream, width, depth, 'light').filter((f) => f.terrain === 'road' || !placed.some((p) => insideShape(p, f.shape)))
-  // The town over the rest, and the road over the town so it still runs through.
+  const random = randomTerrain(stream, width, depth, 'light', { scale: 'platoon' }).filter((f) => f.terrain === 'road' || !placed.some((p) => insideShape(p, f.shape)))
+  // The town's own features over the rest, and the wider table's road over the town so it still runs through.
   const road = random.filter((f) => f.terrain === 'road')
-  return { width, depth, terrain: [...random.filter((f) => f.terrain !== 'road'), townFeature, ...road], objectives }
+  return { width, depth, terrain: [...random.filter((f) => f.terrain !== 'road'), ...townFeatures, ...road], objectives }
 }
 
 export interface LandingPlan {
@@ -369,7 +404,7 @@ export function landingSetup(opts: {
   const defenders = [...garrison.units, ...standing]
   // The landing force's command: the Marines' first platoon, else the first unit down.
   if (force.units.length === 0 && landing.length > 0) landing[0]!.commandUnit = true
-  const table = landingTable(opts.seed, force.units, defenders, garrison.roles, opts.colony.name)
+  const table = landingTable(opts.seed, force.units, defenders, garrison.roles, opts.colony)
   const overhead: OrbitalShip[] = opts.ships
     .map(({ ship, design }) => ({ id: ship.id, name: ship.name, sheafs: sheafsOf(design), ortillery: ortilleryOf(ship, design) }))
     .filter((s) => s.sheafs + s.ortillery > 0)

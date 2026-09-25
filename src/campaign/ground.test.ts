@@ -17,7 +17,7 @@ import { newStream } from '../dirtside/dice'
 import { designById } from '../data/ships'
 import type { ShipDesign } from '../engine/types'
 import { applyMove, colonyById, createCampaign, journalEntry, taskForceById } from './campaign'
-import { contingentTeams, garrisonOf, landingForce, landingSetup, landingShips, sheafsOf, transitLosses } from './ground'
+import { contingentTeams, garrisonOf, landingForce, landingSetup, landingShips, settlementStyleFor, sheafsOf, transitLosses } from './ground'
 import { generateStarMap, systemAt } from './map'
 import { CAMPAIGN_BANNED_SYSTEMS } from './turn'
 import type { CampaignJournalEntry, CampaignMove, CampaignSetup, CampaignShip, CampaignState, Colony, Hex, StarMap } from './types'
@@ -139,9 +139,23 @@ describe('the garrison (reading)', () => {
       expect(plan.setup.orbital).toEqual([{ side: 'north', ships: [{ id: 'endeavour', name: 'endeavour', sheafs: 2, ortillery: 0 }, { id: 'dart', name: 'dart', sheafs: 1, ortillery: 0 }] }])
       const town = plan.setup.table.terrain.find((f) => f.terrain === 'urban' && f.label === 'Haven')!
       expect(town).toBeDefined()
+      // A generated settlement, not a bare rectangle: real buildings and streets stand inside it (BRIEF-TERRAIN).
+      const pieces = plan.setup.table.terrain.filter((f) => f.partOf === town.id)
+      expect(pieces.some((f) => f.terrain === 'building')).toBe(true)
+      expect(pieces.some((f) => f.terrain === 'road')).toBe(true)
+      for (const f of pieces) for (const p of (f.shape as { points: { x: number; y: number }[] }).points) expect(insideShape(p, town.shape)).toBe(true)
       // A defender in the town stands within its first inch, where it can see out and be seen (p. 20).
       for (const el of plan.setup.sides[1].units.flatMap((u) => u.elements)) if (insideShape(el.position!, town.shape)) expect(depthInside(el.position!, town.shape)).toBeLessThanOrEqual(1)
     }
+  })
+
+  it("styles the colony's town from its population and factories: a thin outpost a village, a settled world a town, a heavily populated one a city", () => {
+    expect(settlementStyleFor(colonyWith({ population: { loyal: 2, subject: 0 }, factories: 0 }))).toBe('village')
+    expect(settlementStyleFor(colonyWith({ population: { loyal: 10, subject: 0 }, factories: 2 }))).toBe('town')
+    expect(settlementStyleFor(colonyWith({ population: { loyal: 60, subject: 0 }, factories: 2 }))).toBe('city')
+    expect(settlementStyleFor(colonyWith({ population: { loyal: 2, subject: 0 }, factories: 8 }))).toBe('city')
+    // A subject population still builds the place up, whoever it now flies for.
+    expect(settlementStyleFor(colonyWith({ population: { loyal: 2, subject: 10 }, factories: 0 }))).toBe('town')
   })
 
   it('finds every unit its own ground however big the fleet or the garrison', () => {

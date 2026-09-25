@@ -1,6 +1,6 @@
-import { type Going, type MobilityFamily, mobilityFamily } from '../../../dirtside/data/mobility'
+import { FACTORS_PER_INCH, type Going, type MobilityFamily, goingOf, mobilityFamily } from '../../../dirtside/data/mobility'
 import { inDeploymentZone } from '../../../dirtside/table/game'
-import { distance, pathCost } from '../../../dirtside/table/terrain'
+import { WOOD_EDGE, WOODS, depthInside, distance, featureAt, insideShape } from '../../../dirtside/table/terrain'
 import type { GameSetup, Point, Shape, SideId, TerrainFeature } from '../../../dirtside/table/types'
 import type { InfantryElement, VehicleDesign } from '../../../dirtside/types'
 
@@ -35,21 +35,95 @@ export function decorRandom(seed: number): () => number {
   }
 }
 
-/** A shape shrunk by `by` inches, or null once nothing is left of it. */
+/** The mean of a polygon's own vertices: cheap and adequate for a roughly star-shaped generated blob or footprint. */
+export function polygonCentroid(points: readonly Point[]): Point {
+  let x = 0
+  let y = 0
+  for (const p of points) {
+    x += p.x
+    y += p.y
+  }
+  return { x: x / points.length, y: y / points.length }
+}
+
+/**
+ * A shape shrunk by `by` inches, or null once nothing is left of it. A
+ * polygon has no straight-skeleton offset here (hard to keep from
+ * self-intersecting on a concave outline); scaling every vertex toward the
+ * centroid by the same fraction is the cheap stand-in that matches this
+ * file's existing precision level and never crosses itself for a
+ * star-shaped outline, which is everything the generator produces.
+ */
 export function insetShape(shape: Shape, by: number): Shape | null {
   if (shape.kind === 'circle') return shape.radius - by > 0.05 ? { ...shape, radius: shape.radius - by } : null
   if (shape.kind === 'rect') return shape.width - 2 * by > 0.1 && shape.height - 2 * by > 0.1 ? { kind: 'rect', x: shape.x + by, y: shape.y + by, width: shape.width - 2 * by, height: shape.height - 2 * by } : null
+  if (shape.kind === 'polygon') {
+    const c = polygonCentroid(shape.points)
+    const avgR = shape.points.reduce((s, p) => s + distance(p, c), 0) / shape.points.length
+    if (avgR - by < 0.3) return null
+    const scale = (avgR - by) / avgR
+    return { kind: 'polygon', points: shape.points.map((p) => ({ x: c.x + (p.x - c.x) * scale, y: c.y + (p.y - c.y) * scale })) }
+  }
   return null
 }
 
-/** The middle of a feature, where its name goes. */
+/** The middle of a feature, where its name goes: a polygon's own centroid, not a path's midpoint trick. */
 export function centreOf(shape: Shape): Point {
   if (shape.kind === 'circle') return shape.centre
   if (shape.kind === 'rect') return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 }
+  if (shape.kind === 'polygon') return polygonCentroid(shape.points)
   const i = Math.floor((shape.points.length - 1) / 2)
   const a = shape.points[i]!
   const b = shape.points[Math.min(i + 1, shape.points.length - 1)]!
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+/**
+ * An approximate "pole of inaccessibility" for a polygon: the grid point
+ * furthest inside its own boundary, a safer label spot than the centroid
+ * for a lobed or crescent outline (a wood with a waist, an L-shaped block)
+ * where the centroid itself can land outside the shape or hard against an
+ * edge. Coarse on purpose — a wargames label, not a cartographic one — and
+ * cheap enough for the handful of area features (rural blobs, fields, one
+ * urban outline a settlement) that ever call it; buildings and rubble never
+ * do, they carry no label of their own (see `terrain.tsx`'s `placeLabels`).
+ */
+export function interiorLabelPoint(shape: Extract<Shape, { kind: 'polygon' }>): Point {
+  const pts = shape.points
+  let x0 = Infinity
+  let x1 = -Infinity
+  let y0 = Infinity
+  let y1 = -Infinity
+  for (const p of pts) {
+    x0 = Math.min(x0, p.x)
+    x1 = Math.max(x1, p.x)
+    y0 = Math.min(y0, p.y)
+    y1 = Math.max(y1, p.y)
+  }
+  const step = Math.max(0.35, (x1 - x0) / 18)
+  let best: Point | null = null
+  let bestD = -1
+  for (let y = y0 + step / 2; y < y1; y += step) {
+    for (let x = x0 + step / 2; x < x1; x += step) {
+      const p = { x, y }
+      if (!insideShape(p, shape)) continue
+      let d = Infinity
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i]!
+        const b = pts[(i + 1) % pts.length]!
+        const dx = b.x - a.x
+        const dy = b.y - a.y
+        const len2 = dx * dx + dy * dy
+        const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+        d = Math.min(d, distance(p, { x: a.x + t * dx, y: a.y + t * dy }))
+      }
+      if (d > bestD) {
+        bestD = d
+        best = p
+      }
+    }
+  }
+  return best ?? polygonCentroid(pts)
 }
 
 /** The point `at` inches along a polyline. */
@@ -92,29 +166,117 @@ export function splitByLegs(points: readonly Point[], legs: ReadonlyArray<{ goin
   return out
 }
 
+/** A shape's own axis-aligned bounding box, padded for a path's width: cheap, UI-side only (terrain.ts keeps its own for the engine's hot loops). */
+function boundsOf(shape: Shape): { x0: number; y0: number; x1: number; y1: number } {
+  if (shape.kind === 'circle') return { x0: shape.centre.x - shape.radius, y0: shape.centre.y - shape.radius, x1: shape.centre.x + shape.radius, y1: shape.centre.y + shape.radius }
+  if (shape.kind === 'rect') return { x0: shape.x, y0: shape.y, x1: shape.x + shape.width, y1: shape.y + shape.height }
+  const pad = shape.kind === 'path' ? shape.width / 2 : 0
+  let x0 = Number.POSITIVE_INFINITY
+  let y0 = Number.POSITIVE_INFINITY
+  let x1 = Number.NEGATIVE_INFINITY
+  let y1 = Number.NEGATIVE_INFINITY
+  for (const p of shape.points) {
+    x0 = Math.min(x0, p.x - pad)
+    y0 = Math.min(y0, p.y - pad)
+    x1 = Math.max(x1, p.x + pad)
+    y1 = Math.max(y1, p.y + pad)
+  }
+  return { x0, y0, x1, y1 }
+}
+
+/** Distance from a point to the nearest point of a box, 0 if the point is inside it. */
+function distanceToBox(p: Point, box: { x0: number; y0: number; x1: number; y1: number }): number {
+  const dx = Math.max(box.x0 - p.x, 0, p.x - box.x1)
+  const dy = Math.max(box.y0 - p.y, 0, p.y - box.y1)
+  return Math.hypot(dx, dy)
+}
+
+/**
+ * Features whose own bounding box comes within `range` of `from`: a cheap
+ * once-per-call filter for anything (a reach ring, a sight band) about to
+ * scan the feature list many times over, shared by both games' `reachPolygon`
+ * (Dirtside's below, Stargrunt's own in `ui/stargrunt/map/geometry.ts`,
+ * which needs its own `pathCost` but not its own copy of this filter).
+ */
+export function nearbyFeatures<F extends TerrainFeature>(from: Point, range: number, features: readonly F[]): F[] {
+  return features.filter((f) => distanceToBox(from, boundsOf(f.shape)) <= range)
+}
+
+/**
+ * A single straight segment's cost, in the same terms `pathCost` (terrain.ts)
+ * charges it — `featureAt`'s going, easy only in travel mode, a wood a
+ * mobility type can't enter stopping the ray at its edge — but built only
+ * for what `reachPolygon`'s own binary search actually asks, "does this
+ * length fit under budget", never the full leg-by-leg breakdown `pathCost`
+ * reports. That lets it do two things `pathCost` itself can't, without
+ * touching `pathCost` or its callers: stop the moment the answer is known
+ * (most of a blocked ray is spent well short of the segment's own end, and
+ * `pathCost` has no reason to stop early when nothing's asking for one), and
+ * sample at half-inch steps rather than a quarter — half the points, for a
+ * ring that only ever needs to look right, not survey-accurate. Together
+ * these are what keep this ring under budget on a city table (BRIEF-TERRAIN,
+ * ~30ms): filtering the feature list first (`nearbyFeatures`, above) cuts
+ * how much each sample scans, this cuts how many samples and how many of
+ * the ray's `pathCost`-equivalent calls ever run at all.
+ */
+function reachCost(from: Point, to: Point, family: MobilityFamily, features: readonly TerrainFeature[], budget: number, opts: { amphibious?: boolean; travel?: boolean }): { blocked: boolean; factors: number } {
+  const step = 0.5
+  const len = distance(from, to)
+  const n = Math.max(1, Math.ceil(len / step))
+  const segLen = len / n
+  let factors = 0
+  for (let i = 1; i <= n; i++) {
+    const t = i / n
+    const point = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }
+    const feature = featureAt(point, features)
+    const terrain = feature?.terrain ?? 'open'
+    let going = goingOf(family, terrain, opts.amphibious)
+    if (going === 'easy' && !opts.travel) going = 'normal'
+    if (going === 'impassable') {
+      const wood = feature && WOODS.includes(feature.terrain) ? depthInside(point, feature.shape) : Number.POSITIVE_INFINITY
+      if (wood <= WOOD_EDGE) going = 'poor'
+      else return { blocked: true, factors }
+    }
+    factors += segLen * FACTORS_PER_INCH[going]
+    if (factors > budget + 1e-6) return { blocked: false, factors }
+  }
+  return { blocked: false, factors }
+}
+
 /**
  * How far a vehicle could get from `from` along each of `rays` straight
  * lines for `budget` movement factors: the reach the move plot draws. Each
- * ray is found by halving on the real path cost, so woods, roads and water
+ * ray is found by halving on `reachCost` (above), so woods, roads and water
  * bend it exactly as a move would be charged.
+ *
+ * `pathCost` itself already skips a far-off feature cheaply (`insideShape`
+ * caches its own bounding box), but on a city table most of a hundred-plus
+ * buildings can still sit within reach of a unit standing in the middle of
+ * town — `nearbyFeatures` trims the list once regardless, and `reachCost`'s
+ * own early exit and coarser step do the rest (BRIEF-TERRAIN: this ring
+ * stays under ~30ms even on a city table).
  */
 export function reachPolygon(from: Point, budget: number, family: MobilityFamily, features: readonly TerrainFeature[], opts: { amphibious?: boolean; travel?: boolean } = {}, rays = 48): Point[] {
   if (budget <= 0.01) return []
   const longest = budget * (opts.travel ? 2 : 1)
+  const nearby = nearbyFeatures(from, longest, features)
   const out: Point[] = []
   for (let r = 0; r < rays; r++) {
     const angle = (r / rays) * Math.PI * 2
     const dir = { x: Math.sin(angle), y: -Math.cos(angle) }
     const end = (len: number) => ({ x: from.x + dir.x * len, y: from.y + dir.y * len })
     const fits = (len: number) => {
-      const cost = pathCost([from, end(len)], family, features, opts)
-      return !cost.blockedAt && cost.factors <= budget + 1e-6
+      const cost = reachCost(from, end(len), family, nearby, budget, opts)
+      return !cost.blocked && cost.factors <= budget + 1e-6
     }
     let lo = 0
     let hi = longest
     if (fits(hi)) lo = hi
     else
-      for (let i = 0; i < 9; i++) {
+      // 7 halvings is well past what a drawn ring can show (budget/128, under a tenth of an inch at a
+      // normal move) — a visual polygon has no use for the extra two steps' precision, and this loop is
+      // the one repeated 48 times a call (BRIEF-TERRAIN's ~30ms budget on a city table).
+      for (let i = 0; i < 7; i++) {
         const mid = (lo + hi) / 2
         if (fits(mid)) lo = mid
         else hi = mid
@@ -273,32 +435,9 @@ export function infantryLabel(inf: InfantryElement): string {
 // Buildings
 // ---------------------------------------------------------------------------
 
-export interface Block {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-/** Rows of buildings with streets between, laid out inside an urban area from its id so they never shuffle. */
-export function blocksIn(shape: Shape, id: string): Block[] {
-  const rnd = decorRandom(hash(id))
-  const box = shape.kind === 'rect' ? { x: shape.x, y: shape.y, w: shape.width, h: shape.height } : shape.kind === 'circle' ? { x: shape.centre.x - shape.radius, y: shape.centre.y - shape.radius, w: shape.radius * 2, h: shape.radius * 2 } : null
-  if (!box) return []
-  const inside = (b: Block) => shape.kind !== 'circle' || [b.x, b.x + b.w].every((x) => [b.y, b.y + b.h].every((y) => distance({ x, y }, shape.centre) <= shape.radius - 0.2))
-  const out: Block[] = []
-  const street = 0.4
-  let y = box.y + street
-  while (y < box.y + box.h - street - 0.6) {
-    const h = Math.min(0.9 + rnd() * 0.9, box.y + box.h - street - y)
-    let x = box.x + street
-    while (x < box.x + box.w - street - 0.5) {
-      const w = Math.min(0.8 + rnd() * 1.1, box.x + box.w - street - x)
-      const b = { x, y, w, h }
-      if (w > 0.45 && rnd() > 0.12 && inside(b)) out.push(b)
-      x += w + (rnd() > 0.8 ? street * 1.6 : street * 0.7)
-    }
-    y += h + street
-  }
-  return out
-}
+// `blocksIn` used to scatter decorative roof rectangles inside a single big
+// `urban` rect/circle, invented by the renderer and read by no rule. Now
+// that a settlement's buildings are real `TerrainFeature`s (`terrain:
+// 'building'`) drawn by `Feature`'s own `'building'` case, this whole
+// subdivision step is superseded, not merely replaced — retired rather than
+// grown a polygon branch (BRIEF-TERRAIN, `terrain-design/impact.md` §7).

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { ESU, FORCES, NAC, NSL, standardPlatoon, type ForceTemplate } from '../../stargrunt/data/forces'
 import { QUALITY_DIE } from '../../stargrunt/types'
-import { placeObjectives, randomTerrain } from '../../dirtside/table/skirmish'
+import { placeObjectives, randomTerrain, TERRAIN_STYLES, type TerrainStyle } from '../../dirtside/table/skirmish'
 import { newStream } from '../../stargrunt/dice'
 import { createGame, inDeploymentZone } from '../../stargrunt/table/game'
 import type { GameSetup, GameState, Leadership, Motivation, Quality, SideId, SideSetup, UnitSetup } from '../../stargrunt/types'
@@ -25,7 +25,6 @@ export interface SkirmishPanelProps {
 const FORCE_LIST: readonly ForceTemplate[] = FORCES
 const FORCE_BY_NAME = new Map(FORCE_LIST.map((f) => [f.nation, f]))
 
-type Terrain = 'none' | 'light' | 'dense'
 type PresetId = 'first' | 'platoons' | 'custom'
 
 interface SideChoice {
@@ -42,7 +41,17 @@ interface SideChoice {
 const QUALITY_LIST: Quality[] = ['untrained', 'green', 'regular', 'veteran', 'elite']
 const QUALITY_NAMES: Record<Quality, string> = { untrained: 'Untrained', green: 'Green', regular: 'Regular', veteran: 'Veteran', elite: 'Elite' }
 const MOTIVATION_NAMES: Record<Motivation, string> = { low: 'Low', medium: 'Medium', high: 'High' }
-const TERRAIN_NAMES: Record<Terrain, string> = { none: 'open plain', light: 'light terrain', dense: 'dense terrain' }
+/** The six styles in plain words, exactly as BRIEF-TERRAIN gives them, for the select and the aside's summary line. */
+const TERRAIN_OPTIONS: Record<TerrainStyle, string> = { none: 'Open', light: 'Rural, light', dense: 'Rural, dense', village: 'Village', town: 'Town', city: 'City' }
+const TERRAIN_NAMES: Record<TerrainStyle, string> = { none: 'open', light: 'rural, light', dense: 'rural, dense', village: 'village', town: 'town', city: 'city' }
+const TERRAIN_HINTS: Record<TerrainStyle, string> = {
+  none: 'An open plain, nothing on it',
+  light: 'Woods, hills, rough ground and a road',
+  dense: 'More of everything, often a river, sometimes a hamlet',
+  village: 'Buildings strung along a road, with gardens and a few fields',
+  town: 'Streets and blocks of buildings round a square, rural ground around it',
+  city: 'Built up across most of the table but the deployment strips',
+}
 
 function defaultChoice(force: ForceTemplate, computer: boolean): SideChoice {
   return { force, quality: 'regular', leadership: 2, motivation: 'medium', squads: force.squadCount, includeHQ: true, computer, name: `${force.nation} force` }
@@ -73,7 +82,7 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100000))
   const [width, setWidth] = useState(48)
   const [depth, setDepth] = useState(36)
-  const [terrain, setTerrain] = useState<Terrain>('light')
+  const [terrain, setTerrain] = useState<TerrainStyle>('light')
   const [objectives, setObjectives] = useState(3)
   const [turnLimit, setTurnLimit] = useState(8)
   const [north, setNorth] = useState<SideChoice>(() => defaultChoice(NAC, false))
@@ -123,7 +132,10 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
       name,
       seed,
       battle: 'encounter',
-      table: { width, depth, terrain: randomTerrain(stream, width, depth, terrain), objectives: placeObjectives(stream, width, depth, objectives) },
+      // Squad scale (BRIEF-TERRAIN's two scales): this panel builds its own `GameSetup` rather than calling
+      // `defaultSkirmish`, so it must pass the scale itself — `randomTerrain` defaults to Dirtside's platoon
+      // scale, whose buildings (0.5–1.5″) would be far too small for a 25mm figure standing beside one.
+      table: { width, depth, terrain: randomTerrain(stream, width, depth, terrain, { scale: 'squad' }), objectives: placeObjectives(stream, width, depth, objectives) },
       sides,
       turnLimit: turnLimit > 0 ? turnLimit : null,
     }
@@ -334,10 +346,12 @@ export function SkirmishPanel({ onClose, onStart }: SkirmishPanelProps) {
                 </label>
                 <label className="dss-field is-wide">
                   <span>Terrain</span>
-                  <select value={terrain} onChange={(e) => touched(setTerrain)(e.target.value as Terrain)} aria-label="Terrain">
-                    <option value="none">Open plain</option>
-                    <option value="light">Light: woods, hills, rough, a road</option>
-                    <option value="dense">Dense: more of everything and a village</option>
+                  <select value={terrain} onChange={(e) => touched(setTerrain)(e.target.value as TerrainStyle)} aria-label="Terrain" title={TERRAIN_HINTS[terrain]}>
+                    {TERRAIN_STYLES.map((t) => (
+                      <option key={t} value={t} title={TERRAIN_HINTS[t]}>
+                        {TERRAIN_OPTIONS[t]}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="dss-field">

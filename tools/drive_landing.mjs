@@ -110,6 +110,11 @@ console.log('header:', kicker.join(' | '))
 if (!kicker.some((k) => /Campaign landing/.test(k))) fail('the table does not say it is a campaign landing')
 if (!(await page.locator('.dst-orbit').isVisible())) fail('no orbit panel')
 console.log('orbit:', (await page.locator('.dst-orbit').textContent())?.replace(/\s+/g, ' '))
+// The colony's town is a real generated settlement now (BRIEF-TERRAIN), not one labeled rectangle: streets
+// and buildings of its own, not just the one urban-area feature the old landingTable hand-built.
+const townBuildings = await page.locator('.dst-map .dst-feature.is-building').count()
+console.log('town buildings:', townBuildings)
+if (townBuildings < 2) fail(`expected the colony's town to have real building features, got ${townBuildings}`)
 await shot('landing-table')
 
 // ── Deploy, and play north until the ships come over ──────────────────────

@@ -58,6 +58,16 @@ async function runDrive(width, height) {
   const sideCols = await page.locator('.sg-side').count()
   if (sideCols !== 2) fail(`[${tag}] expected 2 side columns in setup, got ${sideCols}`)
   await shot('skirmish')
+
+  // A town at squad scale: real buildings and streets in the preview, not the light spread the rest of
+  // this drive plays on (BRIEF-TERRAIN's own model, at the scale Stargrunt plays it).
+  await page.locator('.dst-setup select[aria-label="Terrain"]').selectOption('town')
+  await page.waitForTimeout(150)
+  const townFeatures = await page.locator('.dss-preview .dst-feature.is-building').count()
+  console.log(`[${tag}] town preview buildings:`, townFeatures)
+  if (townFeatures < 2) fail(`[${tag}] expected a squad-scale town preview with real buildings, got ${townFeatures}`)
+  await shot('skirmish-town')
+  await page.locator('.dst-setup select[aria-label="Terrain"]').selectOption('light')
   await page.getByRole('button', { name: 'To the table' }).click()
   await page.waitForSelector('.dst-mapsvg')
   if (!/Deployment/.test(await banner())) fail(`[${tag}] the table did not open in deployment`)

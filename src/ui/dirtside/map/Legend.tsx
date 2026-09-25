@@ -16,7 +16,7 @@ import { TERRAIN_NAMES, TERRAIN_NOTES } from './terrain'
  * the counters and the marks beside them.
  */
 
-const ORDER: TerrainType[] = ['open', 'road', 'light-scrub', 'cultivated', 'rough', 'hills', 'mountains', 'light-woods', 'dense-woods', 'urban', 'swamp', 'river', 'ford', 'open-water']
+const ORDER: TerrainType[] = ['open', 'road', 'light-scrub', 'cultivated', 'rough', 'hills', 'mountains', 'light-woods', 'dense-woods', 'urban', 'building', 'rubble', 'wall', 'hedge', 'swamp', 'river', 'ford', 'open-water']
 
 const GOING_WORDS: Record<Going, string> = { easy: 'easy', normal: 'normal', poor: 'poor', difficult: 'difficult', impassable: 'no entry' }
 
@@ -65,6 +65,25 @@ function Swatch({ type, pid, id }: { type: TerrainType; pid: string; id: string 
           <rect x={1.4} y={0.3} width={1.1} height={0.5} style={{ fill: 'var(--dst-urban-roof)' }} />
           <rect x={0.3} y={1.0} width={1.4} height={0.5} style={{ fill: 'var(--dst-urban-roof)' }} />
         </>
+      ) : type === 'building' ? (
+        <>
+          <rect x={0.55} y={0.4} width={1.7} height={1.15} style={{ fill: 'var(--dst-building-wall)' }} />
+          <rect x={0.7} y={0.5} width={1.4} height={0.95} style={{ fill: 'var(--dst-roof-warm-2)', stroke: 'var(--dst-roof-ridge-warm)', strokeWidth: 0.04 }} />
+          <line x1={0.7} x2={2.1} y1={0.98} y2={0.98} stroke="var(--dst-roof-ridge-warm)" strokeWidth={0.06} opacity={0.8} />
+        </>
+      ) : type === 'rubble' ? (
+        <>
+          <polygon points="0.5,1.5 0.6,0.6 1.1,0.35 1.7,0.5 2.2,0.4 2.3,1.5" style={{ fill: 'var(--dst-rubble)', stroke: 'var(--dst-rubble-dark)', strokeWidth: 0.05 }} />
+          <rect x={1.0} y={0.85} width={0.3} height={0.16} fill="var(--dst-rubble-dark)" opacity={0.8} transform="rotate(20 1.15 0.93)" />
+          <line x1={1.5} y1={1.3} x2={1.5} y2={0.7} stroke="var(--dst-rubble-stub)" strokeWidth={0.14} strokeLinecap="round" />
+        </>
+      ) : type === 'wall' ? (
+        <>
+          <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-rubble-dark)" strokeWidth={0.32} />
+          <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-wall-stone)" strokeWidth={0.22} />
+        </>
+      ) : type === 'hedge' ? (
+        <line x1={0.2} x2={2.6} y1={0.9} y2={0.9} stroke="var(--dst-hedge)" strokeWidth={0.34} strokeLinecap="round" strokeDasharray="0.02 0.3" />
       ) : (
         <>
           {under[type] ? <rect width={2.8} height={1.8} style={{ fill: under[type] }} /> : null}
