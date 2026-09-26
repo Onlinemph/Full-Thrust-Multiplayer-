@@ -35,10 +35,14 @@ import type { MapViewProps } from '../MapView'
 import { OrderCompass } from '../OrderCompass'
 import { useFx } from '../useFx'
 import { BattleScene, type CameraPreset, type SceneCallbacks } from './BattleScene'
+import { fitCompass } from './compassBounds'
 import './hud.css'
 import type { ViewProps } from './layer'
 import { roseFor } from './overlays'
 import './three.css'
+
+/** Roughly `.battle3d-hud`'s own worst-case height (camera-preset row, help text, the flat-map link) — the compass's safe top margin folds this in so it never renders under it (R6, R8's own toolbar-clearance concern for the compass). */
+const HUD_CLEARANCE = 96
 
 /**
  * The phase 11 rose, as a row of real buttons rather than a mesh: what bears
@@ -136,6 +140,23 @@ function wantsCompass(
   return canCommand?.(ship) ?? true
 }
 
+/** Field-by-field, since a fresh `ViewProps` object literal is built every render regardless of whether anything it holds actually changed (R3). */
+function sameView(a: ViewProps, b: ViewProps): boolean {
+  return (
+    a.selectedId === b.selectedId &&
+    a.viewingSide === b.viewingSide &&
+    a.canCommand === b.canCommand &&
+    a.litArcs === b.litArcs &&
+    a.fireRose === b.fireRose &&
+    a.selectedFlightId === b.selectedFlightId &&
+    a.deployWith === b.deployWith &&
+    a.aimWith === b.aimWith &&
+    a.placingTerrain === b.placingTerrain &&
+    a.returnWith === b.returnWith &&
+    a.fx === b.fx
+  )
+}
+
 export default function BattleView3D({
   game,
   selectedId,
@@ -165,12 +186,27 @@ export default function BattleView3D({
   const [preset, setPreset] = useState<CameraPreset>('tilt')
   const [follow, setFollow] = useState(false)
   const [compassAt, setCompassAt] = useState<{ x: number; y: number; clearance: number } | null>(null)
+  /** The ship needs orders and is on screen, but the canvas is too small to hold even a capped compass (R6) — a "zoom out" hint stands in for it rather than nothing at all. */
+  const [compassBlocked, setCompassBlocked] = useState(false)
   const fx = useFx()
 
   const callbacks: SceneCallbacks = {
     onSelect,
     onSelectFlight: (id) => onSelectFlight?.(id),
-    onHover: (text, at) => setHover(text && at ? { text, at } : null),
+    // Coarsely rounded, and a no-op (`prev` returned as-is) when nothing
+    // meaningful moved: `BattleScene.onPointerMove` fires this on essentially
+    // every native pointermove over a tooltip-bearing object, and a fresh
+    // object literal every pixel of jitter used to re-render this component —
+    // and, before the effect below was also fixed, re-run every layer's full
+    // `update()` — on every one of them (R3).
+    onHover: (text, at) =>
+      setHover((prev) => {
+        if (!text || !at) return prev === null ? prev : null
+        const x = Math.round(at.x / 4) * 4
+        const y = Math.round(at.y / 4) * 4
+        if (prev && prev.text === text && prev.at.x === x && prev.at.y === y) return prev
+        return { text, at: { x, y } }
+      }),
     onHoverArc,
     onAimed,
     onTerrainPlaced,
@@ -208,7 +244,20 @@ export default function BattleView3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Every render hands the scene the current battle and props; the layers diff it.
+  // Every render hands the scene the current battle and props; the layers
+  // diff it by id. This effect itself has no dependency list — the compass's
+  // own tracking loop and, before R3's fix, every mouse-move-driven hover
+  // re-render also land here — so it shallow-compares against what it last
+  // actually sent and skips the (expensive: every layer's full diff pass,
+  // including the fire rose and reach overlay's own dispose+rebuild) call
+  // to `scene.update()` when nothing on the battle or these props changed.
+  // Keyed by the `BattleScene` instance itself, not only the battle and view:
+  // StrictMode's dev-only double-invoke disposes and recreates that instance
+  // once on mount without this component unmounting, and a fresh scene has
+  // nothing drawn yet — comparing only `game`/`view` would see the same pair
+  // it already "sent" to the old, now-discarded instance and skip the new
+  // one's very first `update()`, leaving it permanently empty.
+  const lastSent = useRef<{ scene: BattleScene; game: typeof game; view: ViewProps } | null>(null)
   useEffect(() => {
     if (!scene.current) return
     const view: ViewProps = {
@@ -224,6 +273,9 @@ export default function BattleView3D({
       returnWith,
       fx,
     }
+    const prev = lastSent.current
+    lastSent.current = { scene: scene.current, game, view }
+    if (prev && prev.scene === scene.current && prev.game === game && sameView(prev.view, view)) return
     scene.current.update(game, view, callbacksRef.current)
   })
 
@@ -248,19 +300,31 @@ export default function BattleView3D({
   useEffect(() => {
     if (!compassShipId) {
       setCompassAt(null)
+      setCompassBlocked(false)
       return
     }
     let raf = 0
     const tick = () => {
       const s = scene.current
       const h = host.current
-      const p = s && h && !s.isDragging() ? s.projectToScreen(compassShipId) : null
-      const onScreen = p && h && p.x >= 0 && p.x <= h.clientWidth && p.y >= 0 && p.y <= h.clientHeight ? p : null
+      const raw = s && h && !s.isDragging() ? s.projectToScreen(compassShipId) : null
+      const width = h?.clientWidth ?? 0
+      const height = h?.clientHeight ?? 0
+      // The ship's own anchor point on screen at all — off entirely (behind
+      // the camera, panned or scrolled away) still just hides the compass, as
+      // before; only once it is on screen does a too-small canvas count as
+      // "blocked" rather than "not looking at it right now".
+      const anchorOnScreen = raw !== null && raw.x >= 0 && raw.x <= width && raw.y >= 0 && raw.y <= height
+      // Clamped fully inside the canvas and below the HUD, with a capped ring
+      // size, rather than only checked against the anchor point (R6) — so the
+      // compass is always entirely usable whenever it can fit at all.
+      const fitted = anchorOnScreen && raw ? fitCompass(raw, width, height, HUD_CLEARANCE) : null
       setCompassAt((prev) =>
-        prev && onScreen && prev.x === onScreen.x && prev.y === onScreen.y && prev.clearance === onScreen.clearance
+        prev && fitted && prev.x === fitted.x && prev.y === fitted.y && prev.clearance === fitted.clearance
           ? prev
-          : onScreen,
+          : fitted,
       )
+      setCompassBlocked((prev) => (prev === (anchorOnScreen && !fitted) ? prev : anchorOnScreen && !fitted))
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -317,6 +381,14 @@ export default function BattleView3D({
         <div className="battle3d-hud-extra">
           {fireRose && selected && roseFor(game, selected, viewingSide) ? (
             <FireRoseHud game={game} ship={selected} litArcs={litArcs} onHoverArc={onHoverArc} />
+          ) : null}
+          {/* R6: the ship needing orders is on screen, but this close there is
+              nowhere left to draw a fully usable compass — a clear way out
+              rather than a control that would only ever show part of itself. */}
+          {compassOn && compassBlocked ? (
+            <p className="battle3d-compass-hint" role="status">
+              Zoom out to plot this ship’s orders
+            </p>
           ) : null}
           {compassOn && onExit ? (
             <button type="button" className="battle3d-flatmap" onClick={onExit}>
