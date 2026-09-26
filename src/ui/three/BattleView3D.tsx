@@ -9,21 +9,85 @@
  * callbacks and the same `dispatch`/`refuseAtTable` `BattleScene` calls
  * directly. The rules do not know or care which view is on screen.
  *
- * HUD SLOT (stage 2): `.battle3d-hud-extra` is empty here, reserved for
- * OVERLAYS's own controls — the phase 11 fire rose's numbers, a legend for
- * the reach shape currently drawn, whatever else needs a real DOM control
- * rather than a mesh. Add markup there; the camera chips and the exit/
- * hand-off banner above it are BASE's and should stay put.
+ * HUD SLOT (stage 2, filled by OVERLAYS): `.battle3d-hud-extra` holds the
+ * phase 11 fire rose's numbers — `FireRoseHud` below. The rose's wedges are
+ * drawn in the scene by `overlays.ts`; this DOM copy exists because hovering
+ * it is how `onHoverArc` gets wired without reaching into `BattleScene.ts`'s
+ * own raycaster (which is not `overlays.ts`'s file to touch) to hit-test a
+ * ring that turns with the camera. The camera chips and the exit/hand-off
+ * banner above the slot are BASE's and stay put.
  */
 import { useEffect, useRef, useState } from 'react'
 import { optional } from '../../engine/actions'
 import type { ShipState } from '../../engine/game'
 import { canManoeuvre } from '../../engine/specialmoves'
+import { describeReady, fireArcs } from '../fireArcs'
 import type { MapViewProps } from '../MapView'
 import { useFx } from '../useFx'
 import { BattleScene, type CameraPreset, type SceneCallbacks } from './BattleScene'
 import type { ViewProps } from './layer'
+import { roseFor } from './overlays'
 import './three.css'
+
+/**
+ * The phase 11 rose, as a row of real buttons rather than a mesh: what bears
+ * into each arc (`fireArcs`, the same read the 2D `FireRose` draws from) and
+ * how many enemies stand in it. Resting the pointer (or focus, for a keyboard
+ * user) on a wedge lights that arc across the view, mirroring the 2D rose's
+ * own `litArcUnderPointer` — the question a gunner is asking is "what can I
+ * hit them with?", answered without a click.
+ */
+function FireRoseHud({
+  game,
+  ship,
+  litArcs,
+  onHoverArc,
+}: {
+  game: MapViewProps['game']
+  ship: ShipState
+  litArcs: MapViewProps['litArcs']
+  onHoverArc: MapViewProps['onHoverArc']
+}) {
+  const summaries = fireArcs(game, ship)
+  const lit = litArcs?.length === 1 ? (litArcs[0] ?? null) : null
+  return (
+    <div className="battle3d-rose" role="group" aria-label={`Fire arcs of ${ship.name}`}>
+      {summaries.map((summary) => {
+        const armed = summary.ready.length > 0
+        const names = describeReady(summary.ready)
+        const classes = ['battle3d-rose-arc']
+        if (armed) classes.push('is-armed')
+        if (summary.targets.length > 0) classes.push('has-target')
+        if (summary.arc === lit) classes.push('is-lit')
+        const title = `${summary.arc}: ${armed ? `${names}, out to ${summary.reach} MU` : 'nothing bears'}${
+          summary.targets.length > 0
+            ? ` — ${summary.targets.map((t) => `${t.name} at ${t.range.toFixed(1)} MU`).join(', ')}`
+            : ''
+        }`
+        return (
+          <button
+            key={summary.arc}
+            type="button"
+            className={classes.join(' ')}
+            title={title}
+            onPointerEnter={() => onHoverArc?.(summary.arc)}
+            onPointerLeave={() => onHoverArc?.(null)}
+            onFocus={() => onHoverArc?.(summary.arc)}
+            onBlur={() => onHoverArc?.(null)}
+          >
+            <span className="battle3d-rose-arc-name">{summary.arc}</span>
+            <span className="battle3d-rose-arc-guns">
+              {armed ? (names.length > 11 ? `${summary.ready.length} mounts` : names) : '—'}
+            </span>
+            {summary.targets.length > 0 ? (
+              <span className="battle3d-rose-arc-targets">{'◆'.repeat(Math.min(summary.targets.length, 4))}</span>
+            ) : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 export interface BattleView3DProps extends MapViewProps {
   /** Asked to go back to the flat map (WebGL missing, or the player's choice). */
@@ -208,8 +272,11 @@ export default function BattleView3D({
         <p className="battle3d-help">
           Drag to orbit · right-drag to pan · wheel to zoom · click a hull to select · double-click to fly to it
         </p>
-        {/* HUD SLOT (stage 2, OVERLAYS): render fire-rose/reach controls here. */}
-        <div className="battle3d-hud-extra" />
+        <div className="battle3d-hud-extra">
+          {fireRose && selected && roseFor(game, selected, viewingSide) ? (
+            <FireRoseHud game={game} ship={selected} litArcs={litArcs} onHoverArc={onHoverArc} />
+          ) : null}
+        </div>
       </div>
 
       {/*
