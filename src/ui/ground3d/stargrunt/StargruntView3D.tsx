@@ -3,19 +3,22 @@
  * taking the very same `TableMapProps` (plus `onExit`). See
  * `../dirtside/DirtsideView3D.tsx`'s own header for the whole idea — this is
  * its Stargrunt twin, reading Stargrunt's own `GameState` and calling back
- * through the very same `onSelectUnit`/`onClickTable` the 2D map already
- * calls.
+ * through the very same `onSelectUnit`/`onSelectFigure`/`onClickTable` the
+ * 2D map already calls.
  *
- * STARGRUNT'S OWN FILE, along with `units.ts` and `overlays.ts` beside it —
- * extend all three freely (BRIEF-GROUND-3D's build order, stage 2).
- * `selectedFigureId`/`onSelectFigure` (deployment's own figure-level pick),
- * `moveGhost`, `assaultPreview` and `targeting` are accepted (`TableMapProps`
- * says so) but not yet drawn or wired into `units.ts`'s per-figure picking.
+ * STARGRUNT'S OWN FILE, along with `units.ts` and `overlays.ts` beside it
+ * (BRIEF-GROUND-3D's build order, stage 2/STARGRUNT). `moveGhost`,
+ * `assaultPreview` and `targeting` are now drawn (`overlays.ts`); deployment's
+ * own figure-level pick (p. 14) is wired below — a click tags a *figure* id
+ * during deployment (`units.ts`'s own `pickables()`) and this shell routes it
+ * to `onSelectFigure` instead of `onSelectUnit`, exactly the 2D map's own
+ * `hitOf`/`deployPhase` branch in `TableMap.tsx`.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { TableMapProps } from '../../stargrunt/TableMap'
 import { GroundScene, type CameraPreset } from '../GroundScene'
 import '../ground3d.css'
+import './stargrunt3d.css'
 import { STARGRUNT_SCALE, webglAvailable } from '../space'
 import { StargruntOverlaysLayer } from './overlays'
 import { StargruntUnitsLayer } from './units'
@@ -32,13 +35,14 @@ const CAMERA_PRESETS: ReadonlyArray<readonly [CameraPreset, string, string]> = [
 ]
 
 export default function StargruntView3D(props: StargruntView3DProps) {
-  const { state, selectedUnitId, onExit } = props
+  const { state, selectedUnitId, selectedFigureId, onExit } = props
   const host = useRef<HTMLDivElement>(null)
   const scene = useRef<GroundScene | null>(null)
   const units = useRef(new StargruntUnitsLayer())
   const overlays = useRef(new StargruntOverlaysLayer())
   const [failed, setFailed] = useState<string | null>(null)
   const [hover, setHover] = useState<{ text: string; at: { x: number; y: number } } | null>(null)
+  const [hoverUnitId, setHoverUnitId] = useState<string | null>(null)
   const [preset, setPreset] = useState<CameraPreset>('tilt')
   const [follow, setFollow] = useState(false)
 
@@ -59,9 +63,18 @@ export default function StargruntView3D(props: StargruntView3DProps) {
         getUnitPosition: (id) => units.current.drawnPosition(id),
       },
       {
-        onSelectUnit: (id) => propsRef.current.onSelectUnit(id),
+        // Deployment (p. 14) tags a pick with the *figure*'s own id (`units.ts`'s own contract); every other
+        // phase tags it with the unit's, exactly `TableMap.tsx`'s own `hitOf`/`deployPhase` branch.
+        onSelectUnit: (id) => {
+          const deploying = propsRef.current.state.phase === 'deployment' && !!propsRef.current.onSelectFigure
+          if (deploying) propsRef.current.onSelectFigure!(id)
+          else propsRef.current.onSelectUnit(id)
+        },
         onClickBoard: (point) => propsRef.current.onClickTable(point),
-        onHoverUnit: (id) => propsRef.current.onHoverUnit?.(id),
+        onHoverUnit: (id) => {
+          setHoverUnitId(id)
+          propsRef.current.onHoverUnit?.(id)
+        },
         onHoverText: (text, at) => setHover(text && at ? { text, at } : null),
       },
     )
@@ -84,8 +97,9 @@ export default function StargruntView3D(props: StargruntView3DProps) {
     if (!s) return
     s.update(state.setup.table, state.setup.table.terrain)
     const heightAt = (p: { x: number; y: number }) => s.heightAt(p)
-    units.current.update(state.figures, { heightAt, selectedUnitId })
-    overlays.current.update(state, { heightAt })
+    const targetUnitIds = props.targeting ? new Set(Object.keys(props.targeting.verdicts)) : undefined
+    units.current.update(state, { heightAt, selectedUnitId, selectedFigureId, hoverUnitId, targetUnitIds })
+    overlays.current.update(state, { heightAt, selectedUnitId, moveGhost: props.moveGhost, assaultPreview: props.assaultPreview, targeting: props.targeting })
   })
 
   useEffect(() => {

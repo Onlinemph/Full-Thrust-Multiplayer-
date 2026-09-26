@@ -1,0 +1,109 @@
+/* STARGRUNT'S OWN FILE — styling for the labels `units.ts`/`overlays.ts` pin
+   into the scene: the squad pennant (code, quality, confidence, suppression)
+   and the move/fire text. `ground3d.css` (GROUND's) gives every label its
+   base look (`.g3d-l`: font, no-wrap, the text shadow that keeps it legible
+   over any terrain); this file only adds Stargrunt's own classes on top of
+   it, matching `theme/stargruntMap.css`'s own tones (`--sg-co`/`--sg-st`/…)
+   copied to hex for the same reason `ground3d/palette.ts` copies
+   `dirtsideTokens.css` — a CSS2DObject's `<div>` is real DOM, so it *could*
+   read a custom property, but keeping every 3D colour in one place (here,
+   `palette.ts`) is the simpler rule to keep. Own class names (`sg3d-*`) so
+   nothing collides with Full Thrust's `l3d-*` labels sharing the bundle. */
+
+.sg3d-pennant {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 5px 2px 3px;
+  font-family: var(--font-display, sans-serif);
+  font-weight: 700;
+  font-size: 10.5px;
+  color: #0d1109;
+  background: #64d2ff;
+  border: 1px solid #0d1109;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+.sg3d-pennant.is-south {
+  background: #ffc24a;
+}
+.sg3d-pennant.is-active {
+  background: #ff7a3d;
+}
+.sg3d-pennant.is-selected,
+.sg3d-pennant.is-hovered {
+  border-color: #efe6c8;
+  border-width: 2px;
+  padding: 1px 4px 1px 2px;
+}
+.sg3d-code {
+  padding: 0 2px;
+}
+.sg3d-lead {
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(13, 17, 9, 0.85);
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 2px;
+}
+.sg3d-chip {
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #93a0bd;
+  background: rgba(19, 26, 43, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+.sg3d-chip.is-CO {
+  color: #1c3d33;
+  background: #6fe3c4;
+}
+.sg3d-chip.is-ST {
+  color: #0d1109;
+  background: #cdd4e2;
+}
+.sg3d-chip.is-SH {
+  color: #3d2a05;
+  background: #ffb020;
+}
+.sg3d-chip.is-BR {
+  color: #3a1907;
+  background: #ff7a3d;
+}
+.sg3d-chip.is-suppress {
+  color: #3d2a05;
+  background: #ffb020;
+}
+.sg3d-chip.is-ip {
+  color: #1c3d33;
+  background: #6fe3c4;
+}
+.sg3d-chip.is-dis,
+.sg3d-chip.is-ro {
+  color: #fff;
+  background: #ff5555;
+}
+
+.sg3d-move-label {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #efe6c8;
+  background: rgba(18, 20, 12, 0.72);
+  border-radius: 3px;
+}
+.sg3d-fire-label {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff7a3d;
+  background: rgba(18, 20, 12, 0.72);
+  border-radius: 3px;
+}
+.sg3d-fire-label.is-refused {
+  color: #5d6a86;
+}
