@@ -197,3 +197,95 @@
   letter-spacing: 0.05em;
   color: rgba(200, 212, 240, 0.8);
 }
+
+/* ── OVERLAYS (stage 2) ──────────────────────────────────────────────────
+   Labels pinned in the scene by overlays.ts: range-ring numbers, the fire
+   rose's per-arc readout, and the plotted-move ghost's speed/illegal note. */
+
+.l3d-ring {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: rgba(200, 212, 240, 0.75);
+}
+
+.l3d-rose {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  line-height: 1.25;
+  text-align: center;
+  color: var(--ink-dim);
+  white-space: pre-line;
+}
+.l3d-rose.is-armed {
+  color: var(--ink);
+}
+.l3d-rose.has-target {
+  color: #ffb27a;
+}
+.l3d-rose.is-lit {
+  color: #ffe08a;
+  text-shadow:
+    0 0 6px rgba(255, 224, 138, 0.7),
+    0 1px 2px #000;
+}
+
+.l3d-plot {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #9fd0ff;
+}
+.l3d-plot.is-illegal {
+  color: #ff9a8c;
+}
+
+/* The fire rose's DOM twin, in the HUD slot: `overlays.ts` draws the ring in
+   the scene; hovering (or focusing) one of these is how `onHoverArc` gets
+   wired without a 3D raycast against a ring that turns with the camera. */
+.battle3d-rose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  pointer-events: auto;
+}
+.battle3d-rose-arc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 3.6rem;
+  padding: 0.22rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(4px);
+  cursor: default;
+}
+.battle3d-rose-arc.is-armed {
+  color: var(--ink);
+}
+.battle3d-rose-arc.has-target {
+  border-color: #ff8a5c;
+  color: #ffb27a;
+}
+.battle3d-rose-arc.is-lit,
+.battle3d-rose-arc:hover,
+.battle3d-rose-arc:focus-visible {
+  border-color: #ffe08a;
+  color: #ffe08a;
+  outline: none;
+}
+.battle3d-rose-arc-name {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.battle3d-rose-arc-guns {
+  font-size: 0.6rem;
+  opacity: 0.9;
+}
+.battle3d-rose-arc-targets {
+  font-size: 0.6rem;
+  color: #ff8a5c;
+}
