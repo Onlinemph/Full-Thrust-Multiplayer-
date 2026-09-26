@@ -39,7 +39,8 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { engagedTargets } from '../../engine/game'
 import type { FighterGroupState, GameState, GunboatSquadronState } from '../../engine/game'
-import type { Arc, Point } from '../../engine/types'
+import type { Arc, MovementOrder, Point } from '../../engine/types'
+import { counterRadius } from '../Counter'
 import { outsideReach, reachOfAim, reachOfGroup, reachOfReturn, type Reach } from '../reach'
 import { dispatch, refuseAtTable } from '../store'
 import { BackdropLayer } from './backdrop'
@@ -49,7 +50,7 @@ import { pickableOf, tooltipOf, type Layer, type Pickable, type ViewProps } from
 import { OrdnanceLayer } from './ordnance'
 import { OverlaysLayer } from './overlays'
 import { ShipsLayer } from './ships'
-import { framingDistance } from './space'
+import { framingDistance, HULL_ALTITUDE } from './space'
 import { TerrainLayer } from './terrain'
 
 export type CameraPreset = 'tilt' | 'top' | 'low'
@@ -99,6 +100,8 @@ export class BattleScene {
   private boardSize = { width: 0, height: 0 }
   private follow = false
   private down: { x: number; y: number } | null = null
+  /** OrbitControls' own 'start'/'end' — for hiding the 3D order compass mid-drag. */
+  private dragging = false
   private resizeObserver: ResizeObserver
   private reducedMotion =
     typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -143,6 +146,12 @@ export class BattleScene {
     this.controls.maxPolarAngle = 84 * (Math.PI / 180)
     this.controls.minDistance = 3
     this.controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+    // SCENE (stage 3): the 3D order compass hides itself mid-drag (its own
+    // projected position would otherwise swim under the pointer while the
+    // camera is the thing actually moving) — OrbitControls' own start/end
+    // events, not a guess from pointer state.
+    this.controls.addEventListener('start', () => (this.dragging = true))
+    this.controls.addEventListener('end', () => (this.dragging = false))
 
     this.composer = new EffectComposer(this.renderer)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
@@ -176,6 +185,54 @@ export class BattleScene {
     for (const layer of this.layers) layer.update(ctx)
     this.overlays.setReach(this.computeReach())
     if (first || resized) this.setPreset('tilt', true)
+  }
+
+  /** Whether the camera is mid-drag (OrbitControls' own 'start'/'end') — the 3D order compass hides while this is true. */
+  isDragging(): boolean {
+    return this.dragging
+  }
+
+  /**
+   * Where `ships.ts` drew a hull on screen, in pixels relative to this
+   * scene's own host element (the same origin `onHover`'s tooltip position
+   * uses), and its on-screen clearance radius — what `BattleView3D.tsx`
+   * plants its 3D `OrderCompass` overlay on. Null once the hull is not drawn
+   * or sits behind the camera; a result outside the host's own width/height
+   * is still returned — the off-screen check is the caller's, exactly as
+   * `MapView.tsx`'s own `compassPoint` bounds-checks `drawnAt`.
+   */
+  projectToScreen(id: string): { x: number; y: number; clearance: number } | null {
+    if (!this.game) return null
+    const at = this.ships.drawnPosition(id)
+    const ship = this.game.ships.find((s) => s.id === id)
+    if (!at || !ship) return null
+    const center = new Vector3(at.x, HULL_ALTITUDE, at.z)
+    const toCamera = this.camera.position.clone().sub(center)
+    const forward = new Vector3()
+    this.camera.getWorldDirection(forward)
+    if (toCamera.dot(forward) > 0) return null // behind the camera
+    const rect = this.host.getBoundingClientRect()
+    const p = this.toPixel(center, rect)
+    const right = new Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0)
+    const edge = center.clone().addScaledVector(right, Math.max(0.5, counterRadius(ship.design.mass)))
+    const p2 = this.toPixel(edge, rect)
+    return { x: p.x, y: p.y, clearance: Math.hypot(p2.x - p.x, p2.y - p.y) }
+  }
+
+  private toPixel(point: Vector3, rect: { width: number; height: number }): { x: number; y: number } {
+    const v = point.clone().project(this.camera)
+    return { x: ((v.x + 1) / 2) * rect.width, y: ((1 - v.y) / 2) * rect.height }
+  }
+
+  /**
+   * The 3D compass's hovered candidate order, forwarded to the overlays
+   * layer's own ghost track — see `OverlaysLayer.setPreviewOrder`. Applied
+   * immediately rather than waiting for the next `update()` (a React render),
+   * so the ghost tracks the pointer in real time.
+   */
+  setOrderPreview(shipId: string | null, order: MovementOrder | null): void {
+    if (!this.game || !this.view) return
+    this.overlays.setPreviewOrder(shipId, order, this.game, this.view)
   }
 
   /** Point the camera at the board from one of the stock angles. */
@@ -309,6 +366,11 @@ export class BattleScene {
     const rect = this.host.getBoundingClientRect()
     const text = tooltipOf(hover)
     this.callbacks.onHover(text, text ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null)
+    // Phase 11's rose: a wedge under the pointer lights that arc across the
+    // view, the same as hovering the HUD legend's own DOM copy does — the
+    // rose ring turns with the ship, so this is a fresh raycast every move
+    // rather than a screen-space hit test.
+    if (this.view?.fireRose) this.callbacks.onHoverArc?.(this.overlays.arcUnderPointer(this.raycaster))
   }
 
   private onPointerUp = (e: PointerEvent): void => {
@@ -326,6 +388,7 @@ export class BattleScene {
   private onPointerLeave = (): void => {
     this.ships.setHovered(null)
     this.callbacks.onHover(null, null)
+    if (this.view?.fireRose) this.callbacks.onHoverArc?.(null)
   }
 
   private onDoubleClick = (e: MouseEvent): void => {

@@ -1,0 +1,35 @@
+/* ── SCENE (stage 3): the 3D HUD's own additions ────────────────────────────
+   BASE's `.battle3d-hud`/`.battle3d-cams`/`.battle3d-help`/`.battle3d-hud-extra`
+   and OVERLAYS' `.battle3d-rose*` live in three.css; this file is only for
+   what stage 3 adds on top of them — the compass's small "flat map" escape
+   hatch and the fire-rose HUD row's own layout once it can hold that link
+   too. Loaded from `BattleView3D.tsx` alongside `./three.css`. */
+
+/* `.battle3d-hud-extra` (three.css) goes full width once it holds anything;
+   phase 1's flat-map link and phase 11's fire-rose legend never show
+   together (orders vs. ship-fire), so the same row serves both without ever
+   crowding — this only has to lay out whichever one is actually there. */
+.battle3d-hud-extra {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+/* The compass is a full, working control in 3D now (SCENE, stage 3), so this
+   is not a hand-off any more — just a quiet way back to the flat panel for
+   anyone who would rather use it. Small and dim rather than the old banner's
+   blocking orange button, and it sits in the HUD row instead of floating
+   over the board. */
+.battle3d-flatmap {
+  padding: 0.25rem 0.55rem;
+  font-size: var(--text-xs);
+  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.battle3d-flatmap:hover:not(:disabled) {
+  color: var(--side-a);
+  border-color: var(--side-a);
+}

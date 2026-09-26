@@ -390,3 +390,14 @@
   background: var(--side-a);
   border-color: var(--side-a);
 }
+
+/* The active button hovered: `.map-mode-switch button:hover` above outranks
+   `.is-on` on specificity alone, so without this the label's own colour
+   would flip back to --side-a — the same as the fill it sits on — and
+   disappear. Brightened rather than left plain, so the state still reads as
+   hovered. */
+.map-mode-switch button.is-on:hover:not(:disabled) {
+  color: var(--on-bright);
+  background: color-mix(in srgb, var(--side-a) 85%, #ffffff);
+  border-color: color-mix(in srgb, var(--side-a) 85%, #ffffff);
+}

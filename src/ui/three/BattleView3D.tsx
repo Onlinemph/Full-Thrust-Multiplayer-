@@ -9,22 +9,33 @@
  * callbacks and the same `dispatch`/`refuseAtTable` `BattleScene` calls
  * directly. The rules do not know or care which view is on screen.
  *
- * HUD SLOT (stage 2, filled by OVERLAYS): `.battle3d-hud-extra` holds the
- * phase 11 fire rose's numbers — `FireRoseHud` below. The rose's wedges are
- * drawn in the scene by `overlays.ts`; this DOM copy exists because hovering
- * it is how `onHoverArc` gets wired without reaching into `BattleScene.ts`'s
- * own raycaster (which is not `overlays.ts`'s file to touch) to hit-test a
- * ring that turns with the camera. The camera chips and the exit/hand-off
- * banner above the slot are BASE's and stay put.
+ * `.battle3d-hud-extra` holds the phase 11 fire rose's numbers —
+ * `FireRoseHud` below. The rose's wedges are drawn in the scene by
+ * `overlays.ts`; this DOM copy exists because hovering (or focusing) it is
+ * one way `onHoverArc` gets wired — `BattleScene`'s own pointer handling
+ * raycasts the ring itself for the same callback (SCENE, stage 3), so either
+ * one lights the arc.
+ *
+ * SCENE (stage 3): phase 1's `OrderCompass` — the same component `MapView`
+ * mounts — is planted over the canvas at the selected ship's own projected
+ * screen position (`BattleScene.projectToScreen`), tracked every animation
+ * frame so it rides along as the camera orbits, follows or flies. It hides
+ * itself mid-drag or once the hull is off screen (the `compassAt` effect
+ * below) rather than float over nothing. The old blocking "plot it on the
+ * flat map" banner is gone; a small link in the HUD (`.battle3d-flatmap`) is
+ * kept for anyone who would rather use the 2D panel.
  */
 import { useEffect, useRef, useState } from 'react'
-import { optional } from '../../engine/actions'
+import { optional, shipsAwaitingOrders } from '../../engine/actions'
 import type { ShipState } from '../../engine/game'
 import { canManoeuvre } from '../../engine/specialmoves'
+import type { MovementOrder } from '../../engine/types'
 import { describeReady, fireArcs } from '../fireArcs'
 import type { MapViewProps } from '../MapView'
+import { OrderCompass } from '../OrderCompass'
 import { useFx } from '../useFx'
 import { BattleScene, type CameraPreset, type SceneCallbacks } from './BattleScene'
+import './hud.css'
 import type { ViewProps } from './layer'
 import { roseFor } from './overlays'
 import './three.css'
@@ -105,13 +116,14 @@ export function webglAvailable(): boolean {
 }
 
 /**
- * Whether the selected ship still wants a course written this turn — 3.5,
- * under cinematic movement only (12.12's vector sheet is written from its
- * own panel, not a click on the table, in 2D or 3D alike). Mirrors
- * `MapView.tsx`'s own `compassFor`, minus the "is it actually drawn" check
- * that only the 2D plot's layout can answer.
+ * Whether the selected ship gets the 3D compass this turn — 3.5, under
+ * cinematic movement only (12.12's vector sheet is written from its own
+ * panel, not a click on the table, in 2D or 3D alike, so a vector-order ship
+ * gets no compass in either view). Exactly `MapView.tsx`'s own `compassFor`,
+ * minus the "is it actually drawn" check, which here is `projectToScreen`
+ * returning a point still inside the canvas.
  */
-function needsOrderHandoff(
+function wantsCompass(
   game: MapViewProps['game'],
   ship: ShipState | undefined,
   canCommand: MapViewProps['canCommand'],
@@ -142,6 +154,8 @@ export default function BattleView3D({
   onAimed,
   returnWith = null,
   onReturned,
+  onHoldCourse,
+  onNextShip,
   onExit,
 }: BattleView3DProps) {
   const host = useRef<HTMLDivElement>(null)
@@ -150,6 +164,7 @@ export default function BattleView3D({
   const [hover, setHover] = useState<{ text: string; at: { x: number; y: number } } | null>(null)
   const [preset, setPreset] = useState<CameraPreset>('tilt')
   const [follow, setFollow] = useState(false)
+  const [compassAt, setCompassAt] = useState<{ x: number; y: number; clearance: number } | null>(null)
   const fx = useFx()
 
   const callbacks: SceneCallbacks = {
@@ -222,6 +237,36 @@ export default function BattleView3D({
     scene.current?.setPreset(p)
   }
 
+  const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
+  const compassOn = wantsCompass(game, selected, canCommand)
+  const compassShipId = compassOn ? (selected?.id ?? null) : null
+
+  // The compass rides the selected ship's own screen position, which changes
+  // every frame the camera orbits, follows or flies — not only on a React
+  // render — so it is tracked from its own small animation-frame loop rather
+  // than the per-render `scene.current.update(...)` effect below.
+  useEffect(() => {
+    if (!compassShipId) {
+      setCompassAt(null)
+      return
+    }
+    let raf = 0
+    const tick = () => {
+      const s = scene.current
+      const h = host.current
+      const p = s && h && !s.isDragging() ? s.projectToScreen(compassShipId) : null
+      const onScreen = p && h && p.x >= 0 && p.x <= h.clientWidth && p.y >= 0 && p.y <= h.clientHeight ? p : null
+      setCompassAt((prev) =>
+        prev && onScreen && prev.x === onScreen.x && prev.y === onScreen.y && prev.clearance === onScreen.clearance
+          ? prev
+          : onScreen,
+      )
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [compassShipId])
+
   if (failed) {
     return (
       <div className="battle3d battle3d-failed" role="alert">
@@ -234,9 +279,6 @@ export default function BattleView3D({
       </div>
     )
   }
-
-  const selected = selectedId ? game.ships.find((s) => s.id === selectedId) : undefined
-  const handoff = needsOrderHandoff(game, selected, canCommand)
 
   return (
     <div className="battle3d" ref={host} role="img" aria-label="Play surface, 3D view">
@@ -276,22 +318,39 @@ export default function BattleView3D({
           {fireRose && selected && roseFor(game, selected, viewingSide) ? (
             <FireRoseHud game={game} ship={selected} litArcs={litArcs} onHoverArc={onHoverArc} />
           ) : null}
+          {compassOn && onExit ? (
+            <button type="button" className="battle3d-flatmap" onClick={onExit}>
+              Flat map instead ↗
+            </button>
+          ) : null}
         </div>
       </div>
 
       {/*
-       * 3.5's compass is a 2D-only control (it edits the plotted course by
-       * dragging round a ring on the flat map); rather than leave a selected
-       * ship silently un-orderable in 3D, this is the hand-off the brief
-       * asks for: never a dead end.
+       * Phase 1's compass, planted at the selected ship's own projected
+       * screen point (tracked every frame above) — the same `OrderCompass`
+       * `MapView.tsx` mounts, so an order written here is an order written,
+       * full stop. It only ever shows once that point is actually on screen;
+       * off screen, mid-drag, or under vector movement (no compass in either
+       * view — the `.battle3d-flatmap` link above is the way to its own
+       * panel), nothing is drawn here at all.
        */}
-      {handoff && onExit ? (
-        <div className="battle3d-handoff">
-          <p>{selected?.name} still needs this turn's course.</p>
-          <button type="button" className="primary" onClick={onExit}>
-            Plot it on the flat map
-          </button>
-        </div>
+      {compassAt && selected ? (
+        <OrderCompass
+          key={selected.id}
+          ship={selected}
+          x={compassAt.x}
+          y={compassAt.y}
+          clearance={compassAt.clearance}
+          onTrack={selected.orbit !== null}
+          editable={canCommand?.(selected) ?? true}
+          onHold={() => onHoldCourse?.(selected)}
+          onNext={() => onNextShip?.(selected.id)}
+          moreToWrite={shipsAwaitingOrders(game).some(
+            (ship) => ship.id !== selected.id && (canCommand?.(ship) ?? true),
+          )}
+          onPreview={(order: MovementOrder | null) => scene.current?.setOrderPreview(selected.id, order)}
+        />
       ) : null}
 
       {hover && (

@@ -104,31 +104,6 @@
   pointer-events: auto;
 }
 
-/* 3.5's compass has no 3D counterpart (it drags a ring on the flat map):
-   a hand-off banner instead of a dead end, bottom-centre so it never sits
-   over a hull the player is trying to look at. */
-.battle3d-handoff {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.8rem;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  border: 1px solid var(--side-a);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
-}
-.battle3d-handoff p {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--ink);
-  white-space: nowrap;
-}
-
 /* Hover text, the 3D counterpart of the map's title/aria-label text. */
 .battle3d-tip {
   position: absolute;
@@ -256,6 +231,16 @@
 }
 .l3d-plot.is-illegal {
   color: #ff9a8c;
+}
+
+/* ── SCENE (stage 3) ─────────────────────────────────────────────────────
+   The returning-ship edge band's own callout — 2D's `.reach-label` read at
+   full ink brightness, not `.l3d-ring`'s dim readout, since this is telling
+   someone where to click. */
+.l3d-edge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--ink);
 }
 
 /* The fire rose's DOM twin, in the HUD slot: `overlays.ts` draws the ring in
