@@ -6,8 +6,10 @@
  * `glowTexture`/`flareTexture` are the shared soft dot and four-point flare
  * every layer wants. `cloudTexture` is soft layered noise for a dust-cloud or
  * nebula billboard (`terrain.ts`, `backdrop.ts`), `worldTexture` paints a
- * planet or planetoid's surface for `terrain.ts`'s world spheres, and
- * `beamTexture` is the running current in a weapon beam's core (`effects.ts`).
+ * planet or planetoid's surface for `terrain.ts`'s world spheres,
+ * `platingTexture` breaks a hull's gunmetal up into panels and seams for
+ * `hulls.ts`/`ships.ts`, and `beamTexture` is the running current in a
+ * weapon beam's core (`effects.ts`).
  */
 import { CanvasTexture, Color, RepeatWrapping, SRGBColorSpace, type Texture } from 'three'
 
@@ -62,6 +64,77 @@ export function flareTexture(): Texture {
       ctx.fillRect(c - w / 2, c - h / 2, w, h)
     }
   })
+}
+
+/**
+ * A hull's gunmetal plating, broken into a grid of panels with seams, a few
+ * rivets and a soft directional sheen — so a `MeshStandardMaterial` reads as
+ * built-up armour rather than one flat-shaded slab. Values stay light and
+ * fairly neutral (never darker than mid-grey) because it multiplies against
+ * the plating material's own base colour; it is not the colour itself.
+ * Tileable in both axes so `hulls.ts`'s extruded side walls, whose UVs run
+ * the outline's arc-length, keep repeating cleanly rather than showing a seam
+ * where a hull's own contour wraps back to its start.
+ */
+export function platingTexture(): Texture {
+  const tex = canvasTexture('plating', 256, (ctx, s) => {
+    ctx.fillStyle = '#9aa1ac'
+    ctx.fillRect(0, 0, s, s)
+    // A hair of tonal variation, not a gradient a single flat UV island would
+    // show as a hard diagonal streak — the real sheen a hull wants comes from
+    // `MeshStandardMaterial`'s own metalness picking up the room environment
+    // and the sun, not from anything painted into the map.
+
+    // Panel seams: a grid, offset every other row like plating courses, each
+    // seam a hair darker than the base so it reads under raking light without
+    // ever going anywhere near black.
+    const cols = 8
+    const rows = 10
+    ctx.strokeStyle = 'rgba(30,34,40,0.35)'
+    ctx.lineWidth = 1.4
+    for (let r = 0; r <= rows; r++) {
+      const y = (r / rows) * s
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(s, y)
+      ctx.stroke()
+    }
+    for (let r = 0; r < rows; r++) {
+      const offset = r % 2 === 0 ? 0 : 0.5
+      const y0 = (r / rows) * s
+      const y1 = ((r + 1) / rows) * s
+      for (let c = 0; c <= cols; c++) {
+        const x = ((c + offset) / cols) * s
+        ctx.beginPath()
+        ctx.moveTo(x, y0)
+        ctx.lineTo(x, y1)
+        ctx.stroke()
+      }
+    }
+
+    // A handful of rivets per panel corner, small enough to vanish at
+    // ordinary camera distance and only ever add texture, not noise.
+    let seed = 7
+    const rand = () => {
+      seed = (seed * 9301 + 49297) % 233280
+      return seed / 233280
+    }
+    ctx.fillStyle = 'rgba(20,22,26,0.3)'
+    for (let r = 0; r < rows; r++) {
+      const offset = r % 2 === 0 ? 0 : 0.5
+      for (let c = 0; c < cols; c++) {
+        if (rand() > 0.55) continue
+        const x = ((c + offset + 0.06) / cols) * s
+        const y = ((r + 0.08) / rows) * s
+        ctx.beginPath()
+        ctx.arc(x, y, 1.1, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  })
+  tex.wrapS = RepeatWrapping
+  tex.wrapT = RepeatWrapping
+  return tex
 }
 
 /**

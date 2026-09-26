@@ -112,4 +112,49 @@ describe('buildHull', () => {
       expect(mount.z).toBeGreaterThan(0) // astern is +Z
     }
   })
+
+  it('gives every hull a little relief: a raised superstructure sized off its own reach', () => {
+    const cruiser = buildHull(heavyCruiser, counterRadius(heavyCruiser.mass))
+    const position = cruiser.superstructure.getAttribute('position')
+    expect(position.count).toBeGreaterThan(4)
+    // Sitting clear of the plating's own top, not buried in it or floating
+    // free of it.
+    expect(cruiser.superstructureAt.top).toBeGreaterThan(cruiser.top)
+    // Set a touch aft of amidships (a bridge, not dead-centre) for a hull
+    // with a keel to place it along.
+    expect(cruiser.superstructureAt.z).toBeGreaterThan(0)
+
+    // A bigger hull's ridge is bigger too, not a fixed size regardless of the
+    // ship it sits on — measured off the geometry's own bounding box rather
+    // than a hard-coded number, so this only checks the *relationship*.
+    const frigate = buildHull(designNamed('Frigate'), counterRadius(designNamed('Frigate').mass))
+    const span = (geo: typeof cruiser.superstructure) => {
+      geo.computeBoundingBox()
+      const box = geo.boundingBox!
+      return (box.max.x - box.min.x) * (box.max.z - box.min.z)
+    }
+    expect(span(cruiser.superstructure)).toBeGreaterThan(span(frigate.superstructure))
+  })
+
+  it('gives a station a superstructure too, centred rather than offset astern (no keel to set it along)', () => {
+    const hull = buildHull(starbase, counterRadius(starbase.mass))
+    expect(hull.superstructureAt.z).toBe(0)
+  })
+
+  it('reaches a bow point and both quarters with running lights, world-local', () => {
+    const hull = buildHull(heavyCruiser, counterRadius(heavyCruiser.mass))
+    expect(hull.navLights.length).toBeGreaterThanOrEqual(3)
+    const bow = hull.navLights.find((p) => p.x === 0)
+    expect(bow).toBeDefined()
+    expect(bow!.z).toBeLessThan(0) // the bow is the −Z end
+    const [port, starboard] = hull.navLights.filter((p) => p.x !== 0)
+    expect(port.x).toBeCloseTo(-starboard.x, 5) // symmetric either side of the keel
+  })
+
+  it('reports the hull\'s own half-beam alongside its half-length', () => {
+    const hull = buildHull(heavyCruiser, counterRadius(heavyCruiser.mass))
+    expect(hull.halfBeam).toBeGreaterThan(0)
+    // The test above already established this hull reads longer than broad.
+    expect(hull.halfBeam).toBeLessThan(hull.halfLength)
+  })
 })

@@ -156,23 +156,43 @@
     0 1px 2px #000;
 }
 
+/* A ship's own name, raised above and to one side of the hull (ships.ts) and
+   chip-styled like the flat map's own name chip (`.counter-chip`,
+   `src/ui/theme/ftMap.css`) rather than plain outlined text laid across the
+   model — small enough, and backed by its own panel, to stay legible over a
+   crowded hull instead of competing with its plating for the eye. */
 .l3d-name {
-  font-size: 11px;
+  font-size: 9px;
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
-  color: var(--ink);
+  color: var(--ink-dim);
+  padding: 1px 5px;
+  line-height: 1.3;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 .l3d-name.l3d-a {
   color: var(--side-a);
+  border-color: color-mix(in srgb, var(--side-a) 40%, var(--line));
 }
 .l3d-name.l3d-b {
   color: var(--side-b);
+  border-color: color-mix(in srgb, var(--side-b) 40%, var(--line));
 }
 .l3d-name.l3d-c {
   color: var(--side-c);
+  border-color: color-mix(in srgb, var(--side-c) 40%, var(--line));
 }
 .l3d-name.is-ghost {
   opacity: 0.55;
+  font-style: italic;
+}
+/* A wreck's own chip: no side left to speak for it. */
+.l3d-name.is-wreck {
+  color: var(--ink-faint);
+  border-color: var(--line);
+  border-style: dashed;
   font-style: italic;
 }
 

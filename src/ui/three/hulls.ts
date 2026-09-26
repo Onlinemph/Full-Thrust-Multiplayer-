@@ -17,7 +17,7 @@
  * the silhouette are both functions of the *design*, not the instance —
  * materials are per ship, since damage and cloaks change them.
  */
-import { BufferGeometry, EdgesGeometry, ExtrudeGeometry, Shape, Vector2 } from 'three'
+import { BufferGeometry, CylinderGeometry, EdgesGeometry, ExtrudeGeometry, Shape, Vector2 } from 'three'
 import type { ShipDesign } from '../../engine/types'
 import { hullExtent } from '../plot/hullExtent'
 import { COUNTER_EXTENT, counterSilhouette } from '../ssd/layout'
@@ -106,13 +106,77 @@ export interface HullGeometry {
   engineMounts: ReadonlyArray<{ x: number; z: number }>
   /** Half the hull's own length (nose to tail), in MU. */
   halfLength: number
+  /** Half the hull's own widest beam, in MU — for anything shaped round the hull rather than along its keel (a screen shell). */
+  halfBeam: number
   /** Top of the plating above the board plane, in MU — where a badge or ring can sit clear of it. */
   top: number
   /** True for a hull with no bow to point (a station, or a ship with no drive) — `counterSilhouette`'s own flag. */
   radial: boolean
+  /**
+   * A little relief so the hull is not a single flat plate: a raised
+   * ridge/deckhouse sized off the hull's own footprint (bigger for a bigger
+   * ship). World-local, sitting on top of the plating.
+   */
+  superstructure: BufferGeometry
+  /** Where `superstructure` sits, world-local, and its own top surface (for a bridge strip or mast to clear it). */
+  superstructureAt: { x: number; z: number; top: number }
+  /** A handful of running-light points along the hull's outer edge, world-local (x, z). */
+  navLights: ReadonlyArray<{ x: number; z: number }>
 }
 
 const cache = new Map<string, HullGeometry>()
+
+/**
+ * A raised ridge/deckhouse on top of the plating — the little relief a flat
+ * silhouette does not give on its own, so a hull reads as a built thing
+ * rather than one extruded plate. An elongated, tapered block set a touch
+ * aft of amidships for a hull with a bow to point (a keel spine, roughly
+ * where a bridge sits); a squat drum for a station, which has no keel to run
+ * one along. Sized off the hull's own footprint (`radius` — `hullGeometry`'s
+ * own MU reach), so a frigate's ridge and a dreadnought's are each
+ * proportionate to their own hull rather than to a shared constant.
+ */
+function buildSuperstructure(
+  radial: boolean,
+  halfBeam: number,
+  halfLength: number,
+  top: number,
+  radius: number,
+): { geo: BufferGeometry; z: number; structureTop: number } {
+  const height = Math.max(0.045, Math.min(radius * 0.34, radius * 0.16 + 0.03))
+  const footprint = radial ? Math.min(halfBeam, radius) * 0.55 : Math.min(halfBeam * 0.58, radius * 0.34)
+  const length = radial ? footprint : Math.min(halfLength * 0.85, radius * 1.35)
+  const segments = radial ? 10 : 4
+  // A quarter-turn `thetaStart` on a four-gon lines its flat faces up with
+  // the hull's own local axes instead of leaving a corner pointing down the
+  // keel — the same trick a low-poly box-from-a-cylinder always needs.
+  const geo = new CylinderGeometry(footprint * 0.72, footprint, height, segments, 1, false, radial ? 0 : Math.PI / 4)
+  if (!radial) geo.scale(1, 1, length / Math.max(0.001, footprint))
+  geo.translate(0, height / 2, 0)
+  geo.userData.shared = true
+  return { geo, z: radial ? 0 : halfLength * 0.12, structureTop: top + height }
+}
+
+/** A few running-light points along the hull's outer edge — bow, and both quarters — world-local (x, z). */
+function buildNavLights(
+  radial: boolean,
+  halfBeam: number,
+  noseZ: number,
+  tailZ: number,
+): Array<{ x: number; z: number }> {
+  if (radial) {
+    return [
+      { x: halfBeam * 0.92, z: 0 },
+      { x: -halfBeam * 0.92, z: 0 },
+    ]
+  }
+  const midZ = (noseZ + tailZ) / 2
+  return [
+    { x: 0, z: noseZ * 0.94 },
+    { x: -halfBeam * 0.85, z: midZ },
+    { x: halfBeam * 0.85, z: midZ },
+  ]
+}
 
 /**
  * A hull's geometry, sized to `radius` — `counterRadius(design.mass)`, the
@@ -161,14 +225,23 @@ export function buildHull(design: ShipDesign, radius: number): HullGeometry {
             { x: extent.halfBeam * 0.42 * k, z: extent.tailY * k },
           ]
 
+  const halfBeamMU = extent.halfBeam * k
+  const halfLengthMU = ((extent.tailY - extent.noseY) / 2) * k
+  const topMU = rawDepth * k + bevel * k * 2
+  const structure = buildSuperstructure(silhouette.radial, halfBeamMU, halfLengthMU, topMU, radius)
+
   const geometry: HullGeometry = {
     plating,
     trim,
     spine,
     engineMounts,
-    halfLength: ((extent.tailY - extent.noseY) / 2) * k,
-    top: rawDepth * k + bevel * k * 2,
+    halfLength: halfLengthMU,
+    halfBeam: halfBeamMU,
+    top: topMU,
     radial: silhouette.radial,
+    superstructure: structure.geo,
+    superstructureAt: { x: 0, z: structure.z, top: structure.structureTop },
+    navLights: buildNavLights(silhouette.radial, halfBeamMU, extent.noseY * k, extent.tailY * k),
   }
   cache.set(design.id, geometry)
   return geometry
