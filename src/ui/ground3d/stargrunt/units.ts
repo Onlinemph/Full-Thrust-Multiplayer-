@@ -59,6 +59,7 @@ import { isInIntegrity } from '../../../stargrunt/table/cover'
 import { alive } from '../../../stargrunt/table/game'
 import { QUALITY_DIE, type Confidence, type FigureState, type GameState, type UnitState } from '../../../stargrunt/types'
 import { disposeTree, setTooltip, tagPickable, type FrameContext, type Layer, type Point } from '../layer'
+import { declutterLabels, type DeclutterCandidate } from '../labels'
 import { sideColorOf } from '../palette'
 
 export interface StargruntUnitsOptions {
@@ -69,6 +70,16 @@ export interface StargruntUnitsOptions {
   hoverUnitId?: string | null
   /** Enemy units under consideration as a fire target (`targeting.verdicts`'s own keys) — `map/figures.tsx`'s own `target` ring. */
   targetUnitIds?: ReadonlySet<string>
+  /**
+   * A pennant clicked (R11): the 2D map's own `SquadPennant` is a first-class
+   * click target (`data-unit`, `TableMap.tsx`'s own `hitOf`); a `CSS2DObject`
+   * label is inert by default (`pointer-events: none`, `ground3d.css`), so
+   * without this a click on exactly where a squad's flag is drawn does
+   * nothing. The same `onSelectUnit` `StargruntView3D.tsx` already hands
+   * `GroundScene` for its own unit pickables, so a pennant click resolves
+   * through the very same deployment/figure branching.
+   */
+  onSelectUnit?: (id: string) => void
 }
 
 const BASE_R = 0.185
@@ -156,6 +167,9 @@ export class StargruntUnitsLayer implements Layer {
   private entries = new Map<string, Entry>()
   private pennants = new Map<string, PennantEntry>()
   private deployPhase = false
+  /** Latest values from `update()`'s own `opts`, read back by `tick()`'s declutter pass (K2) — a frame can land between two `update()` calls. */
+  private selectedUnitId: string | null = null
+  private hoverUnitId: string | null = null
 
   constructor() {
     this.group.name = 'stargrunt-units'
@@ -164,6 +178,8 @@ export class StargruntUnitsLayer implements Layer {
 
   update(state: GameState, opts: StargruntUnitsOptions): void {
     this.deployPhase = state.phase === 'deployment'
+    this.selectedUnitId = opts.selectedUnitId
+    this.hoverUnitId = this.deployPhase ? null : (opts.hoverUnitId ?? null)
     const codes = unitCodes(state)
     const activeUnitId = state.activation?.unitId ?? null
 
@@ -259,6 +275,15 @@ export class StargruntUnitsLayer implements Layer {
       this.pennantsGroup.add(label)
       entry = { pole, label }
       this.pennants.set(unit.id, entry)
+    }
+    // R11: `ground3d.css` makes every label `pointer-events: none` by
+    // default; `stargrunt3d.css` opts this one back in so a real click can
+    // land on it, forwarded here (never `addEventListener`, so re-pointing
+    // it at this update's own `opts.onSelectUnit` on every call never piles
+    // up stale listeners from an earlier one).
+    entry.label.element.onclick = (e) => {
+      e.stopPropagation()
+      opts.onSelectUnit?.(unit.id)
     }
     const ground = opts.heightAt(anchor)
     const base = new Vector3(anchor.x, ground + STAND_HEIGHT, anchor.y)
@@ -388,16 +413,39 @@ export class StargruntUnitsLayer implements Layer {
     return null
   }
 
-  tick({ now, reducedMotion }: FrameContext): void {
-    if (reducedMotion) return
-    const spin = (now / 4000) % (Math.PI * 2)
-    for (const entry of this.entries.values()) {
-      if (entry.activeRing.visible) entry.activeRing.rotation.z = spin
+  tick(frame: FrameContext): void {
+    const { now, reducedMotion } = frame
+    if (!reducedMotion) {
+      const spin = (now / 4000) % (Math.PI * 2)
+      for (const entry of this.entries.values()) {
+        if (entry.activeRing.visible) entry.activeRing.rotation.z = spin
+      }
     }
+    this.declutter(frame)
+  }
+
+  /** K2: every squad pennant, kept by priority (the hovered unit, the selected unit, nearest first) and faded the rest. */
+  private declutter(frame: FrameContext): void {
+    const candidates: DeclutterCandidate[] = []
+    for (const [unitId, entry] of this.pennants) {
+      const distance = frame.camera.position.distanceTo(entry.label.position)
+      const priority = unitId === this.hoverUnitId ? 0 : unitId === this.selectedUnitId ? 1 : 2
+      candidates.push({ element: entry.label.element, priority, distance })
+    }
+    declutterLabels(candidates, frame.hostTop)
   }
 
   dispose(): void {
     disposeTree(this.group)
+    // Detach every figure/pennant from their own persistent sub-group — left
+    // attached, React StrictMode's dev-only double mount (a fresh
+    // `GroundScene` built right after this layer's own `dispose()`, reusing
+    // this same persisted layer instance) would see empty `entries`/
+    // `pennants` maps and spawn a fresh figure/pennant for every live one
+    // right alongside these stale, already-disposed ones — the doubled
+    // pennant this review found (R13).
+    this.figuresGroup.clear()
+    this.pennantsGroup.clear()
     this.entries.clear()
     this.pennants.clear()
   }

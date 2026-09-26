@@ -57,7 +57,9 @@ export const DST = {
   swampWater: 0x8fb0a6,
   swampReed: 0x2f4331,
 
-  surround: 0x11140d,
+  // Lit close to the fog's own tone (R10): near-black read as a dark stripe
+  // around the table before it had faded into the horizon at all.
+  surround: 0x585a4c,
   frame: 0x2c2819,
 
   buildingWall: 0x5c5748,

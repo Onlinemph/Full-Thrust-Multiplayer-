@@ -9,16 +9,12 @@
  *
  * `moveGhost` in `TableMapProps` carries no destination of its own — the 2D
  * map reads the mouse's own table point, tracked as local state inside
- * `TableMap.tsx`, never passed down as a prop. `GroundScene` (GROUND's, not
- * mine) has no equivalent: its own pointer handling resolves a board point
- * only on click (`onClickBoard`), which is enough to *commit* a move the
- * same way the 2D map's own click does, but there is no live board-point
- * callback to preview one being dragged, and the camera/raycaster that could
- * build one are private to `GroundScene`. So the move ghost here shows what
- * it can without one: the reach ring around the squad's own current
- * position and a label naming the move, not a ghost base following the
- * cursor. Noted for GROUND/the integrator: a `onHoverBoard(point)` callback
- * on `GroundCallbacks` would close this gap for a later pass.
+ * `TableMap.tsx`, never passed down as a prop. `GroundScene.onPointerBoard`
+ * (K1) hands this shell the same live board point instead, passed straight
+ * through as `opts.pointer`: the reach ring around the squad's own current
+ * position still draws from the budget alone, but the move line and each
+ * figure's own ghost base now follow the pointer exactly as the 2D map's
+ * own `MoveGhost` does.
  *
  * Same shape as `units.ts`'s own contract:
  *
@@ -33,8 +29,8 @@ import { isInIntegrity, minEnclosingCircle, unitCentre } from '../../../stargrun
 import type { FigureMove, FigureState, GameState, MobilityKind, SideId } from '../../../stargrunt/types'
 import { deploymentBand, hash, reachPolygon } from '../../stargrunt/map/geometry'
 import type { TargetVerdict } from '../../stargrunt/map/overlays'
-import { disposeTree, setTooltip, type Layer, type Point } from '../layer'
-import { makeLabel, setLabel, type CSS2DObject } from '../labels'
+import { disposeTree, setTooltip, type FrameContext, type Layer, type Point } from '../layer'
+import { declutterLabels, makeLabel, setLabel, type CSS2DObject, type DeclutterCandidate } from '../labels'
 import { sideColorOf } from '../palette'
 import { STARGRUNT_SCALE } from '../space'
 
@@ -44,6 +40,10 @@ export interface StargruntOverlaysOptions {
   moveGhost?: { mobility: MobilityKind; figureIds: string[]; mode: 'normal' | 'combat' | 'travel'; inches: number | null } | null
   assaultPreview?: { moves: readonly FigureMove[]; costs: readonly number[]; maxOneRoll: number } | null
   targeting?: { firingUnitId: string; verdicts: Record<string, TargetVerdict> } | null
+  /** K1: the board point under the pointer (`GroundScene.onPointerBoard`) — what the move ghost's own line and figure bases follow; null off the board. */
+  pointer?: Point | null
+  /** K2: the unit under the pointer — a fire line's own odds/verdict chip for it never fades for crowding. */
+  hoverUnitId?: string | null
 }
 
 const OBJECTIVE_RADIUS = 0.7
@@ -95,8 +95,14 @@ export class StargruntOverlaysLayer implements Layer {
   private integrityLine: Line | null = null
   private moveRing: Line | null = null
   private moveLabel: CSS2DObject | null = null
+  /** The move ghost's own line and per-figure destination marks, following the pointer (K1). */
+  private moveLine: Line | null = null
+  private moveGhostBases: Mesh[] = []
   private assaultPaths = new Map<string, { line: Line; dot: Mesh }>()
   private firePaths = new Map<string, { line: Line; label: CSS2DObject }>()
+  /** Latest values from `update()`'s own `opts`, read back by `tick()`'s declutter pass (K2) — a frame can land between two `update()` calls. */
+  private selectedUnitId: string | null = null
+  private hoverUnitId: string | null = null
 
   constructor() {
     this.group.name = 'stargrunt-overlays'
@@ -104,6 +110,8 @@ export class StargruntOverlaysLayer implements Layer {
   }
 
   update(state: GameState, opts: StargruntOverlaysOptions): void {
+    this.selectedUnitId = opts.selectedUnitId ?? null
+    this.hoverUnitId = opts.hoverUnitId ?? null
     this.updateObjectives(state, opts)
     this.updateDeploymentZones(state, opts)
     this.updateInPosition(state, opts)
@@ -230,13 +238,15 @@ export class StargruntOverlaysLayer implements Layer {
     }
   }
 
-  /** No live destination to draw to (see this file's own header) — just the squad's own reach for the move under way, draped on the ground around its current position. */
+  /** The squad's own reach for the move under way, and (K1) a line and each figure's own ghost base following the pointer — exactly the 2D map's own `MoveGhost`. */
   private updateMoveGhost(state: GameState, opts: StargruntOverlaysOptions): void {
     const ghost = opts.moveGhost
     const figs = ghost ? ghost.figureIds.map((id) => state.figures[id]).filter((f): f is FigureState => !!f) : []
     if (!ghost || figs.length === 0 || ghost.inches === null) {
       if (this.moveRing) this.moveRing.visible = false
       if (this.moveLabel) this.moveLabel.visible = false
+      if (this.moveLine) this.moveLine.visible = false
+      for (const base of this.moveGhostBases) base.visible = false
       return
     }
     const origin = unitCentre(figs.map((f) => f.position))
@@ -247,12 +257,38 @@ export class StargruntOverlaysLayer implements Layer {
     }
     this.moveRing.visible = ring.length > 0
     if (ring.length > 0) this.moveRing.geometry.setFromPoints(drapedRing(ring, opts.heightAt, LIFT))
+
+    const pointer = opts.pointer ?? null
+    if (!this.moveLine) {
+      this.moveLine = new Line(new BufferGeometry(), new LineBasicMaterial({ color: THRUST_COLOR, transparent: true, opacity: 0.85, toneMapped: false }))
+      this.moveGroup.add(this.moveLine)
+    }
+    this.moveLine.visible = !!pointer
+    if (pointer) this.moveLine.geometry.setFromPoints(drapedSegment(origin, pointer, opts.heightAt, LIFT))
+
+    while (this.moveGhostBases.length < figs.length) {
+      const mesh = new Mesh(new CylinderGeometry(0.22, 0.22, 0.03, 16), new MeshStandardMaterial({ color: THRUST_COLOR, transparent: true, opacity: 0.55, roughness: 0.6 }))
+      this.moveGroup.add(mesh)
+      this.moveGhostBases.push(mesh)
+    }
+    const dx = pointer ? pointer.x - origin.x : 0
+    const dy = pointer ? pointer.y - origin.y : 0
+    this.moveGhostBases.forEach((mesh, i) => {
+      const at = figs[i]?.position
+      mesh.visible = !!pointer && !!at
+      if (pointer && at) {
+        const to = { x: at.x + dx, y: at.y + dy }
+        mesh.position.set(to.x, opts.heightAt(to) + 0.02, to.y)
+      }
+    })
+
+    const to = pointer ?? origin
     if (!this.moveLabel) {
       this.moveLabel = makeLabel('', 'sg3d-move-label')
       this.moveGroup.add(this.moveLabel)
     }
     this.moveLabel.visible = true
-    this.moveLabel.position.set(origin.x, opts.heightAt(origin) + 0.6, origin.y)
+    this.moveLabel.position.set(to.x, opts.heightAt(to) + 0.6, to.y)
     const text = ghost.mode === 'combat' ? `combat move — up to ${ghost.inches.toFixed(1)}″ (rolled, doubled)` : `${ghost.inches.toFixed(1)}″ ${ghost.mode}`
     setLabel(this.moveLabel, text)
   }
@@ -340,14 +376,40 @@ export class StargruntOverlaysLayer implements Layer {
     }
   }
 
+  /** K2: every fire line's own odds/verdict chip, kept by priority (the hovered target, the selected unit, nearest first) and faded the rest. */
+  tick(frame: FrameContext): void {
+    const candidates: DeclutterCandidate[] = []
+    for (const [unitId, entry] of this.firePaths) {
+      const distance = frame.camera.position.distanceTo(entry.label.position)
+      const priority = unitId === this.hoverUnitId ? 0 : unitId === this.selectedUnitId ? 1 : 2
+      candidates.push({ element: entry.label.element, priority, distance })
+    }
+    declutterLabels(candidates, frame.hostTop)
+  }
+
   dispose(): void {
     disposeTree(this.group)
+    // Detach every mark from its own persistent sub-group — left attached,
+    // React StrictMode's dev-only double mount (a fresh `GroundScene` built
+    // right after this layer's own `dispose()`, reusing this same persisted
+    // layer instance) would see empty maps and add a fresh mark for every
+    // live objective/zone/path right alongside these stale, already-disposed
+    // ones (R13).
+    this.zonesGroup.clear()
+    this.objectivesGroup.clear()
+    this.ipGroup.clear()
+    this.integrityGroup.clear()
+    this.moveGroup.clear()
+    this.assaultGroup.clear()
+    this.fireGroup.clear()
     this.objectiveMarkers.clear()
     this.zoneMeshes.clear()
     this.ipMarks.clear()
     this.integrityLine = null
     this.moveRing = null
     this.moveLabel = null
+    this.moveLine = null
+    this.moveGhostBases = []
     this.assaultPaths.clear()
     this.firePaths.clear()
   }

@@ -159,7 +159,8 @@ export function decorRandom(seed: number): () => number {
   }
 }
 
-function polygonCentroid(points: readonly Point[]): Point {
+/** A footprint's own centroid — what `terrain.ts` looks `heightAt` up at to stand a feature on a hill's terrace. */
+export function centroidOf(points: readonly Point[]): Point {
   let x = 0
   let y = 0
   for (const p of points) {
@@ -183,13 +184,31 @@ export function insetShape(shape: Shape, by: number): Shape | null {
   if (shape.kind === 'circle') return shape.radius - by > 0.05 ? { ...shape, radius: shape.radius - by } : null
   if (shape.kind === 'rect') return shape.width - 2 * by > 0.1 && shape.height - 2 * by > 0.1 ? { kind: 'rect', x: shape.x + by, y: shape.y + by, width: shape.width - 2 * by, height: shape.height - 2 * by } : null
   if (shape.kind === 'polygon') {
-    const c = polygonCentroid(shape.points)
+    const c = centroidOf(shape.points)
     const avgR = shape.points.reduce((s, p) => s + Math.hypot(p.x - c.x, p.y - c.y), 0) / shape.points.length
     if (avgR - by < 0.3) return null
     const scale = (avgR - by) / avgR
     return { kind: 'polygon', points: shape.points.map((p) => ({ x: c.x + (p.x - c.x) * scale, y: c.y + (p.y - c.y) * scale })) }
   }
   return null
+}
+
+/**
+ * A geometry stripped down to `position` + `normal` alone, de-indexed —
+ * what every geometry entering a `BufferGeometryUtils.mergeGeometries()`
+ * bucket needs (R5): `prism`/`flatSlab` (indexed, with a `uv`) and
+ * `gableRoof` (raw triangles, no `uv`) are not otherwise mergeable together,
+ * since `mergeGeometries` refuses a batch whose entries disagree on either.
+ */
+export function normalizeForMerge(geo: BufferGeometry): BufferGeometry {
+  const src = geo.index ? geo.toNonIndexed() : geo
+  const out = new BufferGeometry()
+  const position = src.getAttribute('position')
+  if (position) out.setAttribute('position', position)
+  const normal = src.getAttribute('normal')
+  if (normal) out.setAttribute('normal', normal)
+  else out.computeVertexNormals()
+  return out
 }
 
 /** A shape's rough bounding box in table inches, for scattering clutter (trees, rocks, rubble) inside it. */

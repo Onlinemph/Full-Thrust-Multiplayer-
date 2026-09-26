@@ -15,7 +15,7 @@ import { CONFIDENCE_LABELS } from '../../../dirtside/table/confidence'
 import type { ActivationState, ElementState, Point, UnitState } from '../../../dirtside/table/types'
 import { hashId } from '../geometry'
 import { disposeTree, setTooltip, tagPickable, type FrameContext, type Layer } from '../layer'
-import { makeLabel, setLabel } from '../labels'
+import { declutterLabels, makeLabel, setLabel, type DeclutterCandidate } from '../labels'
 import { sideColorOf } from '../palette'
 import { headingToYaw } from '../space'
 import { buildHoverGlow, buildInfantryModel, buildVehicleModel, sizeScaleOf } from './models'
@@ -73,12 +73,17 @@ export class DirtsideUnitsLayer implements Layer {
   private entries = new Map<string, Entry>()
   private pennants = new Map<string, CSS2DObject>()
   private clock = 0
+  /** Latest values from `update()`'s own `opts`, read back by `tick()`'s declutter pass (K2) — a frame can land between two `update()` calls. */
+  private selectedId: string | null = null
+  private hoverElementId: string | null = null
 
   constructor() {
     this.group.name = 'dirtside-units'
   }
 
   update(elements: Record<string, ElementState>, opts: DirtsideUnitsOptions): void {
+    this.selectedId = opts.selectedId
+    this.hoverElementId = opts.hoverElementId
     const live = new Set<string>()
     for (const el of Object.values(elements)) {
       if (el.aboard) continue
@@ -354,10 +359,31 @@ export class DirtsideUnitsLayer implements Layer {
 
   tick(frame: FrameContext): void {
     this.clock += frame.dt
-    if (frame.reducedMotion) return
-    for (const entry of this.entries.values()) {
-      if (entry.rotor) entry.rotor.rotation.y = this.clock * 22
+    if (!frame.reducedMotion) {
+      for (const entry of this.entries.values()) {
+        if (entry.rotor) entry.rotor.rotation.y = this.clock * 22
+      }
     }
+    this.declutter(frame)
+  }
+
+  /** K2: every unit tag, its pips and every squad/unit pennant, kept by priority (the hovered element, the selected unit, nearest first) and faded the rest. */
+  private declutter(frame: FrameContext): void {
+    const candidates: DeclutterCandidate[] = []
+    for (const [id, entry] of this.entries) {
+      const distance = frame.camera.position.distanceTo(entry.root.position)
+      const priority = id === this.hoverElementId ? 0 : id === this.selectedId ? 1 : 2
+      if (entry.tag.visible) candidates.push({ element: entry.tag.element, priority, distance })
+      if (entry.pips.visible) candidates.push({ element: entry.pips.element, priority, distance })
+    }
+    for (const [unitId, pennant] of this.pennants) {
+      const distance = frame.camera.position.distanceTo(pennant.position)
+      const hovered = !!this.hoverElementId && this.entries.get(this.hoverElementId)?.unitId === unitId
+      const selected = !!this.selectedId && this.entries.get(this.selectedId)?.unitId === unitId
+      const priority = hovered ? 0 : selected ? 1 : 2
+      candidates.push({ element: pennant.element, priority, distance })
+    }
+    declutterLabels(candidates, frame.hostTop)
   }
 
   pickables(): Object3D[] {
@@ -371,6 +397,13 @@ export class DirtsideUnitsLayer implements Layer {
 
   dispose(): void {
     disposeTree(this.group)
+    // Detach every entry root and pennant, not just forget them — left
+    // attached, React StrictMode's dev-only double mount (a fresh
+    // `GroundScene` built right after this layer's own `dispose()`, reusing
+    // this same persisted layer instance) would see empty `entries`/
+    // `pennants` maps and spawn a fresh model/pennant for every live element
+    // right alongside these stale, already-disposed ones (R13).
+    this.group.clear()
     for (const p of this.pennants.values()) p.element.remove()
     this.entries.clear()
     this.pennants.clear()
