@@ -9,16 +9,23 @@
  * three.js here; this file is the glue between it and Dirtside's own props.
  *
  * DIRTSIDE'S OWN FILE, along with `units.ts` and `overlays.ts` beside it —
- * extend all three freely (BRIEF-GROUND-3D's build order, stage 2). Only
- * `moveBudget`/`targeting`/`aimPreview`/`plot`/`recent`/`pendingLandings`
- * are read from `TableMapProps` for real once you wire them into
- * `overlays.ts`; today they are accepted (`TableMapProps` says so) but not
- * yet drawn.
+ * extend all three freely (BRIEF-GROUND-3D's build order, stage 2).
+ *
+ * `moveBudget`/`targeting`/`plot`/`plotFrom`/`reach`/`recent`/
+ * `pendingLandings`/`targets`/`highlight` are wired into `units.ts`/
+ * `overlays.ts` for real. `aimPreview`/`landingPreview` are not: both only
+ * ever followed the 2D map's own mouse pointer continuously, and
+ * `GroundScene` has no callback that hands a shell the raycasted board
+ * point on every pointer move (only on release, `onClickBoard`) — adding
+ * one is a change to `GroundScene.ts`, GROUND's file, not this one's. Noted
+ * in the report rather than worked around here.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TableMapProps } from '../../dirtside/TableMap'
+import { unitCodes } from '../../dirtside/unitCodes'
 import { GroundScene, type CameraPreset } from '../GroundScene'
 import '../ground3d.css'
+import './dirtside3d.css'
 import { DirtsideOverlaysLayer } from './overlays'
 import { DirtsideUnitsLayer } from './units'
 import { DIRTSIDE_SCALE, webglAvailable } from '../space'
@@ -44,9 +51,15 @@ export default function DirtsideView3D(props: DirtsideView3DProps) {
   const [hover, setHover] = useState<{ text: string; at: { x: number; y: number } } | null>(null)
   const [preset, setPreset] = useState<CameraPreset>('tilt')
   const [follow, setFollow] = useState(false)
+  // The pointer is over this element's own model — `GroundScene`'s only continuous hover signal (`onHoverUnit`),
+  // read here in its raw element-id form for the fire-line-on-hover and the target ring (`units.ts`/`overlays.ts`);
+  // `onHoverUnit` on `TableMapProps` itself wants the *unit* id, same translation the placeholder already did.
+  const [hoverElementId, setHoverElementId] = useState<string | null>(null)
 
   const propsRef = useRef(props)
   propsRef.current = props
+
+  const codes = useMemo(() => unitCodes(state), [state.setup, state.units])
 
   useEffect(() => {
     if (!host.current) return
@@ -64,7 +77,10 @@ export default function DirtsideView3D(props: DirtsideView3DProps) {
       {
         onSelectUnit: (id) => propsRef.current.onSelectElement(id),
         onClickBoard: (point) => propsRef.current.onClickTable(point),
-        onHoverUnit: (id) => propsRef.current.onHoverUnit?.(id ? (propsRef.current.state.elements[id]?.unitId ?? null) : null),
+        onHoverUnit: (id) => {
+          setHoverElementId(id)
+          propsRef.current.onHoverUnit?.(id ? (propsRef.current.state.elements[id]?.unitId ?? null) : null)
+        },
         onHoverText: (text, at) => setHover(text && at ? { text, at } : null),
       },
     )
@@ -87,8 +103,32 @@ export default function DirtsideView3D(props: DirtsideView3DProps) {
     if (!s) return
     s.update(state.setup.table, state.setup.table.terrain)
     const heightAt = (p: { x: number; y: number }) => s.heightAt(p)
-    units.current.update(state.elements, { heightAt, selectedId })
-    overlays.current.update(state, { heightAt })
+    const targetIds = new Set(props.targets)
+    const verdicts = props.targeting ? Object.fromEntries(Object.entries(props.targeting.verdicts).map(([id, v]) => [id, v.ok])) : null
+    units.current.update(state.elements, {
+      heightAt,
+      selectedId,
+      activeUnitId: state.activation?.unitId ?? null,
+      hoverElementId,
+      targetIds,
+      highlightId: props.highlight,
+      verdicts,
+      units: state.units,
+      codes,
+      activation: state.activation,
+    })
+    overlays.current.update(state, {
+      heightAt,
+      plot: props.plot,
+      plotFrom: props.plotFrom,
+      reach: props.reach,
+      moveBudget: props.moveBudget ?? null,
+      targeting: props.targeting ?? null,
+      hoverElementId,
+      recent: props.recent ?? [],
+      pendingLandings: props.pendingLandings ?? [],
+      viewer: props.viewer,
+    })
   })
 
   useEffect(() => {
