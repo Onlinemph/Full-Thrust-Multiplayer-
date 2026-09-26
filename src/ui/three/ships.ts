@@ -312,12 +312,12 @@ export class ShipsLayer implements Layer {
       const color = screenBandColor(screenLevel)
       const inner = (entry.screen.material as ShaderMaterial).uniforms
       inner.uColor.value.setHex(color)
-      inner.uOpacity.value = screenLevel >= 2 ? 0.4 : 0.28
+      inner.uOpacity.value = screenLevel >= 2 ? 0.3 : 0.18
       inner.uPower.value = screenLevel >= 2 ? 2.4 : 3.4
       if (screenLevel >= 2) {
         const outer = (entry.screenOuter.material as ShaderMaterial).uniforms
         outer.uColor.value.setHex(color)
-        outer.uOpacity.value = 0.22
+        outer.uOpacity.value = 0.15
         outer.uPower.value = 2.8
       }
     }
@@ -452,9 +452,11 @@ export class ShipsLayer implements Layer {
       return sprite
     })
 
+    // The selected ship's ring, thin and in its own side's colour as the 2D map draws it, so it frames the
+    // hull without swamping it close up and never reads as a screen (gold) or a lock (red).
     const ring = new Mesh(
-      new RingGeometry(radius * 1.25, radius * 1.4, 32).rotateX(-Math.PI / 2),
-      new MeshStandardMaterial({ color: 0xffd766, emissive: 0xffd766, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 }),
+      new RingGeometry(radius * 1.3, radius * 1.36, 48).rotateX(-Math.PI / 2),
+      new MeshBasicMaterial({ color: sideColorOf(ship.side), transparent: true, opacity: 0.75, toneMapped: false, side: DoubleSide, depthWrite: false }),
     )
     ring.visible = false
     group.add(ring)
@@ -644,7 +646,7 @@ export class ShipsLayer implements Layer {
 
       if (entry.ring.visible) {
         const pulse = 0.6 + 0.25 * Math.sin(now / 260)
-        ;(entry.ring.material as MeshStandardMaterial).opacity = pulse
+        ;(entry.ring.material as MeshBasicMaterial).opacity = pulse
       }
       if (entry.targetRing.visible) {
         const pulse = 0.5 + 0.3 * Math.sin(now / 200)
@@ -659,8 +661,9 @@ export class ShipsLayer implements Layer {
       // ours alone to set here without a fight over who wins.
       const distance = camera.position.distanceTo(entry.group.position)
       const far = Math.min(1, Math.max(0, (distance - LABEL_NEAR) / (LABEL_FAR - LABEL_NEAR)))
-      entry.label.element.style.opacity = (1 - far * 0.72).toFixed(2)
-      entry.label.element.style.fontSize = `${(9 - far * 2.4).toFixed(1)}px`
+      // Never below a size and brightness a player can read at the Tilt preset's full-fleet framing.
+      entry.label.element.style.opacity = (1 - far * 0.25).toFixed(2)
+      entry.label.element.style.fontSize = `${(12 - far * 2).toFixed(1)}px`
     }
   }
 

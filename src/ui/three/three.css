@@ -137,13 +137,13 @@
    model — small enough, and backed by its own panel, to stay legible over a
    crowded hull instead of competing with its plating for the eye. */
 .l3d-name {
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
-  color: var(--ink-dim);
-  padding: 1px 5px;
-  line-height: 1.3;
-  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  color: var(--ink);
+  padding: 1px 6px;
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--panel-2) 90%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
