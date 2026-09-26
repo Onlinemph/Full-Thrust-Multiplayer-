@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { newStream } from '../../stargrunt/dice'
 import { aiAction } from '../../stargrunt/table/ai'
@@ -32,7 +32,8 @@ import { RefusalToast } from '../dirtside/play/RefusalToast'
 import { StatusStrip, type StripAction, type StripModel } from '../dirtside/play/StatusStrip'
 import { useTableKeys } from '../dirtside/play/useTableKeys'
 import { unitCodes } from '../dirtside/unitCodes'
-import { TableMap, type TargetVerdict } from './TableMap'
+import { TableMap, type TableMapProps, type TargetVerdict } from './TableMap'
+import { MapModeChips, useMapView } from '../ground3d/MapSwitch'
 import {
   canTakeBackStargrunt,
   currentStargruntBattle,
@@ -41,6 +42,9 @@ import {
   takeBackStargrunt,
   useStargruntBattle,
 } from './stargruntStore'
+
+/** three.js stays out of the main bundle until a player actually picks 3D (BRIEF-GROUND-3D). */
+const StargruntView3D = lazy(() => import('../ground3d/stargrunt/StargruntView3D'))
 
 /**
  * The Stargrunt table, on the pattern of Dirtside's own `TableScreen.tsx`: a
@@ -111,6 +115,7 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
   const [guide, setGuide] = useState(false)
   const [resultHidden, setResultHidden] = useState(false)
   const [folds, setFolds] = useState<Partial<Record<SideId, boolean>>>({})
+  const [mapView, setMapView] = useMapView('ftpc.stargrunt.mapview.v1')
   const pane = useRef<HTMLDivElement>(null)
 
   // The computer's seats: whenever one of them is to act, it acts a beat later, through the same door.
@@ -425,6 +430,22 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
 
   const resultOpen = !!state.result && !resultHidden
   const mapCursor = mode === 'fire' || mode === 'assault' || mode === 'transfer' || mode === 'rally' ? 'crosshair' : mode === 'move' ? 'move' : state.phase === 'deployment' && deployFigure ? 'crosshair' : 'default'
+  // Handed identically to the 2D `TableMap` and its 3D drop-in (`StargruntView3D`, BRIEF-GROUND-3D), so the
+  // rules cannot tell which one is on screen.
+  const tableMapProps: TableMapProps = {
+    state,
+    selectedUnitId,
+    onSelectUnit: selectUnit,
+    onClickTable,
+    selectedFigureId: state.phase === 'deployment' ? selectedFigureId : undefined,
+    onSelectFigure: state.phase === 'deployment' ? selectFigure : undefined,
+    toAct,
+    hoverUnitId: selectedUnitId,
+    moveGhost,
+    assaultPreview,
+    targeting,
+    cursor: mapCursor,
+  }
 
   const forceOrder: SideId[] = toAct === 'south' || (activation?.sideId === 'south') ? ['south', 'north'] : ['north', 'south']
   const forceFolded = (s: SideId) => {
@@ -465,20 +486,14 @@ function Table({ state, onMenu, onNewSkirmish }: TableScreenProps & { state: Gam
         <div className="dst-main">
           <StatusStrip model={strip} />
           <div className={`dst-table${toAct ? ` acts-${toAct}` : ''}`} ref={pane}>
-            <TableMap
-              state={state}
-              selectedUnitId={selectedUnitId}
-              onSelectUnit={selectUnit}
-              onClickTable={onClickTable}
-              selectedFigureId={state.phase === 'deployment' ? selectedFigureId : undefined}
-              onSelectFigure={state.phase === 'deployment' ? selectFigure : undefined}
-              toAct={toAct}
-              hoverUnitId={selectedUnitId}
-              moveGhost={moveGhost}
-              assaultPreview={assaultPreview}
-              targeting={targeting}
-              cursor={mapCursor}
-            />
+            {mapView === '3d' ? (
+              <Suspense fallback={<div className="ground3d ground3d-failed">Loading the 3D view…</div>}>
+                <StargruntView3D {...tableMapProps} onExit={() => setMapView('2d')} />
+              </Suspense>
+            ) : (
+              <TableMap {...tableMapProps} />
+            )}
+            <MapModeChips mode={mapView} onChange={setMapView} />
             {refusal ? <RefusalToast reason={refusal.reason} page={refusal.page} at={null} pane={pane} onClose={() => setRefusal(null)} adviceFor={sgAdviceFor} /> : null}
             {resultOpen ? (
               <div className="modal-backdrop" onClick={() => setResultHidden(true)}>
