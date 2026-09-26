@@ -70,7 +70,7 @@ export interface GroundSceneOptions {
 }
 
 const FOV = 42
-/** Comfortably above the double-click interval any common browser/OS uses (R8) — see `onPointerUp`'s own note. */
+/** The browser's double-click window, near enough: a second release on the same spot within it is the second half of a double-click. */
 const DBLCLICK_MS = 400
 
 export class GroundScene {
@@ -91,7 +91,8 @@ export class GroundScene {
   private lastPointerBoard: Point | null = null
   private down: { x: number; y: number } | null = null
   /** A click's own dispatch, held back in case a `dblclick` cancels it (R8) — see `onPointerUp`. */
-  private pendingClick: ReturnType<typeof setTimeout> | null = null
+  /** The last click on bare ground, to drop the second half of a double-click. */
+  private lastBoardClick: { at: number; x: number; y: number } | null = null
   private dragging = false
   private frame = 0
   private last = performance.now()
@@ -347,25 +348,19 @@ export class GroundScene {
     if (moved || e.button !== 0) return
     const pick = pickableOf(this.pickUnit(e))
     const point = pick ? null : this.boardPoint(e)
-    // R8: a browser double-click dispatches two whole pointerdown/pointerup
-    // pairs before its own `dblclick` event ever fires, so committing a
-    // click's own board action (a waypoint, a shot, a deploy point) right
-    // here would silently spend two of them before `onDoubleClick`'s
-    // fly-to-it ever runs. Held behind a short timer keyed to the browser's
-    // own double-click window instead, so a resolved double click can cancel
-    // both halves' pending dispatch before either one fires.
-    this.cancelPendingClick()
-    this.pendingClick = window.setTimeout(() => {
-      this.pendingClick = null
-      if (pick) this.callbacks.onSelectUnit(pick.id)
-      else if (point) this.callbacks.onClickBoard(point)
-    }, DBLCLICK_MS)
-  }
-
-  private cancelPendingClick(): void {
-    if (this.pendingClick === null) return
-    clearTimeout(this.pendingClick)
-    this.pendingClick = null
+    // A click acts at once, as on the flat map. The second half of a double-click (a second release on the
+    // same spot within the browser's double-click window) is dropped, so a double-click never plots a
+    // waypoint, a shot or a deploy point twice; double-clicking a unit then flies to it.
+    if (pick) {
+      this.callbacks.onSelectUnit(pick.id)
+      return
+    }
+    if (!point) return
+    const now = performance.now()
+    const last = this.lastBoardClick
+    if (last && now - last.at < DBLCLICK_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 6) return
+    this.lastBoardClick = { at: now, x: e.clientX, y: e.clientY }
+    this.callbacks.onClickBoard(point)
   }
 
   private onPointerLeave = (): void => {
@@ -375,14 +370,12 @@ export class GroundScene {
   }
 
   private onDoubleClick = (e: MouseEvent): void => {
-    this.cancelPendingClick()
     const pick = pickableOf(this.pickUnit(e))
-    if (!pick || !this.focusUnit(pick.id)) this.setPreset('tilt')
+    if (pick) this.focusUnit(pick.id)
   }
 
   dispose(): void {
     cancelAnimationFrame(this.frame)
-    this.cancelPendingClick()
     this.resizeObserver.disconnect()
     this.reducedMotionQuery?.removeEventListener('change', this.onReducedMotionChange)
     this.controls.dispose()

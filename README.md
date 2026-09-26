@@ -810,6 +810,38 @@ A review read the new rules against both books, every finding put to a skeptic; 
 sides, the cover checks that name no firer ignoring walls, the computer heading for the notch of an L-shaped
 building, and a cache warning).
 
+## The ground games in 3D
+
+Both ground tables have *Map: 2D / 3D* over the board too, remembered per game, three.js loaded only when 3D
+is picked. The view, in `src/ui/ground3d/`, reads the same battle and sends every click through the same
+actions as the flat map; the rules are untouched. Elevation is what it shows best: hills stand as terraced
+wargame hills and whatever is on them stands on their terraces, buildings rise in storeys under pitched or flat
+roofs (merged by colour, so a city of several hundred draws in a handful of calls), woods are stands of trees
+with their edge readable, rivers sit sunken between banks, rubble lies in heaps, and roads, fields, walls and
+hedges lie on the ground. Dirtside is built at 6mm scale and Stargrunt at 25mm, so a building and a hill are the
+size each game means. Both books keep height simple, high ground or not (Dirtside p. 4, p. 20; Stargrunt
+p. 11), and the whole of a hill still counts as high ground; the terraces are its look.
+
+- Dirtside's elements are small models by mobility (tracked, wheeled, hover skirts, grav with a glow, walkers,
+  VTOL rotors) with their turrets, infantry stands by team, dug-in and hull-down marks, damage and
+  systems-down pips and the unit pennants. The plotted path is draped on the ground and coloured by the going,
+  with the move ghost following the pointer and its cost; the reach, the range bands, each target's verdict
+  and odds with the fire line, orbital aim and beaten zones, landing clearance and recent fire are drawn as on
+  the flat map, with its legend and a two-click ruler.
+- Stargrunt's troopers are small soldiers carrying their kit (rifle, SAW, support weapon, a medic's pack, the
+  leader's mark), wounded and stabilised figures lie pale and the dead dark, and each squad's pennant carries
+  its quality, confidence and suppression and selects the squad. The selected squad's integrity, the move
+  ghost, the charge plan's paths coloured by roll, fire lines with the engine's odds, deployment zones and
+  objectives are drawn on the ground.
+- Tilt, Top, Low (eye level) and Follow frame the table; a double-click on a unit flies to it. Clicks snap to
+  the flat map's quarter-inch grid, labels declutter on screen, and a browser without WebGL keeps the flat map.
+  `tools/visual_ground3d.mjs`, `tools/visual_dirtside3d.mjs` and `tools/visual_stargrunt3d.mjs` check the views.
+
+A review played both games in 3D and read the code against the flat maps and the Full Thrust view's own fixes,
+every finding put to a skeptic; the thirteen that survived are fixed (among them buildings and woods on a hill
+drawn sunk into it, clicks off the quarter-inch grid, a WebGL context kept after closing the view, every render
+re-running every layer, and presets that left corner units out of frame).
+
 ## Architecture
 
 See `docs/architecture.md` for the full account. In brief:
