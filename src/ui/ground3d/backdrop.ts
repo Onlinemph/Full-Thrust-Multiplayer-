@@ -29,7 +29,13 @@ export class BackdropLayer implements Layer {
   constructor(private scene: Scene) {
     this.group.name = 'ground-backdrop'
     this.scene.background = new Color(DST.sky)
-    this.scene.fog = new Fog(DST.skyHorizon, 40, 260)
+    // R10: fog only ever tints geometry, never the flat background colour —
+    // a different fog tone (`skyHorizon`) made the surround floor fade to a
+    // shade the sky itself never was, leaving a hard seam at the true
+    // horizon, worst at the Tilt/Low presets where that band fills much of
+    // the screen. Fogging to the same colour the empty sky already is closes
+    // that seam.
+    this.scene.fog = new Fog(DST.sky, 40, 260)
   }
 
   update({ table }: GroundContext): void {

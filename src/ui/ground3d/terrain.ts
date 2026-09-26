@@ -36,10 +36,11 @@ import {
   Quaternion,
   Vector3,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { TerrainType } from '../../dirtside/data/mobility'
 import { WOOD_EDGE, depthInside, insideShape } from '../../dirtside/table/terrain'
 import type { Point, Shape, TerrainFeature } from '../../dirtside/table/types'
-import { boundsOf, decorRandom, flatSlab, footprintPoints, gableRoof, hashId, insetShape, prism, ribbonPolygon } from './geometry'
+import { boundsOf, centroidOf, decorRandom, flatSlab, footprintPoints, gableRoof, hashId, insetShape, normalizeForMerge, prism, ribbonPolygon } from './geometry'
 import { disposeTree, setTooltip, tagGround, type FrameContext, type GroundContext, type Layer } from './layer'
 import { DST } from './palette'
 import type { GroundScale } from './space'
@@ -100,6 +101,13 @@ const CANOPY_CONE = new ConeGeometry(1, 1.7, 7)
 CANOPY_CONE.translate(0, 1.2, 0)
 CANOPY_CONE.userData.shared = true
 
+// ── Shared rubble-heap geometry/material (every rubble feature's own debris instances) ──
+
+const RUBBLE_ROCK_GEOMETRY = new IcosahedronGeometry(1, 0)
+RUBBLE_ROCK_GEOMETRY.userData.shared = true
+const RUBBLE_ROCK_MATERIAL = groundMaterial(DST.rubbleDark, { roughness: 1 })
+RUBBLE_ROCK_MATERIAL.userData.shared = true
+
 interface HillLevel {
   shape: Shape
   top: number
@@ -119,6 +127,15 @@ export class TerrainLayer implements Layer {
   private hillLevels: HillLevel[] = []
   private trees: TreeEntry[] = []
   private clock = 0
+  // R5: a city table's hundreds of buildings collected here during the main
+  // feature pass instead of becoming a Mesh apiece, then merged into a
+  // handful of draw calls at the end of `rebuild()` (`flushMergedBuildings`)
+  // — buildings' walls are always one fixed colour (one bucket), their roofs
+  // one of a small warm/cool palette (a bucket per colour actually used).
+  private wallGeometries: BufferGeometry[] = []
+  private roofGeometries = new Map<number, BufferGeometry[]>()
+  private rubbleBaseGeometries: BufferGeometry[] = []
+  private rubbleStubGeometries: BufferGeometry[] = []
 
   constructor() {
     this.group.name = 'ground-terrain'
@@ -145,13 +162,24 @@ export class TerrainLayer implements Layer {
     this.group.clear()
     this.hillLevels = []
     this.trees = []
-    for (const feature of features) {
+    this.wallGeometries = []
+    this.roofGeometries = new Map()
+    this.rubbleBaseGeometries = []
+    this.rubbleStubGeometries = []
+    // Hills first, so `heightAt` already knows every terrace by the time the
+    // rest of the table is built: the generator does not keep hills clear of
+    // other features (R1), so a building, wood or road can sit partly or
+    // wholly inside one and must stand on its terrace, not at table height 0.
+    const isHill = (f: TerrainFeature) => f.terrain === 'hills' || f.terrain === 'mountains'
+    const ordered = [...features.filter(isHill), ...features.filter((f) => !isHill(f))]
+    for (const feature of ordered) {
       const built = this.buildFeature(feature, scale)
       if (!built) continue
       built.name = `terrain:${feature.id}`
       setTooltip(built, labelOf(feature))
       this.group.add(built)
     }
+    this.flushMergedBuildings()
   }
 
   private buildFeature(feature: TerrainFeature, scale: GroundScale): Group | null {
@@ -160,7 +188,8 @@ export class TerrainLayer implements Layer {
       case 'mountains':
         return this.buildHill(feature, scale)
       case 'building':
-        return this.buildBuilding(feature, scale)
+        this.collectBuilding(feature, scale)
+        return null
       case 'rubble':
         return this.buildRubble(feature, scale)
       case 'light-woods':
@@ -217,47 +246,90 @@ export class TerrainLayer implements Layer {
   }
 
   // ── Buildings: walls, and a gabled or a flat roof, warm on their own and cool as part of a town (2D's own rule) ──
+  // R5: a city table can carry hundreds of these — every wall and every roof colour actually used is collected
+  // here (each building's own height, storeys and roof shape all still computed per feature, exactly as before)
+  // and merged into one mesh per bucket at the end of `rebuild()` (`flushMergedBuildings`), instead of two draw
+  // calls and two unique geometries per building.
 
-  private buildBuilding(feature: TerrainFeature, scale: GroundScale): Group {
-    const root = new Group()
+  private collectBuilding(feature: TerrainFeature, scale: GroundScale): void {
     const footprint = footprintPoints(feature.shape)
+    const base = this.heightAt(centroidOf(footprint))
     const rnd = decorRandom(hashId(feature.id))
     const storeys = 1 + Math.floor(rnd() * (feature.terrain === 'building' && feature.partOf ? 3 : 2))
-    const wallTop = scale.buildingStorey * storeys
-    const walls = new Mesh(prism(footprint, 0, wallTop), groundMaterial(DST.buildingWall, { roughness: 0.85 }))
-    tagGround(walls)
-    root.add(walls)
+    const wallTop = base + scale.buildingStorey * storeys
+    this.wallGeometries.push(normalizeForMerge(prism(footprint, base, wallTop)))
 
     const cool = !!feature.partOf
-    const tones = cool ? [DST.roofCool[0]!, DST.roofCool[1]!, DST.roofCool[2]!] : [DST.roofWarm[0]!, DST.roofWarm[1]!, DST.roofWarm[2]!]
+    const tones = cool ? DST.roofCool : DST.roofWarm
     const roofColor = tones[Math.floor(rnd() * tones.length) % tones.length]!
-
+    let roofGeo: BufferGeometry
     if (footprint.length === 4) {
-      const corners = footprint as [Point, Point, Point, Point]
-      const roof = new Mesh(gableRoof(corners, wallTop, wallTop + scale.roofRise), groundMaterial(roofColor, { roughness: 0.75 }))
-      tagGround(roof)
-      root.add(roof)
+      roofGeo = gableRoof(footprint as [Point, Point, Point, Point], wallTop, wallTop + scale.roofRise)
     } else {
       const capPoints = insetShape(feature.shape, 0.05)
-      const roof = new Mesh(flatSlab(capPoints ? footprintPoints(capPoints) : footprint, wallTop + 0.01), groundMaterial(roofColor, { roughness: 0.8 }))
-      tagGround(roof)
-      root.add(roof)
+      roofGeo = flatSlab(capPoints ? footprintPoints(capPoints) : footprint, wallTop + 0.01)
     }
-    return root
+    const bucket = this.roofGeometries.get(roofColor)
+    if (bucket) bucket.push(normalizeForMerge(roofGeo))
+    else this.roofGeometries.set(roofColor, [normalizeForMerge(roofGeo)])
+  }
+
+  /** Every building's collected wall/roof geometry, merged into one mesh per colour bucket — buildings share exactly this palette (`buildingWall`, the six `roofWarm`/`roofCool` tones), so this never needs more than a handful of draw calls whatever the table's own building count. */
+  private flushMergedBuildings(): void {
+    if (this.wallGeometries.length > 0) {
+      const merged = mergeGeometries(this.wallGeometries, false)
+      if (merged) {
+        const mesh = new Mesh(merged, groundMaterial(DST.buildingWall, { roughness: 0.85 }))
+        tagGround(mesh)
+        mesh.name = 'terrain:buildings-walls'
+        setTooltip(mesh, TERRAIN_NAMES.building)
+        this.group.add(mesh)
+      }
+    }
+    for (const [color, geometries] of this.roofGeometries) {
+      const merged = mergeGeometries(geometries, false)
+      if (!merged) continue
+      const mesh = new Mesh(merged, groundMaterial(color, { roughness: 0.75 }))
+      tagGround(mesh)
+      mesh.name = 'terrain:buildings-roofs'
+      setTooltip(mesh, TERRAIN_NAMES.building)
+      this.group.add(mesh)
+    }
+    if (this.rubbleBaseGeometries.length > 0) {
+      const merged = mergeGeometries(this.rubbleBaseGeometries, false)
+      if (merged) {
+        const mesh = new Mesh(merged, groundMaterial(DST.rubble, { roughness: 1 }))
+        tagGround(mesh)
+        mesh.name = 'terrain:rubble-base'
+        setTooltip(mesh, TERRAIN_NAMES.rubble)
+        this.group.add(mesh)
+      }
+    }
+    if (this.rubbleStubGeometries.length > 0) {
+      const merged = mergeGeometries(this.rubbleStubGeometries, false)
+      if (merged) {
+        const mesh = new Mesh(merged, groundMaterial(DST.rubbleStub, { roughness: 1 }))
+        mesh.name = 'terrain:rubble-stubs'
+        this.group.add(mesh)
+      }
+    }
   }
 
   // ── Rubble: a destroyed building's low, broken heap, in its own footprint ──
+  // R5: the base slab and the stub of wall are collected like a building's own walls/roof (merged in
+  // `flushMergedBuildings`, both fixed single colours); the scattered debris stays one `InstancedMesh` per
+  // feature (it already costs one draw call, and every feature's own rocks differ), now sharing one module-level
+  // geometry/material (`RUBBLE_ROCK_GEOMETRY`/`_MATERIAL`) instead of a fresh pair per rubble feature.
 
   private buildRubble(feature: TerrainFeature, scale: GroundScale): Group {
     const root = new Group()
     const footprint = footprintPoints(feature.shape)
-    const base = new Mesh(prism(footprint, 0, scale.rubbleHeight * 0.5), groundMaterial(DST.rubble, { roughness: 1 }))
-    tagGround(base)
-    root.add(base)
+    const base = this.heightAt(centroidOf(footprint))
+    this.rubbleBaseGeometries.push(normalizeForMerge(prism(footprint, base, base + scale.rubbleHeight * 0.5)))
     const box = boundsOf(footprint)
     const rnd = decorRandom(hashId(feature.id) ^ 0x527562)
     const count = Math.max(4, Math.min(24, Math.round(((box.x1 - box.x0) * (box.y1 - box.y0)) / 1.4)))
-    const heap = new InstancedMesh(new IcosahedronGeometry(1, 0), groundMaterial(DST.rubbleDark, { roughness: 1 }), count)
+    const heap = new InstancedMesh(RUBBLE_ROCK_GEOMETRY, RUBBLE_ROCK_MATERIAL, count)
     const m = new Matrix4()
     let placed = 0
     let guard = 0
@@ -266,7 +338,7 @@ export class TerrainLayer implements Layer {
       const y = box.y0 + rnd() * (box.y1 - box.y0)
       if (!insideShape({ x, y }, feature.shape)) continue
       const s = scale.rubbleHeight * (0.5 + rnd() * 0.7)
-      m.compose(new Vector3(x, scale.rubbleHeight * 0.5 + s * 0.3, y), new Quaternion().random(), new Vector3(s, s * 0.6, s))
+      m.compose(new Vector3(x, base + scale.rubbleHeight * 0.5 + s * 0.3, y), new Quaternion().random(), new Vector3(s, s * 0.6, s))
       heap.setMatrixAt(placed, m)
       placed++
     }
@@ -280,8 +352,7 @@ export class TerrainLayer implements Layer {
       const e = Math.floor(rnd() * n)
       const a = footprint[e]!
       const b = footprint[(e + 1) % n]!
-      const stub = new Mesh(ribbonPolygonPrism([a, b], 0.12, 0, scale.rubbleHeight * 1.6), groundMaterial(DST.rubbleStub, { roughness: 1 }))
-      root.add(stub)
+      this.rubbleStubGeometries.push(normalizeForMerge(ribbonPolygonPrism([a, b], 0.12, base, base + scale.rubbleHeight * 1.6)))
     }
     return root
   }
@@ -292,11 +363,12 @@ export class TerrainLayer implements Layer {
     const root = new Group()
     const light = feature.terrain === 'light-woods'
     const footprint = footprintPoints(feature.shape)
+    const base = this.heightAt(centroidOf(footprint))
     const box = boundsOf(footprint)
     const area = Math.max(0.5, (box.x1 - box.x0) * (box.y1 - box.y0))
     const density = light ? 1.1 : 2.2
     const count = Math.max(6, Math.min(420, Math.round(area * density)))
-    const floor = new Mesh(prism(footprint, 0, 0.02), groundMaterial(light ? DST.woodsLight : DST.woodsDense, { roughness: 1 }))
+    const floor = new Mesh(prism(footprint, base, base + 0.02), groundMaterial(light ? DST.woodsLight : DST.woodsDense, { roughness: 1 }))
     tagGround(floor)
     root.add(floor)
 
@@ -317,9 +389,9 @@ export class TerrainLayer implements Layer {
       const h = scale.treeHeight * (0.75 + rnd() * 0.5) * edge
       const r = scale.treeRadius * (0.7 + rnd() * 0.5) * edge
       const trunkH = scale.trunkHeight * (0.8 + rnd() * 0.4)
-      m.compose(new Vector3(x, 0, y), new Quaternion(), new Vector3(r * 0.4, trunkH, r * 0.4))
+      m.compose(new Vector3(x, base, y), new Quaternion(), new Vector3(r * 0.4, trunkH, r * 0.4))
       trunks.setMatrixAt(placed, m)
-      m.compose(new Vector3(x, trunkH, y), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), rnd() * Math.PI * 2), new Vector3(r, h, r))
+      m.compose(new Vector3(x, base + trunkH, y), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), rnd() * Math.PI * 2), new Vector3(r, h, r))
       canopies.setMatrixAt(placed, m)
       placed++
     }
@@ -339,7 +411,8 @@ export class TerrainLayer implements Layer {
   private buildRibbon(feature: TerrainFeature, color: number, height: number, width: number): Group {
     const root = new Group()
     const points = feature.shape.kind === 'path' ? feature.shape.points : footprintPoints(feature.shape)
-    const mesh = new Mesh(ribbonPolygonPrism(points, width, 0, height), groundMaterial(color, { roughness: 0.95 }))
+    const base = this.heightAt(centroidOf(points))
+    const mesh = new Mesh(ribbonPolygonPrism(points, width, base, base + height), groundMaterial(color, { roughness: 0.95 }))
     tagGround(mesh)
     root.add(mesh)
     return root
@@ -350,10 +423,11 @@ export class TerrainLayer implements Layer {
   private buildWater(feature: TerrainFeature, scale: GroundScale): Group {
     const root = new Group()
     const footprint = footprintPoints(feature.shape)
-    const surface = new Mesh(flatSlab(footprint, -scale.waterSink), groundMaterial(DST.water, { roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.92 }))
+    const base = this.heightAt(centroidOf(footprint))
+    const surface = new Mesh(flatSlab(footprint, base - scale.waterSink), groundMaterial(DST.water, { roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.92 }))
     tagGround(surface)
     root.add(surface)
-    const bed = new Mesh(prism(footprint, -scale.waterSink * 1.6, -scale.waterSink), groundMaterial(new Color(DST.water).multiplyScalar(0.55).getHex(), { roughness: 1 }))
+    const bed = new Mesh(prism(footprint, base - scale.waterSink * 1.6, base - scale.waterSink), groundMaterial(new Color(DST.water).multiplyScalar(0.55).getHex(), { roughness: 1 }))
     root.add(bed)
     return root
   }
@@ -363,8 +437,9 @@ export class TerrainLayer implements Layer {
   private buildRoad(feature: TerrainFeature, scale: GroundScale): Group {
     const root = new Group()
     const footprint = footprintPoints(feature.shape)
+    const base = this.heightAt(centroidOf(footprint))
     const tone = feature.terrain === 'ford' ? DST.tarmac : DST.road
-    const mesh = new Mesh(flatSlab(footprint, scale.roadLift), groundMaterial(tone, { roughness: 0.95 }))
+    const mesh = new Mesh(flatSlab(footprint, base + scale.roadLift), groundMaterial(tone, { roughness: 0.95 }))
     tagGround(mesh)
     root.add(mesh)
     return root
@@ -375,7 +450,8 @@ export class TerrainLayer implements Layer {
   private buildPatch(feature: TerrainFeature, map: MeshStandardMaterial['map'], y: number): Group {
     const root = new Group()
     const footprint = footprintPoints(feature.shape)
-    const mesh = new Mesh(flatSlab(footprint, y), groundMaterial(0xffffff, { map, roughness: 0.95 }))
+    const base = this.heightAt(centroidOf(footprint))
+    const mesh = new Mesh(flatSlab(footprint, base + y), groundMaterial(0xffffff, { map, roughness: 0.95 }))
     tagGround(mesh)
     root.add(mesh)
     return root
@@ -392,6 +468,10 @@ export class TerrainLayer implements Layer {
     disposeTree(this.group)
     this.hillLevels = []
     this.trees = []
+    this.wallGeometries = []
+    this.roofGeometries = new Map()
+    this.rubbleBaseGeometries = []
+    this.rubbleStubGeometries = []
     this.builtFrom = null
   }
 }

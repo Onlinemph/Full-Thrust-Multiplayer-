@@ -38,7 +38,7 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import type { Point, TerrainFeature } from '../../dirtside/table/types'
 import { BackdropLayer } from './backdrop'
 import { pickableOf, tooltipOf, type FrameContext, type Layer } from './layer'
-import { framingDistance, fromWorldXZ, type GroundScale } from './space'
+import { elevatedFramingDistance, framingDistance, fromWorldXZ, snapToGrid, type GroundScale } from './space'
 import { TerrainLayer } from './terrain'
 
 export type CameraPreset = 'tilt' | 'top' | 'low'
@@ -49,6 +49,16 @@ export interface GroundCallbacks {
   /** `null` when nothing is hovered. */
   onHoverUnit: (id: string | null) => void
   onHoverText: (text: string | null, at: { x: number; y: number } | null) => void
+  /**
+   * The table point under the pointer, read once per animation frame (K1) —
+   * the same point the 2D `TableMap`s track continuously into their own
+   * local `pointer` state (`onPointerMove`/`trackPointer`) so a move ghost,
+   * an orbital aim ring, a landing clearance ring or a deploy ghost can
+   * follow it. `null` once the pointer has left the canvas or sits off the
+   * board entirely — every rule decision about what the point under it means
+   * still lives in the screen/engine; this only ever reports where it is.
+   */
+  onPointerBoard?: (point: Point | null) => void
 }
 
 export interface GroundSceneOptions {
@@ -60,6 +70,8 @@ export interface GroundSceneOptions {
 }
 
 const FOV = 42
+/** Comfortably above the double-click interval any common browser/OS uses (R8) — see `onPointerUp`'s own note. */
+const DBLCLICK_MS = 400
 
 export class GroundScene {
   readonly renderer: WebGLRenderer
@@ -74,12 +86,22 @@ export class GroundScene {
   private ground = new Plane(new Vector3(0, 1, 0), 0)
   private boardSize = { width: 0, depth: 0 }
   private follow: string | null = null
+  /** The pointer's last known client position, read once per frame for `onPointerBoard` (K1); null off the canvas. */
+  private pointerClient: { clientX: number; clientY: number } | null = null
+  private lastPointerBoard: Point | null = null
   private down: { x: number; y: number } | null = null
+  /** A click's own dispatch, held back in case a `dblclick` cancels it (R8) — see `onPointerUp`. */
+  private pendingClick: ReturnType<typeof setTimeout> | null = null
   private dragging = false
   private frame = 0
   private last = performance.now()
   private resizeObserver: ResizeObserver
-  private reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  /** Live-updated by this query's own `change` listener (R7), not read only once at construction. */
+  private reducedMotionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+  private reducedMotion = this.reducedMotionQuery?.matches ?? false
+  private onReducedMotionChange = (e: MediaQueryListEvent): void => {
+    this.reducedMotion = e.matches
+  }
   private flight: { from: Vector3; to: Vector3; fromT: Vector3; toT: Vector3; start: number } | null = null
 
   constructor(
@@ -129,6 +151,9 @@ export class GroundScene {
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(host)
     this.resize()
+    // R7: a live OS/browser toggle while this scene is already open, not only
+    // whatever the preference read at construction.
+    this.reducedMotionQuery?.addEventListener('change', this.onReducedMotionChange)
     this.loop()
   }
 
@@ -167,11 +192,16 @@ export class GroundScene {
     const { width, depth } = this.boardSize
     const center = new Vector3(width / 2, 0, depth / 2)
     const elevation = preset === 'top' ? 89 : preset === 'low' ? 13 : 42
-    const distance = framingDistance(width, depth, FOV, aspect) * (preset === 'top' ? 1 : preset === 'low' ? 0.55 : 1)
+    const topDistance = framingDistance(width, depth, FOV, aspect)
+    // R9: Tilt and Low look across the board rather than straight down, so
+    // `topDistance`'s flat top-down trig understates the near corner's real
+    // angular extent — computed properly instead, or a unit near the
+    // table's own edge can fall outside the frame entirely.
+    const distance = preset === 'top' ? topDistance : elevatedFramingDistance(width, depth, FOV, aspect, elevation)
     const e = elevation * (Math.PI / 180)
     const position = new Vector3(center.x, Math.sin(e) * distance, center.z + Math.cos(e) * distance)
     this.follow = null
-    this.controls.maxDistance = Math.max(distance, framingDistance(width, depth, FOV, aspect)) * 2.4
+    this.controls.maxDistance = Math.max(distance, topDistance) * 2.4
     if (instant || this.reducedMotion) {
       this.camera.position.copy(position)
       this.controls.target.copy(center)
@@ -233,44 +263,65 @@ export class GroundScene {
     }
     this.controls.update()
 
-    const frame: FrameContext = { now, dt, camera: this.camera, reducedMotion: this.reducedMotion }
+    const frame: FrameContext = { now, dt, camera: this.camera, reducedMotion: this.reducedMotion, hostTop: this.host.getBoundingClientRect().top }
     for (const layer of this.layers) layer.tick?.(frame)
     this.renderer.render(this.scene, this.camera)
     this.labels.render(this.scene, this.camera)
+    this.reportPointerBoard()
   }
 
   // ── Pointer ────────────────────────────────────────────────────────────
 
-  private ndc(e: PointerEvent | MouseEvent): Vector2 {
+  private ndc(e: { clientX: number; clientY: number }): Vector2 {
     const rect = this.renderer.domElement.getBoundingClientRect()
     return new Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
   }
 
-  private pickUnit(e: PointerEvent | MouseEvent): Object3D | null {
+  private pickUnit(e: { clientX: number; clientY: number }): Object3D | null {
     this.raycaster.setFromCamera(this.ndc(e), this.camera)
     const hits = this.raycaster.intersectObjects(this.opts.getUnitPickables(), true)
     return hits.length > 0 ? hits[0]!.object : null
   }
 
-  /** The table point under the pointer: the terrain's own raised features first, bare ground otherwise. */
-  private boardPoint(e: PointerEvent | MouseEvent): Point | null {
+  /** The table point under the pointer: the terrain's own raised features first, bare ground otherwise. Never bounds-checked against the board — `reportPointerBoard` is that check, for the continuous K1 preview point. */
+  private boardPoint(e: { clientX: number; clientY: number }): Point | null {
     this.raycaster.setFromCamera(this.ndc(e), this.camera)
     const hits = this.raycaster.intersectObjects([this.terrain.group, this.backdrop.group], true)
     if (hits.length > 0) {
       const p = hits[0]!.point
-      return fromWorldXZ(p.x, p.z)
+      return snapToGrid(fromWorldXZ(p.x, p.z))
     }
     const hit = this.raycaster.ray.intersectPlane(this.ground, new Vector3())
-    return hit ? fromWorldXZ(hit.x, hit.z) : null
+    return hit ? snapToGrid(fromWorldXZ(hit.x, hit.z)) : null
   }
 
-  private hoverTarget(e: PointerEvent): Object3D | null {
+  private hoverTarget(e: { clientX: number; clientY: number }): Object3D | null {
     this.raycaster.setFromCamera(this.ndc(e), this.camera)
     const hits = this.raycaster.intersectObjects([this.terrain.group, this.backdrop.group], true)
     return hits.find((h) => tooltipOf(h.object) !== null)?.object ?? null
   }
 
+  /**
+   * K1: the point every pointer-following preview draws from, read once a
+   * frame off `this.pointerClient` — `boardPoint` alone hits the backdrop's
+   * own room floor well past the board's own edge, so this also drops
+   * anything outside the table's own bounds (`onPointerBoard`'s own "null
+   * off the board").
+   */
+  private reportPointerBoard(): void {
+    if (!this.callbacks.onPointerBoard) return
+    const { width, depth } = this.boardSize
+    const raw = this.pointerClient ? this.boardPoint(this.pointerClient) : null
+    const onTable = !!raw && raw.x >= 0 && raw.x <= width && raw.y >= 0 && raw.y <= depth
+    const point = onTable ? raw : null
+    const same = point === this.lastPointerBoard || (!!point && !!this.lastPointerBoard && point.x === this.lastPointerBoard.x && point.y === this.lastPointerBoard.y)
+    if (same) return
+    this.lastPointerBoard = point
+    this.callbacks.onPointerBoard(point)
+  }
+
   private onPointerDown = (e: PointerEvent): void => {
+    this.pointerClient = { clientX: e.clientX, clientY: e.clientY }
     this.down = { x: e.clientX, y: e.clientY }
     // Orbiting by hand takes the camera back from Follow; panning or dollying does not.
     if (e.button === 0) this.follow = null
@@ -278,6 +329,7 @@ export class GroundScene {
   }
 
   private onPointerMove = (e: PointerEvent): void => {
+    this.pointerClient = { clientX: e.clientX, clientY: e.clientY }
     if (e.buttons !== 0) return
     const unitHit = this.pickUnit(e)
     const pick = pickableOf(unitHit)
@@ -294,30 +346,55 @@ export class GroundScene {
     this.down = null
     if (moved || e.button !== 0) return
     const pick = pickableOf(this.pickUnit(e))
-    if (pick) {
-      this.callbacks.onSelectUnit(pick.id)
-      return
-    }
-    const point = this.boardPoint(e)
-    if (point) this.callbacks.onClickBoard(point)
+    const point = pick ? null : this.boardPoint(e)
+    // R8: a browser double-click dispatches two whole pointerdown/pointerup
+    // pairs before its own `dblclick` event ever fires, so committing a
+    // click's own board action (a waypoint, a shot, a deploy point) right
+    // here would silently spend two of them before `onDoubleClick`'s
+    // fly-to-it ever runs. Held behind a short timer keyed to the browser's
+    // own double-click window instead, so a resolved double click can cancel
+    // both halves' pending dispatch before either one fires.
+    this.cancelPendingClick()
+    this.pendingClick = window.setTimeout(() => {
+      this.pendingClick = null
+      if (pick) this.callbacks.onSelectUnit(pick.id)
+      else if (point) this.callbacks.onClickBoard(point)
+    }, DBLCLICK_MS)
+  }
+
+  private cancelPendingClick(): void {
+    if (this.pendingClick === null) return
+    clearTimeout(this.pendingClick)
+    this.pendingClick = null
   }
 
   private onPointerLeave = (): void => {
+    this.pointerClient = null
     this.callbacks.onHoverUnit(null)
     this.callbacks.onHoverText(null, null)
   }
 
   private onDoubleClick = (e: MouseEvent): void => {
+    this.cancelPendingClick()
     const pick = pickableOf(this.pickUnit(e))
     if (!pick || !this.focusUnit(pick.id)) this.setPreset('tilt')
   }
 
   dispose(): void {
     cancelAnimationFrame(this.frame)
+    this.cancelPendingClick()
     this.resizeObserver.disconnect()
+    this.reducedMotionQuery?.removeEventListener('change', this.onReducedMotionChange)
     this.controls.dispose()
     for (const layer of this.layers) layer.dispose()
     this.renderer.dispose()
+    // `dispose()` alone only frees three's own JS-side caches — the real
+    // WebGL context (and the GPU resources behind it) is only released by
+    // this separate, documented call. Left uncalled, every 2D<->3D toggle
+    // leaves one more live context behind for the browser's GC to reclaim on
+    // its own schedule, and browsers cap how many a page may hold at once
+    // (R3, matching `src/ui/three/BattleScene.ts`'s own fix for the same gap).
+    this.renderer.forceContextLoss()
     this.renderer.domElement.remove()
     this.labels.domElement.remove()
   }

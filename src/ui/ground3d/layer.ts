@@ -34,6 +34,14 @@ export interface FrameContext {
   camera: Camera
   /** Honour prefers-reduced-motion: no bobbing, no flight playback. */
   reducedMotion: boolean
+  /**
+   * Viewport-space Y of the canvas host's own top edge
+   * (`host.getBoundingClientRect().top`) — what a layer measures a label's
+   * own `getBoundingClientRect()` against to keep it clear of the HUD drawn
+   * over the canvas (K2's declutter), without needing a DOM reference of its
+   * own. Matches `src/ui/three/layer.ts`'s own `FrameContext.hostTop`.
+   */
+  hostTop: number
 }
 
 export interface Layer {
@@ -102,14 +110,22 @@ export function disposeTree(root: Object3D): void {
     if (label.isCSS2DObject) label.element?.remove()
     const mesh = o as Object3D & {
       geometry?: { dispose(): void; userData?: { shared?: boolean } }
-      material?: { dispose(): void; userData?: { shared?: boolean }; map?: { dispose(): void } | null } | Array<{ dispose(): void }>
+      material?:
+        | { dispose(): void; userData?: { shared?: boolean }; map?: { dispose(): void; userData?: { shared?: boolean } } | null }
+        | Array<{ dispose(): void }>
     }
     if (mesh.geometry && !mesh.geometry.userData?.shared) mesh.geometry.dispose()
     const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
     for (const m of mats) {
-      const mat = m as { dispose(): void; userData?: { shared?: boolean }; map?: { dispose(): void } | null }
+      const mat = m as { dispose(): void; userData?: { shared?: boolean }; map?: { dispose(): void; userData?: { shared?: boolean } } | null }
       if (mat.userData?.shared) continue
-      mat.map?.dispose()
+      // A per-instance material's own `.map` can still be one of
+      // `textures.ts`'s cached, module-level Textures (e.g. `buildPatch`'s
+      // speckle/furrow maps, `buildHoverGlow`'s shared glow) — disposing it
+      // here would free the GPU texture out from under every other live
+      // consumer still pointing at the same JS object (matches
+      // `src/ui/three/layer.ts`'s own fix for the same gap).
+      if (!mat.map?.userData?.shared) mat.map?.dispose()
       mat.dispose()
     }
   })

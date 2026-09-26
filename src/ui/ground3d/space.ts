@@ -25,15 +25,29 @@ export function fromWorldXZ(x: number, z: number): Point {
   return { x, y: z }
 }
 
+/**
+ * A board point snapped to the quarter-inch grid both 2D `TableMap`s already
+ * snap every click to (`Math.round(at.x * 4) / 4`, `dirtside/TableMap.tsx`
+ * and `stargrunt/TableMap.tsx`) — so a click at the same table spot resolves
+ * to the identical point whichever view is on screen (R2), instead of the
+ * raw float a 3D raycast hit gives back.
+ */
+export function snapToGrid(p: Point): Point {
+  return { x: Math.round(p.x * 4) / 4, y: Math.round(p.y * 4) / 4 }
+}
+
 /** Board heading (degrees, 0 = up the table/north, clockwise) to a Y rotation in radians. */
 export function headingToYaw(heading: number): number {
   return -heading * DEG
 }
 
 /**
- * Where the camera should sit to frame the whole board from a given
- * elevation, looking at its centre — identical maths to `three/space.ts`'s
- * own `framingDistance`.
+ * Where the camera should sit to frame the whole board from a near-vertical
+ * top-down look, looking at its centre — identical maths to
+ * `three/space.ts`'s own `framingDistance`. Only ever right for a look this
+ * close to straight down: it assumes every corner is (near enough)
+ * equidistant from the camera, which stops holding once the camera tilts
+ * down toward the board — see `elevatedFramingDistance` for that case (R9).
  */
 export function framingDistance(width: number, depth: number, fovDeg: number, aspect: number): number {
   const vFov = fovDeg * DEG
@@ -41,6 +55,45 @@ export function framingDistance(width: number, depth: number, fovDeg: number, as
   const byDepth = depth / 2 / Math.tan(vFov / 2)
   const byWidth = width / 2 / Math.tan(hFov / 2)
   return Math.max(byDepth, byWidth) * 1.08
+}
+
+/**
+ * Where the camera should sit, at a given elevation above the board's own
+ * plane, to keep every one of its four corners inside frame (R9's fix):
+ * `framingDistance`'s flat width/depth trig treats every corner as
+ * (near enough) equidistant from the camera, true only for a near-vertical
+ * look. Tilted down at a shallow elevation (the Tilt and, more sharply, the
+ * Low camera preset) the board's near edge sits markedly closer to the
+ * camera than its far edge, so it subtends a wider angle than that flat
+ * trig budgets for — a unit near the table's own edge (exactly where a
+ * side's deployment strip is) could fall outside the frame entirely.
+ *
+ * `GroundScene`'s camera always sits on the ray through the board's centre
+ * at this elevation, looking back at that centre, so its local axes are
+ * fixed regardless of distance: right is world +X (the camera never rolls),
+ * and a board corner's camera-space horizontal offset is just its raw X
+ * offset from centre, while its vertical offset only depends on elevation
+ * and its Z offset from centre (never on distance). That makes the minimum
+ * distance for every corner to stay within a padded field of view solvable
+ * directly, without a numeric search — the derivation is the geometry above.
+ */
+export function elevatedFramingDistance(width: number, depth: number, fovDeg: number, aspect: number, elevationDeg: number, pad = 1.15): number {
+  const vFov = fovDeg * DEG
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect)
+  const tanH = Math.tan(hFov / 2 / pad)
+  const tanV = Math.tan(vFov / 2 / pad)
+  const e = elevationDeg * DEG
+  const sinE = Math.sin(e)
+  const cosE = Math.cos(e)
+  const hw = width / 2
+  const hd = depth / 2
+  // The near corners (south, toward the camera) are always the tight ones:
+  // their horizontal need is `hw / tanH + cosE * hd`, their vertical need
+  // `hd * (sinE / tanV + cosE)` — the far corners need strictly less of
+  // either, so the near pair alone sets the distance.
+  const byWidth = hw / tanH + cosE * hd
+  const byDepth = hd * (sinE / tanV + cosE)
+  return Math.max(byWidth, byDepth)
 }
 
 /**
