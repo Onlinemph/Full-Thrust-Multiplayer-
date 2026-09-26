@@ -368,6 +368,16 @@ export class TerrainLayer implements Layer {
 
     const seed = hashId(feature.id)
     const isPlanet = feature.kind === 'planet'
+    // The board is an opaque surface (backdrop.ts), so a sphere centred at
+    // the root — the footprint ring's own altitude — would sit half buried
+    // in it and read as a dome instead of a world. Lifting the ball (and its
+    // atmosphere) so it rests tangent on the board, like a globe on a table,
+    // keeps the footprint ring, gravity rings and orbit markers at their true
+    // rules radius on the board while showing the whole sphere above it.
+    const body = new Group()
+    body.name = 'body'
+    body.position.y = feature.radius
+    root.add(body)
     const sphere = new Mesh(
       new SphereGeometry(feature.radius, 40, 26),
       new MeshStandardMaterial({
@@ -378,8 +388,7 @@ export class TerrainLayer implements Layer {
         envMapIntensity: 0.05,
       }),
     )
-    sphere.name = 'body'
-    root.add(sphere)
+    body.add(sphere)
 
     if (isPlanet) {
       const rng = new Rng((seed ^ 0x9a3) >>> 0)
@@ -389,7 +398,7 @@ export class TerrainLayer implements Layer {
         new MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.14, blending: AdditiveBlending, depthWrite: false, side: DoubleSide }),
       )
       shell.name = 'atmosphere'
-      root.add(shell)
+      body.add(shell)
     }
 
     const rim = new Mesh(
@@ -409,7 +418,7 @@ export class TerrainLayer implements Layer {
     root.add(rim)
 
     const label = makeLabel(terrainLabelText(feature), 'l3d-terrain')
-    label.position.set(0, feature.radius + 0.6, 0)
+    label.position.set(0, feature.radius * 2 + 0.6, 0)
     root.add(label)
 
     attachExtras(root, feature)

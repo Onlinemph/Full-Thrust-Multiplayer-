@@ -31,7 +31,9 @@ import {
   LineLoop,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   PlaneGeometry,
+  type Raycaster,
   RingGeometry,
 } from 'three'
 import { optional } from '../../engine/actions'
@@ -39,7 +41,7 @@ import type { GameState, ShipState } from '../../engine/game'
 import { vectorStateOf } from '../../engine/game'
 import { courseToDegrees, distance } from '../../engine/geometry'
 import { applyOrder, driveFromDef, type MovementState } from '../../engine/movement'
-import type { Arc } from '../../engine/types'
+import type { Arc, MovementOrder } from '../../engine/types'
 import { moveVector } from '../../engine/vectormovement'
 import { describeReady, fireArcs } from '../fireArcs'
 import type { Reach } from '../reach'
@@ -228,13 +230,16 @@ export class OverlaysLayer implements Layer {
   private rose = new Group()
   private reachGroup = new Group()
   private tracks = new Group()
+  private preview = new Group()
   private locate: Locator | null = null
   private reach: Reach | null = null
   private trackEntries = new Map<string, TrackEntry>()
+  private previewShipId: string | null = null
+  private previewOrder: MovementOrder | null = null
 
   constructor() {
     this.group.name = 'overlays'
-    this.group.add(this.rings, this.arcs, this.rose, this.reachGroup, this.tracks)
+    this.group.add(this.rings, this.arcs, this.rose, this.reachGroup, this.tracks, this.preview)
   }
 
   /** Where `ships.ts` actually drew each hull, so a track/ghost starts from a hull's true drawn position. */
@@ -246,12 +251,38 @@ export class OverlaysLayer implements Layer {
     this.reach = reach
   }
 
+  /**
+   * SCENE (stage 3): the order the 3D compass's pointer is resting on
+   * (`BattleView3D.tsx`'s `OrderCompass`), drawn as a ghost track before it
+   * is written — the same idea as `MapView.tsx`'s own `preview`/`onPreview`.
+   * Called directly from `BattleScene.setOrderPreview` on every pointer
+   * enter/leave rather than waited for the next `update()` (which only runs
+   * on a React render), so the ghost tracks a hover in real time.
+   */
+  setPreviewOrder(shipId: string | null, order: MovementOrder | null, game: GameState, view: ViewProps): void {
+    this.previewShipId = shipId
+    this.previewOrder = order
+    this.updatePreview(game, view)
+  }
+
+  /** The fire-rose arc under a raycast, for BattleScene's pointer handling — the 3D rose lighting from a hover on the ring itself. */
+  arcUnderPointer(raycaster: Raycaster): Arc | null {
+    const hits = raycaster.intersectObjects(this.rose.children, true)
+    for (const hit of hits) {
+      for (let o: Object3D | null = hit.object; o; o = o.parent) {
+        if (o.userData.arc) return o.userData.arc as Arc
+      }
+    }
+    return null
+  }
+
   update({ game, view }: LayerContext): void {
     this.updateRangeRings(game, view)
     this.updateLitArcs(game, view)
     this.updateRose(game, view)
     this.updateReach(game)
     this.updateTracks(game, view)
+    this.updatePreview(game, view)
   }
 
   private updateRangeRings(game: GameState, view: ViewProps): void {
@@ -313,7 +344,12 @@ export class OverlaysLayer implements Layer {
       const hasTarget = summary.targets.length > 0
       const color = hasTarget ? 0xff6a4d : armed ? 0xffcc66 : 0x4a5570
       const opacity = summary.arc === lit ? 0.6 : hasTarget ? 0.42 : armed ? 0.28 : 0.14
-      this.rose.add(wedgeRing(inner, outer, centerDeg, 60, color, opacity))
+      const wedge = wedgeRing(inner, outer, centerDeg, 60, color, opacity)
+      // Tagged so `arcUnderPointer` can answer BattleScene's raycast — the 3D
+      // rose lighting an arc from a hover on the ring itself, not only from
+      // the HUD legend's own DOM buttons (`BattleView3D.tsx`'s `FireRoseHud`).
+      wedge.userData.arc = summary.arc
+      this.rose.add(wedge)
       const names = describeReady(summary.ready)
       const text = `${summary.arc}\n${armed ? names : '—'}${hasTarget ? ` ◆${summary.targets.length}` : ''}`
       const classes = `l3d-rose${summary.arc === lit ? ' is-lit' : ''}${hasTarget ? ' has-target' : armed ? ' is-armed' : ''}`
@@ -360,7 +396,12 @@ export class OverlaysLayer implements Layer {
       plane.position.set(rect.x + rect.width / 2, HULL_ALTITUDE * 0.06, rect.y + rect.height / 2)
       const outline = new LineLoop(rectOutline(rect), new LineBasicMaterial({ color: 0x64d2ff, transparent: true, opacity: 0.6, toneMapped: false }))
       outline.position.y = HULL_ALTITUDE * 0.07
-      this.reachGroup.add(plane, outline)
+      // `reach.label` ("<ship> comes back on the <edge> edge") — 2D's own
+      // `ReachOverlay` 'edge' case draws it as a `<text>`; this had none, so a
+      // returning ship's own edge read as a bare glowing strip.
+      const label = makeLabel(reach.label, 'l3d-edge')
+      label.position.set(rect.x + rect.width / 2, HULL_ALTITUDE * 0.2, rect.y + rect.height / 2)
+      this.reachGroup.add(plane, outline, label)
     }
   }
 
@@ -409,7 +450,32 @@ export class OverlaysLayer implements Layer {
     this.trackEntries.set(ship.id, { group, key })
   }
 
-  private buildTrack(ship: ShipState, plan: TrackPlan): Group {
+  /** The compass's hovered candidate order (if any), rebuilt fresh each call — a single line is cheap. */
+  private updatePreview(game: GameState, view: ViewProps): void {
+    disposeTree(this.preview)
+    this.preview.clear()
+    const shipId = this.previewShipId
+    const order = this.previewOrder
+    if (!shipId || !order) return
+    const ship = game.ships.find((s) => s.id === shipId)
+    if (!ship || ship.destroyed || ship.offTable || !shipVisible(ship, view.viewingSide)) return
+    const movement: MovementState = {
+      placement: ship.placement,
+      velocity: ship.velocity,
+      drive: { ...driveFromDef(ship.design.drive), hits: ship.driveHits },
+    }
+    const result = applyOrder(movement, order)
+    const plan: TrackPlan = {
+      path: result.legs.map((leg) => leg.to),
+      steps: null,
+      heading: courseToDegrees(result.placement.facing),
+      speed: result.velocity,
+      illegal: !result.legal,
+    }
+    this.preview.add(this.buildTrack(ship, plan, { preview: true }))
+  }
+
+  private buildTrack(ship: ShipState, plan: TrackPlan, opts: { preview?: boolean } = {}): Group {
     const group = new Group()
     const at = this.locate?.(ship.id)
     const start = at ? { x: at.x, z: at.z } : toXZ(ship.placement.position)
@@ -417,6 +483,21 @@ export class OverlaysLayer implements Layer {
     const end = rest[rest.length - 1] ?? start
     const unmoved = rest.length === 0 || (distance(ship.placement.position, plan.path[plan.path.length - 1]!) < 1e-6 && !plan.illegal)
     if (unmoved) return group
+
+    // The order the compass's pointer is on, not yet written (3.5): a plain
+    // cyan line and nothing else, the same restraint `MapView.tsx`'s own
+    // `track is-preview` polyline shows — no ghost hull, no arrow, so a
+    // candidate order never reads as the one actually plotted.
+    if (opts.preview) {
+      const points = [start, ...rest]
+      const core = new Line(
+        polyline(points, FLOOR + 0.015),
+        new LineDashedMaterial({ color: 0x64d2ff, dashSize: 0.35, gapSize: 0.45, transparent: true, opacity: 0.85, toneMapped: false }),
+      )
+      core.computeLineDistances()
+      group.add(core)
+      return group
+    }
 
     const color = plan.illegal ? 0xff6a5a : 0x9fd0ff
     if (plan.steps) {
