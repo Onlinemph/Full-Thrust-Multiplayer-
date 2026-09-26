@@ -1,0 +1,199 @@
+/* ── The 3D battle view ───────────────────────────────────────────────────
+   Sits where the 2D map does and sizes the same way; the canvas and the
+   label layer both fill it. Labels use the map's own type; the border glow
+   is --side-a, the same cyan the flat map spends on ranges and arcs. */
+
+.battle3d {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--void);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 0 22px rgba(100, 210, 255, 0.14);
+  user-select: none;
+  touch-action: none;
+}
+
+.battle3d-canvas,
+.battle3d-labels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.battle3d-canvas {
+  display: block;
+  cursor: grab;
+}
+.battle3d-canvas:active {
+  cursor: grabbing;
+}
+.battle3d-labels {
+  pointer-events: none;
+}
+
+.battle3d-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+/* Camera chips and the one-line help, over the top-left of the view. */
+.battle3d-hud {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+  pointer-events: none;
+  z-index: 2;
+}
+.battle3d-cams {
+  display: flex;
+  gap: 0.3rem;
+  pointer-events: auto;
+}
+.cam-chip {
+  padding: 0.28rem 0.6rem;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(4px);
+}
+.cam-chip:hover:not(:disabled) {
+  border-color: var(--side-a);
+  color: var(--side-a);
+}
+.cam-chip.is-on {
+  color: var(--on-bright);
+  background: var(--side-a);
+  border-color: var(--side-a);
+}
+.cam-chip:disabled {
+  opacity: 0.4;
+}
+.battle3d-help {
+  margin: 0;
+  font-size: 0.72rem;
+  color: rgba(147, 160, 189, 0.85);
+  text-shadow: 0 1px 2px #000;
+}
+@media (max-width: 700px) {
+  .battle3d-help {
+    display: none;
+  }
+}
+
+.battle3d-hud-extra {
+  flex-basis: 100%;
+  pointer-events: auto;
+}
+
+/* 3.5's compass has no 3D counterpart (it drags a ring on the flat map):
+   a hand-off banner instead of a dead end, bottom-centre so it never sits
+   over a hull the player is trying to look at. */
+.battle3d-handoff {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--side-a);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.5);
+}
+.battle3d-handoff p {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Hover text, the 3D counterpart of the map's title/aria-label text. */
+.battle3d-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: 280px;
+  padding: 0.4rem 0.6rem;
+  white-space: pre-line;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+
+/* ── Labels pinned in the scene ─────────────────────────────────────────── */
+
+.l3d {
+  font-family: inherit;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow:
+    0 0 3px #000,
+    0 1px 2px #000;
+}
+
+.l3d-name {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.l3d-name.l3d-a {
+  color: var(--side-a);
+}
+.l3d-name.l3d-b {
+  color: var(--side-b);
+}
+.l3d-name.l3d-c {
+  color: var(--side-c);
+}
+.l3d-name.is-ghost {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.l3d-craft {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+}
+.l3d-craft.l3d-a {
+  color: var(--side-a);
+}
+.l3d-craft.l3d-b {
+  color: var(--side-b);
+}
+.l3d-craft.l3d-c {
+  color: var(--side-c);
+}
+
+.l3d-terrain {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: rgba(200, 212, 240, 0.8);
+}

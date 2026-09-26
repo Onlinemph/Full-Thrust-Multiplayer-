@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import { PHASE_LABELS, type Arc, type Course, type Phase } from '../engine/types'
 import {
@@ -56,6 +56,7 @@ import { GatePanel } from './GatePanel'
 import { MainMenu } from './MainMenu'
 import type { ShipDesign } from '../engine/types'
 import { MapView } from './MapView'
+import { BattleView3D, MapModeChips, useMapView } from './three/MapSwitch'
 import { useNet } from './net'
 import { OnlinePanel } from './OnlinePanel'
 import { LobbyPanel } from './LobbyPanel'
@@ -166,6 +167,10 @@ export function App() {
      table, not from a ship's panel, and a carrier's own counter stays selected
      while its wing is out (8.5). */
   const [selectedFlightId, setSelectedFlightId] = useState<string | null>(null)
+  /* "Map: 2D / 3D" (ft3d): which view is on screen, remembered per browser.
+     Both views read the same battle through the same props; only the map
+     switch itself decides which one is mounted. */
+  const [mapView, setMapView] = useMapView()
   const [chosenSide, setChosenSide] = useState<string | null>(null)
   /* One player's console looks through that player's eyes and nobody else's.
      The open table and the other fleet's view are courtesies of two people
@@ -805,22 +810,11 @@ export function App() {
         </div>
       ) : null}
       <main className="app-body">
-        <MapView
-          game={game}
-          table={table}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          viewingSide={viewingSide}
-          canCommand={canCommand}
-          onHoldCourse={holdCourse}
-          onNextShip={selectNextOwing}
-          litArcs={litArcs}
-          fireRose={showRose && selected !== undefined && canCommand(selected)}
-          onHoverArc={(arc) => setLitArcs(arc === null ? undefined : [arc])}
-          selectedFlightId={selectedFlightId}
-          onSelectFlight={setSelectedFlightId}
-          deployWith={deployWith}
-          placingTerrain={
+        {(() => {
+          // Hoisted so the 2D map and the 3D view (ft3d) hand the same
+          // values to the same props rather than each recomputing them —
+          // the whole point of "the same MapViewProps, plus onExit".
+          const placingTerrainProp =
             placingTerrain && defendingSide(game)
               ? {
                   sideId: defendingSide(game) as string,
@@ -830,17 +824,66 @@ export function App() {
                   radius: placingTerrain === 'planet' ? 8 : 5,
                 }
               : null
-          }
-          onTerrainPlaced={() => setPlacingTerrain(null)}
-          returnWith={returning}
-          onReturned={() => setReturning(null)}
-          aimWith={
+          const aimWithProp =
             game.phase === 'launch-missiles' || (game.phase === 'ship-fire' && aiming?.kind === 'spinal')
               ? aiming
               : null
-          }
-          onAimed={() => setAiming(null)}
-        />
+          return (
+            <div className="map-column">
+              {mapView === '3d' ? (
+                <Suspense fallback={<div className="battle3d battle3d-failed">Loading the 3D view…</div>}>
+                  <BattleView3D
+                    game={game}
+                    table={table}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    viewingSide={viewingSide}
+                    canCommand={canCommand}
+                    onHoldCourse={holdCourse}
+                    onNextShip={selectNextOwing}
+                    litArcs={litArcs}
+                    fireRose={showRose && selected !== undefined && canCommand(selected)}
+                    onHoverArc={(arc) => setLitArcs(arc === null ? undefined : [arc])}
+                    selectedFlightId={selectedFlightId}
+                    onSelectFlight={setSelectedFlightId}
+                    deployWith={deployWith}
+                    placingTerrain={placingTerrainProp}
+                    onTerrainPlaced={() => setPlacingTerrain(null)}
+                    returnWith={returning}
+                    onReturned={() => setReturning(null)}
+                    aimWith={aimWithProp}
+                    onAimed={() => setAiming(null)}
+                    onExit={() => setMapView('2d')}
+                  />
+                </Suspense>
+              ) : (
+                <MapView
+                  game={game}
+                  table={table}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  viewingSide={viewingSide}
+                  canCommand={canCommand}
+                  onHoldCourse={holdCourse}
+                  onNextShip={selectNextOwing}
+                  litArcs={litArcs}
+                  fireRose={showRose && selected !== undefined && canCommand(selected)}
+                  onHoverArc={(arc) => setLitArcs(arc === null ? undefined : [arc])}
+                  selectedFlightId={selectedFlightId}
+                  onSelectFlight={setSelectedFlightId}
+                  deployWith={deployWith}
+                  placingTerrain={placingTerrainProp}
+                  onTerrainPlaced={() => setPlacingTerrain(null)}
+                  returnWith={returning}
+                  onReturned={() => setReturning(null)}
+                  aimWith={aimWithProp}
+                  onAimed={() => setAiming(null)}
+                />
+              )}
+              <MapModeChips mode={mapView} onChange={setMapView} />
+            </div>
+          )
+        })()}
 
         <aside className="app-side">
           <div className="side-scroll">
