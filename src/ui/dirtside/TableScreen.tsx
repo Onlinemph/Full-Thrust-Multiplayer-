@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { newStream } from '../../dirtside/dice'
 import { aiAction } from '../../dirtside/table/ai'
@@ -21,9 +21,13 @@ import { CraftPanel, OrbitPanel } from './play/SupportPanels'
 import { useTableKeys } from './play/useTableKeys'
 import { VolleyPanel } from './play/VolleyPanel'
 import { familyOf, oddsOf, pct, sameWeapon, shortReason, wades, weaponsOf } from './play/words'
-import { TableMap, type RecentMark, type TargetingOverlay } from './TableMap'
+import { TableMap, type RecentMark, type TableMapProps, type TargetingOverlay } from './TableMap'
 import { canTakeBackDirtside, currentDirtsideBattle, dirtsideBattleText, dirtsideDispatch, dirtsideTransitions, takeBackDirtside, useDirtsideBattle, type DirtsideTransition } from './dirtsideStore'
 import { unitCodes } from './unitCodes'
+import { MapModeChips, useMapView } from '../ground3d/MapSwitch'
+
+/** three.js stays out of the main bundle until a player actually picks 3D (BRIEF-GROUND-3D). */
+const DirtsideView3D = lazy(() => import('../ground3d/dirtside/DirtsideView3D'))
 
 /**
  * The Dirtside II table, played from one console: a strip above the table
@@ -106,6 +110,7 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   /* The player's own folding of the force lists; unset follows who is acting. */
   const [folds, setFolds] = useState<Partial<Record<SideId, boolean>>>({})
   const [outcomeHiddenAt, setOutcomeHiddenAt] = useState(-1)
+  const [mapView, setMapView] = useMapView('ftpc.dirtside.mapview.v1')
   const pane = useRef<HTMLDivElement>(null)
 
   /* The computer's seats: whenever one of them is to act, it acts, a beat
@@ -906,6 +911,30 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
   const moveBudget = useMemo(() => (budgetOn && selected ? { family, amphibious: wades(selected), travel: travelling, left, evasive } : null), [budgetOn, selected, family, travelling, left, evasive])
   const aimPreview = useMemo(() => (mode === 'orbital' && orbitalChoice ? { radius: STRIKE_RADIUS[orbitalChoice.attack] } : null), [mode, orbitalChoice])
   const landingPreview = useMemo(() => (mode === 'land' && placing ? { label: state.setup.craft?.find((c) => c.id === placing)?.name ?? '' } : null), [mode, placing, state.setup.craft])
+  // Handed identically to the 2D `TableMap` and its 3D drop-in (`DirtsideView3D`, BRIEF-GROUND-3D), so the
+  // rules cannot tell which one is on screen.
+  const tableMapProps: TableMapProps = {
+    state,
+    selectedId,
+    onSelectElement: selectOnMap,
+    onClickTable: clickOnMap,
+    plot: moving ? plot : NO_POINTS,
+    plotFrom: (moving || ghostReady) && selected ? selected.position : null,
+    reach: moving || ghostReady ? left - (moving ? (plotted?.factors ?? 0) : 0) : null,
+    targets: targetIds,
+    highlight: offer?.movedElementId ?? null,
+    pendingLandings,
+    viewer,
+    toAct,
+    hoverUnitId,
+    onHoverUnit: setHoverUnitId,
+    targeting,
+    moveBudget,
+    recent,
+    aimPreview,
+    landingPreview,
+    cursor: mapCursor,
+  }
 
   const volleyPanel =
     firingUnit && (volley.length > 0 || (mode === 'fire' && weapon)) ? (
@@ -989,28 +1018,14 @@ function Table({ state, onMenu, onNewSkirmish, campaign }: TableScreenProps & { 
         <div className="dst-main">
           <StatusStrip model={strip} />
           <div className={`dst-table${toAct ? ` acts-${toAct}` : ''}`} ref={pane}>
-            <TableMap
-              state={state}
-              selectedId={selectedId}
-              onSelectElement={selectOnMap}
-              onClickTable={clickOnMap}
-              plot={moving ? plot : NO_POINTS}
-              plotFrom={(moving || ghostReady) && selected ? selected.position : null}
-              reach={moving || ghostReady ? left - (moving ? (plotted?.factors ?? 0) : 0) : null}
-              targets={targetIds}
-              highlight={offer?.movedElementId ?? null}
-              pendingLandings={pendingLandings}
-              viewer={viewer}
-              toAct={toAct}
-              hoverUnitId={hoverUnitId}
-              onHoverUnit={setHoverUnitId}
-              targeting={targeting}
-              moveBudget={moveBudget}
-              recent={recent}
-              aimPreview={aimPreview}
-              landingPreview={landingPreview}
-              cursor={mapCursor}
-            />
+            {mapView === '3d' ? (
+              <Suspense fallback={<div className="ground3d ground3d-failed">Loading the 3D view…</div>}>
+                <DirtsideView3D {...tableMapProps} onExit={() => setMapView('2d')} />
+              </Suspense>
+            ) : (
+              <TableMap {...tableMapProps} />
+            )}
+            <MapModeChips mode={mapView} onChange={setMapView} />
             {refusal ? <RefusalToast reason={refusal.reason} page={refusal.page} at={refusal.at} pane={pane} onClose={() => setRefusal(null)} /> : null}
             {resultOpen ? (
               <ResultPanel
