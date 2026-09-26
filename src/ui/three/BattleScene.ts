@@ -103,8 +103,12 @@ export class BattleScene {
   /** OrbitControls' own 'start'/'end' — for hiding the 3D order compass mid-drag. */
   private dragging = false
   private resizeObserver: ResizeObserver
-  private reducedMotion =
-    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  /** Live-updated by this query's own `change` listener (R5), not read only once at mount. */
+  private reducedMotionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+  private reducedMotion = this.reducedMotionQuery?.matches ?? false
+  private onReducedMotionChange = (e: MediaQueryListEvent): void => {
+    this.reducedMotion = e.matches
+  }
 
   constructor(private host: HTMLElement, callbacks: SceneCallbacks) {
     this.callbacks = callbacks
@@ -170,6 +174,9 @@ export class BattleScene {
     this.resizeObserver = new ResizeObserver(() => this.resize())
     this.resizeObserver.observe(host)
     this.resize()
+    // R5: a live OS/browser toggle while this scene is already open, not only
+    // whatever the preference read at mount.
+    this.reducedMotionQuery?.addEventListener('change', this.onReducedMotionChange)
     this.loop()
   }
 
@@ -314,7 +321,7 @@ export class BattleScene {
     }
     this.controls.update()
 
-    const frame = { now, dt, camera: this.camera, reducedMotion: this.reducedMotion }
+    const frame = { now, dt, camera: this.camera, reducedMotion: this.reducedMotion, hostTop: this.host.getBoundingClientRect().top }
     for (const layer of this.layers) layer.tick?.(frame)
     this.composer.render()
     this.labels.render(this.scene, this.camera)
@@ -594,11 +601,19 @@ export class BattleScene {
   dispose(): void {
     cancelAnimationFrame(this.frame)
     this.resizeObserver.disconnect()
+    this.reducedMotionQuery?.removeEventListener('change', this.onReducedMotionChange)
     this.controls.dispose()
     for (const layer of this.layers) layer.dispose()
     this.composer.dispose()
     this.scene.environment?.dispose()
     this.renderer.dispose()
+    // `dispose()` alone only frees three's own JS-side caches — the real
+    // WebGL context (and the GPU resources behind it) is only released by
+    // this separate, documented call. Left uncalled, every 2D<->3D toggle
+    // leaves one more live context behind for the browser's GC to reclaim on
+    // its own schedule, and browsers cap how many a page may hold at once
+    // (R4: repeated toggling made the view progressively unresponsive).
+    this.renderer.forceContextLoss()
     this.renderer.domElement.remove()
     this.labels.domElement.remove()
   }

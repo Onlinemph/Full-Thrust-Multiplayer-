@@ -31,13 +31,13 @@ import {
   SpriteMaterial,
   Vector3,
 } from 'three'
-import { effectiveScreenLevel } from '../../engine/actions'
+import { effectiveScreenLevel, optional } from '../../engine/actions'
 import type { GameState, ShipState } from '../../engine/game'
-import { engagedTargets } from '../../engine/game'
+import { engagedTargets, hullRowsCompleted } from '../../engine/game'
 import { courseToDegrees } from '../../engine/geometry'
 import { arrangeTouchingShips } from '../../engine/movement'
 import type { Point } from '../../engine/types'
-import { damageLevelOf } from '../../engine/victory'
+import { damageLevelOf, type DamageLevel } from '../../engine/victory'
 import { counterRadius } from '../Counter'
 import { buildHull, type HullGeometry } from './hulls'
 import { glowTexture, platingTexture } from './textures'
@@ -60,6 +60,13 @@ const TOUCHING_SEPARATION = 1.6
 /** A name chip is full strength within this many MU of the camera, and fully faded by the far one — the Tilt preset's own usual working range. */
 const LABEL_NEAR = 13
 const LABEL_FAR = 50
+
+/**
+ * Pixels below the canvas's own top edge (`FrameContext.hostTop`) a name chip
+ * must clear — `BattleView3D.tsx`'s `.battle3d-hud` (the camera-preset row
+ * plus its one-line help text) never grows taller than this in practice (R8).
+ */
+const TOOLBAR_CLEARANCE = 64
 
 /**
  * A hull's own gunmetal — the plating's base colour now that the side colour
@@ -185,6 +192,24 @@ function riderOffset(game: GameState, ship: ShipState): Point {
   }
 }
 
+/**
+ * `damageLevelOf` (4.12), but restricted to what the hull track alone shows —
+ * rows gone and whether any boxes are marked at all — with none of its other
+ * three legs (no offensive armament left, no FireCon left, no thrust left),
+ * every one of which reaches into `ship.destroyedSystems`: the enemy's own
+ * fit-out, exactly what the "Sensors and ECM" (12.1) optional rule keeps a
+ * side from seeing on the flat map's own Ssd panel (`redacted`, `Ssd.tsx`).
+ * The 3D hull tint and tooltip use this instead of the full test whenever
+ * that rule applies and the hull is not one of ours — a classified "all guns
+ * dead" must not paint the hull crippled a turn before an unclassified hull
+ * track would.
+ */
+export function sensorSafeLevel(ship: ShipState): DamageLevel {
+  if (ship.destroyed) return 'destroyed'
+  if (hullRowsCompleted(ship) >= 2) return 'crippled'
+  return ship.hullMarked > 0 ? 'damaged' : 'unhurt'
+}
+
 export class ShipsLayer implements Layer {
   readonly group = new Group()
   private entries = new Map<string, Entry>()
@@ -241,10 +266,14 @@ export class ShipsLayer implements Layer {
     const selected = view.selectedId ? game.ships.find((s) => s.id === view.selectedId) : undefined
     const targetedIds = new Set(selected ? engagedTargets(selected, game.phase) : [])
 
+    // 12.1's own gate, read once for the whole fleet rather than per hull —
+    // `actions.ts`'s own AI read of the same option (line ~8944).
+    const sensorRules = optional(game).sensorRules === true
+
     const seen = new Set<string>()
     for (const ship of visible) {
       seen.add(ship.id)
-      this.updateShip(ship, view, drawnAt.get(ship.id) ?? ship.placement.position, targetedIds)
+      this.updateShip(ship, view, drawnAt.get(ship.id) ?? ship.placement.position, targetedIds, sensorRules)
     }
     for (const [id, entry] of this.entries) {
       if (seen.has(id)) continue
@@ -252,12 +281,17 @@ export class ShipsLayer implements Layer {
       this.group.remove(entry.group)
       this.entries.delete(id)
     }
-
     this.updateSquadronMarks(visible)
     this.updateTowMarks(visible)
   }
 
-  private updateShip(ship: ShipState, view: ViewProps, at: Point, targetedIds: ReadonlySet<string>): void {
+  private updateShip(
+    ship: ShipState,
+    view: ViewProps,
+    at: Point,
+    targetedIds: ReadonlySet<string>,
+    sensorRules: boolean,
+  ): void {
     let entry = this.entries.get(ship.id)
     if (!entry) {
       entry = this.buildEntry(ship)
@@ -268,7 +302,11 @@ export class ShipsLayer implements Layer {
     entry.group.position.copy(toWorld(at, HULL_ALTITUDE))
     entry.group.rotation.y = headingToYaw(courseToDegrees(ship.placement.facing))
 
-    const level = damageLevelOf(ship)
+    // App.tsx's own `redacted` test for the Ssd panel, ported: an enemy hull
+    // under the sensor rules gets the hull-rows-only reading, not the fit-out
+    // -aware one (R1).
+    const redacted = sensorRules && view.viewingSide !== null && ship.side !== view.viewingSide
+    const level = redacted ? sensorSafeLevel(ship) : damageLevelOf(ship)
     const fraction = ship.design.hullBoxes > 0 ? ship.hullMarked / ship.design.hullBoxes : 0
     const sideColor = sideColorOf(ship.side)
     entry.crippled = level === 'crippled' && !ship.destroyed
@@ -595,7 +633,7 @@ export class ShipsLayer implements Layer {
     }
   }
 
-  tick({ now, dt, reducedMotion, camera }: FrameContext): void {
+  tick({ now, dt, reducedMotion, camera, hostTop }: FrameContext): void {
     if (!reducedMotion) {
       for (const entry of this.entries.values()) {
         if (entry.destroyed) {
@@ -664,6 +702,43 @@ export class ShipsLayer implements Layer {
       // Never below a size and brightness a player can read at the Tilt preset's full-fleet framing.
       entry.label.element.style.opacity = (1 - far * 0.25).toFixed(2)
       entry.label.element.style.fontSize = `${(12 - far * 2).toFixed(1)}px`
+    }
+
+    this.declutterLabels(camera, hostTop)
+  }
+
+  /**
+   * R7/R8: a full fleet's name chips otherwise stack up illegibly at the
+   * default framing, and one can render over the camera-preset toolbar at
+   * close range. Every visible chip is measured where `CSS2DRenderer` last
+   * drew it (one frame stale, same as any post-render DOM read here would
+   * be) and laid out by priority — the selected ship's own chip always wins
+   * and is never faded for crowding, then the rest nearest-camera-first —
+   * fading (never `display`, which `CSS2DRenderer.render()` overwrites every
+   * frame after `tick()` runs) whichever clashes with one already kept, or
+   * strays above the toolbar's own safe margin.
+   */
+  private declutterLabels(camera: FrameContext['camera'], hostTop: number): void {
+    const PAD = 3
+    const safeTop = hostTop + TOOLBAR_CLEARANCE
+    const candidates: { entry: Entry; rect: DOMRect; selected: boolean; distance: number }[] = []
+    for (const entry of this.entries.values()) {
+      const rect = entry.label.element.getBoundingClientRect()
+      // Zero-sized: `CSS2DRenderer` already set `display: none` (behind the
+      // camera or outside the near/far planes) — nothing to declutter.
+      if (rect.width === 0 && rect.height === 0) continue
+      candidates.push({ entry, rect, selected: entry.ring.visible, distance: camera.position.distanceTo(entry.group.position) })
+    }
+    candidates.sort((a, b) => (a.selected === b.selected ? a.distance - b.distance : a.selected ? -1 : 1))
+    const kept: DOMRect[] = []
+    for (const { entry, rect, selected } of candidates) {
+      const aboveToolbar = rect.top < safeTop
+      const overlapsKept = kept.some(
+        (k) => rect.left < k.right + PAD && rect.right > k.left - PAD && rect.top < k.bottom + PAD && rect.bottom > k.top - PAD,
+      )
+      const hide = aboveToolbar || (!selected && overlapsKept)
+      if (hide) entry.label.element.style.opacity = '0'
+      else kept.push(rect)
     }
   }
 

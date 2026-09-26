@@ -33,3 +33,17 @@
   color: var(--side-a);
   border-color: var(--side-a);
 }
+
+/* R6: shown in place of the compass when the canvas is too small (or the
+   camera too close) to ever hold a fully usable one — a clear way to get it
+   back rather than a control that would only show part of itself. */
+.battle3d-compass-hint {
+  margin: 0;
+  padding: 0.25rem 0.55rem;
+  font-size: var(--text-xs);
+  color: var(--warn);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}

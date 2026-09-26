@@ -64,6 +64,14 @@ export interface FrameContext {
   camera: Camera
   /** Honour prefers-reduced-motion: no bobbing, no flight playback. */
   reducedMotion: boolean
+  /**
+   * Viewport-space Y of the canvas host's own top edge
+   * (`host.getBoundingClientRect().top`) — what a layer measures a CSS2D
+   * label's or overlay's own `getBoundingClientRect()` against to keep it
+   * clear of the HUD toolbar drawn over the canvas (R8), without needing a
+   * DOM reference of its own.
+   */
+  hostTop: number
 }
 
 export interface Layer {
@@ -126,9 +134,21 @@ export function disposeTree(root: Object3D): void {
     if (mesh.geometry && !mesh.geometry.userData?.shared) mesh.geometry.dispose()
     const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
     for (const m of mats) {
-      const mat = m as { dispose(): void; userData?: { shared?: boolean }; map?: { dispose(): void } | null }
+      const mat = m as {
+        dispose(): void
+        userData?: { shared?: boolean }
+        map?: { dispose(): void; userData?: { shared?: boolean } } | null
+      }
       if (mat.userData?.shared) continue
-      mat.map?.dispose()
+      // A per-instance material's own `.map` can still be one of
+      // `textures.ts`'s cached, module-level Textures (every hull's plating,
+      // every glow sprite, backdrop stars, terrain glows — `canvasTexture()`
+      // and `worldTexture()` both stamp `userData.shared` on the texture
+      // itself for exactly this check). Disposing that here frees the GPU
+      // texture out from under every other live consumer still pointing at
+      // the same JS object (R2) — checked independently of the material's
+      // own flag, which only ever describes the material.
+      if (!mat.map?.userData?.shared) mat.map?.dispose()
       mat.dispose()
     }
   })
