@@ -215,6 +215,29 @@ sheet can open large. The main menu is grouped, New battle keeps its rules text 
 fleet picker, library and lobby show each ship's counter. Section 1 of `tokens.css` is unchanged: sides
 stay cyan, amber and violet, orange is thrust and the next thing to press, red is damage.
 
+### In 3D
+
+*Map: 3D* under the board swaps the flat map for a three.js view of the same battle, the way the sibling
+StarForce table does; *Map: 2D* swaps back, and the choice is remembered in this browser. Nothing in the rules
+knows which view is on screen: the 3D view reads the same game state, and every click in it goes through the
+same actions the flat map uses.
+
+- Hulls are extruded from the same sheet silhouettes the counters draw: gunmetal plating with the side's colour
+  as trim and running lights, a spine sized by mass and engine glow by thrust spent. Screens are a faint rim-lit
+  shell, stronger at level 2; damage washes the plating, a crippled ship throws sparks, a wreck goes dark and
+  cloaked ships are ghosts. Fighter wings and gunboat squadrons fly as formations of small craft.
+- Salvo missiles fly as clusters of the missiles actually left, plasma bolts and antimatter carry their blast
+  radius, and mines, flak and the Nova Cannon's sweeps are drawn where they are. Asteroid fields are real rock
+  fields, planets are lit worlds with atmospheres, dust clouds and nebulae are volumes, and beams, gunfire and
+  explosions play out as the dice fall.
+- Phase 1's order compass floats over the selected ship and follows the camera, with the ghost of a course
+  change drawn before it is written; phase 11's fire rose rings the ship and lights an arc from the ring or its
+  legend. Range bands, plotted tracks, deployment, aiming ordnance, placing terrain and bringing a ship back
+  onto the table work as on the flat map, and a side's view hides what the flat map hides.
+- The camera orbits, pans and zooms; Tilt, Top, Low and Follow are one click each and a double-click flies to
+  a ship. three.js loads only when 3D is picked, and a browser without WebGL is offered the flat map instead.
+  `tools/visual_3d.mjs` checks the view in a browser.
+
 ## Playing against the computer
 
 Hand either fleet to the computer in **New battle**. It writes its orders in
